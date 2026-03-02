@@ -28,6 +28,11 @@ enum WatchEventType {
   episode
 }
 
+enum MetadataType {
+  movie
+  series
+}
+
 model Item {
   id           String   @id @default(uuid()) @db.Uuid
   type         ItemType
@@ -92,4 +97,18 @@ model TraktToken {
   refreshToken String
   expiresAt    DateTime @db.Timestamptz(6)
   updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+}
+
+model Metadata {
+  imdbId      String
+  type        MetadataType
+  tmdbId      Int?
+  name        String
+  year        Int?
+  poster      String?
+  background  String?
+  description String?      @db.Text
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(6)
+
+  @@unique([imdbId, type])
 }
