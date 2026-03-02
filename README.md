@@ -97,6 +97,23 @@ http://LAN-IP:7001/manifest.json
 
 > **Important:** Apple TV cannot use `localhost` URLs. The add-on URL must be reachable on your LAN from Apple TV.
 
+## Nginx Proxy Manager Setup
+
+Configure Nginx Proxy Manager with one Proxy Host for your domain (for example, `cataloggy.domain.com`):
+
+- **Proxy Host target:** web service on port `7002`
+- **Advanced locations:**
+  - `/api/` → port `7000`
+  - `/addon/` → port `7001`
+
+Use this Omni add-on URL to install when accessing through your domain:
+
+```text
+https://cataloggy.domain.com/addon/manifest.json
+```
+
+LAN development URLs stay available, so you can continue using direct local access like `http://LAN-IP:7002` and `http://LAN-IP:7001/manifest.json` on your network.
+
 ## Useful Commands
 
 - Run apps in dev mode from root:
