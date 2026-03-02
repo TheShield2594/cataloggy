@@ -11,7 +11,7 @@ const manifest = {
   name: "Cataloggy (Personal)",
   version: "0.1.0",
   description: "Personal watchlist + continue watching from your self-hosted Cataloggy.",
-  resources: ["catalog"],
+  resources: ["catalog", "meta"],
   types: ["movie", "series"],
   catalogs: [
     { type: "movie", id: "my_watchlist_movies", name: "Cataloggy Watchlist (Movies)" },
@@ -52,6 +52,46 @@ app.get<{ Params: { type: string; id: string } }>("/catalog/:type/:id.json", asy
   }
 
   return reply.send(payload);
+});
+
+app.get<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async (request, reply) => {
+  const { type, id } = request.params;
+
+  if (type !== "movie" && type !== "series") {
+    return reply.code(400).send({ error: "type must be one of: movie, series" });
+  }
+
+  const imdbId = id.trim();
+  if (!imdbId) {
+    return reply.code(400).send({ error: "id is required" });
+  }
+
+  const apiUrl = new URL(`/meta/${type}/${encodeURIComponent(imdbId)}`, CATALOGGY_API_BASE);
+
+  const upstreamResponse = await fetch(apiUrl, {
+    headers: CATALOGGY_API_TOKEN ? { Authorization: `Bearer ${CATALOGGY_API_TOKEN}` } : {}
+  });
+
+  const payload = await upstreamResponse.json().catch(() => ({}));
+
+  if (!upstreamResponse.ok) {
+    return reply.code(upstreamResponse.status).send(payload);
+  }
+
+  const releaseInfo = typeof payload.year === "number" ? String(payload.year) : undefined;
+
+  return reply.send({
+    meta: {
+      id: imdbId,
+      type,
+      name: typeof payload.name === "string" && payload.name.trim() ? payload.name : imdbId,
+      poster: typeof payload.poster === "string" ? payload.poster : undefined,
+      background: typeof payload.background === "string" ? payload.background : undefined,
+      description: typeof payload.description === "string" ? payload.description : undefined,
+      releaseInfo,
+      year: typeof payload.year === "number" ? payload.year : undefined
+    }
+  });
 });
 
 const start = async () => {
