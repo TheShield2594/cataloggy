@@ -84,6 +84,8 @@ model SeriesProgress {
   lastEpisode  Int
   lastWatchedAt DateTime @db.Timestamptz(6)
   updatedAt    DateTime @db.Timestamptz(6)
+
+  @@index([lastWatchedAt], name: "idx_seriesprogress_lastWatchedAt")
 }
 
 model KV {
