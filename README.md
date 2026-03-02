@@ -58,6 +58,45 @@ cataloggy/
 - Web: http://localhost:7002
 - Postgres: `localhost:5432` (`postgres` / `postgres`, db `cataloggy`)
 
+
+## Use on Your Local Network (Phone + Apple TV)
+
+### Find your LAN IP (brief)
+
+Your LAN IP is your computer's local network address (usually like `192.168.x.x` or `10.0.x.x`).
+
+- **macOS:** System Settings → Network → select active connection → look for **IP Address**
+- **Windows:** Command Prompt → `ipconfig` → look for **IPv4 Address**
+- **Linux:** Terminal → `hostname -I`
+
+### Open CataLoggy on your phone
+
+On your phone (connected to the same Wi-Fi), open:
+
+```text
+http://LAN-IP:7002
+```
+
+Example:
+
+```text
+http://192.168.1.25:7002
+```
+
+### Install as a PWA
+
+- **iOS Safari:** **Share** → **Add to Home Screen**
+
+### Install Omni add-on on Apple TV
+
+Use this add-on URL in Omni:
+
+```text
+http://LAN-IP:7001/manifest.json
+```
+
+> **Important:** Apple TV cannot use `localhost` URLs. The add-on URL must be reachable on your LAN from Apple TV.
+
 ## Useful Commands
 
 - Run apps in dev mode from root:
