@@ -3,6 +3,7 @@ import { InstallButton } from "./components/InstallButton";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ListsPage } from "./pages/ListsPage";
 import { SearchPage } from "./pages/SearchPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
   `rounded-md px-3 py-2 text-sm font-medium ${isActive ? "bg-sky-500/20 text-sky-200" : "text-slate-300 hover:bg-slate-800"}`;
@@ -26,6 +27,9 @@ export function App() {
             <NavLink to="/lists" className={navClass}>
               Lists
             </NavLink>
+            <NavLink to="/settings" className={navClass}>
+              Settings
+            </NavLink>
           </nav>
         </div>
       </header>
@@ -35,6 +39,7 @@ export function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/lists/*" element={<ListsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
     </div>
