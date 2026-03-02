@@ -26,6 +26,7 @@ const CATALOGGY_ALLOWED_ORIGINS = (process.env.CATALOGGY_ALLOWED_ORIGINS ?? "")
   .filter(Boolean);
 const CORS_METHODS = "GET,POST,DELETE,OPTIONS";
 const CORS_HEADERS = "Authorization,Content-Type";
+const PROXY_PATH_PREFIXES = ["/api"] as const;
 
 type AuthenticatedRequest = FastifyRequest;
 type StremioMetaType = "movie" | "series";
@@ -80,6 +81,18 @@ const applyCorsHeaders = (request: FastifyRequest, reply: FastifyReply) => {
   reply.header("Vary", "Origin");
 };
 
+const stripProxyPrefix = (url: string, prefix: string) => {
+  if (url === prefix) {
+    return "/";
+  }
+
+  if (!url.startsWith(`${prefix}/`)) {
+    return null;
+  }
+
+  return url.slice(prefix.length) || "/";
+};
+
 const toSha256Digest = (value: string) => createHash("sha256").update(value).digest();
 
 const verifyToken = async (request: AuthenticatedRequest, reply: FastifyReply) => {
@@ -103,6 +116,18 @@ const verifyToken = async (request: AuthenticatedRequest, reply: FastifyReply) =
 };
 
 app.addHook("onRequest", async (request, reply) => {
+  const rawUrl = request.raw.url;
+
+  if (rawUrl) {
+    for (const prefix of PROXY_PATH_PREFIXES) {
+      const stripped = stripProxyPrefix(rawUrl, prefix);
+      if (stripped) {
+        request.raw.url = stripped;
+        break;
+      }
+    }
+  }
+
   applyCorsHeaders(request, reply);
 
   if (request.method === "OPTIONS") {
