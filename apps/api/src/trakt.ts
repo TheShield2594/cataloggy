@@ -1,7 +1,9 @@
 import type { FastifyBaseLogger } from "fastify";
+import type { PrismaClient } from "@prisma/client";
 
 const TRAKT_API_BASE = "https://api.trakt.tv";
 const MAX_PAGES = 100;
+const DEFAULT_TOKEN_ROW_ID = "default";
 
 type TraktIds = {
   imdb?: string | null;
@@ -48,31 +50,75 @@ type TraktMovieHistoryPayload = {
 type TraktTokenResponse = {
   access_token: string;
   refresh_token: string;
+  expires_in?: number;
 };
 
 export class TraktClient {
   private readonly clientId: string;
   private readonly clientSecret: string;
+  private readonly prisma: PrismaClient;
   private accessToken: string;
   private refreshToken: string;
-  private hasLoggedPersistenceWarning = false;
 
-  constructor() {
+  private constructor(options: {
+    clientId: string;
+    clientSecret: string;
+    accessToken: string;
+    refreshToken: string;
+    prisma: PrismaClient;
+  }) {
+    this.clientId = options.clientId;
+    this.clientSecret = options.clientSecret;
+    this.accessToken = options.accessToken;
+    this.refreshToken = options.refreshToken;
+    this.prisma = options.prisma;
+  }
+
+  static async create(prisma: PrismaClient): Promise<TraktClient> {
     const clientId = process.env.TRAKT_CLIENT_ID;
     const clientSecret = process.env.TRAKT_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      throw new Error("Trakt credentials are incomplete. Set TRAKT_CLIENT_ID and TRAKT_CLIENT_SECRET.");
+    }
+
+    const persistedToken = await prisma.traktToken.findUnique({ where: { id: DEFAULT_TOKEN_ROW_ID } });
+
+    if (persistedToken) {
+      return new TraktClient({
+        clientId,
+        clientSecret,
+        accessToken: persistedToken.accessToken,
+        refreshToken: persistedToken.refreshToken,
+        prisma
+      });
+    }
+
     const accessToken = process.env.TRAKT_ACCESS_TOKEN;
     const refreshToken = process.env.TRAKT_REFRESH_TOKEN;
 
-    if (!clientId || !clientSecret || !accessToken || !refreshToken) {
+    if (!accessToken || !refreshToken) {
       throw new Error(
-        "Trakt credentials are incomplete. Set TRAKT_CLIENT_ID, TRAKT_CLIENT_SECRET, TRAKT_ACCESS_TOKEN, and TRAKT_REFRESH_TOKEN."
+        "Trakt tokens are missing. Configure TRAKT_ACCESS_TOKEN and TRAKT_REFRESH_TOKEN or seed TraktToken in the database."
       );
     }
 
-    this.clientId = clientId;
-    this.clientSecret = clientSecret;
-    this.accessToken = accessToken;
-    this.refreshToken = refreshToken;
+    await prisma.traktToken.create({
+      data: {
+        id: DEFAULT_TOKEN_ROW_ID,
+        accessToken,
+        refreshToken,
+        expiresAt: new Date(0)
+      }
+    });
+
+    return new TraktClient({
+      clientId,
+      clientSecret,
+      accessToken,
+      refreshToken,
+      prisma
+    });
   }
 
   async fetchWatchlistMovies(logger: FastifyBaseLogger): Promise<TraktMoviePayload[]> {
@@ -215,12 +261,27 @@ export class TraktClient {
     this.accessToken = tokenResponse.access_token;
     this.refreshToken = tokenResponse.refresh_token;
 
-    if (!this.hasLoggedPersistenceWarning) {
-      logger.warn(
-        "Trakt tokens were refreshed in memory only. Persist refreshed tokens to durable storage for production use."
-      );
-      this.hasLoggedPersistenceWarning = true;
-    }
+    const expiresAt =
+      typeof tokenResponse.expires_in === "number" && Number.isFinite(tokenResponse.expires_in)
+        ? new Date(Date.now() + tokenResponse.expires_in * 1000)
+        : new Date(0);
+
+    await this.prisma.traktToken.upsert({
+      where: { id: DEFAULT_TOKEN_ROW_ID },
+      update: {
+        accessToken: this.accessToken,
+        refreshToken: this.refreshToken,
+        expiresAt
+      },
+      create: {
+        id: DEFAULT_TOKEN_ROW_ID,
+        accessToken: this.accessToken,
+        refreshToken: this.refreshToken,
+        expiresAt
+      }
+    });
+
+    logger.info("Trakt tokens refreshed and persisted");
   }
 }
 
