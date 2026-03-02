@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 import { ItemType, ListItemType, ListKind, Prisma, PrismaClient } from "@prisma/client";
 
@@ -5,8 +6,11 @@ const prisma = new PrismaClient();
 const app = Fastify({ logger: true });
 
 const API_TOKEN = process.env.API_TOKEN;
+const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type AuthenticatedRequest = FastifyRequest;
+
+const toSha256Digest = (value: string) => createHash("sha256").update(value).digest();
 
 const verifyToken = async (request: AuthenticatedRequest, reply: FastifyReply) => {
   if (!API_TOKEN) {
@@ -20,30 +24,38 @@ const verifyToken = async (request: AuthenticatedRequest, reply: FastifyReply) =
   }
 
   const token = authHeader.slice("Bearer ".length).trim();
-  if (token !== API_TOKEN) {
+  const tokenDigest = toSha256Digest(token);
+  const expectedTokenDigest = toSha256Digest(API_TOKEN);
+
+  if (!timingSafeEqual(tokenDigest, expectedTokenDigest)) {
     return reply.code(401).send({ error: "Unauthorized" });
   }
 };
 
 const ensureDefaultWatchlist = async () => {
-  const defaultWatchlists = await prisma.list.findMany({
-    where: { kind: ListKind.watchlist, name: "Watchlist" },
-    orderBy: { createdAt: "asc" }
-  });
+  await prisma.$transaction(
+    async (tx) => {
+      const defaultWatchlists = await tx.list.findMany({
+        where: { kind: ListKind.watchlist, name: "Watchlist" },
+        orderBy: { createdAt: "asc" }
+      });
 
-  if (defaultWatchlists.length === 0) {
-    await prisma.list.create({
-      data: { kind: ListKind.watchlist, name: "Watchlist" }
-    });
-    return;
-  }
+      if (defaultWatchlists.length === 0) {
+        await tx.list.create({
+          data: { kind: ListKind.watchlist, name: "Watchlist" }
+        });
+        return;
+      }
 
-  if (defaultWatchlists.length > 1) {
-    const [, ...duplicates] = defaultWatchlists;
-    await prisma.list.deleteMany({
-      where: { id: { in: duplicates.map((list) => list.id) } }
-    });
-  }
+      if (defaultWatchlists.length > 1) {
+        const [, ...duplicates] = defaultWatchlists;
+        await tx.list.deleteMany({
+          where: { id: { in: duplicates.map((list) => list.id) } }
+        });
+      }
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+  );
 };
 
 app.get("/health", async () => ({ status: "ok", service: "api" }));
@@ -126,6 +138,10 @@ app.post<{ Params: { listId: string }; Body: unknown }>("/lists/:listId/items", 
     return reply.code(400).send({ error: "title must be a string when provided" });
   }
 
+  if (!UUID_V4_PATTERN.test(request.params.listId)) {
+    return reply.code(400).send({ error: "listId must be a valid UUID" });
+  }
+
   const list = await prisma.list.findUnique({ where: { id: request.params.listId } });
   if (!list) {
     return reply.code(404).send({ error: "List not found" });
@@ -133,6 +149,11 @@ app.post<{ Params: { listId: string }; Body: unknown }>("/lists/:listId/items", 
 
   const imdbId = body.imdbId.trim();
   const type = body.type as ListItemType;
+
+  if (!Object.values(ItemType).includes(type as ItemType)) {
+    return reply.code(400).send({ error: "type must be a valid item type" });
+  }
+
   const itemType = type as ItemType;
 
   await prisma.item.upsert({
