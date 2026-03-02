@@ -1,4 +1,5 @@
 import { Link, NavLink, Route, Routes } from "react-router-dom";
+import { InstallButton } from "./components/InstallButton";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ListsPage } from "./pages/ListsPage";
 import { SearchPage } from "./pages/SearchPage";
@@ -11,19 +12,22 @@ export function App() {
     <div className="mx-auto min-h-screen w-full max-w-6xl px-4 py-6">
       <header className="mb-6 flex items-center justify-between">
         <Link to="/" className="text-xl font-semibold text-sky-300">
-          CataLoggy
+          Cataloggy
         </Link>
-        <nav className="flex gap-2">
-          <NavLink to="/" end className={navClass}>
-            Dashboard
-          </NavLink>
-          <NavLink to="/search" className={navClass}>
-            Search
-          </NavLink>
-          <NavLink to="/lists" className={navClass}>
-            Lists
-          </NavLink>
-        </nav>
+        <div className="flex items-center gap-3">
+          <InstallButton />
+          <nav className="flex gap-2">
+            <NavLink to="/" end className={navClass}>
+              Dashboard
+            </NavLink>
+            <NavLink to="/search" className={navClass}>
+              Search
+            </NavLink>
+            <NavLink to="/lists" className={navClass}>
+              Lists
+            </NavLink>
+          </nav>
+        </div>
       </header>
 
       <main>
