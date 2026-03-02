@@ -262,6 +262,21 @@ const getContinueMetas = async (limit: number): Promise<ContinueMetaPreview[]> =
     .filter((meta): meta is ContinueMetaPreview => Boolean(meta));
 };
 
+const getCustomListMetas = async (listId: string, type: StremioMetaType, limit: number) => {
+  const listItemType = type === "movie" ? ListItemType.movie : ListItemType.series;
+  const listItems = await prisma.listItem.findMany({
+    where: { listId, type: listItemType },
+    orderBy: { addedAt: "desc" },
+    take: limit,
+    select: { imdbId: true }
+  });
+
+  return buildMetasFromIds(
+    listItems.map((item) => item.imdbId),
+    type
+  );
+};
+
 const ensureDefaultWatchlist = async () => {
   await prisma.$transaction(
     async (tx) => {
@@ -640,6 +655,31 @@ app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_recent_movies"
 app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_continue_series", { preHandler: verifyToken }, async (request) => {
   const limit = parseCatalogLimit(request.query.limit);
   const metas = await getContinueMetas(limit);
+
+  return { metas };
+});
+
+app.get<{ Params: { listId: string }; Querystring: { type?: string; limit?: string } }>("/stremio/list/:listId", { preHandler: verifyToken }, async (request, reply) => {
+  const type = parseMetaType(request.query.type);
+  if (!type) {
+    return reply.code(400).send({ error: "type must be one of: movie, series" });
+  }
+
+  if (!UUID_V4_PATTERN.test(request.params.listId)) {
+    return reply.code(400).send({ error: "listId must be a valid UUID" });
+  }
+
+  const list = await prisma.list.findUnique({
+    where: { id: request.params.listId },
+    select: { id: true, kind: true }
+  });
+
+  if (!list || list.kind !== ListKind.custom) {
+    return reply.code(404).send({ error: "Custom list not found" });
+  }
+
+  const limit = parseCatalogLimit(request.query.limit);
+  const metas = await getCustomListMetas(list.id, type, limit);
 
   return { metas };
 });

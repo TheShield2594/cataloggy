@@ -6,6 +6,12 @@ const CATALOGGY_API_BASE = process.env.CATALOGGY_API_BASE ?? "http://api:7000";
 const CATALOGGY_API_TOKEN = process.env.CATALOGGY_API_TOKEN;
 const ADDON_PUBLIC_BASE = process.env.ADDON_PUBLIC_BASE;
 
+type CataloggyList = {
+  id: string;
+  name: string;
+  kind: "watchlist" | "custom";
+};
+
 const manifest = {
   id: "com.cataloggy.personal",
   name: "Cataloggy (Personal)",
@@ -29,14 +35,70 @@ const catalogRouteMap: Record<string, string> = {
 };
 
 app.get("/health", async () => ({ status: "ok", service: "addon", publicBase: ADDON_PUBLIC_BASE ?? null }));
-app.get("/manifest.json", async () => manifest);
+
+const fetchCustomLists = async (): Promise<CataloggyList[]> => {
+  const apiUrl = new URL("/lists", CATALOGGY_API_BASE);
+  const upstreamResponse = await fetch(apiUrl, {
+    headers: CATALOGGY_API_TOKEN ? { Authorization: `Bearer ${CATALOGGY_API_TOKEN}` } : {}
+  });
+
+  if (!upstreamResponse.ok) {
+    throw new Error(`Failed to fetch lists: ${upstreamResponse.status}`);
+  }
+
+  const payload = (await upstreamResponse.json()) as { lists?: CataloggyList[] };
+  return (payload.lists ?? []).filter((list) => list.kind === "custom");
+};
+
+app.get("/manifest.json", async (request, reply) => {
+  try {
+    const customLists = await fetchCustomLists();
+    const customCatalogs = customLists.flatMap((list) => [
+      { type: "movie", id: `list_${list.id}_movies`, name: `Cataloggy List: ${list.name} (Movies)` },
+      { type: "series", id: `list_${list.id}_series`, name: `Cataloggy List: ${list.name} (Shows)` }
+    ]);
+
+    return reply.send({
+      ...manifest,
+      catalogs: [...manifest.catalogs, ...customCatalogs]
+    });
+  } catch (error) {
+    request.log.error(error, "Failed to fetch custom lists for manifest");
+    return reply.code(502).send({ error: "Failed to build manifest" });
+  }
+});
 
 app.get<{ Params: { type: string; id: string } }>("/catalog/:type/:id.json", async (request, reply) => {
   const routeKey = `${request.params.type}:${request.params.id}`;
   const catalogId = catalogRouteMap[routeKey];
 
   if (!catalogId) {
-    return reply.code(404).send({ error: "Catalog not found" });
+    const customListMatch = request.params.id.match(/^list_([0-9a-f-]+)_(movies|series)$/i);
+    if (!customListMatch) {
+      return reply.code(404).send({ error: "Catalog not found" });
+    }
+
+    const listId = customListMatch[1];
+    const listType = customListMatch[2] === "movies" ? "movie" : "series";
+
+    if (request.params.type !== listType) {
+      return reply.code(404).send({ error: "Catalog not found" });
+    }
+
+    const apiUrl = new URL(`/stremio/list/${encodeURIComponent(listId)}`, CATALOGGY_API_BASE);
+    apiUrl.searchParams.set("type", listType);
+
+    const upstreamResponse = await fetch(apiUrl, {
+      headers: CATALOGGY_API_TOKEN ? { Authorization: `Bearer ${CATALOGGY_API_TOKEN}` } : {}
+    });
+
+    const payload = await upstreamResponse.json().catch(() => ({ metas: [] }));
+
+    if (!upstreamResponse.ok) {
+      return reply.code(upstreamResponse.status).send(payload);
+    }
+
+    return reply.send(payload);
   }
 
   const apiUrl = new URL(`/stremio/catalog/${catalogId}`, CATALOGGY_API_BASE);
