@@ -3,13 +3,19 @@ FROM node:20-alpine
 WORKDIR /app
 RUN corepack enable
 
-COPY package.json pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs ./
+COPY apps/api/package.json ./apps/api/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
+
+RUN pnpm install --frozen-lockfile
+
 COPY apps/api ./apps/api
-COPY apps/addon ./apps/addon
 COPY packages/shared ./packages/shared
 
-RUN pnpm install --frozen-lockfile=false
 RUN pnpm --filter @cataloggy/api prisma generate
+RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
+USER app
 
 EXPOSE 7000
-CMD ["sh", "-c", "pnpm --filter @cataloggy/api prisma db push && pnpm --filter @cataloggy/api start"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s CMD wget -q --spider http://127.0.0.1:7000/health || exit 1
+CMD ["sh", "-c", "pnpm --filter @cataloggy/api build && pnpm --filter @cataloggy/api start"]

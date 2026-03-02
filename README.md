@@ -29,9 +29,10 @@ cataloggy/
    pnpm install
    ```
 
-2. (Optional local API run) copy env values:
+2. Prepare environment files:
 
    ```bash
+   cp .env.example .env
    cp apps/api/.env.example apps/api/.env
    ```
 
@@ -53,6 +54,12 @@ cataloggy/
 
   ```bash
   pnpm dev
+  ```
+
+- Run builds:
+
+  ```bash
+  pnpm build
   ```
 
 - Run typechecks:
