@@ -29,6 +29,9 @@ export type CatalogMeta = {
   id: string;
   type: MediaType;
   name: string;
+  poster?: string;
+  year?: number;
+  description?: string;
 };
 
 const authHeaders = () => {
@@ -91,9 +94,9 @@ export const api = {
   },
   dashboard() {
     return Promise.all([
-      request<{ metas: CatalogMeta[] }>("/stremio/catalog/my_watchlist_movies?limit=10"),
-      request<{ metas: CatalogMeta[] }>("/stremio/catalog/my_continue_series?limit=10"),
-      request<{ metas: CatalogMeta[] }>("/stremio/catalog/my_recent_movies?limit=10")
+      request<{ metas: CatalogMeta[] }>("/watchlist?type=movie&limit=10"),
+      request<{ metas: CatalogMeta[] }>("/continue?limit=10"),
+      request<{ metas: CatalogMeta[] }>("/recent?type=movie&limit=10")
     ]);
   }
 };
