@@ -1,11 +1,19 @@
 import Fastify from "fastify";
 
-const app = Fastify({ logger: true });
+const parseProxyPathPrefixes = (raw: string | undefined, fallback: readonly string[]) => {
+  const parsed = (raw ?? "")
+    .split(",")
+    .map((prefix) => prefix.trim())
+    .filter(Boolean)
+    .map((prefix) => (prefix.startsWith("/") ? prefix : `/${prefix}`));
+
+  return parsed.length > 0 ? parsed : [...fallback];
+};
 
 const CATALOGGY_API_BASE = process.env.CATALOGGY_API_BASE ?? "http://api:7000";
 const CATALOGGY_API_TOKEN = process.env.CATALOGGY_API_TOKEN;
 const ADDON_PUBLIC_BASE = process.env.ADDON_PUBLIC_BASE;
-const PROXY_PATH_PREFIXES = ["/addon"] as const;
+const PROXY_PATH_PREFIXES = parseProxyPathPrefixes(process.env.PROXY_PATH_PREFIXES, ["/addon"] as const);
 
 const stripProxyPrefix = (url: string, prefix: string) => {
   if (url === prefix) {
@@ -19,20 +27,20 @@ const stripProxyPrefix = (url: string, prefix: string) => {
   return url.slice(prefix.length) || "/";
 };
 
-app.addHook("onRequest", async (request) => {
-  const rawUrl = request.raw.url;
-
-  if (!rawUrl) {
-    return;
-  }
-
+const normalizeProxyPath = (rawUrl: string) => {
   for (const prefix of PROXY_PATH_PREFIXES) {
     const stripped = stripProxyPrefix(rawUrl, prefix);
     if (stripped) {
-      request.raw.url = stripped;
-      break;
+      return stripped;
     }
   }
+
+  return rawUrl;
+};
+
+const app = Fastify({
+  logger: true,
+  rewriteUrl: (request) => normalizeProxyPath(request.url ?? "/")
 });
 
 type CataloggyList = {

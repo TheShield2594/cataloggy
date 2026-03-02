@@ -5,7 +5,46 @@ import { TraktClient } from "./trakt.js";
 import { MetadataPayload, TmdbClient } from "./tmdb.js";
 
 const prisma = new PrismaClient();
-const app = Fastify({ logger: true });
+
+const parseProxyPathPrefixes = (raw: string | undefined, fallback: readonly string[]) => {
+  const parsed = (raw ?? "")
+    .split(",")
+    .map((prefix) => prefix.trim())
+    .filter(Boolean)
+    .map((prefix) => (prefix.startsWith("/") ? prefix : `/${prefix}`));
+
+  return parsed.length > 0 ? parsed : [...fallback];
+};
+
+const PROXY_PATH_PREFIXES = parseProxyPathPrefixes(process.env.PROXY_PATH_PREFIXES, ["/api"] as const);
+
+const stripProxyPrefix = (url: string, prefix: string) => {
+  if (url === prefix) {
+    return "/";
+  }
+
+  if (!url.startsWith(`${prefix}/`)) {
+    return null;
+  }
+
+  return url.slice(prefix.length) || "/";
+};
+
+const normalizeProxyPath = (rawUrl: string) => {
+  for (const prefix of PROXY_PATH_PREFIXES) {
+    const stripped = stripProxyPrefix(rawUrl, prefix);
+    if (stripped) {
+      return stripped;
+    }
+  }
+
+  return rawUrl;
+};
+
+const app = Fastify({
+  logger: true,
+  rewriteUrl: (request) => normalizeProxyPath(request.url ?? "/")
+});
 let traktClient: TraktClient | null = null;
 
 const getTraktClient = async () => {
@@ -26,7 +65,6 @@ const CATALOGGY_ALLOWED_ORIGINS = (process.env.CATALOGGY_ALLOWED_ORIGINS ?? "")
   .filter(Boolean);
 const CORS_METHODS = "GET,POST,DELETE,OPTIONS";
 const CORS_HEADERS = "Authorization,Content-Type";
-const PROXY_PATH_PREFIXES = ["/api"] as const;
 
 type AuthenticatedRequest = FastifyRequest;
 type StremioMetaType = "movie" | "series";
@@ -81,18 +119,6 @@ const applyCorsHeaders = (request: FastifyRequest, reply: FastifyReply) => {
   reply.header("Vary", "Origin");
 };
 
-const stripProxyPrefix = (url: string, prefix: string) => {
-  if (url === prefix) {
-    return "/";
-  }
-
-  if (!url.startsWith(`${prefix}/`)) {
-    return null;
-  }
-
-  return url.slice(prefix.length) || "/";
-};
-
 const toSha256Digest = (value: string) => createHash("sha256").update(value).digest();
 
 const verifyToken = async (request: AuthenticatedRequest, reply: FastifyReply) => {
@@ -116,18 +142,6 @@ const verifyToken = async (request: AuthenticatedRequest, reply: FastifyReply) =
 };
 
 app.addHook("onRequest", async (request, reply) => {
-  const rawUrl = request.raw.url;
-
-  if (rawUrl) {
-    for (const prefix of PROXY_PATH_PREFIXES) {
-      const stripped = stripProxyPrefix(rawUrl, prefix);
-      if (stripped) {
-        request.raw.url = stripped;
-        break;
-      }
-    }
-  }
-
   applyCorsHeaders(request, reply);
 
   if (request.method === "OPTIONS") {
