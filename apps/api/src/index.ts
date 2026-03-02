@@ -1,9 +1,19 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 import { ItemType, ListItemType, ListKind, Prisma, PrismaClient } from "@prisma/client";
+import { TraktClient } from "./trakt.js";
 
 const prisma = new PrismaClient();
 const app = Fastify({ logger: true });
+let traktClient: TraktClient | null = null;
+
+const getTraktClient = () => {
+  if (!traktClient) {
+    traktClient = new TraktClient();
+  }
+
+  return traktClient;
+};
 
 const API_TOKEN = process.env.API_TOKEN;
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -56,6 +66,21 @@ const ensureDefaultWatchlist = async () => {
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
   );
+};
+
+const getDefaultWatchlist = async () => {
+  const watchlist = await prisma.list.findFirst({
+    where: { kind: ListKind.watchlist, name: "Watchlist" },
+    orderBy: { createdAt: "asc" }
+  });
+
+  if (watchlist) {
+    return watchlist;
+  }
+
+  return prisma.list.create({
+    data: { kind: ListKind.watchlist, name: "Watchlist" }
+  });
 };
 
 app.get("/health", async () => ({ status: "ok", service: "api" }));
@@ -204,6 +229,173 @@ app.delete<{ Params: { listId: string; type: string; imdbId: string } }>("/lists
   }
 
   return reply.code(204).send();
+});
+
+app.post("/trakt/import", { preHandler: verifyToken }, async (request, reply) => {
+  let client: TraktClient;
+  try {
+    client = getTraktClient();
+  } catch (error) {
+    request.log.error(error, "Trakt client initialization failed");
+    return reply.code(500).send({ error: "Trakt integration is not configured" });
+  }
+
+  const watchlist = await getDefaultWatchlist();
+
+  const [watchlistMovies, watchlistShows, movieHistory, episodeHistory] = await Promise.all([
+    client.fetchWatchlistMovies(request.log),
+    client.fetchWatchlistShows(request.log),
+    client.fetchMovieHistory(request.log),
+    client.fetchEpisodeHistory(request.log)
+  ]);
+
+  const importedWatchlist = { movies: 0, series: 0 };
+  const importedWatchEvents = { movies: 0, episodes: 0 };
+  const seriesProgressByImdb = new Map<string, { lastSeason: number; lastEpisode: number; updatedAt: Date }>();
+
+  for (const entry of watchlistMovies) {
+    const imdbId = entry.movie?.ids?.imdb;
+    if (!imdbId) {
+      continue;
+    }
+
+    const title = entry.movie?.title?.trim();
+    await prisma.item.upsert({
+      where: { type_imdbId: { type: ItemType.movie, imdbId } },
+      create: { type: ItemType.movie, imdbId, title: title || undefined },
+      update: title ? { title } : {}
+    });
+
+    await prisma.listItem.upsert({
+      where: { listId_type_imdbId: { listId: watchlist.id, type: ListItemType.movie, imdbId } },
+      create: { listId: watchlist.id, type: ListItemType.movie, imdbId },
+      update: {}
+    });
+    importedWatchlist.movies += 1;
+  }
+
+  for (const entry of watchlistShows) {
+    const imdbId = entry.show?.ids?.imdb;
+    if (!imdbId) {
+      continue;
+    }
+
+    const title = entry.show?.title?.trim();
+    await prisma.item.upsert({
+      where: { type_imdbId: { type: ItemType.series, imdbId } },
+      create: { type: ItemType.series, imdbId, title: title || undefined },
+      update: title ? { title } : {}
+    });
+
+    await prisma.listItem.upsert({
+      where: { listId_type_imdbId: { listId: watchlist.id, type: ListItemType.series, imdbId } },
+      create: { listId: watchlist.id, type: ListItemType.series, imdbId },
+      update: {}
+    });
+    importedWatchlist.series += 1;
+  }
+
+  for (const entry of movieHistory) {
+    const imdbId = entry.movie?.ids?.imdb;
+    const watchedAt = entry.watched_at;
+
+    if (!imdbId || !watchedAt) {
+      continue;
+    }
+
+    const title = entry.movie?.title?.trim();
+    if (title) {
+      await prisma.item.upsert({
+        where: { type_imdbId: { type: ItemType.movie, imdbId } },
+        create: { type: ItemType.movie, imdbId, title },
+        update: { title }
+      });
+    }
+
+    await prisma.watchEvent.create({
+      data: {
+        type: "movie",
+        imdbId,
+        watchedAt: new Date(watchedAt),
+        plays: 1
+      }
+    });
+
+    importedWatchEvents.movies += 1;
+  }
+
+  for (const entry of episodeHistory) {
+    const episodeImdbId = entry.episode?.ids?.imdb;
+    const seriesImdbId = entry.show?.ids?.imdb;
+    const watchedAt = entry.watched_at;
+    const season = entry.episode?.season;
+    const episode = entry.episode?.number;
+
+    if (!episodeImdbId || !seriesImdbId || !watchedAt || season === undefined || episode === undefined) {
+      continue;
+    }
+
+    const seriesTitle = entry.show?.title?.trim();
+    if (seriesTitle) {
+      await prisma.item.upsert({
+        where: { type_imdbId: { type: ItemType.series, imdbId: seriesImdbId } },
+        create: { type: ItemType.series, imdbId: seriesImdbId, title: seriesTitle },
+        update: { title: seriesTitle }
+      });
+    }
+
+    await prisma.watchEvent.create({
+      data: {
+        type: "episode",
+        imdbId: episodeImdbId,
+        seriesImdbId,
+        season,
+        episode,
+        watchedAt: new Date(watchedAt),
+        plays: 1
+      }
+    });
+
+    const watchedAtDate = new Date(watchedAt);
+    const existing = seriesProgressByImdb.get(seriesImdbId);
+    if (
+      !existing ||
+      watchedAtDate.getTime() > existing.updatedAt.getTime() ||
+      (watchedAtDate.getTime() === existing.updatedAt.getTime() &&
+        (season > existing.lastSeason || (season === existing.lastSeason && episode > existing.lastEpisode)))
+    ) {
+      seriesProgressByImdb.set(seriesImdbId, {
+        lastSeason: season,
+        lastEpisode: episode,
+        updatedAt: watchedAtDate
+      });
+    }
+
+    importedWatchEvents.episodes += 1;
+  }
+
+  for (const [seriesImdbId, progress] of seriesProgressByImdb.entries()) {
+    await prisma.seriesProgress.upsert({
+      where: { seriesImdbId },
+      create: {
+        seriesImdbId,
+        lastSeason: progress.lastSeason,
+        lastEpisode: progress.lastEpisode,
+        updatedAt: progress.updatedAt
+      },
+      update: {
+        lastSeason: progress.lastSeason,
+        lastEpisode: progress.lastEpisode,
+        updatedAt: progress.updatedAt
+      }
+    });
+  }
+
+  return reply.code(200).send({
+    importedWatchlist,
+    importedWatchEvents,
+    updatedSeriesProgress: seriesProgressByImdb.size
+  });
 });
 
 const start = async () => {
