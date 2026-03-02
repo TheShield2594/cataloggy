@@ -16,7 +16,7 @@ export default [
   },
   ...tseslint.configs.recommended,
   {
-    files: ["**/*.ts"],
+    files: ["**/*.{ts,tsx}"],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
@@ -29,6 +29,14 @@ export default [
     },
     rules: {
       "no-console": "off"
+    }
+  },
+  {
+    files: ["apps/web/**/*.{js,jsx,ts,tsx}"],
+    languageOptions: {
+      globals: {
+        ...globals.browser
+      }
     }
   }
 ];
