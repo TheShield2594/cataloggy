@@ -10,13 +10,14 @@ export default [
       ecmaVersion: "latest",
       sourceType: "module",
       globals: {
-        ...globals.node
+        ...globals.node,
+        ...globals.browser
       }
     }
   },
   ...tseslint.configs.recommended,
   {
-    files: ["**/*.ts"],
+    files: ["**/*.{ts,tsx}"],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
@@ -24,7 +25,8 @@ export default [
         sourceType: "module"
       },
       globals: {
-        ...globals.node
+        ...globals.node,
+        ...globals.browser
       }
     },
     rules: {
