@@ -33,10 +33,14 @@ type StremioMetaPreview = {
 };
 
 type ContinueMetaPreview = StremioMetaPreview & {
+  extension: {
+    season: number;
+    episode: number;
+  };
   lastWatched: {
     season: number;
     episode: number;
-    updatedAt: string;
+    lastWatchedAt: string;
   };
 };
 
@@ -227,13 +231,13 @@ const getRecentMetas = async (type: StremioMetaType, limit: number) => {
 
 const getContinueMetas = async (limit: number): Promise<ContinueMetaPreview[]> => {
   const seriesProgress = await prisma.seriesProgress.findMany({
-    orderBy: { updatedAt: "desc" },
+    orderBy: { lastWatchedAt: "desc" },
     take: limit,
     select: {
       seriesImdbId: true,
       lastSeason: true,
       lastEpisode: true,
-      updatedAt: true
+      lastWatchedAt: true
     }
   });
 
@@ -252,10 +256,14 @@ const getContinueMetas = async (limit: number): Promise<ContinueMetaPreview[]> =
 
       return {
         ...meta,
+        extension: {
+          season: progress.lastSeason,
+          episode: progress.lastEpisode
+        },
         lastWatched: {
           season: progress.lastSeason,
           episode: progress.lastEpisode,
-          updatedAt: progress.updatedAt.toISOString()
+          lastWatchedAt: progress.lastWatchedAt.toISOString()
         }
       };
     })
@@ -345,7 +353,7 @@ const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
   ]);
 
   const importedWatchEvents = { movies: 0, episodes: 0 };
-  const seriesProgressByImdb = new Map<string, { lastSeason: number; lastEpisode: number; updatedAt: Date }>();
+  const seriesProgressByImdb = new Map<string, { lastSeason: number; lastEpisode: number; lastWatchedAt: Date }>();
 
   for (const entry of movieHistory) {
     const imdbId = entry.movie?.ids?.imdb;
@@ -446,14 +454,14 @@ const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
     const existing = seriesProgressByImdb.get(seriesImdbId);
     if (
       !existing ||
-      watchedAtDate.getTime() > existing.updatedAt.getTime() ||
-      (watchedAtDate.getTime() === existing.updatedAt.getTime() &&
+      watchedAtDate.getTime() > existing.lastWatchedAt.getTime() ||
+      (watchedAtDate.getTime() === existing.lastWatchedAt.getTime() &&
         (season > existing.lastSeason || (season === existing.lastSeason && episode > existing.lastEpisode)))
     ) {
       seriesProgressByImdb.set(seriesImdbId, {
         lastSeason: season,
         lastEpisode: episode,
-        updatedAt: watchedAtDate
+        lastWatchedAt: watchedAtDate
       });
     }
 
@@ -467,12 +475,14 @@ const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
         seriesImdbId,
         lastSeason: progress.lastSeason,
         lastEpisode: progress.lastEpisode,
-        updatedAt: progress.updatedAt
+        lastWatchedAt: progress.lastWatchedAt,
+        updatedAt: progress.lastWatchedAt
       },
       update: {
         lastSeason: progress.lastSeason,
         lastEpisode: progress.lastEpisode,
-        updatedAt: progress.updatedAt
+        lastWatchedAt: progress.lastWatchedAt,
+        updatedAt: progress.lastWatchedAt
       }
     });
   }
@@ -821,7 +831,7 @@ app.post("/trakt/import", { preHandler: verifyToken }, async (request, reply) =>
 
   const importedWatchlist = { movies: 0, series: 0 };
   const importedWatchEvents = { movies: 0, episodes: 0 };
-  const seriesProgressByImdb = new Map<string, { lastSeason: number; lastEpisode: number; updatedAt: Date }>();
+  const seriesProgressByImdb = new Map<string, { lastSeason: number; lastEpisode: number; lastWatchedAt: Date }>();
 
   for (const entry of watchlistMovies) {
     const imdbId = entry.movie?.ids?.imdb;
@@ -930,14 +940,14 @@ app.post("/trakt/import", { preHandler: verifyToken }, async (request, reply) =>
     const existing = seriesProgressByImdb.get(seriesImdbId);
     if (
       !existing ||
-      watchedAtDate.getTime() > existing.updatedAt.getTime() ||
-      (watchedAtDate.getTime() === existing.updatedAt.getTime() &&
+      watchedAtDate.getTime() > existing.lastWatchedAt.getTime() ||
+      (watchedAtDate.getTime() === existing.lastWatchedAt.getTime() &&
         (season > existing.lastSeason || (season === existing.lastSeason && episode > existing.lastEpisode)))
     ) {
       seriesProgressByImdb.set(seriesImdbId, {
         lastSeason: season,
         lastEpisode: episode,
-        updatedAt: watchedAtDate
+        lastWatchedAt: watchedAtDate
       });
     }
 
@@ -951,12 +961,14 @@ app.post("/trakt/import", { preHandler: verifyToken }, async (request, reply) =>
         seriesImdbId,
         lastSeason: progress.lastSeason,
         lastEpisode: progress.lastEpisode,
-        updatedAt: progress.updatedAt
+        lastWatchedAt: progress.lastWatchedAt,
+        updatedAt: progress.lastWatchedAt
       },
       update: {
         lastSeason: progress.lastSeason,
         lastEpisode: progress.lastEpisode,
-        updatedAt: progress.updatedAt
+        lastWatchedAt: progress.lastWatchedAt,
+        updatedAt: progress.lastWatchedAt
       }
     });
   }

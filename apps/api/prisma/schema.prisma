@@ -82,6 +82,7 @@ model SeriesProgress {
   seriesImdbId String   @id
   lastSeason   Int
   lastEpisode  Int
+  lastWatchedAt DateTime @db.Timestamptz(6)
   updatedAt    DateTime @db.Timestamptz(6)
 }
 
