@@ -33,11 +33,21 @@ type StremioMetaPreview = {
 };
 
 type ContinueMetaPreview = StremioMetaPreview & {
+  extension: {
+    season: number;
+    episode: number;
+  };
   lastWatched: {
     season: number;
     episode: number;
-    updatedAt: string;
+    lastWatchedAt: string;
   };
+};
+
+type SeriesProgressCandidate = {
+  lastSeason: number;
+  lastEpisode: number;
+  lastWatchedAt: Date;
 };
 
 const DEFAULT_STREMIO_LIMIT = 50;
@@ -129,6 +139,63 @@ const parseMetaType = (rawType: unknown): StremioMetaType | null => {
   }
 
   return null;
+};
+
+const isIncomingSeriesProgressNewer = (
+  existing: SeriesProgressCandidate,
+  incoming: SeriesProgressCandidate
+) => {
+  const incomingTimestamp = incoming.lastWatchedAt.getTime();
+  const existingTimestamp = existing.lastWatchedAt.getTime();
+
+  if (incomingTimestamp !== existingTimestamp) {
+    return incomingTimestamp > existingTimestamp;
+  }
+
+  if (incoming.lastSeason !== existing.lastSeason) {
+    return incoming.lastSeason > existing.lastSeason;
+  }
+
+  return incoming.lastEpisode > existing.lastEpisode;
+};
+
+const upsertSeriesProgressIfNewer = async (seriesImdbId: string, incoming: SeriesProgressCandidate) => {
+  const existing = await prisma.seriesProgress.findUnique({
+    where: { seriesImdbId },
+    select: {
+      lastSeason: true,
+      lastEpisode: true,
+      lastWatchedAt: true
+    }
+  });
+
+  if (!existing) {
+    await prisma.seriesProgress.create({
+      data: {
+        seriesImdbId,
+        lastSeason: incoming.lastSeason,
+        lastEpisode: incoming.lastEpisode,
+        lastWatchedAt: incoming.lastWatchedAt,
+        updatedAt: incoming.lastWatchedAt
+      }
+    });
+
+    return;
+  }
+
+  if (!isIncomingSeriesProgressNewer(existing, incoming)) {
+    return;
+  }
+
+  await prisma.seriesProgress.update({
+    where: { seriesImdbId },
+    data: {
+      lastSeason: incoming.lastSeason,
+      lastEpisode: incoming.lastEpisode,
+      lastWatchedAt: incoming.lastWatchedAt,
+      updatedAt: incoming.lastWatchedAt
+    }
+  });
 };
 
 const buildMetasFromIds = async (ids: string[], type: StremioMetaType): Promise<StremioMetaPreview[]> => {
@@ -227,13 +294,13 @@ const getRecentMetas = async (type: StremioMetaType, limit: number) => {
 
 const getContinueMetas = async (limit: number): Promise<ContinueMetaPreview[]> => {
   const seriesProgress = await prisma.seriesProgress.findMany({
-    orderBy: { updatedAt: "desc" },
+    orderBy: { lastWatchedAt: "desc" },
     take: limit,
     select: {
       seriesImdbId: true,
       lastSeason: true,
       lastEpisode: true,
-      updatedAt: true
+      lastWatchedAt: true
     }
   });
 
@@ -252,10 +319,14 @@ const getContinueMetas = async (limit: number): Promise<ContinueMetaPreview[]> =
 
       return {
         ...meta,
+        extension: {
+          season: progress.lastSeason,
+          episode: progress.lastEpisode
+        },
         lastWatched: {
           season: progress.lastSeason,
           episode: progress.lastEpisode,
-          updatedAt: progress.updatedAt.toISOString()
+          lastWatchedAt: progress.lastWatchedAt.toISOString()
         }
       };
     })
@@ -345,7 +416,7 @@ const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
   ]);
 
   const importedWatchEvents = { movies: 0, episodes: 0 };
-  const seriesProgressByImdb = new Map<string, { lastSeason: number; lastEpisode: number; updatedAt: Date }>();
+  const seriesProgressByImdb = new Map<string, SeriesProgressCandidate>();
 
   for (const entry of movieHistory) {
     const imdbId = entry.movie?.ids?.imdb;
@@ -446,14 +517,14 @@ const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
     const existing = seriesProgressByImdb.get(seriesImdbId);
     if (
       !existing ||
-      watchedAtDate.getTime() > existing.updatedAt.getTime() ||
-      (watchedAtDate.getTime() === existing.updatedAt.getTime() &&
+      watchedAtDate.getTime() > existing.lastWatchedAt.getTime() ||
+      (watchedAtDate.getTime() === existing.lastWatchedAt.getTime() &&
         (season > existing.lastSeason || (season === existing.lastSeason && episode > existing.lastEpisode)))
     ) {
       seriesProgressByImdb.set(seriesImdbId, {
         lastSeason: season,
         lastEpisode: episode,
-        updatedAt: watchedAtDate
+        lastWatchedAt: watchedAtDate
       });
     }
 
@@ -461,20 +532,7 @@ const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
   }
 
   for (const [seriesImdbId, progress] of seriesProgressByImdb.entries()) {
-    await prisma.seriesProgress.upsert({
-      where: { seriesImdbId },
-      create: {
-        seriesImdbId,
-        lastSeason: progress.lastSeason,
-        lastEpisode: progress.lastEpisode,
-        updatedAt: progress.updatedAt
-      },
-      update: {
-        lastSeason: progress.lastSeason,
-        lastEpisode: progress.lastEpisode,
-        updatedAt: progress.updatedAt
-      }
-    });
+    await upsertSeriesProgressIfNewer(seriesImdbId, progress);
   }
 
   await prisma.kV.upsert({
@@ -821,7 +879,7 @@ app.post("/trakt/import", { preHandler: verifyToken }, async (request, reply) =>
 
   const importedWatchlist = { movies: 0, series: 0 };
   const importedWatchEvents = { movies: 0, episodes: 0 };
-  const seriesProgressByImdb = new Map<string, { lastSeason: number; lastEpisode: number; updatedAt: Date }>();
+  const seriesProgressByImdb = new Map<string, SeriesProgressCandidate>();
 
   for (const entry of watchlistMovies) {
     const imdbId = entry.movie?.ids?.imdb;
@@ -930,14 +988,14 @@ app.post("/trakt/import", { preHandler: verifyToken }, async (request, reply) =>
     const existing = seriesProgressByImdb.get(seriesImdbId);
     if (
       !existing ||
-      watchedAtDate.getTime() > existing.updatedAt.getTime() ||
-      (watchedAtDate.getTime() === existing.updatedAt.getTime() &&
+      watchedAtDate.getTime() > existing.lastWatchedAt.getTime() ||
+      (watchedAtDate.getTime() === existing.lastWatchedAt.getTime() &&
         (season > existing.lastSeason || (season === existing.lastSeason && episode > existing.lastEpisode)))
     ) {
       seriesProgressByImdb.set(seriesImdbId, {
         lastSeason: season,
         lastEpisode: episode,
-        updatedAt: watchedAtDate
+        lastWatchedAt: watchedAtDate
       });
     }
 
@@ -945,20 +1003,7 @@ app.post("/trakt/import", { preHandler: verifyToken }, async (request, reply) =>
   }
 
   for (const [seriesImdbId, progress] of seriesProgressByImdb.entries()) {
-    await prisma.seriesProgress.upsert({
-      where: { seriesImdbId },
-      create: {
-        seriesImdbId,
-        lastSeason: progress.lastSeason,
-        lastEpisode: progress.lastEpisode,
-        updatedAt: progress.updatedAt
-      },
-      update: {
-        lastSeason: progress.lastSeason,
-        lastEpisode: progress.lastEpisode,
-        updatedAt: progress.updatedAt
-      }
-    });
+    await upsertSeriesProgressIfNewer(seriesImdbId, progress);
   }
 
   return reply.code(200).send({
