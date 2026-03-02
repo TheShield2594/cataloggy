@@ -35,6 +35,8 @@ cataloggy/
    cp .env.example .env
    ```
 
+   Set `TMDB_API_KEY` in `.env` if you plan to use the search/meta endpoints.
+
 3. Start everything with Docker Compose:
 
    ```bash
@@ -53,6 +55,7 @@ cataloggy/
 
 - API: http://localhost:7000/health
 - Addon: http://localhost:7001/manifest.json
+- Web: http://localhost:7002
 - Postgres: `localhost:5432` (`postgres` / `postgres`, db `cataloggy`)
 
 ## Useful Commands
