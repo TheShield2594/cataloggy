@@ -1,7 +1,8 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
-import { ItemType, ListItemType, ListKind, Prisma, PrismaClient } from "@prisma/client";
+import { ItemType, ListItemType, ListKind, MetadataType, Prisma, PrismaClient } from "@prisma/client";
 import { TraktClient } from "./trakt.js";
+import { MetadataPayload, TmdbClient } from "./tmdb.js";
 
 const prisma = new PrismaClient();
 const app = Fastify({ logger: true });
@@ -51,6 +52,51 @@ const verifyToken = async (request: AuthenticatedRequest, reply: FastifyReply) =
   if (!timingSafeEqual(tokenDigest, expectedTokenDigest)) {
     return reply.code(401).send({ error: "Unauthorized" });
   }
+};
+
+
+const getMetadataType = (rawType: string): MetadataType | null => {
+  if (rawType === "movie") {
+    return MetadataType.movie;
+  }
+
+  if (rawType === "series") {
+    return MetadataType.series;
+  }
+
+  return null;
+};
+
+const upsertMetadata = async (metadata: MetadataPayload) =>
+  prisma.metadata.upsert({
+    where: {
+      imdbId_type: {
+        imdbId: metadata.imdbId,
+        type: metadata.type
+      }
+    },
+    create: metadata,
+    update: {
+      tmdbId: metadata.tmdbId,
+      name: metadata.name,
+      year: metadata.year,
+      poster: metadata.poster,
+      background: metadata.background,
+      description: metadata.description,
+      updatedAt: new Date()
+    }
+  });
+
+const fetchMetadata = async (type: MetadataType, imdbId: string): Promise<MetadataPayload | null> => {
+  const tmdb = TmdbClient.fromEnv();
+  const metadata = await tmdb.findByImdbId(type, imdbId);
+
+  if (!metadata) {
+    return null;
+  }
+
+  await upsertMetadata(metadata);
+  return metadata;
 };
 
 const parseCatalogLimit = (rawLimit: unknown) => {
@@ -312,6 +358,77 @@ const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
     updatedSeriesProgress: seriesProgressByImdb.size
   };
 };
+
+
+app.get<{ Querystring: { type?: string; query?: string } }>("/search", async (request, reply) => {
+  const type = getMetadataType(request.query.type ?? "");
+  if (!type) {
+    return reply.code(400).send({ error: "type must be one of: movie, series" });
+  }
+
+  const query = request.query.query?.trim();
+  if (!query) {
+    return reply.code(400).send({ error: "query is required" });
+  }
+
+  let tmdb: TmdbClient;
+  try {
+    tmdb = TmdbClient.fromEnv();
+  } catch (error) {
+    request.log.error(error, "TMDB client initialization failed");
+    return reply.code(500).send({ error: "TMDB integration is not configured" });
+  }
+
+  const results = await tmdb.search(type, query);
+  await Promise.all(results.map((result) => upsertMetadata(result)));
+
+  return results.map((result) => ({
+    tmdbId: result.tmdbId,
+    imdbId: result.imdbId,
+    type: result.type,
+    name: result.name,
+    year: result.year,
+    poster: result.poster,
+    description: result.description
+  }));
+});
+
+app.get<{ Params: { type: string; imdbId: string } }>("/meta/:type/:imdbId", async (request, reply) => {
+  const type = getMetadataType(request.params.type);
+  if (!type) {
+    return reply.code(400).send({ error: "type must be one of: movie, series" });
+  }
+
+  const imdbId = request.params.imdbId.trim();
+  if (!imdbId) {
+    return reply.code(400).send({ error: "imdbId is required" });
+  }
+
+  const existing = await prisma.metadata.findUnique({
+    where: {
+      imdbId_type: {
+        imdbId,
+        type
+      }
+    }
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  try {
+    const metadata = await fetchMetadata(type, imdbId);
+    if (!metadata) {
+      return reply.code(404).send({ error: "Metadata not found" });
+    }
+
+    return metadata;
+  } catch (error) {
+    request.log.error(error, "Metadata fetch failed");
+    return reply.code(500).send({ error: "Metadata fetch failed" });
+  }
+});
 
 app.get("/health", async () => ({ status: "ok", service: "api" }));
 
