@@ -33,15 +33,35 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:7000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   addon:
     build:
       context: .
       dockerfile: apps/addon/Dockerfile
+    env_file:
+      - .env
     environment:
       PORT: 7001
+      CATALOGGY_API_BASE: ${CATALOGGY_API_BASE:-http://api:7000}
+      CATALOGGY_API_TOKEN: ${CATALOGGY_API_TOKEN:-dev-token}
+      ADDON_PUBLIC_BASE: ${ADDON_PUBLIC_BASE:-http://localhost:7001}
     ports:
       - "7001:7001"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:7001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
 volumes:
   pgdata:
