@@ -85,3 +85,11 @@ model KV {
   value     String
   updatedAt DateTime @db.Timestamp(6)
 }
+
+model TraktToken {
+  id           String   @id @default("default")
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+}
