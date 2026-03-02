@@ -1,0 +1,19 @@
+FROM node:20-alpine
+
+WORKDIR /app
+RUN corepack enable
+RUN apk add --no-cache wget
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs ./
+COPY apps/web/package.json ./apps/web/package.json
+
+RUN pnpm install --frozen-lockfile
+
+COPY apps/web ./apps/web
+
+RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
+USER app
+
+EXPOSE 7002
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s CMD wget -q --spider http://127.0.0.1:7002/ || exit 1
+CMD ["sh", "-c", "pnpm --filter @cataloggy/web build && pnpm --filter @cataloggy/web preview --host 0.0.0.0 --port 7002"]
