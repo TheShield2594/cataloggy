@@ -11,8 +11,15 @@ const requiredTraktEnv = [
 
 const check = async (name, run) => {
   process.stdout.write(`• ${name}... `);
-  await run();
-  process.stdout.write("ok\n");
+
+  try {
+    await run();
+    process.stdout.write("ok\n");
+  } catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    process.stdout.write(`failed (${details})\n`);
+    throw error;
+  }
 };
 
 const getJson = async (url, init) => {
