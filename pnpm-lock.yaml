@@ -1,0 +1,58 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+  .:
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.17.0
+        version: 9.17.0
+      '@types/node':
+        specifier: ^20.17.19
+        version: 20.17.19
+      eslint:
+        specifier: ^9.17.0
+        version: 9.17.0
+      globals:
+        specifier: ^15.14.0
+        version: 15.14.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.7.2
+      typescript-eslint:
+        specifier: ^8.19.1
+        version: 8.19.1
+
+  apps/addon:
+    dependencies:
+      fastify:
+        specifier: ^5.1.0
+        version: 5.1.0
+    devDependencies:
+      tsx:
+        specifier: ^4.19.2
+        version: 4.19.2
+
+  apps/api:
+    dependencies:
+      '@prisma/client':
+        specifier: ^5.22.0
+        version: 5.22.0
+      fastify:
+        specifier: ^5.1.0
+        version: 5.1.0
+      zod:
+        specifier: ^3.24.0
+        version: 3.24.0
+    devDependencies:
+      prisma:
+        specifier: ^5.22.0
+        version: 5.22.0
+      tsx:
+        specifier: ^4.19.2
+        version: 4.19.2
+
+  packages/shared: {}
