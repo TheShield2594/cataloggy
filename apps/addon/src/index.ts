@@ -5,6 +5,35 @@ const app = Fastify({ logger: true });
 const CATALOGGY_API_BASE = process.env.CATALOGGY_API_BASE ?? "http://api:7000";
 const CATALOGGY_API_TOKEN = process.env.CATALOGGY_API_TOKEN;
 const ADDON_PUBLIC_BASE = process.env.ADDON_PUBLIC_BASE;
+const PROXY_PATH_PREFIXES = ["/addon"] as const;
+
+const stripProxyPrefix = (url: string, prefix: string) => {
+  if (url === prefix) {
+    return "/";
+  }
+
+  if (!url.startsWith(`${prefix}/`)) {
+    return null;
+  }
+
+  return url.slice(prefix.length) || "/";
+};
+
+app.addHook("onRequest", async (request) => {
+  const rawUrl = request.raw.url;
+
+  if (!rawUrl) {
+    return;
+  }
+
+  for (const prefix of PROXY_PATH_PREFIXES) {
+    const stripped = stripProxyPrefix(rawUrl, prefix);
+    if (stripped) {
+      request.raw.url = stripped;
+      break;
+    }
+  }
+});
 
 type CataloggyList = {
   id: string;
