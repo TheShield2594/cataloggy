@@ -74,13 +74,18 @@ export const api = {
     });
   },
   addToList(listId: string, payload: { type: MediaType; imdbId: string; title: string }) {
-    return request(`/lists/${listId}/items`, {
+    const encodedListId = encodeURIComponent(listId);
+
+    return request(`/lists/${encodedListId}/items`, {
       method: "POST",
       body: JSON.stringify(payload)
     });
   },
   removeFromList(listId: string, item: { type: MediaType; imdbId: string }) {
-    return request(`/lists/${listId}/items/${item.type}/${item.imdbId}`, {
+    const encodedListId = encodeURIComponent(listId);
+    const encodedImdbId = encodeURIComponent(item.imdbId);
+
+    return request(`/lists/${encodedListId}/items/${item.type}/${encodedImdbId}`, {
       method: "DELETE"
     });
   },

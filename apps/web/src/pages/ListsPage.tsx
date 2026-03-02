@@ -45,7 +45,15 @@ function ListsIndex({ lists, onCreate }: { lists: CatalogList[]; onCreate: (name
   );
 }
 
-function ListDetails({ lists, reload }: { lists: CatalogList[]; reload: () => Promise<void> }) {
+function ListDetails({
+  lists,
+  reload,
+  onError
+}: {
+  lists: CatalogList[];
+  reload: () => Promise<void>;
+  onError: (message: string) => void;
+}) {
   const { listId } = useParams();
   const list = useMemo(() => lists.find((entry) => entry.id === listId), [lists, listId]);
 
@@ -68,8 +76,13 @@ function ListDetails({ lists, reload }: { lists: CatalogList[]; reload: () => Pr
               <button
                 type="button"
                 onClick={async () => {
-                  await api.removeFromList(list.id, { type: item.type, imdbId: item.imdbId });
-                  await reload();
+                  try {
+                    await api.removeFromList(list.id, { type: item.type, imdbId: item.imdbId });
+                    await reload();
+                  } catch (err) {
+                    console.error(err);
+                    onError(err instanceof Error ? err.message : "Failed to remove list item");
+                  }
                 }}
                 className="rounded bg-rose-600 px-2 py-1 text-xs"
               >
@@ -94,11 +107,14 @@ export function ListsPage() {
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load lists");
+      throw err;
     }
   };
 
   useEffect(() => {
-    void loadLists();
+    void loadLists().catch((err) => {
+      console.error(err);
+    });
   }, []);
 
   const createList = async (name: string) => {
@@ -107,6 +123,7 @@ export function ListsPage() {
       await loadLists();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create list");
+      throw err;
     }
   };
 
@@ -115,7 +132,7 @@ export function ListsPage() {
       {error && <p className="text-rose-300">{error}</p>}
       <Routes>
         <Route index element={<ListsIndex lists={lists} onCreate={createList} />} />
-        <Route path=":listId" element={<ListDetails lists={lists} reload={loadLists} />} />
+        <Route path=":listId" element={<ListDetails lists={lists} reload={loadLists} onError={setError} />} />
       </Routes>
     </div>
   );
