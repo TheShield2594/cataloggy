@@ -28,6 +28,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-cataloggy}
       PORT: 7000
+      CATALOGGY_ALLOWED_ORIGINS: ${CATALOGGY_ALLOWED_ORIGINS:-${CATALOGGY_WEB_PUBLIC:-http://localhost:7002}}
     ports:
       - "7000:7000"
     depends_on:
@@ -50,7 +51,7 @@ services:
       PORT: 7001
       CATALOGGY_API_BASE: ${CATALOGGY_API_BASE:-http://api:7000}
       CATALOGGY_API_TOKEN: ${CATALOGGY_API_TOKEN:-dev-token}
-      ADDON_PUBLIC_BASE: ${ADDON_PUBLIC_BASE:-http://localhost:7001}
+      ADDON_PUBLIC_BASE: ${ADDON_PUBLIC_BASE:-${CATALOGGY_ADDON_PUBLIC:-http://localhost:7001}}
     ports:
       - "7001:7001"
     depends_on:
@@ -70,7 +71,7 @@ services:
     env_file:
       - .env
     environment:
-      VITE_API_BASE: ${VITE_API_BASE:-http://api:7000}
+      VITE_API_BASE: ${VITE_API_BASE:-${CATALOGGY_API_PUBLIC:-http://localhost:7000}}
     ports:
       - "7002:7002"
     depends_on:
