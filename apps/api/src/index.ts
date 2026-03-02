@@ -27,6 +27,17 @@ type StremioMetaPreview = {
   id: string;
   type: StremioMetaType;
   name: string;
+  poster?: string;
+  year?: number;
+  description?: string;
+};
+
+type ContinueMetaPreview = StremioMetaPreview & {
+  lastWatched: {
+    season: number;
+    episode: number;
+    updatedAt: string;
+  };
 };
 
 const DEFAULT_STREMIO_LIMIT = 50;
@@ -112,12 +123,21 @@ const parseCatalogLimit = (rawLimit: unknown) => {
   return Math.min(parsed, MAX_STREMIO_LIMIT);
 };
 
+const parseMetaType = (rawType: unknown): StremioMetaType | null => {
+  if (rawType === "movie" || rawType === "series") {
+    return rawType;
+  }
+
+  return null;
+};
+
 const buildMetasFromIds = async (ids: string[], type: StremioMetaType): Promise<StremioMetaPreview[]> => {
   if (ids.length === 0) {
     return [];
   }
 
   const itemType = type === "movie" ? ItemType.movie : ItemType.series;
+  const metadataType = type === "movie" ? MetadataType.movie : MetadataType.series;
   const items = await prisma.item.findMany({
     where: {
       type: itemType,
@@ -128,14 +148,118 @@ const buildMetasFromIds = async (ids: string[], type: StremioMetaType): Promise<
       title: true
     }
   });
+  const metadata = await prisma.metadata.findMany({
+    where: {
+      imdbId: { in: ids },
+      type: metadataType
+    },
+    select: {
+      imdbId: true,
+      name: true,
+      poster: true,
+      year: true,
+      description: true
+    }
+  });
 
   const titleByImdbId = new Map(items.map((item) => [item.imdbId, item.title?.trim() ?? ""]));
+  const metadataByImdbId = new Map(metadata.map((entry) => [entry.imdbId, entry]));
 
-  return ids.map((id) => ({
-    id,
-    type,
-    name: titleByImdbId.get(id) || id
-  }));
+  return ids.map((id) => {
+    const meta = metadataByImdbId.get(id);
+
+    return {
+      id,
+      type,
+      name: titleByImdbId.get(id) || meta?.name || id,
+      poster: meta?.poster ?? undefined,
+      year: meta?.year ?? undefined,
+      description: meta?.description ?? undefined
+    };
+  });
+};
+
+const getWatchlistMetas = async (type: StremioMetaType, limit: number) => {
+  const watchlist = await getDefaultWatchlist();
+  const listItemType = type === "movie" ? ListItemType.movie : ListItemType.series;
+
+  const watchlistItems = await prisma.listItem.findMany({
+    where: { listId: watchlist.id, type: listItemType },
+    orderBy: { addedAt: "desc" },
+    take: limit,
+    select: { imdbId: true }
+  });
+
+  return buildMetasFromIds(
+    watchlistItems.map((item) => item.imdbId),
+    type
+  );
+};
+
+const getRecentMetas = async (type: StremioMetaType, limit: number) => {
+  if (type === "movie") {
+    const groupedMovies = await prisma.watchEvent.groupBy({
+      by: ["imdbId"],
+      where: { type: "movie" },
+      _max: { watchedAt: true },
+      orderBy: { _max: { watchedAt: "desc" } },
+      take: limit
+    });
+
+    return buildMetasFromIds(groupedMovies.map((event) => event.imdbId), type);
+  }
+
+  const groupedSeries = await prisma.watchEvent.groupBy({
+    by: ["seriesImdbId"],
+    where: {
+      type: "episode",
+      seriesImdbId: { not: null }
+    },
+    _max: { watchedAt: true },
+    orderBy: { _max: { watchedAt: "desc" } },
+    take: limit
+  });
+
+  const ids = groupedSeries.map((event) => event.seriesImdbId).filter((id): id is string => Boolean(id));
+
+  return buildMetasFromIds(ids, type);
+};
+
+const getContinueMetas = async (limit: number): Promise<ContinueMetaPreview[]> => {
+  const seriesProgress = await prisma.seriesProgress.findMany({
+    orderBy: { updatedAt: "desc" },
+    take: limit,
+    select: {
+      seriesImdbId: true,
+      lastSeason: true,
+      lastEpisode: true,
+      updatedAt: true
+    }
+  });
+
+  const metas = await buildMetasFromIds(
+    seriesProgress.map((progress) => progress.seriesImdbId),
+    "series"
+  );
+
+  const progressBySeriesId = new Map(seriesProgress.map((progress) => [progress.seriesImdbId, progress]));
+  return metas
+    .map((meta) => {
+      const progress = progressBySeriesId.get(meta.id);
+      if (!progress) {
+        return null;
+      }
+
+      return {
+        ...meta,
+        lastWatched: {
+          season: progress.lastSeason,
+          episode: progress.lastEpisode,
+          updatedAt: progress.updatedAt.toISOString()
+        }
+      };
+    })
+    .filter((meta): meta is ContinueMetaPreview => Boolean(meta));
 };
 
 const ensureDefaultWatchlist = async () => {
@@ -494,74 +618,59 @@ app.get("/lists", { preHandler: verifyToken }, async () => {
 
 app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_watchlist_movies", { preHandler: verifyToken }, async (request) => {
   const limit = parseCatalogLimit(request.query.limit);
-  const watchlist = await getDefaultWatchlist();
-
-  const watchlistItems = await prisma.listItem.findMany({
-    where: { listId: watchlist.id, type: ListItemType.movie },
-    orderBy: { addedAt: "desc" },
-    take: limit,
-    select: { imdbId: true }
-  });
-
-  const metas = await buildMetasFromIds(
-    watchlistItems.map((item) => item.imdbId),
-    "movie"
-  );
+  const metas = await getWatchlistMetas("movie", limit);
 
   return { metas };
 });
 
 app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_watchlist_series", { preHandler: verifyToken }, async (request) => {
   const limit = parseCatalogLimit(request.query.limit);
-  const watchlist = await getDefaultWatchlist();
-
-  const watchlistItems = await prisma.listItem.findMany({
-    where: { listId: watchlist.id, type: ListItemType.series },
-    orderBy: { addedAt: "desc" },
-    take: limit,
-    select: { imdbId: true }
-  });
-
-  const metas = await buildMetasFromIds(
-    watchlistItems.map((item) => item.imdbId),
-    "series"
-  );
+  const metas = await getWatchlistMetas("series", limit);
 
   return { metas };
 });
 
 app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_recent_movies", { preHandler: verifyToken }, async (request) => {
   const limit = parseCatalogLimit(request.query.limit);
-
-  const groupedMovies = await prisma.watchEvent.groupBy({
-    by: ["imdbId"],
-    where: { type: "movie" },
-    _max: { watchedAt: true },
-    orderBy: { _max: { watchedAt: "desc" } },
-    take: limit
-  });
-
-  const metas = await buildMetasFromIds(
-    groupedMovies.map((event) => event.imdbId),
-    "movie"
-  );
+  const metas = await getRecentMetas("movie", limit);
 
   return { metas };
 });
 
 app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_continue_series", { preHandler: verifyToken }, async (request) => {
   const limit = parseCatalogLimit(request.query.limit);
+  const metas = await getContinueMetas(limit);
 
-  const seriesProgress = await prisma.seriesProgress.findMany({
-    orderBy: { updatedAt: "desc" },
-    take: limit,
-    select: { seriesImdbId: true }
-  });
+  return { metas };
+});
 
-  const metas = await buildMetasFromIds(
-    seriesProgress.map((progress) => progress.seriesImdbId),
-    "series"
-  );
+app.get<{ Querystring: { type?: string; limit?: string } }>("/watchlist", { preHandler: verifyToken }, async (request, reply) => {
+  const type = parseMetaType(request.query.type);
+  if (!type) {
+    return reply.code(400).send({ error: "type must be one of: movie, series" });
+  }
+
+  const limit = parseCatalogLimit(request.query.limit);
+  const metas = await getWatchlistMetas(type, limit);
+
+  return { metas };
+});
+
+app.get<{ Querystring: { limit?: string } }>("/continue", { preHandler: verifyToken }, async (request) => {
+  const limit = parseCatalogLimit(request.query.limit);
+  const metas = await getContinueMetas(limit);
+
+  return { metas };
+});
+
+app.get<{ Querystring: { type?: string; limit?: string } }>("/recent", { preHandler: verifyToken }, async (request, reply) => {
+  const type = parseMetaType(request.query.type);
+  if (!type) {
+    return reply.code(400).send({ error: "type must be one of: movie, series" });
+  }
+
+  const limit = parseCatalogLimit(request.query.limit);
+  const metas = await getRecentMetas(type, limit);
 
   return { metas };
 });
