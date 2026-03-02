@@ -16,6 +16,8 @@ const getTraktClient = () => {
 };
 
 const API_TOKEN = process.env.API_TOKEN;
+const TRAKT_LAST_POLLED_AT_KEY = "trakt:lastPolledAt";
+const TRAKT_POLL_INTERVAL_SEC = Number(process.env.TRAKT_POLL_INTERVAL_SEC ?? 300);
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type AuthenticatedRequest = FastifyRequest;
@@ -81,6 +83,186 @@ const getDefaultWatchlist = async () => {
   return prisma.list.create({
     data: { kind: ListKind.watchlist, name: "Watchlist" }
   });
+};
+
+const getTraktPollStartAt = async () => {
+  const kvValue = await prisma.kV.findUnique({ where: { key: TRAKT_LAST_POLLED_AT_KEY } });
+
+  if (!kvValue) {
+    return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  }
+
+  const parsed = new Date(kvValue.value);
+  if (Number.isNaN(parsed.getTime())) {
+    return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  }
+
+  return parsed;
+};
+
+const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
+  const client = getTraktClient();
+  const pollStartAt = await getTraktPollStartAt();
+  const pollCompletedAt = new Date();
+  const pollStartAtIso = pollStartAt.toISOString();
+
+  const [movieHistory, episodeHistory] = await Promise.all([
+    client.fetchMovieHistory(logger, pollStartAtIso),
+    client.fetchEpisodeHistory(logger, pollStartAtIso)
+  ]);
+
+  const importedWatchEvents = { movies: 0, episodes: 0 };
+  const seriesProgressByImdb = new Map<string, { lastSeason: number; lastEpisode: number; updatedAt: Date }>();
+
+  for (const entry of movieHistory) {
+    const imdbId = entry.movie?.ids?.imdb;
+    const watchedAt = entry.watched_at;
+
+    if (!imdbId || !watchedAt) {
+      continue;
+    }
+
+    const watchedAtDate = new Date(watchedAt);
+    const title = entry.movie?.title?.trim();
+    if (title) {
+      await prisma.item.upsert({
+        where: { type_imdbId: { type: ItemType.movie, imdbId } },
+        create: { type: ItemType.movie, imdbId, title },
+        update: { title }
+      });
+    }
+
+    const existingEvent = await prisma.watchEvent.findFirst({
+      where: {
+        type: "movie",
+        imdbId,
+        watchedAt: watchedAtDate
+      }
+    });
+
+    if (existingEvent) {
+      await prisma.watchEvent.update({
+        where: { id: existingEvent.id },
+        data: { plays: 1 }
+      });
+    } else {
+      await prisma.watchEvent.create({
+        data: {
+          type: "movie",
+          imdbId,
+          watchedAt: watchedAtDate,
+          plays: 1
+        }
+      });
+    }
+
+    importedWatchEvents.movies += 1;
+  }
+
+  for (const entry of episodeHistory) {
+    const episodeImdbId = entry.episode?.ids?.imdb;
+    const seriesImdbId = entry.show?.ids?.imdb;
+    const watchedAt = entry.watched_at;
+    const season = entry.episode?.season;
+    const episode = entry.episode?.number;
+
+    if (!episodeImdbId || !seriesImdbId || !watchedAt || season === undefined || episode === undefined) {
+      continue;
+    }
+
+    const watchedAtDate = new Date(watchedAt);
+    const seriesTitle = entry.show?.title?.trim();
+    if (seriesTitle) {
+      await prisma.item.upsert({
+        where: { type_imdbId: { type: ItemType.series, imdbId: seriesImdbId } },
+        create: { type: ItemType.series, imdbId: seriesImdbId, title: seriesTitle },
+        update: { title: seriesTitle }
+      });
+    }
+
+    const existingEvent = await prisma.watchEvent.findFirst({
+      where: {
+        type: "episode",
+        imdbId: episodeImdbId,
+        seriesImdbId,
+        season,
+        episode,
+        watchedAt: watchedAtDate
+      }
+    });
+
+    if (existingEvent) {
+      await prisma.watchEvent.update({
+        where: { id: existingEvent.id },
+        data: { plays: 1 }
+      });
+    } else {
+      await prisma.watchEvent.create({
+        data: {
+          type: "episode",
+          imdbId: episodeImdbId,
+          seriesImdbId,
+          season,
+          episode,
+          watchedAt: watchedAtDate,
+          plays: 1
+        }
+      });
+    }
+
+    const existing = seriesProgressByImdb.get(seriesImdbId);
+    if (
+      !existing ||
+      watchedAtDate.getTime() > existing.updatedAt.getTime() ||
+      (watchedAtDate.getTime() === existing.updatedAt.getTime() &&
+        (season > existing.lastSeason || (season === existing.lastSeason && episode > existing.lastEpisode)))
+    ) {
+      seriesProgressByImdb.set(seriesImdbId, {
+        lastSeason: season,
+        lastEpisode: episode,
+        updatedAt: watchedAtDate
+      });
+    }
+
+    importedWatchEvents.episodes += 1;
+  }
+
+  for (const [seriesImdbId, progress] of seriesProgressByImdb.entries()) {
+    await prisma.seriesProgress.upsert({
+      where: { seriesImdbId },
+      create: {
+        seriesImdbId,
+        lastSeason: progress.lastSeason,
+        lastEpisode: progress.lastEpisode,
+        updatedAt: progress.updatedAt
+      },
+      update: {
+        lastSeason: progress.lastSeason,
+        lastEpisode: progress.lastEpisode,
+        updatedAt: progress.updatedAt
+      }
+    });
+  }
+
+  await prisma.kV.upsert({
+    where: { key: TRAKT_LAST_POLLED_AT_KEY },
+    create: {
+      key: TRAKT_LAST_POLLED_AT_KEY,
+      value: pollCompletedAt.toISOString(),
+      updatedAt: pollCompletedAt
+    },
+    update: {
+      value: pollCompletedAt.toISOString(),
+      updatedAt: pollCompletedAt
+    }
+  });
+
+  return {
+    since: pollStartAtIso,
+    polledAt: pollCompletedAt.toISOString(),
+    importedWatchEvents,
+    updatedSeriesProgress: seriesProgressByImdb.size
+  };
 };
 
 app.get("/health", async () => ({ status: "ok", service: "api" }));
@@ -398,9 +580,30 @@ app.post("/trakt/import", { preHandler: verifyToken }, async (request, reply) =>
   });
 });
 
+app.post("/trakt/poll", { preHandler: verifyToken }, async (request, reply) => {
+  try {
+    const result = await pollTraktHistory(request.log);
+    return reply.code(200).send(result);
+  } catch (error) {
+    request.log.error(error, "Trakt poll failed");
+    return reply.code(500).send({ error: "Trakt poll failed" });
+  }
+});
+
 const start = async () => {
   const port = Number(process.env.PORT ?? 7000);
   await ensureDefaultWatchlist();
+
+  if (TRAKT_POLL_INTERVAL_SEC > 0) {
+    setInterval(() => {
+      void pollTraktHistory(app.log).catch((error) => {
+        app.log.error(error, "Scheduled Trakt poll failed");
+      });
+    }, TRAKT_POLL_INTERVAL_SEC * 1000);
+  } else {
+    app.log.info("Scheduled Trakt poll disabled because TRAKT_POLL_INTERVAL_SEC is set to 0");
+  }
+
   await app.listen({ port, host: "0.0.0.0" });
 };
 
