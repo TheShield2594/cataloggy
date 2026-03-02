@@ -33,5 +33,13 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"]
       }
     })
-  ]
+  ],
+  server: {
+    host: "0.0.0.0",
+    port: 7002
+  },
+  preview: {
+    host: "0.0.0.0",
+    port: 7002
+  }
 });

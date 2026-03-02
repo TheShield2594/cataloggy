@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 0.0.0.0 --port 7002",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "lint": "eslint src",
-    "preview": "vite preview"
+    "preview": "vite preview --host 0.0.0.0 --port 7002"
   },
   "dependencies": {
     "react": "^18.3.1",
