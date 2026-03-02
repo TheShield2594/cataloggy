@@ -29,11 +29,10 @@ cataloggy/
    pnpm install
    ```
 
-2. Prepare environment files:
+2. Prepare environment file:
 
    ```bash
    cp .env.example .env
-   cp apps/api/.env.example apps/api/.env
    ```
 
 3. Start everything with Docker Compose:
@@ -41,6 +40,14 @@ cataloggy/
    ```bash
    docker compose up --build
    ```
+
+4. Run the smoke checks:
+
+   ```bash
+   pnpm smoke
+   ```
+
+   This validates API and add-on health endpoints and (when all Trakt env vars are configured) runs `/trakt/import` and verifies a catalog response contains a `metas` array.
 
 ## Services
 
