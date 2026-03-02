@@ -1,5 +1,39 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:7000";
+const API_BASE_DEFAULT = import.meta.env.VITE_API_BASE ?? "http://localhost:7000";
+const API_BASE_OVERRIDE_KEY = "cataloggy_api_base_override";
 const TOKEN_KEY = "cataloggy_token";
+
+export const runtimeConfig = {
+  apiBaseDefault: API_BASE_DEFAULT,
+  apiBaseOverrideKey: API_BASE_OVERRIDE_KEY,
+  tokenKey: TOKEN_KEY,
+  getApiBaseOverride() {
+    return window.localStorage.getItem(API_BASE_OVERRIDE_KEY)?.trim() ?? "";
+  },
+  setApiBaseOverride(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      window.localStorage.removeItem(API_BASE_OVERRIDE_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(API_BASE_OVERRIDE_KEY, trimmed);
+  },
+  getApiBase() {
+    return runtimeConfig.getApiBaseOverride() || API_BASE_DEFAULT;
+  },
+  getToken() {
+    return window.localStorage.getItem(TOKEN_KEY) ?? "";
+  },
+  setToken(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      window.localStorage.removeItem(TOKEN_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(TOKEN_KEY, trimmed);
+  }
+};
 
 export type MediaType = "movie" | "series";
 
@@ -35,7 +69,7 @@ export type CatalogMeta = {
 };
 
 const authHeaders = () => {
-  const token = window.localStorage.getItem(TOKEN_KEY) ?? "";
+  const token = runtimeConfig.getToken();
   return {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json"
@@ -43,7 +77,7 @@ const authHeaders = () => {
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${runtimeConfig.getApiBase()}${path}`, {
     ...init,
     headers: {
       ...authHeaders(),
