@@ -21,6 +21,15 @@ const TRAKT_POLL_INTERVAL_SEC = Number(process.env.TRAKT_POLL_INTERVAL_SEC ?? 30
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type AuthenticatedRequest = FastifyRequest;
+type StremioMetaType = "movie" | "series";
+type StremioMetaPreview = {
+  id: string;
+  type: StremioMetaType;
+  name: string;
+};
+
+const DEFAULT_STREMIO_LIMIT = 50;
+const MAX_STREMIO_LIMIT = 200;
 
 const toSha256Digest = (value: string) => createHash("sha256").update(value).digest();
 
@@ -42,6 +51,45 @@ const verifyToken = async (request: AuthenticatedRequest, reply: FastifyReply) =
   if (!timingSafeEqual(tokenDigest, expectedTokenDigest)) {
     return reply.code(401).send({ error: "Unauthorized" });
   }
+};
+
+const parseCatalogLimit = (rawLimit: unknown) => {
+  if (rawLimit === undefined) {
+    return DEFAULT_STREMIO_LIMIT;
+  }
+
+  const parsed = Number(rawLimit);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return DEFAULT_STREMIO_LIMIT;
+  }
+
+  return Math.min(parsed, MAX_STREMIO_LIMIT);
+};
+
+const buildMetasFromIds = async (ids: string[], type: StremioMetaType): Promise<StremioMetaPreview[]> => {
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const itemType = type === "movie" ? ItemType.movie : ItemType.series;
+  const items = await prisma.item.findMany({
+    where: {
+      type: itemType,
+      imdbId: { in: ids }
+    },
+    select: {
+      imdbId: true,
+      title: true
+    }
+  });
+
+  const titleByImdbId = new Map(items.map((item) => [item.imdbId, item.title?.trim() ?? ""]));
+
+  return ids.map((id) => ({
+    id,
+    type,
+    name: titleByImdbId.get(id) || id
+  }));
 };
 
 const ensureDefaultWatchlist = async () => {
@@ -325,6 +373,80 @@ app.get("/lists", { preHandler: verifyToken }, async () => {
   });
 
   return { lists };
+});
+
+app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_watchlist_movies", { preHandler: verifyToken }, async (request) => {
+  const limit = parseCatalogLimit(request.query.limit);
+  const watchlist = await getDefaultWatchlist();
+
+  const watchlistItems = await prisma.listItem.findMany({
+    where: { listId: watchlist.id, type: ListItemType.movie },
+    orderBy: { addedAt: "desc" },
+    take: limit,
+    select: { imdbId: true }
+  });
+
+  const metas = await buildMetasFromIds(
+    watchlistItems.map((item) => item.imdbId),
+    "movie"
+  );
+
+  return { metas };
+});
+
+app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_watchlist_series", { preHandler: verifyToken }, async (request) => {
+  const limit = parseCatalogLimit(request.query.limit);
+  const watchlist = await getDefaultWatchlist();
+
+  const watchlistItems = await prisma.listItem.findMany({
+    where: { listId: watchlist.id, type: ListItemType.series },
+    orderBy: { addedAt: "desc" },
+    take: limit,
+    select: { imdbId: true }
+  });
+
+  const metas = await buildMetasFromIds(
+    watchlistItems.map((item) => item.imdbId),
+    "series"
+  );
+
+  return { metas };
+});
+
+app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_recent_movies", { preHandler: verifyToken }, async (request) => {
+  const limit = parseCatalogLimit(request.query.limit);
+
+  const groupedMovies = await prisma.watchEvent.groupBy({
+    by: ["imdbId"],
+    where: { type: "movie" },
+    _max: { watchedAt: true },
+    orderBy: { _max: { watchedAt: "desc" } },
+    take: limit
+  });
+
+  const metas = await buildMetasFromIds(
+    groupedMovies.map((event) => event.imdbId),
+    "movie"
+  );
+
+  return { metas };
+});
+
+app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_continue_series", { preHandler: verifyToken }, async (request) => {
+  const limit = parseCatalogLimit(request.query.limit);
+
+  const seriesProgress = await prisma.seriesProgress.findMany({
+    orderBy: { updatedAt: "desc" },
+    take: limit,
+    select: { seriesImdbId: true }
+  });
+
+  const metas = await buildMetasFromIds(
+    seriesProgress.map((progress) => progress.seriesImdbId),
+    "series"
+  );
+
+  return { metas };
 });
 
 app.post<{ Params: { listId: string }; Body: unknown }>("/lists/:listId/items", { preHandler: verifyToken }, async (request, reply) => {
