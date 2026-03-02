@@ -83,15 +83,19 @@ export class TraktClient {
     return this.fetchAllPages<TraktShowPayload>("/sync/watchlist/shows", logger);
   }
 
-  async fetchMovieHistory(logger: FastifyBaseLogger): Promise<TraktMovieHistoryPayload[]> {
-    return this.fetchAllPages<TraktMovieHistoryPayload>("/sync/history/movies", logger);
+  async fetchMovieHistory(logger: FastifyBaseLogger, startAt?: string): Promise<TraktMovieHistoryPayload[]> {
+    return this.fetchAllPages<TraktMovieHistoryPayload>("/sync/history/movies", logger, startAt ? { start_at: startAt } : undefined);
   }
 
-  async fetchEpisodeHistory(logger: FastifyBaseLogger): Promise<TraktEpisodeHistoryPayload[]> {
-    return this.fetchAllPages<TraktEpisodeHistoryPayload>("/sync/history/episodes", logger);
+  async fetchEpisodeHistory(logger: FastifyBaseLogger, startAt?: string): Promise<TraktEpisodeHistoryPayload[]> {
+    return this.fetchAllPages<TraktEpisodeHistoryPayload>("/sync/history/episodes", logger, startAt ? { start_at: startAt } : undefined);
   }
 
-  private async fetchAllPages<T>(path: string, logger: FastifyBaseLogger): Promise<T[]> {
+  private async fetchAllPages<T>(
+    path: string,
+    logger: FastifyBaseLogger,
+    queryParams?: Record<string, string>
+  ): Promise<T[]> {
     const items: T[] = [];
     let page = 1;
     let pageCount = 1;
@@ -104,6 +108,7 @@ export class TraktClient {
           "trakt-api-key": this.clientId,
           Authorization: `Bearer ${this.accessToken}`
         },
+        queryParams,
         page,
         perPage: 100,
         logger
@@ -139,6 +144,7 @@ export class TraktClient {
       method: "GET" | "POST";
       headers: Record<string, string>;
       body?: string;
+      queryParams?: Record<string, string>;
       page?: number;
       perPage?: number;
       logger: FastifyBaseLogger;
@@ -148,6 +154,12 @@ export class TraktClient {
     const url = new URL(path, TRAKT_API_BASE);
     if (options.page !== undefined) {
       url.searchParams.set("page", String(options.page));
+    }
+
+    if (options.queryParams) {
+      for (const [key, value] of Object.entries(options.queryParams)) {
+        url.searchParams.set(key, value);
+      }
     }
 
     if (options.perPage !== undefined) {
