@@ -39,6 +39,7 @@ model Item {
   createdAt    DateTime @default(now()) @db.Timestamp(6)
 
   @@index([imdbId])
+  @@unique([type, imdbId])
 }
 
 model List {
