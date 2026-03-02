@@ -59,10 +59,15 @@ const API_TOKEN = process.env.API_TOKEN;
 const TRAKT_LAST_POLLED_AT_KEY = "trakt:lastPolledAt";
 const TRAKT_POLL_INTERVAL_SEC = Number(process.env.TRAKT_POLL_INTERVAL_SEC ?? 300);
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const IS_DEVELOPMENT = process.env.NODE_ENV === "development";
+const PRODUCTION_UI_ORIGIN = "https://cataloggy.domain.com";
 const CATALOGGY_ALLOWED_ORIGINS = (process.env.CATALOGGY_ALLOWED_ORIGINS ?? "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+const ALLOWED_ORIGINS = IS_DEVELOPMENT
+  ? ["*"]
+  : Array.from(new Set([PRODUCTION_UI_ORIGIN, ...CATALOGGY_ALLOWED_ORIGINS]));
 const CORS_METHODS = "GET,POST,DELETE,OPTIONS";
 const CORS_HEADERS = "Authorization,Content-Type";
 
@@ -99,11 +104,15 @@ const DEFAULT_STREMIO_LIMIT = 50;
 const MAX_STREMIO_LIMIT = 200;
 
 const isAllowedOrigin = (origin: string | undefined) => {
+  if (IS_DEVELOPMENT) {
+    return true;
+  }
+
   if (!origin) {
     return false;
   }
 
-  return CATALOGGY_ALLOWED_ORIGINS.includes(origin);
+  return ALLOWED_ORIGINS.includes(origin);
 };
 
 const applyCorsHeaders = (request: FastifyRequest, reply: FastifyReply) => {
@@ -113,10 +122,13 @@ const applyCorsHeaders = (request: FastifyRequest, reply: FastifyReply) => {
     return;
   }
 
-  reply.header("Access-Control-Allow-Origin", origin);
+  reply.header("Access-Control-Allow-Origin", IS_DEVELOPMENT ? "*" : origin);
   reply.header("Access-Control-Allow-Methods", CORS_METHODS);
   reply.header("Access-Control-Allow-Headers", CORS_HEADERS);
-  reply.header("Vary", "Origin");
+
+  if (!IS_DEVELOPMENT) {
+    reply.header("Vary", "Origin");
+  }
 };
 
 const toSha256Digest = (value: string) => createHash("sha256").update(value).digest();
