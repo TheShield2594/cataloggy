@@ -7,9 +7,9 @@ const prisma = new PrismaClient();
 const app = Fastify({ logger: true });
 let traktClient: TraktClient | null = null;
 
-const getTraktClient = () => {
+const getTraktClient = async () => {
   if (!traktClient) {
-    traktClient = new TraktClient();
+    traktClient = await TraktClient.create(prisma);
   }
 
   return traktClient;
@@ -149,7 +149,7 @@ const getTraktPollStartAt = async () => {
 };
 
 const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
-  const client = getTraktClient();
+  const client = await getTraktClient();
   const pollStartAt = await getTraktPollStartAt();
   const pollCompletedAt = new Date();
   const pollStartAtIso = pollStartAt.toISOString();
@@ -538,7 +538,7 @@ app.delete<{ Params: { listId: string; type: string; imdbId: string } }>("/lists
 app.post("/trakt/import", { preHandler: verifyToken }, async (request, reply) => {
   let client: TraktClient;
   try {
-    client = getTraktClient();
+    client = await getTraktClient();
   } catch (error) {
     request.log.error(error, "Trakt client initialization failed");
     return reply.code(500).send({ error: "Trakt integration is not configured" });
