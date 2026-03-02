@@ -7,9 +7,80 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+enum ItemType {
+  movie
+  series
+  episode
+}
+
+enum ListKind {
+  watchlist
+  custom
+}
+
+enum ListItemType {
+  movie
+  series
+}
+
+enum WatchEventType {
+  movie
+  episode
+}
+
+model Item {
+  id           String   @id @default(uuid()) @db.Uuid
+  type         ItemType
+  imdbId       String
+  parentImdbId String?
+  season       Int?
+  episode      Int?
+  title        String?
+  createdAt    DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([imdbId])
+}
+
+model List {
+  id        String     @id @default(uuid()) @db.Uuid
+  name      String
+  kind      ListKind
+  createdAt DateTime   @default(now()) @db.Timestamp(6)
+  items     ListItem[]
+}
+
+model ListItem {
+  listId  String       @db.Uuid
+  type    ListItemType
+  imdbId  String
+  addedAt DateTime     @default(now()) @db.Timestamp(6)
+
+  list List @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, type, imdbId])
+  @@index([listId])
+}
+
+model WatchEvent {
+  id           String         @id @default(uuid()) @db.Uuid
+  type         WatchEventType
+  imdbId       String
+  seriesImdbId String?
+  season       Int?
+  episode      Int?
+  watchedAt    DateTime       @db.Timestamptz(6)
+  plays        Int            @default(1)
+}
+
+model SeriesProgress {
+  seriesImdbId String   @id
+  lastSeason   Int
+  lastEpisode  Int
+  updatedAt    DateTime @db.Timestamptz(6)
+}
+
+model KV {
+  key       String   @id
+  value     String
+  updatedAt DateTime @db.Timestamp(6)
 }
