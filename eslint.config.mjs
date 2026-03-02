@@ -10,8 +10,7 @@ export default [
       ecmaVersion: "latest",
       sourceType: "module",
       globals: {
-        ...globals.node,
-        ...globals.browser
+        ...globals.node
       }
     }
   },
@@ -25,12 +24,19 @@ export default [
         sourceType: "module"
       },
       globals: {
-        ...globals.node,
-        ...globals.browser
+        ...globals.node
       }
     },
     rules: {
       "no-console": "off"
+    }
+  },
+  {
+    files: ["apps/web/**/*.{js,jsx,ts,tsx}"],
+    languageOptions: {
+      globals: {
+        ...globals.browser
+      }
     }
   }
 ];

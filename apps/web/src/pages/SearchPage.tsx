@@ -7,14 +7,21 @@ export function SearchPage() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [lists, setLists] = useState<CatalogList[]>([]);
   const [selectedListId, setSelectedListId] = useState<string>("");
+  const [pendingAdds, setPendingAdds] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void api.getLists().then(({ lists: loaded }) => {
-      setLists(loaded);
-      setSelectedListId(loaded[0]?.id ?? "");
-    });
+    void (async () => {
+      try {
+        const { lists: loaded } = await api.getLists();
+        setLists(loaded);
+        setSelectedListId(loaded[0]?.id ?? "");
+      } catch (err) {
+        console.error(err);
+        setError(err instanceof Error ? err.message : "Failed to load lists");
+      }
+    })();
   }, []);
 
   const watchlistId = useMemo(() => lists.find((list) => list.kind === "watchlist")?.id, [lists]);
@@ -33,14 +40,21 @@ export function SearchPage() {
   };
 
   const handleAdd = async (listId: string, result: SearchResult) => {
+    if (pendingAdds[listId]) {
+      return;
+    }
+
     setMessage(null);
     setError(null);
+    setPendingAdds((current) => ({ ...current, [listId]: true }));
 
     try {
       await api.addToList(listId, { type: result.type, imdbId: result.imdbId, title: result.name });
       setMessage(`Added ${result.name}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to add item");
+    } finally {
+      setPendingAdds((current) => ({ ...current, [listId]: false }));
     }
   };
 
@@ -88,7 +102,7 @@ export function SearchPage() {
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  disabled={!watchlistId}
+                  disabled={!watchlistId || (watchlistId ? pendingAdds[watchlistId] : false)}
                   onClick={() => watchlistId && handleAdd(watchlistId, result)}
                   className="rounded bg-sky-600 px-3 py-2 text-sm disabled:opacity-50"
                 >
@@ -107,7 +121,7 @@ export function SearchPage() {
                 </select>
                 <button
                   type="button"
-                  disabled={!selectedListId}
+                  disabled={!selectedListId || pendingAdds[selectedListId]}
                   onClick={() => selectedListId && handleAdd(selectedListId, result)}
                   className="rounded bg-violet-600 px-3 py-2 text-sm disabled:opacity-50"
                 >
