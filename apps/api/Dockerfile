@@ -2,6 +2,7 @@ FROM node:20-alpine
 
 WORKDIR /app
 RUN corepack enable
+RUN apk add --no-cache wget
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs ./
 COPY apps/api/package.json ./apps/api/package.json
