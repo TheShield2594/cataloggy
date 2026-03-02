@@ -5,7 +5,8 @@ const parseProxyPathPrefixes = (raw: string | undefined, fallback: readonly stri
     .split(",")
     .map((prefix) => prefix.trim())
     .filter(Boolean)
-    .map((prefix) => (prefix.startsWith("/") ? prefix : `/${prefix}`));
+    .map((prefix) => (prefix.startsWith("/") ? prefix : `/${prefix}`))
+    .map((prefix) => (prefix.length > 1 ? prefix.replace(/\/+$/, "") : prefix));
 
   return parsed.length > 0 ? parsed : [...fallback];
 };
