@@ -13,9 +13,10 @@ RUN pnpm install --frozen-lockfile
 COPY apps/addon ./apps/addon
 COPY packages/shared ./packages/shared
 
+RUN pnpm --filter @cataloggy/addon build
 RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
 USER app
 
 EXPOSE 7001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s CMD wget -q --spider http://127.0.0.1:7001/health || exit 1
-CMD ["sh", "-c", "pnpm --filter @cataloggy/addon build && pnpm --filter @cataloggy/addon start"]
+CMD ["pnpm", "--filter", "@cataloggy/addon", "start"]

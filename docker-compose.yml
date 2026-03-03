@@ -50,7 +50,7 @@ services:
     environment:
       PORT: 7001
       CATALOGGY_API_BASE: ${CATALOGGY_API_BASE:-http://api:7000}
-      CATALOGGY_API_TOKEN: ${CATALOGGY_API_TOKEN:-dev-token}
+      CATALOGGY_API_TOKEN: ${CATALOGGY_API_TOKEN:-${API_TOKEN:-dev-token}}
       ADDON_PUBLIC_BASE: ${ADDON_PUBLIC_BASE:-${CATALOGGY_ADDON_PUBLIC:-http://localhost:7001}}
     ports:
       - "7001:7001"
