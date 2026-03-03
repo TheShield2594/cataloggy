@@ -21,23 +21,29 @@ cataloggy/
 - pnpm 9+
 - Docker + Docker Compose
 
-## Setup
+## Docker Compose install (recommended)
 
-1. Install dependencies from the repository root:
-
-   ```bash
-   pnpm install
-   ```
-
-2. Prepare environment file:
+1. Prepare environment file:
 
    ```bash
    cp .env.example .env
    ```
 
-   Set `TMDB_API_KEY` in `.env` if you plan to use the search/meta endpoints.
+2. Set only the values you care about in `.env`:
 
-3. Start everything with Docker Compose:
+   - Required: `API_TOKEN`
+   - Optional but recommended for LAN devices (phone/Apple TV):
+     - `CATALOGGY_PUBLIC_BASE`
+     - `CATALOGGY_API_PUBLIC`
+     - `CATALOGGY_ADDON_PUBLIC`
+     - `CATALOGGY_WEB_PUBLIC`
+   - Optional integrations:
+     - `TMDB_API_KEY`
+     - Trakt variables (`TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET`, `TRAKT_ACCESS_TOKEN`, `TRAKT_REFRESH_TOKEN`)
+
+   Everything else already has defaults in `docker-compose.yml`, so you can leave them blank.
+
+3. Start everything:
 
    ```bash
    docker compose up --build
@@ -50,6 +56,20 @@ cataloggy/
    ```
 
    This validates API and add-on health endpoints and (when all Trakt env vars are configured) runs `/trakt/import` and verifies a catalog response contains a `metas` array.
+
+## Local development without Docker
+
+1. Install dependencies from the repository root:
+
+   ```bash
+   pnpm install
+   ```
+
+2. Start local dev services:
+
+   ```bash
+   pnpm dev
+   ```
 
 ## Services
 
