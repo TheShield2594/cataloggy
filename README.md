@@ -39,7 +39,7 @@ cataloggy/
      - `CATALOGGY_WEB_PUBLIC`
    - Optional integrations:
      - `TMDB_API_KEY`
-     - Trakt variables (`TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET`, `TRAKT_ACCESS_TOKEN`, `TRAKT_REFRESH_TOKEN`)
+     - Trakt variables (`TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET`)
 
    Everything else already has defaults in `docker-compose.yml`, so you can leave them blank.
 
