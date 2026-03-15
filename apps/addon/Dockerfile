@@ -15,7 +15,7 @@ RUN pnpm install --frozen-lockfile
 COPY apps/addon ./apps/addon
 COPY packages/shared ./packages/shared
 
-RUN pnpm --filter @cataloggy/addon build
+RUN cd apps/addon && pnpm exec tsc -p tsconfig.json
 RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
 USER app
 
