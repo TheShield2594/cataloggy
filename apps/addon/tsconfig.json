@@ -4,7 +4,9 @@
     "rootDir": "src",
     "outDir": "dist",
     "noEmit": false,
-    "types": []
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"]
 }
