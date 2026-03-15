@@ -1,4 +1,4 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyRequest, type FastifyReply, type RawRequestDefaultExpression } from "fastify";
 
 const parseProxyPathPrefixes = (raw: string | undefined, fallback: readonly string[]) => {
   const parsed = (raw ?? "")
@@ -41,7 +41,7 @@ const normalizeProxyPath = (rawUrl: string) => {
 
 const app = Fastify({
   logger: true,
-  rewriteUrl: (request) => normalizeProxyPath(request.url ?? "/")
+  rewriteUrl: (request: RawRequestDefaultExpression) => normalizeProxyPath(request.url ?? "/")
 });
 
 type CataloggyList = {
@@ -88,7 +88,7 @@ const fetchCustomLists = async (): Promise<CataloggyList[]> => {
   return (payload.lists ?? []).filter((list) => list.kind === "custom");
 };
 
-app.get("/manifest.json", async (request, reply) => {
+app.get("/manifest.json", async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const customLists = await fetchCustomLists();
     const customCatalogs = customLists.flatMap((list) => [
