@@ -22,4 +22,4 @@ USER app
 
 EXPOSE 7000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s CMD wget -q --spider http://127.0.0.1:7000/health || exit 1
-CMD ["pnpm", "--filter", "@cataloggy/api", "start"]
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy --schema=apps/api/prisma/schema.prisma && node apps/api/dist/index.js"]
