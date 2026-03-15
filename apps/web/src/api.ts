@@ -77,13 +77,27 @@ const authHeaders = () => {
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${runtimeConfig.getApiBase()}${path}`, {
-    ...init,
-    headers: {
-      ...authHeaders(),
-      ...(init?.headers ?? {})
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  let response: Response;
+  try {
+    response = await fetch(`${runtimeConfig.getApiBase()}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        ...authHeaders(),
+        ...(init?.headers ?? {})
+      }
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (controller.signal.aborted) {
+      throw new Error(`Request timed out – is the API server running at ${runtimeConfig.getApiBase()}?`);
     }
-  });
+    throw new Error(`Network error – cannot reach ${runtimeConfig.getApiBase()}. Check that the API server is running and the URL is correct.`);
+  }
+  clearTimeout(timeoutId);
 
   if (!response.ok) {
     const message = await response.text();
