@@ -19,4 +19,4 @@ USER app
 
 EXPOSE 7002
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s CMD wget -q --spider http://127.0.0.1:7002/ || exit 1
-CMD ["sh", "-c", "cd apps/web && pnpm exec tsc -b && pnpm exec vite build && pnpm exec vite preview --host 0.0.0.0 --port 7002"]
+CMD ["sh", "-c", "pnpm exec tsc -b apps/web && pnpm exec vite build --root apps/web && pnpm exec vite preview --host 0.0.0.0 --port 7002 --root apps/web"]
