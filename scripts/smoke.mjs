@@ -4,9 +4,7 @@ const apiToken = process.env.API_TOKEN ?? "dev-token";
 
 const requiredTraktEnv = [
   "TRAKT_CLIENT_ID",
-  "TRAKT_CLIENT_SECRET",
-  "TRAKT_ACCESS_TOKEN",
-  "TRAKT_REFRESH_TOKEN"
+  "TRAKT_CLIENT_SECRET"
 ];
 
 const check = async (name, run) => {

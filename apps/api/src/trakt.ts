@@ -84,39 +84,17 @@ export class TraktClient {
 
     const persistedToken = await prisma.traktToken.findUnique({ where: { id: DEFAULT_TOKEN_ROW_ID } });
 
-    if (persistedToken) {
-      return new TraktClient({
-        clientId,
-        clientSecret,
-        accessToken: persistedToken.accessToken,
-        refreshToken: persistedToken.refreshToken,
-        prisma
-      });
-    }
-
-    const accessToken = process.env.TRAKT_ACCESS_TOKEN;
-    const refreshToken = process.env.TRAKT_REFRESH_TOKEN;
-
-    if (!accessToken || !refreshToken) {
+    if (!persistedToken) {
       throw new Error(
-        "Trakt tokens are missing. Configure TRAKT_ACCESS_TOKEN and TRAKT_REFRESH_TOKEN or seed TraktToken in the database."
+        "Trakt tokens are missing. Complete the OAuth flow or seed a TraktToken row in the database."
       );
     }
-
-    await prisma.traktToken.create({
-      data: {
-        id: DEFAULT_TOKEN_ROW_ID,
-        accessToken,
-        refreshToken,
-        expiresAt: new Date(0)
-      }
-    });
 
     return new TraktClient({
       clientId,
       clientSecret,
-      accessToken,
-      refreshToken,
+      accessToken: persistedToken.accessToken,
+      refreshToken: persistedToken.refreshToken,
       prisma
     });
   }
