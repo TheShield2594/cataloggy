@@ -15,7 +15,7 @@ RUN pnpm install --frozen-lockfile
 COPY apps/api ./apps/api
 COPY packages/shared ./packages/shared
 
-RUN pnpm --filter @cataloggy/api prisma generate
+RUN pnpm --filter @cataloggy/api exec prisma generate
 RUN pnpm --filter @cataloggy/api build
 RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
 USER app
