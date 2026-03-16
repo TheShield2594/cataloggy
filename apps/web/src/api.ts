@@ -78,7 +78,7 @@ const authHeaders = () => {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
 
   let response: Response;
   try {
@@ -106,6 +106,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (response.status === 204) {
     return undefined as T;
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json") && !contentType.includes("+json")) {
+    throw new Error(
+      `Expected JSON from API but received "${contentType}". ` +
+      `Make sure ${runtimeConfig.getApiBase()} points to the Cataloggy API server, not the web UI.`
+    );
   }
 
   return response.json() as Promise<T>;

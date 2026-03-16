@@ -35,7 +35,7 @@ export function SettingsPage() {
           <input
             value={apiBaseOverride}
             onChange={(event) => setApiBaseOverride(event.target.value)}
-            placeholder="http://192.168.1.50:7000"
+            placeholder="http://192.168.1.20:7000"
             className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
           />
         </label>
