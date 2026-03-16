@@ -1554,17 +1554,33 @@ app.get("/trakt/oauth/callback", async (request, reply) => {
     return reply.code(500).send({ error: "Trakt credentials are not configured" });
   }
 
-  const tokenResponse = await fetch("https://api.trakt.tv/oauth/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      code,
-      client_id: clientId,
-      client_secret: clientSecret,
-      redirect_uri: redirectUri,
-      grant_type: "authorization_code"
-    })
-  });
+  const tokenExchangeController = new AbortController();
+  const tokenExchangeTimeout = setTimeout(() => tokenExchangeController.abort(), 30_000);
+
+  let tokenResponse: Response;
+  try {
+    tokenResponse = await fetch("https://api.trakt.tv/oauth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: tokenExchangeController.signal,
+      body: JSON.stringify({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code"
+      })
+    });
+  } catch (err) {
+    clearTimeout(tokenExchangeTimeout);
+    if (tokenExchangeController.signal.aborted) {
+      request.log.error("Trakt token exchange timed out after 30s");
+      return reply.code(502).send({ error: "Trakt token exchange timed out" });
+    }
+    request.log.error(err, "Trakt token exchange fetch failed");
+    return reply.code(502).send({ error: "Failed to exchange authorization code" });
+  }
+  clearTimeout(tokenExchangeTimeout);
 
   if (!tokenResponse.ok) {
     const body = await tokenResponse.text();
@@ -1604,18 +1620,36 @@ app.post("/metadata/refresh-all", async (request, reply) => {
     return reply.send({ refreshed: 0, total: 0 });
   }
 
+  const BATCH_SIZE = 5;
+  const BATCH_DELAY_MS = 500;
   const tmdb = TmdbClient.fromEnv();
   let refreshed = 0;
 
-  for (const item of allMetadata) {
-    try {
-      const payload = await tmdb.findByImdbId(item.type, item.imdbId);
-      if (payload) {
-        await upsertMetadata(payload);
+  for (let i = 0; i < allMetadata.length; i += BATCH_SIZE) {
+    const batch = allMetadata.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batch.map(async (item) => {
+        const payload = await tmdb.findByImdbId(item.type, item.imdbId);
+        if (payload) {
+          await upsertMetadata(payload);
+          return true;
+        }
+        return false;
+      })
+    );
+
+    for (let j = 0; j < results.length; j++) {
+      const result = results[j];
+      if (result.status === "fulfilled" && result.value) {
         refreshed++;
+      } else if (result.status === "rejected") {
+        const item = batch[j];
+        request.log.warn({ imdbId: item.imdbId, type: item.type, error: result.reason }, "Failed to refresh metadata");
       }
-    } catch (error) {
-      request.log.warn({ imdbId: item.imdbId, type: item.type, error }, "Failed to refresh metadata");
+    }
+
+    if (i + BATCH_SIZE < allMetadata.length) {
+      await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
     }
   }
 
