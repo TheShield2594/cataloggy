@@ -42,9 +42,10 @@ export function SettingsPage() {
         </label>
 
         <div className="block space-y-1">
-          <span className="text-sm text-slate-300">Cataloggy token (localStorage: cataloggy_token)</span>
+          <label htmlFor="cataloggy-token" className="text-sm text-slate-300">Cataloggy token (localStorage: cataloggy_token)</label>
           <div className="relative">
             <input
+              id="cataloggy-token"
               type={showToken ? "text" : "password"}
               value={token}
               onChange={(event) => setToken(event.target.value)}
@@ -54,6 +55,8 @@ export function SettingsPage() {
             <button
               type="button"
               onClick={() => setShowToken((prev) => !prev)}
+              aria-pressed={showToken}
+              aria-label={showToken ? "Hide token" : "Show token"}
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-slate-700 px-2 py-1 text-xs text-slate-300"
             >
               {showToken ? "Hide" : "Show"}

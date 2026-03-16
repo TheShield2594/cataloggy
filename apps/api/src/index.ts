@@ -106,7 +106,7 @@ const MAX_STREMIO_LIMIT = 200;
 const isLocalOrigin = (origin: string) => {
   try {
     const { hostname } = new URL(origin);
-    return hostname === "localhost" || hostname === "127.0.0.1";
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
   } catch {
     return false;
   }
