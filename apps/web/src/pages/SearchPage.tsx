@@ -1,8 +1,42 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronRight, Clock, Film, Plus, Search, Tv, X } from "lucide-react";
+import { Check, ChevronRight, Clock, Film, Plus, Search, Tv, X, Heart } from "lucide-react";
 import { api, CatalogList, MediaType, SearchResult, WatchEvent } from "../api";
 
 type FilterType = "all" | MediaType;
+
+/* ─── Toast System ─── */
+
+function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: number) => void }) {
+  return (
+    <div role="status" aria-live="polite" aria-atomic="true" className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 sm:bottom-6 max-sm:bottom-20 max-sm:right-4">
+      {toasts.map((toast) => (
+        <div
+          key={toast.id}
+          className={`toast-enter flex items-center gap-3 rounded-xl border bg-slate-900 px-5 py-3.5 shadow-xl ${
+            toast.type === "success"
+              ? "border-emerald-500/30"
+              : toast.type === "error"
+                ? "border-rose-500/30"
+                : "border-red-500/30"
+          }`}
+          style={{ borderLeftWidth: "4px" }}
+        >
+          {toast.type === "success" ? (
+            <Check aria-hidden="true" className="h-5 w-5 flex-none text-emerald-400" />
+          ) : toast.type === "error" ? (
+            <X aria-hidden="true" className="h-5 w-5 flex-none text-rose-400" />
+          ) : (
+            <Heart aria-hidden="true" className="h-5 w-5 flex-none text-red-400" />
+          )}
+          <span className="text-sm font-medium text-slate-200">{toast.message}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type Toast = { id: number; message: string; type: "success" | "error" | "info" };
+let toastId = 0;
 
 export function SearchPage() {
   const [query, setQuery] = useState("");
@@ -11,14 +45,21 @@ export function SearchPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [lists, setLists] = useState<CatalogList[]>([]);
   const [pendingAdds, setPendingAdds] = useState<Record<string, boolean>>({});
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<SearchResult | null>(null);
   const [panelHistory, setPanelHistory] = useState<WatchEvent[]>([]);
   const [panelHistoryLoading, setPanelHistoryLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const showToast = useCallback((message: string, type: Toast["type"] = "success") => {
+    const id = ++toastId;
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3000);
+  }, []);
 
   // Load lists on mount
   useEffect(() => {
@@ -28,10 +69,10 @@ export function SearchPage() {
         setLists(loaded);
       } catch (err) {
         console.error(err);
-        setError(err instanceof Error ? err.message : "Failed to load lists");
+        showToast(err instanceof Error ? err.message : "Failed to load lists", "error");
       }
     })();
-  }, []);
+  }, [showToast]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -78,8 +119,6 @@ export function SearchPage() {
   const doSearch = useCallback(
     async (searchFilter: FilterType, searchQuery: string) => {
       if (!searchQuery.trim()) return;
-      setMessage(null);
-      setError(null);
       setIsSearching(true);
 
       try {
@@ -101,12 +140,13 @@ export function SearchPage() {
           setResults(response);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Search failed");
+        setResults([]);
+        showToast(err instanceof Error ? err.message : "Search failed", "error");
       } finally {
         setIsSearching(false);
       }
     },
-    []
+    [showToast]
   );
 
   // Debounced auto-search (300ms)
@@ -134,14 +174,12 @@ export function SearchPage() {
     const key = `${listId}:${result.imdbId}`;
     if (pendingAdds[key]) return;
 
-    setMessage(null);
-    setError(null);
     setPendingAdds((current) => ({ ...current, [key]: true }));
 
     try {
       await api.addToList(listId, { type: result.type, imdbId: result.imdbId, title: result.name });
       const listName = listMap.get(listId)?.name ?? "list";
-      setMessage(`Added "${result.name}" to ${listName}`);
+      showToast(`Added "${result.name}" to ${listName}`, "success");
       // Update local lists state to reflect the addition
       setLists((prev) =>
         prev.map((l) =>
@@ -158,7 +196,7 @@ export function SearchPage() {
       );
       setOpenDropdown(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to add item");
+      showToast(err instanceof Error ? err.message : "Unable to add item", "error");
     } finally {
       setPendingAdds((current) => ({ ...current, [key]: false }));
     }
@@ -178,100 +216,107 @@ export function SearchPage() {
       {/* Search bar */}
       <form
         onSubmit={submitSearch}
-        className="sticky top-16 z-40 rounded-2xl border border-slate-800 bg-slate-900/95 p-4 backdrop-blur"
+        className="sticky top-[76px] z-40 rounded-2xl border border-slate-800/60 bg-slate-900/90 p-4 backdrop-blur-xl shadow-lg"
       >
         <div className="relative">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+          <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search for movies & series…"
-            className="w-full rounded-xl border border-slate-700 bg-slate-950 py-3 pl-12 pr-4 text-lg placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+            placeholder="Search movies & TV shows..."
+            className="w-full rounded-full border border-slate-700/60 bg-slate-950 py-3.5 pl-14 pr-12 text-base placeholder:text-slate-500 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15 transition-all"
             autoFocus
           />
+          {query && (
+            <button
+              type="button"
+              onClick={() => { setQuery(""); setResults(null); }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full bg-slate-600 text-xs font-bold text-slate-950 hover:bg-slate-400 transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
 
         {/* Filter pills */}
-        <div className="mt-3 flex gap-2">
-          {filterOptions.map((opt) => {
-            const Icon = opt.icon;
-            const active = filter === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setFilter(opt.value)}
-                className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                  active
-                    ? "bg-sky-600 text-white shadow-lg shadow-sky-600/25"
-                    : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
-                }`}
-              >
-                {Icon && <Icon className="h-3.5 w-3.5" />}
-                {opt.label}
-              </button>
-            );
-          })}
+        <div className="mt-3 flex items-center gap-2">
+          <div className="flex rounded-full border border-slate-700/60 bg-slate-800/60 p-1">
+            {filterOptions.map((opt) => {
+              const Icon = opt.icon;
+              const active = filter === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setFilter(opt.value)}
+                  className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
+                    active
+                      ? "bg-red-500 text-white shadow-lg shadow-red-500/25"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {Icon && <Icon className="h-3.5 w-3.5" />}
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
           {isSearching && (
             <span className="ml-auto flex items-center gap-2 text-sm text-slate-400">
-              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-sky-500 border-t-transparent" />
-              Searching…
+              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-red-500 border-t-transparent" />
+              Searching...
             </span>
           )}
         </div>
       </form>
 
-      {/* Notifications */}
-      {error && (
-        <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-rose-300">{error}</p>
-      )}
-      {message && (
-        <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-emerald-300">{message}</p>
-      )}
-
       {/* Empty state – no search yet */}
       {!hasSearched && !isSearching && (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="text-6xl">🎬</div>
-          <p className="mt-4 text-xl font-semibold text-slate-200">Discover your next favorite</p>
-          <p className="mt-2 max-w-sm text-slate-400">
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="flex h-28 w-28 items-center justify-center rounded-full bg-slate-900 ring-1 ring-slate-800">
+            <Search className="h-14 w-14 text-slate-700" />
+          </div>
+          <p className="mt-6 text-2xl font-bold text-slate-100">Discover your next favorite</p>
+          <p className="mt-2 max-w-sm text-slate-500">
             Search for movies and series to add them to your lists and track what you watch.
           </p>
-          <div className="mt-6 flex gap-3 text-3xl">
-            <span>🍿</span>
-            <span>📺</span>
-            <span>🎭</span>
-          </div>
         </div>
       )}
 
       {/* No results */}
       {noResults && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="text-5xl">🔍</div>
-          <p className="mt-4 text-lg font-medium text-slate-300">No results found</p>
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="flex h-24 w-24 items-center justify-center rounded-full bg-slate-900 ring-1 ring-slate-800">
+            <Search className="h-12 w-12 text-slate-700" />
+          </div>
+          <p className="mt-5 text-lg font-semibold text-slate-300">No results found</p>
           <p className="mt-1 text-sm text-slate-500">Try a different search term or filter.</p>
         </div>
       )}
 
       {/* Results grid */}
       {hasSearched && results.length > 0 && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {results.map((result) => (
-            <ResultCard
-              key={`${result.type}:${result.imdbId}`}
-              result={result}
-              lists={lists}
-              listMap={listMap}
-              pendingAdds={pendingAdds}
-              openDropdown={openDropdown}
-              dropdownRef={dropdownRef}
-              onToggleDropdown={(id) => setOpenDropdown(openDropdown === id ? null : id)}
-              onAdd={handleAdd}
-              onSelect={setSelectedItem}
-            />
-          ))}
-        </div>
+        <>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-500">{results.length} results</p>
+          </div>
+          <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {results.map((result) => (
+              <ResultCard
+                key={`${result.type}:${result.imdbId}`}
+                result={result}
+                lists={lists}
+                listMap={listMap}
+                pendingAdds={pendingAdds}
+                openDropdown={openDropdown}
+                dropdownRef={dropdownRef}
+                onToggleDropdown={(id) => setOpenDropdown(openDropdown === id ? null : id)}
+                onAdd={handleAdd}
+                onSelect={setSelectedItem}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Detail side panel */}
@@ -284,6 +329,9 @@ export function SearchPage() {
           onClose={() => setSelectedItem(null)}
         />
       )}
+
+      {/* Toast notifications */}
+      <ToastContainer toasts={toasts} onRemove={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))} />
     </div>
   );
 }
@@ -306,7 +354,7 @@ function ResultCard({
   listMap: Map<string, CatalogList>;
   pendingAdds: Record<string, boolean>;
   openDropdown: string | null;
-  dropdownRef: React.RefObject<HTMLDivElement | null>;
+  dropdownRef: React.RefObject<HTMLDivElement>;
   onToggleDropdown: (id: string) => void;
   onAdd: (listId: string, result: SearchResult) => Promise<void>;
   onSelect: (result: SearchResult) => void;
@@ -320,28 +368,37 @@ function ResultCard({
     <div className="group flex flex-col">
       {/* Poster */}
       <div
-        className="relative cursor-pointer overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-transform duration-200 hover:scale-[1.03]"
+        role="button"
+        tabIndex={0}
+        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
         style={{ aspectRatio: "var(--poster-ratio)" }}
         onClick={() => onSelect(result)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelect(result);
+          }
+        }}
+        aria-label={`View details for ${result.name}`}
       >
         {result.poster ? (
           <img
             src={result.poster}
             alt={result.name}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             loading="lazy"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-slate-800">
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900">
             <Film className="h-12 w-12 text-slate-600" />
           </div>
         )}
 
         {/* Type badge */}
         <span
-          className={`absolute left-2 top-2 z-10 flex items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs font-semibold shadow ${
+          className={`absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-lg ${
             result.type === "movie"
-              ? "bg-sky-600/90 text-white"
+              ? "bg-red-500/90 text-white"
               : "bg-violet-600/90 text-white"
           }`}
         >
@@ -350,7 +407,7 @@ function ResultCard({
         </span>
 
         {/* Hover gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
         {/* Quick-add button (bottom-right on hover) */}
         <button
@@ -359,18 +416,25 @@ function ResultCard({
             e.stopPropagation();
             onToggleDropdown(result.imdbId);
           }}
-          className="absolute bottom-2 right-2 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-sky-600 text-white opacity-0 shadow-lg transition-all duration-200 hover:bg-sky-500 group-hover:opacity-100"
+          className="absolute bottom-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shadow-lg transition-all duration-300 hover:bg-red-600 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
           aria-label={`Add ${result.name} to a list`}
         >
           <Plus className="h-4 w-4" strokeWidth={3} />
         </button>
+
+        {/* Watchlist indicator */}
+        {listNames.length > 0 && (
+          <div className="absolute top-2.5 right-2.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-red-500 shadow-lg">
+            <Heart className="h-4 w-4 fill-white text-white" />
+          </div>
+        )}
       </div>
 
       {/* Quick-add dropdown */}
       {isOpen && (
         <div ref={dropdownRef} className="relative z-30 mt-1">
-          <div className="absolute left-0 right-0 overflow-hidden rounded-lg border border-slate-700 bg-slate-800 shadow-xl">
-            <p className="border-b border-slate-700 px-3 py-2 text-2xs font-semibold uppercase tracking-wider text-slate-400">
+          <div className="absolute left-0 right-0 overflow-hidden rounded-xl border border-slate-700/60 bg-slate-900 shadow-2xl">
+            <p className="border-b border-slate-800 px-3 py-2.5 text-2xs font-semibold uppercase tracking-wider text-slate-500">
               Add to list
             </p>
             {lists.map((list) => {
@@ -386,7 +450,7 @@ function ResultCard({
                     e.stopPropagation();
                     void onAdd(list.id, result);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-slate-700 disabled:opacity-50"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-slate-800 disabled:opacity-50"
                 >
                   {already ? (
                     <Check className="h-3.5 w-3.5 text-emerald-400" />
@@ -396,7 +460,7 @@ function ResultCard({
                   <span className={already ? "text-slate-400" : "text-slate-200"}>{list.name}</span>
                   {already && <span className="ml-auto text-2xs text-slate-500">Added</span>}
                   {pending && (
-                    <span className="ml-auto inline-block h-3 w-3 animate-spin rounded-full border border-sky-500 border-t-transparent" />
+                    <span className="ml-auto inline-block h-3 w-3 animate-spin rounded-full border border-red-500 border-t-transparent" />
                   )}
                 </button>
               );
@@ -406,22 +470,17 @@ function ResultCard({
       )}
 
       {/* Title & metadata */}
-      <p className="mt-2 truncate text-sm font-medium text-slate-100">{result.name}</p>
-      <p className="text-xs text-slate-500">{result.year ?? "Unknown year"}</p>
-
-      {/* List pills */}
-      {listNames.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {listNames.map((name) => (
-            <span
-              key={name}
-              className="inline-block rounded-full bg-slate-800 px-2 py-0.5 text-2xs text-slate-400 ring-1 ring-slate-700"
-            >
-              {name}
+      <div className="mt-3">
+        <p className="truncate text-sm font-semibold text-slate-100">{result.name}</p>
+        <div className="mt-0.5 flex items-center gap-2">
+          <span className="text-xs text-slate-500">{result.year ?? "Unknown year"}</span>
+          {listNames.length > 0 && (
+            <span className="rounded bg-slate-800 px-1.5 py-0.5 text-2xs font-medium text-slate-400">
+              In {listNames.length} {listNames.length === 1 ? "list" : "lists"}
             </span>
-          ))}
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -449,17 +508,17 @@ function DetailPanel({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
         onClick={onClose}
       />
 
       {/* Panel */}
-      <aside className="fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col overflow-y-auto border-l border-slate-800 bg-slate-900 shadow-2xl sm:w-[28rem]">
+      <aside className="fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col overflow-y-auto border-l border-slate-800/60 bg-slate-950 shadow-2xl sm:w-[28rem]">
         {/* Close button */}
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-slate-800/80 text-slate-400 backdrop-blur hover:bg-slate-700 hover:text-white"
+          className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-slate-900/80 text-slate-400 backdrop-blur hover:bg-slate-800 hover:text-white transition-colors"
           aria-label="Close detail panel"
         >
           <X className="h-4 w-4" />
@@ -474,22 +533,22 @@ function DetailPanel({
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-slate-800">
-              <Film className="h-20 w-20 text-slate-600" />
+            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900">
+              <Film className="h-20 w-20 text-slate-700" />
             </div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
         </div>
 
         {/* Content */}
-        <div className="-mt-12 relative z-10 flex-1 space-y-5 px-5 pb-8">
+        <div className="-mt-16 relative z-10 flex-1 space-y-6 px-6 pb-8">
           {/* Title area */}
           <div>
             <div className="flex items-center gap-2">
               <span
-                className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold ${
+                className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide ${
                   item.type === "movie"
-                    ? "bg-sky-600/90 text-white"
+                    ? "bg-red-500/90 text-white"
                     : "bg-violet-600/90 text-white"
                 }`}
               >
@@ -498,16 +557,16 @@ function DetailPanel({
               </span>
               {item.year && <span className="text-sm text-slate-400">{item.year}</span>}
             </div>
-            <h2 className="mt-2 text-2xl font-bold text-white">{item.name}</h2>
+            <h2 className="mt-3 text-2xl font-bold text-white">{item.name}</h2>
           </div>
 
           {/* Lists */}
           {listNames.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {listNames.map((name) => (
                 <span
                   key={name}
-                  className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/20"
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/20"
                 >
                   <Check className="h-3 w-3" />
                   {name}
@@ -519,25 +578,25 @@ function DetailPanel({
           {/* Description */}
           {item.description && (
             <div>
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Overview</h3>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Overview</h3>
               <p className="text-sm leading-relaxed text-slate-300">{item.description}</p>
             </div>
           )}
 
           {/* Watch History */}
           <div>
-            <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
               <Clock className="h-3.5 w-3.5" />
               Watch History
             </h3>
             {historyLoading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="skeleton h-10 rounded-lg" />
+                  <div key={i} className="skeleton h-11 rounded-lg" />
                 ))}
               </div>
             ) : history.length === 0 ? (
-              <p className="rounded-lg bg-slate-800/50 py-4 text-center text-sm text-slate-500">
+              <p className="rounded-xl bg-slate-900/60 border border-slate-800/40 py-5 text-center text-sm text-slate-500">
                 No watch history yet
               </p>
             ) : (
@@ -545,9 +604,9 @@ function DetailPanel({
                 {history.map((event) => (
                   <div
                     key={event.id}
-                    className="flex items-center gap-3 rounded-lg bg-slate-800/50 px-3 py-2"
+                    className="flex items-center gap-3 rounded-lg bg-slate-900/60 border border-slate-800/30 px-3 py-2.5"
                   >
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-600" />
                     <div className="min-w-0 flex-1">
                       {event.season != null && event.episode != null ? (
                         <span className="text-sm text-slate-200">
