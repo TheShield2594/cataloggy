@@ -68,7 +68,7 @@ const CATALOGGY_ALLOWED_ORIGINS = (process.env.CATALOGGY_ALLOWED_ORIGINS ?? "")
 const ALLOWED_ORIGINS = IS_DEVELOPMENT
   ? ["*"]
   : Array.from(new Set([PRODUCTION_UI_ORIGIN, ...CATALOGGY_ALLOWED_ORIGINS]));
-const CORS_METHODS = "GET,POST,DELETE,OPTIONS";
+const CORS_METHODS = "GET,POST,DELETE,PATCH,OPTIONS";
 const CORS_HEADERS = "Authorization,Content-Type";
 
 type AuthenticatedRequest = FastifyRequest;
@@ -788,10 +788,61 @@ app.post<{ Body: unknown }>("/lists", async (request, reply) => {
 app.get("/lists", async () => {
   const lists = await prisma.list.findMany({
     orderBy: [{ createdAt: "asc" }],
-    include: { items: { orderBy: { addedAt: "asc" } } }
+    include: { _count: { select: { items: true } } }
   });
 
-  return { lists };
+  return {
+    lists: lists.map((list) => ({
+      id: list.id,
+      name: list.name,
+      kind: list.kind,
+      createdAt: list.createdAt,
+      itemCount: list._count.items
+    }))
+  };
+});
+
+app.delete<{ Params: { id: string } }>("/lists/:id", async (request, reply) => {
+  if (!UUID_V4_PATTERN.test(request.params.id)) {
+    return reply.code(400).send({ error: "id must be a valid UUID" });
+  }
+
+  const list = await prisma.list.findUnique({ where: { id: request.params.id } });
+  if (!list) {
+    return reply.code(404).send({ error: "List not found" });
+  }
+
+  await prisma.listItem.deleteMany({ where: { listId: list.id } });
+  await prisma.list.delete({ where: { id: list.id } });
+
+  return reply.code(204).send();
+});
+
+app.patch<{ Params: { id: string }; Body: unknown }>("/lists/:id", async (request, reply) => {
+  if (!UUID_V4_PATTERN.test(request.params.id)) {
+    return reply.code(400).send({ error: "id must be a valid UUID" });
+  }
+
+  if (!request.body || typeof request.body !== "object") {
+    return reply.code(400).send({ error: "name is required" });
+  }
+
+  const body = request.body as { name?: unknown };
+  if (typeof body.name !== "string" || !body.name.trim()) {
+    return reply.code(400).send({ error: "name is required" });
+  }
+
+  const list = await prisma.list.findUnique({ where: { id: request.params.id } });
+  if (!list) {
+    return reply.code(404).send({ error: "List not found" });
+  }
+
+  const updated = await prisma.list.update({
+    where: { id: list.id },
+    data: { name: body.name.trim() }
+  });
+
+  return { list: updated };
 });
 
 app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_watchlist_movies", async (request) => {
