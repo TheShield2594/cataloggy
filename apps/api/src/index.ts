@@ -170,6 +170,16 @@ app.addHook("onRequest", async (request, reply) => {
   }
 });
 
+app.addHook("onRequest", async (request, reply) => {
+  const url = request.url;
+
+  if (url === "/health" || url.startsWith("/addon/") || url === "/addon") {
+    return;
+  }
+
+  await verifyToken(request, reply);
+});
+
 
 const getMetadataType = (rawType: string): MetadataType | null => {
   if (rawType === "movie") {
@@ -751,7 +761,7 @@ app.post<{ Body: unknown }>("/users", async (request, reply) => {
   }
 });
 
-app.post<{ Body: unknown }>("/lists", { preHandler: verifyToken }, async (request, reply) => {
+app.post<{ Body: unknown }>("/lists", async (request, reply) => {
   if (!request.body || typeof request.body !== "object") {
     return reply.code(400).send({ error: "name and kind are required" });
   }
@@ -775,7 +785,7 @@ app.post<{ Body: unknown }>("/lists", { preHandler: verifyToken }, async (reques
   return reply.code(201).send({ list });
 });
 
-app.get("/lists", { preHandler: verifyToken }, async () => {
+app.get("/lists", async () => {
   const lists = await prisma.list.findMany({
     orderBy: [{ createdAt: "asc" }],
     include: { items: { orderBy: { addedAt: "asc" } } }
@@ -784,35 +794,35 @@ app.get("/lists", { preHandler: verifyToken }, async () => {
   return { lists };
 });
 
-app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_watchlist_movies", { preHandler: verifyToken }, async (request) => {
+app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_watchlist_movies", async (request) => {
   const limit = parseCatalogLimit(request.query.limit);
   const metas = await getWatchlistMetas("movie", limit);
 
   return { metas };
 });
 
-app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_watchlist_series", { preHandler: verifyToken }, async (request) => {
+app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_watchlist_series", async (request) => {
   const limit = parseCatalogLimit(request.query.limit);
   const metas = await getWatchlistMetas("series", limit);
 
   return { metas };
 });
 
-app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_recent_movies", { preHandler: verifyToken }, async (request) => {
+app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_recent_movies", async (request) => {
   const limit = parseCatalogLimit(request.query.limit);
   const metas = await getRecentMetas("movie", limit);
 
   return { metas };
 });
 
-app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_continue_series", { preHandler: verifyToken }, async (request) => {
+app.get<{ Querystring: { limit?: string } }>("/stremio/catalog/my_continue_series", async (request) => {
   const limit = parseCatalogLimit(request.query.limit);
   const metas = await getContinueMetas(limit);
 
   return { metas };
 });
 
-app.get<{ Params: { listId: string }; Querystring: { type?: string; limit?: string } }>("/stremio/list/:listId", { preHandler: verifyToken }, async (request, reply) => {
+app.get<{ Params: { listId: string }; Querystring: { type?: string; limit?: string } }>("/stremio/list/:listId", async (request, reply) => {
   const type = parseMetaType(request.query.type);
   if (!type) {
     return reply.code(400).send({ error: "type must be one of: movie, series" });
@@ -837,7 +847,7 @@ app.get<{ Params: { listId: string }; Querystring: { type?: string; limit?: stri
   return { metas };
 });
 
-app.get<{ Querystring: { type?: string; limit?: string } }>("/watchlist", { preHandler: verifyToken }, async (request, reply) => {
+app.get<{ Querystring: { type?: string; limit?: string } }>("/watchlist", async (request, reply) => {
   const type = parseMetaType(request.query.type);
   if (!type) {
     return reply.code(400).send({ error: "type must be one of: movie, series" });
@@ -849,14 +859,14 @@ app.get<{ Querystring: { type?: string; limit?: string } }>("/watchlist", { preH
   return { metas };
 });
 
-app.get<{ Querystring: { limit?: string } }>("/continue", { preHandler: verifyToken }, async (request) => {
+app.get<{ Querystring: { limit?: string } }>("/continue", async (request) => {
   const limit = parseCatalogLimit(request.query.limit);
   const metas = await getContinueMetas(limit);
 
   return { metas };
 });
 
-app.get<{ Querystring: { type?: string; limit?: string } }>("/recent", { preHandler: verifyToken }, async (request, reply) => {
+app.get<{ Querystring: { type?: string; limit?: string } }>("/recent", async (request, reply) => {
   const type = parseMetaType(request.query.type);
   if (!type) {
     return reply.code(400).send({ error: "type must be one of: movie, series" });
@@ -868,7 +878,7 @@ app.get<{ Querystring: { type?: string; limit?: string } }>("/recent", { preHand
   return { metas };
 });
 
-app.post<{ Params: { listId: string }; Body: unknown }>("/lists/:listId/items", { preHandler: verifyToken }, async (request, reply) => {
+app.post<{ Params: { listId: string }; Body: unknown }>("/lists/:listId/items", async (request, reply) => {
   if (!request.body || typeof request.body !== "object") {
     return reply.code(400).send({ error: "type and imdbId are required" });
   }
@@ -933,7 +943,7 @@ app.post<{ Params: { listId: string }; Body: unknown }>("/lists/:listId/items", 
   return reply.code(201).send({ listItem });
 });
 
-app.delete<{ Params: { listId: string; type: string; imdbId: string } }>("/lists/:listId/items/:type/:imdbId", { preHandler: verifyToken }, async (request, reply) => {
+app.delete<{ Params: { listId: string; type: string; imdbId: string } }>("/lists/:listId/items/:type/:imdbId", async (request, reply) => {
   const type = request.params.type;
   if (!Object.values(ListItemType).includes(type as ListItemType)) {
     return reply.code(400).send({ error: "type must be one of: movie, series" });
@@ -954,7 +964,7 @@ app.delete<{ Params: { listId: string; type: string; imdbId: string } }>("/lists
   return reply.code(204).send();
 });
 
-app.post("/trakt/import", { preHandler: verifyToken }, async (request, reply) => {
+app.post("/trakt/import", async (request, reply) => {
   let client: TraktClient;
   try {
     client = await getTraktClient();
@@ -1108,7 +1118,7 @@ app.post("/trakt/import", { preHandler: verifyToken }, async (request, reply) =>
   });
 });
 
-app.post("/trakt/poll", { preHandler: verifyToken }, async (request, reply) => {
+app.post("/trakt/poll", async (request, reply) => {
   try {
     const result = await pollTraktHistory(request.log);
     return reply.code(200).send(result);
