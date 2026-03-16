@@ -38,14 +38,14 @@ function timeAgo(dateStr: string): string {
 
 function StatsSkeleton() {
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-3 gap-4">
       {Array.from({ length: 3 }).map((_, i) => (
         <div
           key={i}
-          className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
+          className="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-5"
         >
-          <div className="skeleton mb-2 h-7 w-16 rounded" />
-          <div className="skeleton h-3.5 w-24 rounded" />
+          <div className="skeleton mb-3 h-8 w-16 rounded-lg" />
+          <div className="skeleton h-4 w-24 rounded" />
         </div>
       ))}
     </div>
@@ -54,13 +54,13 @@ function StatsSkeleton() {
 
 function ContinueWatchingSkeleton() {
   return (
-    <div className="flex gap-3 overflow-hidden pb-2">
-      {Array.from({ length: 4 }).map((_, i) => (
+    <div className="flex gap-4 overflow-hidden pb-2">
+      {Array.from({ length: 5 }).map((_, i) => (
         <div key={i} className="flex-none">
-          <div className="skeleton h-40 w-28 rounded-xl" />
-          <div className="skeleton mt-1.5 h-3 w-24 rounded" />
-          <div className="skeleton mt-1 h-2.5 w-16 rounded" />
-          <div className="skeleton mt-1.5 h-7 w-28 rounded-lg" />
+          <div className="skeleton h-44 w-[7.5rem] rounded-xl" />
+          <div className="skeleton mt-2 h-3.5 w-24 rounded" />
+          <div className="skeleton mt-1 h-3 w-16 rounded" />
+          <div className="skeleton mt-2 h-8 w-[7.5rem] rounded-lg" />
         </div>
       ))}
     </div>
@@ -73,14 +73,14 @@ function RecentlyWatchedSkeleton() {
       {Array.from({ length: 5 }).map((_, i) => (
         <div
           key={i}
-          className="flex items-center gap-3 rounded-xl border border-slate-800/50 bg-slate-900/40 p-2.5"
+          className="flex items-center gap-3 rounded-xl border border-slate-800/40 bg-slate-900/40 p-3"
         >
-          <div className="skeleton h-14 w-10 flex-none rounded-lg" />
-          <div className="flex-1 space-y-1.5">
-            <div className="skeleton h-3.5 w-32 rounded" />
-            <div className="skeleton h-2.5 w-20 rounded" />
+          <div className="skeleton h-16 w-11 flex-none rounded-lg" />
+          <div className="flex-1 space-y-2">
+            <div className="skeleton h-4 w-36 rounded" />
+            <div className="skeleton h-3 w-20 rounded" />
           </div>
-          <div className="skeleton h-2.5 w-14 rounded" />
+          <div className="skeleton h-3 w-14 rounded" />
         </div>
       ))}
     </div>
@@ -107,7 +107,7 @@ function Poster({
     />
   ) : (
     <div
-      className={`flex items-center justify-center bg-slate-800 ${className}`}
+      className={`flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 ${className}`}
     >
       <Film className="h-6 w-6 text-slate-600" />
     </div>
@@ -178,15 +178,15 @@ export function DashboardPage() {
   /* ─── Error state ─── */
   if (error) {
     return (
-      <div className="mx-auto max-w-lg space-y-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-6 text-center">
-        <AlertCircle className="mx-auto h-10 w-10 text-rose-400" />
-        <p className="text-lg font-medium text-rose-300">
+      <div className="mx-auto max-w-lg space-y-4 rounded-2xl border border-rose-500/20 bg-rose-500/5 p-8 text-center">
+        <AlertCircle className="mx-auto h-12 w-12 text-rose-400" />
+        <p className="text-xl font-semibold text-rose-300">
           Unable to connect to the API
         </p>
-        <p className="text-sm text-slate-300">{error}</p>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-slate-400">{error}</p>
+        <p className="text-sm text-slate-500">
           Current API base:{" "}
-          <span className="font-mono text-sky-300">
+          <span className="font-mono text-red-300">
             {runtimeConfig.getApiBase()}
           </span>
         </p>
@@ -194,13 +194,13 @@ export function DashboardPage() {
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium hover:bg-sky-500"
+            className="rounded-lg bg-red-500 px-5 py-2.5 text-sm font-semibold hover:bg-red-600 transition-colors"
           >
             Reload
           </button>
           <Link
             to="/settings"
-            className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800"
+            className="rounded-lg border border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800"
           >
             Settings
           </Link>
@@ -216,43 +216,53 @@ export function DashboardPage() {
           label: "Movies Watched",
           value: stats.totalMovies,
           icon: Film,
-          color: "text-sky-400",
+          gradient: "from-red-500/10 to-transparent",
+          iconColor: "text-red-400",
+          borderColor: "border-red-500/20",
         },
         {
           label: "Episodes Watched",
           value: stats.totalEpisodes,
           icon: Tv,
-          color: "text-violet-400",
+          gradient: "from-violet-500/10 to-transparent",
+          iconColor: "text-violet-400",
+          borderColor: "border-violet-500/20",
         },
         {
           label: "Total Plays",
           value: stats.totalPlays,
           icon: Play,
-          color: "text-emerald-400",
+          gradient: "from-amber-500/10 to-transparent",
+          iconColor: "text-amber-400",
+          borderColor: "border-amber-500/20",
         },
       ]
     : null;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       {/* ── Stats ── */}
       <section>
         {loading ? (
           <StatsSkeleton />
         ) : statsCards ? (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-4">
             {statsCards.map((card) => (
               <div
                 key={card.label}
-                className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
+                className={`rounded-2xl border ${card.borderColor} bg-gradient-to-br ${card.gradient} bg-slate-900/40 p-5 transition-colors hover:bg-slate-900/60`}
               >
-                <div className="flex items-center gap-2">
-                  <card.icon className={`h-4 w-4 ${card.color}`} />
-                  <span className="text-2xl font-bold font-heading text-slate-100 tabular-nums">
-                    {card.value.toLocaleString()}
-                  </span>
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800/80 ${card.iconColor}`}>
+                    <card.icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <span className="text-2xl font-bold text-white tabular-nums">
+                      {card.value.toLocaleString()}
+                    </span>
+                    <p className="text-xs text-slate-400 font-medium">{card.label}</p>
+                  </div>
                 </div>
-                <p className="mt-0.5 text-xs text-slate-400">{card.label}</p>
               </div>
             ))}
           </div>
@@ -261,7 +271,7 @@ export function DashboardPage() {
 
       {/* ── Continue Watching ── */}
       <section>
-        <h2 className="mb-3 text-lg font-semibold font-heading">
+        <h2 className="mb-4 text-xl font-bold">
           Continue Watching
         </h2>
         {loading ? (
@@ -271,49 +281,49 @@ export function DashboardPage() {
             No series in progress. Start watching something!
           </p>
         ) : (
-          <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
+          <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
             {progress.map((s) => {
               const isMarking = markingNext.has(s.imdbId);
               const isDone = markedDone.has(s.imdbId);
               return (
-                <div key={s.imdbId} className="flex-none snap-start">
-                  <div className="relative h-40 w-28 overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10">
+                <div key={s.imdbId} className="flex-none snap-start group">
+                  <div className="relative h-44 w-[7.5rem] overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:scale-[1.03]">
                     <Poster
                       src={s.poster}
                       alt={s.name}
                       className="h-full w-full"
                     />
                     {/* Bottom gradient with episode info */}
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-2 pb-2 pt-6">
-                      <p className="text-2xs font-medium text-slate-300">
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-2.5 pb-2.5 pt-8">
+                      <p className="text-2xs font-semibold text-slate-200">
                         S{s.lastSeason}:E{s.lastEpisode}
                       </p>
                     </div>
                   </div>
-                  <p className="mt-1.5 w-28 truncate text-xs font-medium text-slate-200">
+                  <p className="mt-2 w-[7.5rem] truncate text-sm font-medium text-slate-200">
                     {s.name}
                   </p>
                   <button
                     type="button"
                     disabled={isMarking || isDone}
                     onClick={() => void handleMarkNext(s.imdbId)}
-                    className={`mt-1.5 flex w-28 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-2xs font-medium transition-colors ${
+                    className={`mt-2 flex w-[7.5rem] items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition-all ${
                       isDone
-                        ? "bg-emerald-600/20 text-emerald-400"
+                        ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
                         : isMarking
-                          ? "bg-slate-700/50 text-slate-400"
-                          : "bg-sky-600/20 text-sky-400 hover:bg-sky-600/40"
+                          ? "bg-slate-800 text-slate-400"
+                          : "bg-red-500/15 text-red-400 ring-1 ring-red-500/20 hover:bg-red-500/25"
                     }`}
                   >
                     {isDone ? (
                       <>
-                        <Check className="h-3 w-3" /> Marked
+                        <Check className="h-3.5 w-3.5" /> Marked
                       </>
                     ) : isMarking ? (
-                      <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+                      <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
                     ) : (
                       <>
-                        <ChevronRight className="h-3 w-3" />
+                        <ChevronRight className="h-3.5 w-3.5" />
                         S{s.nextSeason}:E{s.nextEpisode}
                       </>
                     )}
@@ -327,7 +337,7 @@ export function DashboardPage() {
 
       {/* ── Recently Watched ── */}
       <section>
-        <h2 className="mb-3 text-lg font-semibold font-heading">
+        <h2 className="mb-4 text-xl font-bold">
           Recently Watched
         </h2>
         {loading ? (
@@ -339,9 +349,9 @@ export function DashboardPage() {
             {history.map((event) => (
               <div
                 key={event.id}
-                className="flex items-center gap-3 rounded-xl border border-slate-800/50 bg-slate-900/40 p-2.5 transition-colors hover:bg-slate-900/70"
+                className="flex items-center gap-4 rounded-xl border border-slate-800/40 bg-slate-900/30 p-3 transition-all hover:bg-slate-900/60 hover:border-slate-700/60"
               >
-                <div className="h-14 w-10 flex-none overflow-hidden rounded-lg ring-1 ring-white/5">
+                <div className="h-16 w-11 flex-none overflow-hidden rounded-lg ring-1 ring-white/5">
                   <Poster
                     src={event.poster}
                     alt={event.name}
@@ -349,10 +359,10 @@ export function DashboardPage() {
                   />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-slate-200">
+                  <p className="truncate text-sm font-semibold text-slate-100">
                     {event.name}
                   </p>
-                  <p className="text-2xs text-slate-500">
+                  <p className="mt-0.5 text-xs text-slate-500">
                     {event.type === "series" &&
                     event.season != null &&
                     event.episode != null
@@ -362,7 +372,7 @@ export function DashboardPage() {
                         : ""}
                   </p>
                 </div>
-                <span className="flex-none text-2xs text-slate-500">
+                <span className="flex-none rounded-full bg-slate-800/60 px-2.5 py-1 text-2xs font-medium text-slate-400">
                   {timeAgo(event.watchedAt)}
                 </span>
               </div>

@@ -1,6 +1,5 @@
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { Clapperboard, LayoutDashboard, Search, List, Settings } from "lucide-react";
-import "@fontsource-variable/plus-jakarta-sans";
 import { InstallButton } from "./components/InstallButton";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ListsPage } from "./pages/ListsPage";
@@ -14,45 +13,54 @@ const navItems = [
   { to: "/settings", label: "Settings", icon: Settings, end: false },
 ] as const;
 
-const desktopNavClass = ({ isActive }: { isActive: boolean }) =>
-  `relative px-3 py-2 text-sm font-medium rounded-full ${
-    isActive
-      ? "bg-sky-500/20 text-sky-300"
-      : "text-slate-300 hover:text-slate-100 hover:bg-slate-800"
-  }`;
-
 export function App() {
   const location = useLocation();
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-6xl px-4 pb-20 pt-6 sm:pb-6">
-      {/* Sticky header */}
-      <header className="sticky top-0 z-50 -mx-4 mb-6 flex items-center justify-between backdrop-blur bg-slate-950/80 px-4 py-3 border-b border-slate-800/50">
-        <Link to="/" className="flex items-center gap-2 text-xl font-semibold text-sky-300 font-heading">
-          <Clapperboard className="h-6 w-6" />
-          Cataloggy
-        </Link>
-        <div className="flex items-center gap-3">
-          <InstallButton />
-          {/* Desktop nav - hidden on mobile */}
-          <nav className="hidden sm:flex gap-1">
-            {navItems.map((item) => (
-              <NavLink key={item.to} to={item.to} end={item.end ?? false} className={desktopNavClass}>
-                {({ isActive }) => (
-                  <>
-                    {item.label}
-                    {isActive && (
-                      <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-4/5 rounded-full bg-sky-400" />
-                    )}
-                  </>
-                )}
-              </NavLink>
-            ))}
-          </nav>
+    <div className="min-h-screen w-full">
+      {/* Fixed header */}
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-slate-800/60 bg-slate-950/85 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-6 px-6 py-3.5">
+          <Link to="/" className="flex items-center gap-2.5 text-xl font-bold text-white">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-500">
+              <Clapperboard className="h-5 w-5 text-white" />
+            </div>
+            <span className="hidden sm:inline">Cataloggy</span>
+          </Link>
+
+          <div className="flex items-center gap-4">
+            <InstallButton />
+
+            {/* Desktop pill nav */}
+            <nav className="hidden sm:flex rounded-full border border-slate-700/60 bg-slate-900/80 p-1">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end ?? false}
+                  className={({ isActive }) =>
+                    `flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+                      isActive
+                        ? "bg-red-500 text-white shadow-lg shadow-red-500/25"
+                        : "text-slate-400 hover:text-white"
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
         </div>
       </header>
 
-      <main>
+      {/* Main content */}
+      <main className="mx-auto max-w-[1400px] px-6 pb-24 pt-[88px] sm:pb-8">
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/search" element={<SearchPage />} />
@@ -62,7 +70,7 @@ export function App() {
       </main>
 
       {/* Mobile bottom tab bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 flex sm:hidden border-t border-slate-800 bg-slate-950/95 backdrop-blur">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 flex sm:hidden border-t border-slate-800/60 bg-slate-950/95 backdrop-blur-xl">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = item.end
@@ -72,8 +80,8 @@ export function App() {
             <Link
               key={item.to}
               to={item.to}
-              className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-2xs ${
-                isActive ? "text-sky-400" : "text-slate-500"
+              className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-2xs font-medium transition-colors ${
+                isActive ? "text-red-400" : "text-slate-500"
               }`}
             >
               <Icon className="h-5 w-5" />
@@ -82,6 +90,11 @@ export function App() {
           );
         })}
       </nav>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-800/40 py-8 text-center text-sm text-slate-600">
+        Cataloggy &middot; Personal Media Tracker
+      </footer>
     </div>
   );
 }
