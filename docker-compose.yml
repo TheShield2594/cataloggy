@@ -18,6 +18,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - cataloggy
 
   api:
     build:
@@ -40,6 +42,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    networks:
+      - cataloggy
 
   addon:
     build:
@@ -63,6 +67,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    networks:
+      - cataloggy
 
   web:
     build:
@@ -83,6 +89,12 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    networks:
+      - cataloggy
 
 volumes:
   pgdata:
+
+networks:
+  cataloggy:
+    driver: bridge
