@@ -683,15 +683,17 @@ const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
 };
 
 
-app.get<{ Querystring: { type?: string; query?: string } }>("/search", async (request, reply) => {
-  const type = getMetadataType(request.query.type ?? "");
-  if (!type) {
-    return reply.code(400).send({ error: "type must be one of: movie, series" });
+app.get<{ Querystring: { type?: string; query?: string; q?: string } }>("/search", async (request, reply) => {
+  const rawType = request.query.type ?? "all";
+  const isAll = rawType === "all";
+  const type = isAll ? null : getMetadataType(rawType);
+  if (!isAll && !type) {
+    return reply.code(400).send({ error: "type must be one of: movie, series, all" });
   }
 
-  const query = request.query.query?.trim();
+  const query = (request.query.q ?? request.query.query)?.trim();
   if (!query) {
-    return reply.code(400).send({ error: "query is required" });
+    return reply.code(400).send({ error: "q or query is required" });
   }
 
   let tmdb: TmdbClient;
@@ -702,18 +704,50 @@ app.get<{ Querystring: { type?: string; query?: string } }>("/search", async (re
     return reply.code(500).send({ error: "TMDB integration is not configured" });
   }
 
-  const results = await tmdb.search(type, query);
+  const allResults = isAll
+    ? await tmdb.searchMulti(query)
+    : await tmdb.search(type!, query);
+
+  const results = allResults.slice(0, 20);
+
   await Promise.all(results.map((result) => upsertMetadata(result)));
 
-  return results.map((result) => ({
-    tmdbId: result.tmdbId,
-    imdbId: result.imdbId,
-    type: result.type,
-    name: result.name,
-    year: result.year,
-    poster: result.poster,
-    description: result.description
-  }));
+  const imdbIds = results.map((r) => r.imdbId);
+  const resultTypes = [...new Set(results.map((r) => r.type as ListItemType))];
+
+  const listItems = await prisma.listItem.findMany({
+    where: { imdbId: { in: imdbIds }, type: { in: resultTypes } },
+    include: { list: { select: { name: true, kind: true } } }
+  });
+
+  const listInfoKey = (imdbId: string, mediaType: string) => `${mediaType}:${imdbId}`;
+  const listInfoByKey = new Map<string, { inWatchlist: boolean; lists: string[] }>();
+  for (const item of listItems) {
+    const key = listInfoKey(item.imdbId, item.type);
+    let info = listInfoByKey.get(key);
+    if (!info) {
+      info = { inWatchlist: false, lists: [] };
+      listInfoByKey.set(key, info);
+    }
+    if (item.list.kind === ListKind.watchlist) {
+      info.inWatchlist = true;
+    }
+    info.lists.push(item.list.name);
+  }
+
+  return results.map((result) => {
+    const info = listInfoByKey.get(listInfoKey(result.imdbId, result.type));
+    return {
+      imdbId: result.imdbId,
+      type: result.type,
+      name: result.name,
+      year: result.year,
+      poster: result.poster,
+      description: result.description,
+      inWatchlist: info?.inWatchlist ?? false,
+      lists: info?.lists ?? []
+    };
+  });
 });
 
 app.get<{ Params: { type: string; imdbId: string } }>("/meta/:type/:imdbId", async (request, reply) => {
