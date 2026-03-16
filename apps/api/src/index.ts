@@ -1249,6 +1249,67 @@ app.get("/watch/stats", async () => {
   };
 });
 
+app.get("/series/progress", async () => {
+  const progressRows = await prisma.seriesProgress.findMany({
+    orderBy: { lastWatchedAt: "desc" }
+  });
+
+  if (progressRows.length === 0) {
+    return { progress: [] };
+  }
+
+  const imdbIds = progressRows.map((p) => p.seriesImdbId);
+  const metadata = await prisma.metadata.findMany({
+    where: { imdbId: { in: imdbIds }, type: "series" },
+    select: { imdbId: true, name: true, poster: true }
+  });
+  const metaByImdbId = new Map(metadata.map((m) => [m.imdbId, m]));
+
+  const progress = progressRows.map((row) => {
+    const meta = metaByImdbId.get(row.seriesImdbId);
+    return {
+      seriesImdbId: row.seriesImdbId,
+      lastSeason: row.lastSeason,
+      lastEpisode: row.lastEpisode,
+      lastWatchedAt: row.lastWatchedAt,
+      updatedAt: row.updatedAt,
+      name: meta?.name ?? null,
+      poster: meta?.poster ?? null
+    };
+  });
+
+  return { progress };
+});
+
+app.get<{ Params: { imdbId: string } }>("/series/progress/:imdbId", async (request, reply) => {
+  const { imdbId } = request.params;
+
+  const row = await prisma.seriesProgress.findUnique({
+    where: { seriesImdbId: imdbId }
+  });
+
+  if (!row) {
+    return reply.code(404).send({ error: "No progress found for this series" });
+  }
+
+  const meta = await prisma.metadata.findUnique({
+    where: { imdbId_type: { imdbId, type: "series" } },
+    select: { name: true, poster: true }
+  });
+
+  return {
+    progress: {
+      seriesImdbId: row.seriesImdbId,
+      lastSeason: row.lastSeason,
+      lastEpisode: row.lastEpisode,
+      lastWatchedAt: row.lastWatchedAt,
+      updatedAt: row.updatedAt,
+      name: meta?.name ?? null,
+      poster: meta?.poster ?? null
+    }
+  };
+});
+
 app.post("/trakt/import", async (request, reply) => {
   let client: TraktClient;
   try {
