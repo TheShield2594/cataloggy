@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
-import { ItemType, ListItemType, ListKind, MetadataType, Prisma, PrismaClient } from "@prisma/client";
+import { ItemType, ListItemType, ListKind, MetadataType, Prisma, PrismaClient, WatchEventType } from "@prisma/client";
 import { TraktClient } from "./trakt.js";
 import { MetadataPayload, TmdbClient } from "./tmdb.js";
 
@@ -1091,6 +1091,162 @@ app.get<{ Params: { listId: string } }>("/lists/:listId/items", async (request, 
   });
 
   return { items };
+});
+
+app.post<{ Body: unknown }>("/watch", async (request, reply) => {
+  if (!request.body || typeof request.body !== "object") {
+    return reply.code(400).send({ error: "type and imdbId are required" });
+  }
+
+  const body = request.body as {
+    type?: unknown;
+    imdbId?: unknown;
+    seriesImdbId?: unknown;
+    season?: unknown;
+    episode?: unknown;
+    watchedAt?: unknown;
+  };
+
+  if (!Object.values(WatchEventType).includes(body.type as WatchEventType)) {
+    return reply.code(400).send({ error: "type must be one of: movie, episode" });
+  }
+
+  if (typeof body.imdbId !== "string" || !body.imdbId.trim()) {
+    return reply.code(400).send({ error: "imdbId is required" });
+  }
+
+  if (body.seriesImdbId !== undefined && (typeof body.seriesImdbId !== "string" || !body.seriesImdbId.trim())) {
+    return reply.code(400).send({ error: "seriesImdbId must be a non-empty string when provided" });
+  }
+
+  if (body.season !== undefined && (!Number.isInteger(body.season) || (body.season as number) < 0)) {
+    return reply.code(400).send({ error: "season must be a non-negative integer when provided" });
+  }
+
+  if (body.episode !== undefined && (!Number.isInteger(body.episode) || (body.episode as number) < 0)) {
+    return reply.code(400).send({ error: "episode must be a non-negative integer when provided" });
+  }
+
+  let watchedAt: Date;
+  if (body.watchedAt !== undefined) {
+    if (typeof body.watchedAt !== "string") {
+      return reply.code(400).send({ error: "watchedAt must be an ISO 8601 string" });
+    }
+    watchedAt = new Date(body.watchedAt);
+    if (Number.isNaN(watchedAt.getTime())) {
+      return reply.code(400).send({ error: "watchedAt must be a valid ISO 8601 date" });
+    }
+  } else {
+    watchedAt = new Date();
+  }
+
+  const type = body.type as WatchEventType;
+  const imdbId = body.imdbId.trim();
+  const seriesImdbId = body.seriesImdbId ? (body.seriesImdbId as string).trim() : null;
+  const season = body.season as number | undefined ?? null;
+  const episode = body.episode as number | undefined ?? null;
+
+  const dayStart = new Date(watchedAt);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayEnd = new Date(watchedAt);
+  dayEnd.setUTCHours(23, 59, 59, 999);
+
+  const existing = await prisma.watchEvent.findFirst({
+    where: {
+      imdbId,
+      season,
+      episode,
+      watchedAt: { gte: dayStart, lte: dayEnd }
+    }
+  });
+
+  if (existing) {
+    const updated = await prisma.watchEvent.update({
+      where: { id: existing.id },
+      data: { plays: existing.plays + 1 }
+    });
+    return reply.code(200).send({ watchEvent: updated });
+  }
+
+  const watchEvent = await prisma.watchEvent.create({
+    data: { type, imdbId, seriesImdbId, season, episode, watchedAt }
+  });
+
+  if (type === "episode" && seriesImdbId && season !== null && episode !== null) {
+    await upsertSeriesProgressIfNewer(seriesImdbId, {
+      lastSeason: season,
+      lastEpisode: episode,
+      lastWatchedAt: watchedAt
+    });
+  }
+
+  return reply.code(201).send({ watchEvent });
+});
+
+app.get<{ Querystring: { limit?: string; offset?: string } }>("/watch/history", async (request) => {
+  const limit = Math.min(Math.max(Number(request.query.limit) || 50, 1), 200);
+  const offset = Math.max(Number(request.query.offset) || 0, 0);
+
+  const events = await prisma.watchEvent.findMany({
+    orderBy: { watchedAt: "desc" },
+    take: limit,
+    skip: offset
+  });
+
+  if (events.length === 0) {
+    return { history: [] };
+  }
+
+  const movieImdbIds = events.filter((e) => e.type === "movie").map((e) => e.imdbId);
+  const seriesImdbIds = events
+    .filter((e) => e.type === "episode" && e.seriesImdbId)
+    .map((e) => e.seriesImdbId!);
+  const allMetadataIds = [...new Set([...movieImdbIds, ...seriesImdbIds])];
+
+  const metadata = allMetadataIds.length > 0
+    ? await prisma.metadata.findMany({
+        where: { imdbId: { in: allMetadataIds } },
+        select: { imdbId: true, type: true, name: true, poster: true }
+      })
+    : [];
+
+  const metadataByImdbId = new Map(metadata.map((m) => [m.imdbId, m]));
+
+  const history = events.map((event) => {
+    const lookupId = event.type === "episode" && event.seriesImdbId
+      ? event.seriesImdbId
+      : event.imdbId;
+    const meta = metadataByImdbId.get(lookupId);
+
+    return {
+      ...event,
+      name: meta?.name ?? null,
+      poster: meta?.poster ?? null
+    };
+  });
+
+  return { history };
+});
+
+app.get("/watch/stats", async () => {
+  const [movieAgg, episodeAgg] = await Promise.all([
+    prisma.watchEvent.aggregate({
+      where: { type: "movie" },
+      _count: true,
+      _sum: { plays: true }
+    }),
+    prisma.watchEvent.aggregate({
+      where: { type: "episode" },
+      _count: true,
+      _sum: { plays: true }
+    })
+  ]);
+
+  return {
+    totalMovies: movieAgg._count,
+    totalEpisodes: episodeAgg._count,
+    totalPlays: (movieAgg._sum.plays ?? 0) + (episodeAgg._sum.plays ?? 0)
+  };
 });
 
 app.post("/trakt/import", async (request, reply) => {
