@@ -4,6 +4,7 @@ import { runtimeConfig } from "../api";
 export function SettingsPage() {
   const [apiBaseOverride, setApiBaseOverride] = useState(runtimeConfig.getApiBaseOverride());
   const [token, setToken] = useState(runtimeConfig.getToken());
+  const [showToken, setShowToken] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const saveSettings = (event: FormEvent<HTMLFormElement>) => {
@@ -40,15 +41,28 @@ export function SettingsPage() {
           />
         </label>
 
-        <label className="block space-y-1">
+        <div className="block space-y-1">
           <span className="text-sm text-slate-300">Cataloggy token (localStorage: cataloggy_token)</span>
-          <input
-            value={token}
-            onChange={(event) => setToken(event.target.value)}
-            placeholder="Paste API token"
-            className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
-          />
-        </label>
+          <div className="relative">
+            <input
+              type={showToken ? "text" : "password"}
+              value={token}
+              onChange={(event) => setToken(event.target.value)}
+              placeholder="Paste API token"
+              className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 pr-16"
+            />
+            <button
+              type="button"
+              onClick={() => setShowToken((prev) => !prev)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-slate-700 px-2 py-1 text-xs text-slate-300"
+            >
+              {showToken ? "Hide" : "Show"}
+            </button>
+          </div>
+          <p className="text-xs text-amber-400">
+            Token is stored in localStorage. Only use this on trusted devices.
+          </p>
+        </div>
 
         <div className="flex gap-2">
           <button type="submit" className="rounded bg-sky-600 px-4 py-2 text-sm font-medium">
