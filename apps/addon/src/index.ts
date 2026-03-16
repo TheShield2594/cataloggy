@@ -11,7 +11,7 @@ const parseProxyPathPrefixes = (raw: string | undefined, fallback: readonly stri
   return parsed.length > 0 ? parsed : [...fallback];
 };
 
-const CATALOGGY_API_BASE = process.env.CATALOGGY_API_BASE ?? "http://api:7000";
+const CATALOGGY_API_BASE = process.env.CATALOGGY_API ?? process.env.CATALOGGY_API_BASE ?? "http://api:7000";
 const CATALOGGY_API_TOKEN = process.env.CATALOGGY_API_TOKEN;
 const ADDON_PUBLIC_BASE = process.env.ADDON_PUBLIC_BASE;
 const PROXY_PATH_PREFIXES = parseProxyPathPrefixes(process.env.PROXY_PATH_PREFIXES, ["/addon"] as const);
@@ -50,31 +50,12 @@ type CataloggyList = {
   kind: "watchlist" | "custom";
 };
 
-const manifest = {
-  id: "com.cataloggy.personal",
-  name: "Cataloggy (Personal)",
-  version: "0.1.0",
-  description: "Personal watchlist + continue watching from your self-hosted Cataloggy.",
-  resources: ["catalog", "meta"],
-  types: ["movie", "series"],
-  catalogs: [
-    { type: "movie", id: "my_watchlist_movies", name: "Cataloggy Watchlist (Movies)" },
-    { type: "series", id: "my_watchlist_series", name: "Cataloggy Watchlist (Shows)" },
-    { type: "series", id: "my_continue_series", name: "Cataloggy Continue Watching" },
-    { type: "movie", id: "my_recent_movies", name: "Cataloggy Recently Watched (Movies)" }
-  ]
-};
-
-const catalogRouteMap: Record<string, string> = {
-  "movie:my_watchlist_movies": "my_watchlist_movies",
-  "series:my_watchlist_series": "my_watchlist_series",
-  "series:my_continue_series": "my_continue_series",
-  "movie:my_recent_movies": "my_recent_movies"
-};
+let cachedManifest: { data: object; expiry: number } | null = null;
+const MANIFEST_CACHE_TTL_MS = 60_000;
 
 app.get("/health", async () => ({ status: "ok", service: "addon", publicBase: ADDON_PUBLIC_BASE ?? null }));
 
-const fetchCustomLists = async (): Promise<CataloggyList[]> => {
+const fetchAllLists = async (): Promise<CataloggyList[]> => {
   const apiUrl = new URL("/lists", CATALOGGY_API_BASE);
   const upstreamResponse = await fetch(apiUrl, {
     headers: CATALOGGY_API_TOKEN ? { Authorization: `Bearer ${CATALOGGY_API_TOKEN}` } : {}
@@ -85,61 +66,66 @@ const fetchCustomLists = async (): Promise<CataloggyList[]> => {
   }
 
   const payload = (await upstreamResponse.json()) as { lists?: CataloggyList[] };
-  return (payload.lists ?? []).filter((list) => list.kind === "custom");
+  return payload.lists ?? [];
+};
+
+const buildManifest = (lists: CataloggyList[]) => {
+  const catalogs = lists.flatMap((list) => [
+    { type: "movie" as const, id: `cataloggy-${list.id}-movie`, name: list.name },
+    { type: "series" as const, id: `cataloggy-${list.id}-series`, name: list.name }
+  ]);
+
+  return {
+    id: "com.cataloggy.addon",
+    version: "0.1.0",
+    name: "CataLoggy",
+    description: "Personal catalogs powered by CataLoggy.",
+    resources: ["catalog"],
+    types: ["movie", "series"],
+    idPrefixes: ["tt"],
+    catalogs
+  };
 };
 
 app.get("/manifest.json", async (request: FastifyRequest, reply: FastifyReply) => {
-  try {
-    const customLists = await fetchCustomLists();
-    const customCatalogs = customLists.flatMap((list) => [
-      { type: "movie", id: `list_${list.id}_movies`, name: `Cataloggy List: ${list.name} (Movies)` },
-      { type: "series", id: `list_${list.id}_series`, name: `Cataloggy List: ${list.name} (Shows)` }
-    ]);
+  reply.header("Access-Control-Allow-Origin", "*");
+  reply.header("Content-Type", "application/json");
 
-    return reply.send({
-      ...manifest,
-      catalogs: [...manifest.catalogs, ...customCatalogs]
-    });
+  const now = Date.now();
+  if (cachedManifest && now < cachedManifest.expiry) {
+    return reply.send(cachedManifest.data);
+  }
+
+  try {
+    const lists = await fetchAllLists();
+    const data = buildManifest(lists);
+    cachedManifest = { data, expiry: now + MANIFEST_CACHE_TTL_MS };
+    return reply.send(data);
   } catch (error) {
-    request.log.error(error, "Failed to fetch custom lists for manifest");
+    request.log.error(error, "Failed to fetch lists for manifest");
     return reply.code(502).send({ error: "Failed to build manifest" });
   }
 });
 
 app.get<{ Params: { type: string; id: string } }>("/catalog/:type/:id.json", async (request, reply) => {
-  const routeKey = `${request.params.type}:${request.params.id}`;
-  const catalogId = catalogRouteMap[routeKey];
+  reply.header("Access-Control-Allow-Origin", "*");
 
-  if (!catalogId) {
-    const customListMatch = request.params.id.match(/^list_([0-9a-f-]+)_(movies|series)$/i);
-    if (!customListMatch) {
-      return reply.code(404).send({ error: "Catalog not found" });
-    }
+  const { type, id } = request.params;
+  const match = id.match(/^cataloggy-([0-9a-f-]+)-(movie|series)$/i);
 
-    const listId = customListMatch[1];
-    const listType = customListMatch[2] === "movies" ? "movie" : "series";
-
-    if (request.params.type !== listType) {
-      return reply.code(404).send({ error: "Catalog not found" });
-    }
-
-    const apiUrl = new URL(`/stremio/list/${encodeURIComponent(listId)}`, CATALOGGY_API_BASE);
-    apiUrl.searchParams.set("type", listType);
-
-    const upstreamResponse = await fetch(apiUrl, {
-      headers: CATALOGGY_API_TOKEN ? { Authorization: `Bearer ${CATALOGGY_API_TOKEN}` } : {}
-    });
-
-    const payload = await upstreamResponse.json().catch(() => ({ metas: [] }));
-
-    if (!upstreamResponse.ok) {
-      return reply.code(upstreamResponse.status).send(payload);
-    }
-
-    return reply.send(payload);
+  if (!match) {
+    return reply.code(404).send({ error: "Catalog not found" });
   }
 
-  const apiUrl = new URL(`/stremio/catalog/${catalogId}`, CATALOGGY_API_BASE);
+  const listId = match[1];
+  const catalogType = match[2];
+
+  if (type !== catalogType) {
+    return reply.code(404).send({ error: "Catalog not found" });
+  }
+
+  const apiUrl = new URL(`/stremio/list/${encodeURIComponent(listId)}`, CATALOGGY_API_BASE);
+  apiUrl.searchParams.set("type", catalogType);
 
   const upstreamResponse = await fetch(apiUrl, {
     headers: CATALOGGY_API_TOKEN ? { Authorization: `Bearer ${CATALOGGY_API_TOKEN}` } : {}
@@ -155,6 +141,7 @@ app.get<{ Params: { type: string; id: string } }>("/catalog/:type/:id.json", asy
 });
 
 app.get<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async (request, reply) => {
+  reply.header("Access-Control-Allow-Origin", "*");
   const { type, id } = request.params;
 
   if (type !== "movie" && type !== "series") {
