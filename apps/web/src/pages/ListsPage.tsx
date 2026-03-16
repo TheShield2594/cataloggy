@@ -1,197 +1,376 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link, Route, Routes, useParams } from "react-router-dom";
-import { Trash2, Film, FolderOpen } from "lucide-react";
-import { api, CatalogList } from "../api";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { Film, FolderOpen, Plus, Search, Trash2, Tv, X } from "lucide-react";
+import { api, CatalogList, ListItemWithMeta, MediaType, SearchResult } from "../api";
 
-function ListsIndex({ lists, onCreate }: { lists: CatalogList[]; onCreate: (name: string) => Promise<void> }) {
-  const [name, setName] = useState("");
+function AddItemModal({
+  listId,
+  listName,
+  onClose,
+  onAdded,
+}: {
+  listId: string;
+  listName: string;
+  onClose: () => void;
+  onAdded: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [type, setType] = useState<MediaType>("movie");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [adding, setAdding] = useState<Record<string, boolean>>({});
+  const [error, setError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!name.trim()) {
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const doSearch = useCallback(async (q: string, t: MediaType) => {
+    if (!q.trim()) {
+      setResults([]);
       return;
     }
+    setSearching(true);
+    setError(null);
+    try {
+      const res = await api.search(t, q);
+      setResults(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Search failed");
+    } finally {
+      setSearching(false);
+    }
+  }, []);
 
-    await onCreate(name.trim());
-    setName("");
+  useEffect(() => {
+    if (!query.trim()) {
+      setResults([]);
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => void doSearch(query, type), 350);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, type, doSearch]);
+
+  const handleAdd = async (result: SearchResult) => {
+    if (adding[result.imdbId]) return;
+    setAdding((prev) => ({ ...prev, [result.imdbId]: true }));
+    try {
+      await api.addToList(listId, { type: result.type, imdbId: result.imdbId, title: result.name });
+      onAdded();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add item");
+    } finally {
+      setAdding((prev) => ({ ...prev, [result.imdbId]: false }));
+    }
   };
 
   return (
-    <div className="space-y-4">
-      <form onSubmit={submit} className="flex gap-2 rounded-xl border border-slate-800 bg-slate-900 p-4">
-        <input
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="Create custom list"
-          className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-        />
-        <button type="submit" className="rounded-lg bg-emerald-600 px-4 py-2 font-medium hover:bg-emerald-500">
-          Create list
-        </button>
-      </form>
-
-      {lists.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <svg className="mb-4 h-24 w-24 text-slate-700" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="16" y="20" width="64" height="56" rx="8" stroke="currentColor" strokeWidth="2" />
-            <path d="M16 36h64" stroke="currentColor" strokeWidth="2" />
-            <rect x="28" y="46" width="40" height="4" rx="2" fill="currentColor" opacity="0.3" />
-            <rect x="28" y="56" width="28" height="4" rx="2" fill="currentColor" opacity="0.3" />
-            <rect x="28" y="66" width="16" height="4" rx="2" fill="currentColor" opacity="0.3" />
-          </svg>
-          <p className="text-lg font-medium text-slate-400">No lists yet</p>
-          <p className="mt-1 text-sm text-slate-500">Create your first list to start organizing your media.</p>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm pt-[10vh]" onClick={onClose}>
+      <div
+        className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+          <h3 className="text-lg font-semibold font-heading">Add to {listName}</h3>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+            <X className="h-5 w-5" />
+          </button>
         </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {lists.map((list) => {
-            const posterItems = list.items.slice(0, 4);
-            return (
-              <Link
-                key={list.id}
-                to={list.id}
-                className="group rounded-xl border border-slate-800 bg-slate-900 p-4 hover:border-slate-700 hover:bg-slate-800/80"
+
+        {/* Search input */}
+        <div className="flex gap-2 border-b border-slate-800 px-5 py-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search movies & series…"
+              className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-9 pr-3 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+            />
+          </div>
+          <div className="relative inline-flex rounded-full bg-slate-800 p-0.5">
+            <div
+              className="absolute top-0.5 h-[calc(100%-0.25rem)] w-[calc(50%-0.125rem)] rounded-full bg-sky-500 transition-transform duration-200"
+              style={{ transform: type === "series" ? "translateX(100%)" : "translateX(0)" }}
+            />
+            {(["movie", "series"] as const).map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => setType(opt)}
+                className={`relative z-10 flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium ${type === opt ? "text-white" : "text-slate-400"}`}
               >
-                {/* 2x2 poster collage */}
-                <div className="mb-3 grid grid-cols-2 gap-1 overflow-hidden rounded-lg" style={{ aspectRatio: "1" }}>
-                  {Array.from({ length: 4 }).map((_, i) => {
-                    const item = posterItems[i];
-                    return (
-                      <div key={i} className="bg-slate-800 overflow-hidden">
-                        {item ? (
-                          <div className="h-full w-full bg-slate-700 flex items-center justify-center">
-                            <Film className="h-6 w-6 text-slate-500" />
-                          </div>
-                        ) : (
-                          <div className="h-full w-full bg-slate-800" />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="font-medium text-sky-300 group-hover:text-sky-200 font-heading">{list.name}</p>
-                <p className="mt-0.5 text-xs text-slate-400">
-                  {list.kind} &bull; {list.items.length} {list.items.length === 1 ? "item" : "items"}
-                </p>
-              </Link>
-            );
-          })}
+                {opt === "movie" ? <Film className="h-3 w-3" /> : <Tv className="h-3 w-3" />}
+                {opt === "movie" ? "Movie" : "Series"}
+              </button>
+            ))}
+          </div>
         </div>
-      )}
-    </div>
-  );
-}
 
-function ListDetails({
-  lists,
-  reload,
-  onError
-}: {
-  lists: CatalogList[];
-  reload: () => Promise<void>;
-  onError: (message: string) => void;
-}) {
-  const { listId } = useParams();
-  const list = useMemo(() => lists.find((entry) => entry.id === listId), [lists, listId]);
-
-  if (!list) {
-    return <p className="text-slate-400">List not found.</p>;
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 p-4">
-        <h2 className="text-xl font-semibold font-heading">{list.name}</h2>
-        <Link to="/lists" className="text-sm text-sky-400 hover:text-sky-300">&larr; Back</Link>
+        {/* Results */}
+        <div className="max-h-[50vh] overflow-y-auto px-5 py-3">
+          {error && <p className="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/30 px-3 py-2 text-xs text-rose-300">{error}</p>}
+          {searching && <p className="py-6 text-center text-sm text-slate-500">Searching…</p>}
+          {!searching && query.trim() && results.length === 0 && (
+            <p className="py-6 text-center text-sm text-slate-500">No results found.</p>
+          )}
+          <div className="space-y-1">
+            {results.map((r) => (
+              <button
+                key={`${r.type}:${r.imdbId}`}
+                type="button"
+                disabled={adding[r.imdbId]}
+                onClick={() => handleAdd(r)}
+                className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-slate-800 disabled:opacity-50"
+              >
+                <div className="h-14 w-10 flex-none overflow-hidden rounded-md bg-slate-800 ring-1 ring-white/5">
+                  {r.poster ? (
+                    <img src={r.poster} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center"><Film className="h-4 w-4 text-slate-600" /></div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-slate-200">{r.name}</p>
+                  <p className="text-xs text-slate-500">{r.year ?? "Unknown"} &middot; {r.type}</p>
+                </div>
+                <Plus className="h-4 w-4 flex-none text-sky-400" />
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
-      {list.items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <FolderOpen className="mb-3 h-12 w-12 text-slate-600" />
-          <p className="text-lg font-medium text-slate-400">This list is empty</p>
-          <p className="mt-1 text-sm text-slate-500">Search for titles to add them to this list.</p>
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-          {list.items.map((item) => {
-            const title = item.imdbId.replace(/^tt/, "Title ").replace(/(\d+)/, " #$1");
-            return (
-              <div
-                key={`${item.type}:${item.imdbId}`}
-                className="group flex gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3"
-              >
-                {/* Poster placeholder */}
-                <div className="flex h-20 w-14 flex-none items-center justify-center rounded-lg bg-slate-800 ring-1 ring-white/5">
-                  <Film className="h-6 w-6 text-slate-600" />
-                </div>
-                <div className="flex flex-1 flex-col justify-between min-w-0">
-                  <div>
-                    <p className="truncate text-sm font-medium text-slate-200">{title}</p>
-                    <p className="text-2xs text-slate-500">{item.type} &bull; {item.imdbId}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await api.removeFromList(list.id, { type: item.type, imdbId: item.imdbId });
-                        await reload();
-                      } catch (err) {
-                        console.error(err);
-                        onError(err instanceof Error ? err.message : "Failed to remove list item");
-                      }
-                    }}
-                    className="self-start rounded-lg p-1.5 text-slate-500 hover:bg-rose-500/20 hover:text-rose-400"
-                    aria-label="Remove from list"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
 
 export function ListsPage() {
   const [lists, setLists] = useState<CatalogList[]>([]);
+  const [selectedListId, setSelectedListId] = useState<string | null>(null);
+  const [items, setItems] = useState<ListItemWithMeta[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newListName, setNewListName] = useState("");
+  const [removingIds, setRemovingIds] = useState<Record<string, boolean>>({});
 
-  const loadLists = async () => {
+  const loadLists = useCallback(async () => {
     try {
-      const response = await api.getLists();
-      setLists(response.lists);
-      setError(null);
+      const { lists: loaded } = await api.getLists();
+      setLists(loaded);
+      return loaded;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load lists");
-      throw err;
+      return [];
+    }
+  }, []);
+
+  const loadItems = useCallback(async (listId: string) => {
+    setLoadingItems(true);
+    try {
+      const { items: loaded } = await api.getListItems(listId);
+      setItems(loaded);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load items");
+    } finally {
+      setLoadingItems(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadLists().then((loaded) => {
+      if (loaded.length > 0 && !selectedListId) {
+        setSelectedListId(loaded[0].id);
+      }
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (selectedListId) {
+      void loadItems(selectedListId);
+    } else {
+      setItems([]);
+    }
+  }, [selectedListId, loadItems]);
+
+  const selectedList = lists.find((l) => l.id === selectedListId);
+
+  const handleCreateList = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!newListName.trim()) return;
+    try {
+      const { list } = await api.createList(newListName.trim());
+      setNewListName("");
+      await loadLists();
+      setSelectedListId(list.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create list");
     }
   };
 
-  useEffect(() => {
-    void loadLists().catch((err) => {
-      console.error(err);
-    });
-  }, []);
-
-  const createList = async (name: string) => {
+  const handleRemove = async (item: ListItemWithMeta) => {
+    if (!selectedListId || removingIds[item.imdbId]) return;
+    setRemovingIds((prev) => ({ ...prev, [item.imdbId]: true }));
     try {
-      await api.createList(name);
-      await loadLists();
+      await api.removeFromList(selectedListId, { type: item.type, imdbId: item.imdbId });
+      setItems((prev) => prev.filter((i) => i.imdbId !== item.imdbId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create list");
-      throw err;
+      setError(err instanceof Error ? err.message : "Failed to remove item");
+    } finally {
+      setRemovingIds((prev) => ({ ...prev, [item.imdbId]: false }));
     }
   };
 
   return (
-    <div className="space-y-4">
-      {error && <p className="rounded-lg bg-rose-500/10 border border-rose-500/30 px-4 py-2 text-rose-300">{error}</p>}
-      <Routes>
-        <Route index element={<ListsIndex lists={lists} onCreate={createList} />} />
-        <Route path=":listId" element={<ListDetails lists={lists} reload={loadLists} onError={setError} />} />
-      </Routes>
+    <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
+      {/* Sidebar */}
+      <aside className="w-full shrink-0 lg:w-64">
+        {/* Mobile: horizontal scrollable tabs */}
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide lg:flex-col lg:overflow-x-visible lg:pb-0">
+          {lists.map((list) => (
+            <button
+              key={list.id}
+              type="button"
+              onClick={() => setSelectedListId(list.id)}
+              className={`flex-none rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors lg:w-full ${
+                selectedListId === list.id
+                  ? "border-sky-500/50 bg-sky-500/10 text-sky-300"
+                  : "border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700 hover:bg-slate-800/80"
+              }`}
+            >
+              <p className="truncate font-heading">{list.name}</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {list.items.length} {list.items.length === 1 ? "item" : "items"}
+              </p>
+            </button>
+          ))}
+        </div>
+        {/* Create new list */}
+        <form onSubmit={handleCreateList} className="mt-3 flex gap-2">
+          <input
+            value={newListName}
+            onChange={(e) => setNewListName(e.target.value)}
+            placeholder="New list name…"
+            className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium hover:bg-emerald-500"
+          >
+            Create
+          </button>
+        </form>
+      </aside>
+
+      {/* Main content area */}
+      <main className="min-w-0 flex-1">
+        {error && (
+          <p className="mb-4 rounded-lg bg-rose-500/10 border border-rose-500/30 px-4 py-2 text-rose-300">{error}</p>
+        )}
+
+        {!selectedList ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <FolderOpen className="mb-3 h-12 w-12 text-slate-600" />
+            <p className="text-lg font-medium text-slate-400">No list selected</p>
+            <p className="mt-1 text-sm text-slate-500">Select a list from the sidebar or create a new one.</p>
+          </div>
+        ) : (
+          <>
+            {/* List header */}
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold font-heading text-slate-100">{selectedList.name}</h2>
+              <button
+                type="button"
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium hover:bg-sky-500"
+              >
+                <Plus className="h-4 w-4" />
+                Add
+              </button>
+            </div>
+
+            {/* Items grid */}
+            {loadingItems ? (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="animate-pulse">
+                    <div className="rounded-xl bg-slate-800" style={{ aspectRatio: "2/3" }} />
+                    <div className="mt-2 h-3 w-3/4 rounded bg-slate-800" />
+                    <div className="mt-1 h-2.5 w-1/2 rounded bg-slate-800" />
+                  </div>
+                ))}
+              </div>
+            ) : items.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <FolderOpen className="mb-3 h-12 w-12 text-slate-600" />
+                <p className="text-lg font-medium text-slate-400">This list is empty</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Click <span className="text-sky-400">+ Add</span> to search and add titles.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                {items.map((item) => {
+                  const name = item.metadata?.name ?? item.imdbId;
+                  const poster = item.metadata?.poster;
+                  const year = item.metadata?.year;
+                  return (
+                    <div key={`${item.type}:${item.imdbId}`} className="group">
+                      {/* Poster */}
+                      <div className="relative overflow-hidden rounded-xl bg-slate-800 shadow-lg ring-1 ring-white/10" style={{ aspectRatio: "2/3" }}>
+                        {poster ? (
+                          <img src={poster} alt={name} className="h-full w-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <Film className="h-10 w-10 text-slate-600" />
+                          </div>
+                        )}
+                        {/* Type badge */}
+                        <span className={`absolute top-2 left-2 rounded-md px-1.5 py-0.5 text-2xs font-semibold uppercase shadow ${
+                          item.type === "movie"
+                            ? "bg-sky-600 text-white"
+                            : "bg-violet-600 text-white"
+                        }`}>
+                          {item.type === "movie" ? "Movie" : "Series"}
+                        </span>
+                        {/* Remove button on hover */}
+                        <button
+                          type="button"
+                          disabled={removingIds[item.imdbId]}
+                          onClick={() => handleRemove(item)}
+                          className="absolute top-2 right-2 rounded-lg bg-black/60 p-1.5 text-slate-300 opacity-0 transition-opacity hover:bg-rose-500/80 hover:text-white group-hover:opacity-100 disabled:opacity-50"
+                          aria-label="Remove from list"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      {/* Title & year */}
+                      <p className="mt-1.5 truncate text-sm font-medium text-slate-200">{name}</p>
+                      <p className="text-xs text-slate-500">{year ?? "Unknown year"}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </main>
+
+      {/* Add item modal */}
+      {showAddModal && selectedListId && selectedList && (
+        <AddItemModal
+          listId={selectedListId}
+          listName={selectedList.name}
+          onClose={() => setShowAddModal(false)}
+          onAdded={() => void loadItems(selectedListId)}
+        />
+      )}
     </div>
   );
 }
