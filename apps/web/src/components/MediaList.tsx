@@ -6,9 +6,10 @@ type Props = {
   items: CatalogMeta[];
   count?: number;
   onSeeAll?: () => void;
+  onAddItem?: (item: CatalogMeta) => void;
 };
 
-export function MediaList({ title, items, count, onSeeAll }: Props) {
+export function MediaList({ title, items, count, onSeeAll, onAddItem }: Props) {
   return (
     <section>
       <div className="mb-4 flex items-center justify-between">
@@ -61,15 +62,18 @@ export function MediaList({ title, items, count, onSeeAll }: Props) {
                 )}
 
                 {/* Hover overlay */}
-                <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pb-3">
-                  <button
-                    type="button"
-                    className="rounded-full bg-red-500 p-2 text-white shadow-lg hover:bg-red-600 transition-colors"
-                    aria-label={`Add ${item.name}`}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
-                </div>
+                {onAddItem && (
+                  <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-300 pb-3">
+                    <button
+                      type="button"
+                      onClick={() => onAddItem(item)}
+                      className="rounded-full bg-red-500 p-2 text-white shadow-lg hover:bg-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                      aria-label={`Add ${item.name}`}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
               </div>
               <p className="mt-2 w-[7.5rem] truncate text-sm font-medium text-slate-200">{item.name}</p>
               {item.year ? <p className="w-[7.5rem] text-2xs text-slate-500">{item.year}</p> : null}
