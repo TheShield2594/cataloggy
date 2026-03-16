@@ -103,6 +103,15 @@ type SeriesProgressCandidate = {
 const DEFAULT_STREMIO_LIMIT = 50;
 const MAX_STREMIO_LIMIT = 200;
 
+const isLocalOrigin = (origin: string) => {
+  try {
+    const { hostname } = new URL(origin);
+    return hostname === "localhost" || hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+};
+
 const isAllowedOrigin = (origin: string | undefined) => {
   if (IS_DEVELOPMENT) {
     return true;
@@ -112,7 +121,7 @@ const isAllowedOrigin = (origin: string | undefined) => {
     return false;
   }
 
-  return ALLOWED_ORIGINS.includes(origin);
+  return ALLOWED_ORIGINS.includes(origin) || isLocalOrigin(origin);
 };
 
 const applyCorsHeaders = (request: FastifyRequest, reply: FastifyReply) => {
@@ -122,7 +131,7 @@ const applyCorsHeaders = (request: FastifyRequest, reply: FastifyReply) => {
     return;
   }
 
-  reply.header("Access-Control-Allow-Origin", IS_DEVELOPMENT ? "*" : origin);
+  reply.header("Access-Control-Allow-Origin", IS_DEVELOPMENT ? "*" : origin!);
   reply.header("Access-Control-Allow-Methods", CORS_METHODS);
   reply.header("Access-Control-Allow-Headers", CORS_HEADERS);
 
