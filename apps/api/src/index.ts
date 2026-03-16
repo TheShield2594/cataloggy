@@ -693,7 +693,7 @@ app.get<{ Querystring: { type?: string; query?: string; q?: string } }>("/search
 
   const query = (request.query.q ?? request.query.query)?.trim();
   if (!query) {
-    return reply.code(400).send({ error: "q is required" });
+    return reply.code(400).send({ error: "q or query is required" });
   }
 
   let tmdb: TmdbClient;
@@ -713,18 +713,21 @@ app.get<{ Querystring: { type?: string; query?: string; q?: string } }>("/search
   await Promise.all(results.map((result) => upsertMetadata(result)));
 
   const imdbIds = results.map((r) => r.imdbId);
+  const resultTypes = [...new Set(results.map((r) => r.type as ListItemType))];
 
   const listItems = await prisma.listItem.findMany({
-    where: { imdbId: { in: imdbIds } },
+    where: { imdbId: { in: imdbIds }, type: { in: resultTypes } },
     include: { list: { select: { name: true, kind: true } } }
   });
 
-  const listInfoByImdbId = new Map<string, { inWatchlist: boolean; lists: string[] }>();
+  const listInfoKey = (imdbId: string, mediaType: string) => `${mediaType}:${imdbId}`;
+  const listInfoByKey = new Map<string, { inWatchlist: boolean; lists: string[] }>();
   for (const item of listItems) {
-    let info = listInfoByImdbId.get(item.imdbId);
+    const key = listInfoKey(item.imdbId, item.type);
+    let info = listInfoByKey.get(key);
     if (!info) {
       info = { inWatchlist: false, lists: [] };
-      listInfoByImdbId.set(item.imdbId, info);
+      listInfoByKey.set(key, info);
     }
     if (item.list.kind === ListKind.watchlist) {
       info.inWatchlist = true;
@@ -733,7 +736,7 @@ app.get<{ Querystring: { type?: string; query?: string; q?: string } }>("/search
   }
 
   return results.map((result) => {
-    const info = listInfoByImdbId.get(result.imdbId);
+    const info = listInfoByKey.get(listInfoKey(result.imdbId, result.type));
     return {
       imdbId: result.imdbId,
       type: result.type,

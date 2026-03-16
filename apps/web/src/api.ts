@@ -43,6 +43,9 @@ export type SearchResult = {
   name: string;
   year: number | null;
   poster: string | null;
+  description: string | null;
+  inWatchlist: boolean;
+  lists: string[];
 };
 
 export type ListItem = {
