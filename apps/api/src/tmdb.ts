@@ -11,6 +11,7 @@ type TmdbSearchResult = {
   backdrop_path?: string | null;
   release_date?: string;
   first_air_date?: string;
+  media_type?: string;
 };
 
 type TmdbExternalIds = {
@@ -65,6 +66,33 @@ export class TmdbClient {
           return null;
         }
 
+        const externalIds = await this.getExternalIds(mediaType, result.id);
+        const imdbId = externalIds.imdb_id?.trim();
+        if (!imdbId) {
+          return null;
+        }
+
+        return this.toMetadataPayload(type, result, imdbId);
+      })
+    );
+
+    return withImdb.filter((item): item is MetadataPayload => item !== null);
+  }
+
+  async searchMulti(query: string): Promise<MetadataPayload[]> {
+    const response = await this.request<TmdbSearchResponse>("/search/multi", { query });
+    const results = (response.results ?? []).filter(
+      (r) => r.media_type === "movie" || r.media_type === "tv"
+    );
+
+    const withImdb = await Promise.all(
+      results.map(async (result) => {
+        if (!result.id || !result.media_type) {
+          return null;
+        }
+
+        const mediaType = result.media_type as TmdbMediaType;
+        const type = mediaType === "movie" ? MetadataType.movie : MetadataType.series;
         const externalIds = await this.getExternalIds(mediaType, result.id);
         const imdbId = externalIds.imdb_id?.trim();
         if (!imdbId) {
