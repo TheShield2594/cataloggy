@@ -173,7 +173,7 @@ app.addHook("onRequest", async (request, reply) => {
 app.addHook("onRequest", async (request, reply) => {
   const url = request.url;
 
-  if (url === "/health" || url.startsWith("/addon/") || url === "/addon") {
+  if (url === "/health" || url.startsWith("/addon/") || url === "/addon" || url.startsWith("/trakt/oauth/callback")) {
     return;
   }
 
@@ -1518,6 +1518,142 @@ app.post("/trakt/import", async (request, reply) => {
   }
 
   return reply.code(200).send({ imported });
+});
+
+app.get("/trakt/status", async (_request, reply) => {
+  const token = await prisma.traktToken.findUnique({ where: { id: "default" } });
+  const configured = !!(process.env.TRAKT_CLIENT_ID && process.env.TRAKT_CLIENT_SECRET);
+  return reply.send({
+    connected: !!token,
+    configured,
+    expiresAt: token?.expiresAt ?? null
+  });
+});
+
+app.get("/trakt/oauth/authorize", async (_request, reply) => {
+  const clientId = process.env.TRAKT_CLIENT_ID;
+  const redirectUri = process.env.TRAKT_REDIRECT_URI ?? `${process.env.CATALOGGY_API_PUBLIC ?? "http://localhost:7000"}/trakt/oauth/callback`;
+  if (!clientId) {
+    return reply.code(500).send({ error: "TRAKT_CLIENT_ID is not configured" });
+  }
+  const url = `https://trakt.tv/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+  return reply.send({ url });
+});
+
+app.get("/trakt/oauth/callback", async (request, reply) => {
+  const { code } = request.query as { code?: string };
+  if (!code) {
+    return reply.code(400).send({ error: "Missing authorization code" });
+  }
+
+  const clientId = process.env.TRAKT_CLIENT_ID;
+  const clientSecret = process.env.TRAKT_CLIENT_SECRET;
+  const redirectUri = process.env.TRAKT_REDIRECT_URI ?? `${process.env.CATALOGGY_API_PUBLIC ?? "http://localhost:7000"}/trakt/oauth/callback`;
+
+  if (!clientId || !clientSecret) {
+    return reply.code(500).send({ error: "Trakt credentials are not configured" });
+  }
+
+  const tokenExchangeController = new AbortController();
+  const tokenExchangeTimeout = setTimeout(() => tokenExchangeController.abort(), 30_000);
+
+  let tokenResponse: Response;
+  try {
+    tokenResponse = await fetch("https://api.trakt.tv/oauth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: tokenExchangeController.signal,
+      body: JSON.stringify({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code"
+      })
+    });
+  } catch (err) {
+    clearTimeout(tokenExchangeTimeout);
+    if (tokenExchangeController.signal.aborted) {
+      request.log.error("Trakt token exchange timed out after 30s");
+      return reply.code(502).send({ error: "Trakt token exchange timed out" });
+    }
+    request.log.error(err, "Trakt token exchange fetch failed");
+    return reply.code(502).send({ error: "Failed to exchange authorization code" });
+  }
+  clearTimeout(tokenExchangeTimeout);
+
+  if (!tokenResponse.ok) {
+    const body = await tokenResponse.text();
+    request.log.error({ status: tokenResponse.status, body }, "Trakt token exchange failed");
+    return reply.code(502).send({ error: "Failed to exchange authorization code" });
+  }
+
+  const tokens = (await tokenResponse.json()) as { access_token: string; refresh_token: string; expires_in?: number };
+  const expiresAt = typeof tokens.expires_in === "number" && Number.isFinite(tokens.expires_in)
+    ? new Date(Date.now() + tokens.expires_in * 1000)
+    : new Date(0);
+
+  await prisma.traktToken.upsert({
+    where: { id: "default" },
+    update: { accessToken: tokens.access_token, refreshToken: tokens.refresh_token, expiresAt },
+    create: { id: "default", accessToken: tokens.access_token, refreshToken: tokens.refresh_token, expiresAt }
+  });
+
+  traktClient = null;
+
+  return reply.type("text/html").send(`
+    <html><body style="background:#0f172a;color:#e2e8f0;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">
+      <div style="text-align:center"><h1>Trakt Connected!</h1><p>You can close this tab and return to Cataloggy.</p></div>
+    </body></html>
+  `);
+});
+
+app.post("/trakt/disconnect", async (_request, reply) => {
+  await prisma.traktToken.deleteMany();
+  traktClient = null;
+  return reply.send({ disconnected: true });
+});
+
+app.post("/metadata/refresh-all", async (request, reply) => {
+  const allMetadata = await prisma.metadata.findMany({ select: { imdbId: true, type: true } });
+  if (allMetadata.length === 0) {
+    return reply.send({ refreshed: 0, total: 0 });
+  }
+
+  const BATCH_SIZE = 5;
+  const BATCH_DELAY_MS = 500;
+  const tmdb = TmdbClient.fromEnv();
+  let refreshed = 0;
+
+  for (let i = 0; i < allMetadata.length; i += BATCH_SIZE) {
+    const batch = allMetadata.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batch.map(async (item) => {
+        const payload = await tmdb.findByImdbId(item.type, item.imdbId);
+        if (payload) {
+          await upsertMetadata(payload);
+          return true;
+        }
+        return false;
+      })
+    );
+
+    for (let j = 0; j < results.length; j++) {
+      const result = results[j];
+      if (result.status === "fulfilled" && result.value) {
+        refreshed++;
+      } else if (result.status === "rejected") {
+        const item = batch[j];
+        request.log.warn({ imdbId: item.imdbId, type: item.type, error: result.reason }, "Failed to refresh metadata");
+      }
+    }
+
+    if (i + BATCH_SIZE < allMetadata.length) {
+      await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
+    }
+  }
+
+  return reply.send({ refreshed, total: allMetadata.length });
 });
 
 app.post("/trakt/poll", async (request, reply) => {
