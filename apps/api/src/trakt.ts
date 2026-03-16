@@ -47,6 +47,32 @@ type TraktMovieHistoryPayload = {
   };
 };
 
+type TraktWatchedMoviePayload = {
+  plays?: number;
+  last_watched_at?: string;
+  movie?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+};
+
+type TraktWatchedShowPayload = {
+  plays?: number;
+  last_watched_at?: string;
+  show?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+  seasons?: Array<{
+    number?: number;
+    episodes?: Array<{
+      number?: number;
+      plays?: number;
+      last_watched_at?: string;
+    }>;
+  }>;
+};
+
 type TraktTokenResponse = {
   access_token: string;
   refresh_token: string;
@@ -105,6 +131,14 @@ export class TraktClient {
 
   async fetchWatchlistShows(logger: FastifyBaseLogger): Promise<TraktShowPayload[]> {
     return this.fetchAllPages<TraktShowPayload>("/sync/watchlist/shows", logger);
+  }
+
+  async fetchWatchedMovies(logger: FastifyBaseLogger): Promise<TraktWatchedMoviePayload[]> {
+    return this.fetchAllPages<TraktWatchedMoviePayload>("/sync/watched/movies", logger);
+  }
+
+  async fetchWatchedShows(logger: FastifyBaseLogger): Promise<TraktWatchedShowPayload[]> {
+    return this.fetchAllPages<TraktWatchedShowPayload>("/sync/watched/shows", logger);
   }
 
   async fetchMovieHistory(logger: FastifyBaseLogger, startAt?: string): Promise<TraktMovieHistoryPayload[]> {
@@ -263,4 +297,4 @@ export class TraktClient {
   }
 }
 
-export type { TraktEpisodeHistoryPayload, TraktMovieHistoryPayload, TraktMoviePayload, TraktShowPayload };
+export type { TraktEpisodeHistoryPayload, TraktMovieHistoryPayload, TraktMoviePayload, TraktShowPayload, TraktWatchedMoviePayload, TraktWatchedShowPayload };
