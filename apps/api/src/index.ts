@@ -794,7 +794,7 @@ app.post<{ Body: unknown }>("/metadata/sync", async (request, reply) => {
     return reply.code(400).send({ error: "imdbId is required" });
   }
 
-  const type = getMetadataType(body?.type as string | undefined);
+  const type = getMetadataType((body?.type as string | undefined) ?? "");
   if (!type) {
     return reply.code(400).send({ error: "type must be one of: movie, series" });
   }
@@ -1052,9 +1052,9 @@ app.post<{ Params: { listId: string }; Body: unknown }>("/lists/:listId/items", 
         create: {
           type: itemType,
           imdbId,
-          title: body.title?.trim() ? body.title.trim() : undefined
+          title: (body.title as string | undefined)?.trim() ? (body.title as string).trim() : undefined
         },
-        update: body.title?.trim() ? { title: body.title.trim() } : {}
+        update: (body.title as string | undefined)?.trim() ? { title: (body.title as string).trim() } : {}
       });
 
       return tx.listItem.create({
