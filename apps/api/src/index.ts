@@ -975,23 +975,22 @@ app.post<{ Params: { listId: string }; Body: unknown }>("/lists/:listId/items", 
     update: body.title?.trim() ? { title: body.title.trim() } : {}
   });
 
-  const listItem = await prisma.listItem.upsert({
-    where: {
-      listId_type_imdbId: {
+  try {
+    const listItem = await prisma.listItem.create({
+      data: {
         listId: request.params.listId,
         type,
         imdbId
       }
-    },
-    create: {
-      listId: request.params.listId,
-      type,
-      imdbId
-    },
-    update: {}
-  });
+    });
 
-  return reply.code(201).send({ listItem });
+    return reply.code(201).send({ listItem });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return reply.code(409).send({ error: "Item already exists in this list" });
+    }
+    throw error;
+  }
 });
 
 app.delete<{ Params: { listId: string; type: string; imdbId: string } }>("/lists/:listId/items/:type/:imdbId", async (request, reply) => {
@@ -1013,6 +1012,75 @@ app.delete<{ Params: { listId: string; type: string; imdbId: string } }>("/lists
   }
 
   return reply.code(204).send();
+});
+
+app.delete<{ Params: { listId: string; imdbId: string }; Querystring: { type?: string } }>("/lists/:listId/items/:imdbId", async (request, reply) => {
+  if (!UUID_V4_PATTERN.test(request.params.listId)) {
+    return reply.code(400).send({ error: "listId must be a valid UUID" });
+  }
+
+  const where: { listId: string; imdbId: string; type?: ListItemType } = {
+    listId: request.params.listId,
+    imdbId: request.params.imdbId
+  };
+
+  if (request.query.type) {
+    if (!Object.values(ListItemType).includes(request.query.type as ListItemType)) {
+      return reply.code(400).send({ error: "type must be one of: movie, series" });
+    }
+    where.type = request.query.type as ListItemType;
+  }
+
+  const removed = await prisma.listItem.deleteMany({ where });
+
+  if (removed.count === 0) {
+    return reply.code(404).send({ error: "List item not found" });
+  }
+
+  return reply.code(204).send();
+});
+
+app.get<{ Params: { listId: string } }>("/lists/:listId/items", async (request, reply) => {
+  if (!UUID_V4_PATTERN.test(request.params.listId)) {
+    return reply.code(400).send({ error: "listId must be a valid UUID" });
+  }
+
+  const list = await prisma.list.findUnique({ where: { id: request.params.listId } });
+  if (!list) {
+    return reply.code(404).send({ error: "List not found" });
+  }
+
+  const listItems = await prisma.listItem.findMany({
+    where: { listId: request.params.listId },
+    orderBy: { addedAt: "desc" }
+  });
+
+  const metadataMap = new Map<string, { name: string; poster: string | null; year: number | null }>();
+  if (listItems.length > 0) {
+    const metadata = await prisma.metadata.findMany({
+      where: {
+        OR: listItems.map((item) => ({
+          imdbId: item.imdbId,
+          type: item.type as unknown as MetadataType
+        }))
+      },
+      select: { imdbId: true, type: true, name: true, poster: true, year: true }
+    });
+
+    for (const m of metadata) {
+      metadataMap.set(`${m.imdbId}:${m.type}`, { name: m.name, poster: m.poster, year: m.year });
+    }
+  }
+
+  const items = listItems.map((item) => {
+    const meta = metadataMap.get(`${item.imdbId}:${item.type}`);
+    return {
+      ...item,
+      metadata: meta ?? null
+    };
+  });
+
+  return { items };
 });
 
 app.post("/trakt/import", async (request, reply) => {
