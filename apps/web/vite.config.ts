@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icons/icon-192.svg", "icons/icon-512.svg"],
+      includeAssets: ["favicon.ico", "icons/icon-192.png", "icons/icon-512.png"],
       manifest: {
         name: "Cataloggy",
         short_name: "Cataloggy",
@@ -17,14 +17,15 @@ export default defineConfig({
         theme_color: "#0ea5e9",
         icons: [
           {
-            src: "/icons/icon-192.svg",
+            src: "/icons/icon-192.png",
             sizes: "192x192",
-            type: "image/svg+xml"
+            type: "image/png"
           },
           {
-            src: "/icons/icon-512.svg",
+            src: "/icons/icon-512.png",
             sizes: "512x512",
-            type: "image/svg+xml"
+            type: "image/png",
+            purpose: "any maskable"
           }
         ]
       },
