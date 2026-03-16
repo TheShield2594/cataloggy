@@ -2,7 +2,8 @@ import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from "
 import { api, runtimeConfig } from "../api";
 import { ChevronDown, Key, Link, Database, Info, Eye, EyeOff, Loader2, Check, AlertCircle, Unplug } from "lucide-react";
 
-const APP_VERSION = "0.1.0";
+declare const __APP_VERSION__: string;
+const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "unknown";
 
 function Section({ title, icon, defaultOpen, children }: { title: string; icon: ReactNode; defaultOpen?: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(defaultOpen ?? false);
@@ -175,6 +176,7 @@ function TraktSection() {
       <div className="flex flex-wrap gap-2">
         {!status?.connected && (
           <button
+            type="button"
             onClick={connect}
             disabled={!status?.configured}
             className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium transition-colors hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -185,6 +187,7 @@ function TraktSection() {
         {status?.connected && (
           <>
             <button
+              type="button"
               onClick={runImport}
               disabled={importing}
               className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium transition-colors hover:bg-sky-500 disabled:opacity-60"
@@ -192,12 +195,14 @@ function TraktSection() {
               {importing ? <><Loader2 size={16} className="animate-spin" /> Importing…</> : "Run Import"}
             </button>
             <button
+              type="button"
               onClick={disconnect}
               className="inline-flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium transition-colors hover:bg-rose-600"
             >
               <Unplug size={16} /> Disconnect
             </button>
             <button
+              type="button"
               onClick={fetchStatus}
               className="rounded-lg bg-slate-700 px-3 py-2 text-sm font-medium transition-colors hover:bg-slate-600"
             >
@@ -244,6 +249,7 @@ function DataSection() {
     <div className="space-y-3">
       <p className="text-sm text-slate-400">Re-fetch metadata (posters, descriptions, etc.) for all tracked items from TMDB.</p>
       <button
+        type="button"
         onClick={refreshAll}
         disabled={syncing}
         className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium transition-colors hover:bg-sky-500 disabled:opacity-60"
