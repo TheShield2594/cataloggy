@@ -192,11 +192,13 @@ export const api = {
       request<{ metas: CatalogMeta[] }>("/recent?type=movie&limit=10")
     ]);
   },
-  getSeriesProgress() {
-    return request<SeriesProgress[]>("/series/progress");
+  async getSeriesProgress() {
+    const res = await request<{ progress: SeriesProgress[] }>("/series/progress");
+    return res.progress;
   },
-  getWatchHistory(limit = 10) {
-    return request<WatchEvent[]>(`/watch/history?limit=${limit}`);
+  async getWatchHistory(limit = 10) {
+    const res = await request<{ history: WatchEvent[] }>(`/watch/history?limit=${limit}`);
+    return res.history;
   },
   getWatchStats() {
     return request<WatchStats>("/watch/stats");
