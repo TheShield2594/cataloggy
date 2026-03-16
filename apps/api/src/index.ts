@@ -965,23 +965,25 @@ app.post<{ Params: { listId: string }; Body: unknown }>("/lists/:listId/items", 
 
   const itemType = type as ItemType;
 
-  await prisma.item.upsert({
-    where: { type_imdbId: { type: itemType, imdbId } },
-    create: {
-      type: itemType,
-      imdbId,
-      title: body.title?.trim() ? body.title.trim() : undefined
-    },
-    update: body.title?.trim() ? { title: body.title.trim() } : {}
-  });
-
   try {
-    const listItem = await prisma.listItem.create({
-      data: {
-        listId: request.params.listId,
-        type,
-        imdbId
-      }
+    const listItem = await prisma.$transaction(async (tx) => {
+      await tx.item.upsert({
+        where: { type_imdbId: { type: itemType, imdbId } },
+        create: {
+          type: itemType,
+          imdbId,
+          title: body.title?.trim() ? body.title.trim() : undefined
+        },
+        update: body.title?.trim() ? { title: body.title.trim() } : {}
+      });
+
+      return tx.listItem.create({
+        data: {
+          listId: request.params.listId,
+          type,
+          imdbId
+        }
+      });
     });
 
     return reply.code(201).send({ listItem });
@@ -1029,6 +1031,14 @@ app.delete<{ Params: { listId: string; imdbId: string }; Querystring: { type?: s
       return reply.code(400).send({ error: "type must be one of: movie, series" });
     }
     where.type = request.query.type as ListItemType;
+  } else {
+    const count = await prisma.listItem.count({ where });
+    if (count === 0) {
+      return reply.code(404).send({ error: "List item not found" });
+    }
+    if (count > 1) {
+      return reply.code(400).send({ error: "Multiple items match this imdbId; provide ?type=movie or ?type=series to disambiguate" });
+    }
   }
 
   const removed = await prisma.listItem.deleteMany({ where });
