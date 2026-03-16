@@ -55,6 +55,10 @@ export type ListItem = {
   addedAt: string;
 };
 
+export type ListItemWithMeta = ListItem & {
+  metadata: { name: string; poster: string | null; year: number | null } | null;
+};
+
 export type CatalogList = {
   id: string;
   name: string;
@@ -169,6 +173,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload)
     });
+  },
+  getListItems(listId: string) {
+    return request<{ items: ListItemWithMeta[] }>(`/lists/${encodeURIComponent(listId)}/items`);
   },
   removeFromList(listId: string, item: { type: MediaType; imdbId: string }) {
     const encodedListId = encodeURIComponent(listId);
