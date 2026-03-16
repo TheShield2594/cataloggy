@@ -109,7 +109,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
+  if (!contentType.includes("application/json") && !contentType.includes("+json")) {
     throw new Error(
       `Expected JSON from API but received "${contentType}". ` +
       `Make sure ${runtimeConfig.getApiBase()} points to the Cataloggy API server, not the web UI.`
