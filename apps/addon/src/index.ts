@@ -71,8 +71,8 @@ const fetchAllLists = async (): Promise<CataloggyList[]> => {
 
 const buildManifest = (lists: CataloggyList[]) => {
   const catalogs = lists.flatMap((list) => [
-    { type: "movie" as const, id: `cataloggy-${list.id}-movie`, name: list.name },
-    { type: "series" as const, id: `cataloggy-${list.id}-series`, name: list.name }
+    { type: "movie" as const, id: `cataloggy-${list.id}-movie`, name: list.name, extra: [{ name: "search", isRequired: false }] },
+    { type: "series" as const, id: `cataloggy-${list.id}-series`, name: list.name, extra: [{ name: "search", isRequired: false }] }
   ]);
 
   return {
@@ -107,37 +107,109 @@ app.get("/manifest.json", async (request: FastifyRequest, reply: FastifyReply) =
   }
 });
 
-app.get<{ Params: { type: string; id: string } }>("/catalog/:type/:id.json", async (request, reply) => {
-  reply.header("Access-Control-Allow-Origin", "*");
+type ListItemResponse = {
+  imdbId: string;
+  type: string;
+  metadata: { name: string; poster: string | null; year: number | null } | null;
+};
 
-  const { type, id } = request.params;
+type StremioMetaPreview = {
+  id: string;
+  type: string;
+  name: string;
+  poster?: string;
+  posterShape: "poster";
+};
+
+const parseCatalogId = (id: string) => {
   const match = id.match(/^cataloggy-([0-9a-f-]+)-(movie|series)$/i);
+  if (!match) return null;
+  return { listId: match[1], catalogType: match[2] };
+};
 
-  if (!match) {
-    return reply.code(404).send({ error: "Catalog not found" });
-  }
-
-  const listId = match[1];
-  const catalogType = match[2];
-
-  if (type !== catalogType) {
-    return reply.code(404).send({ error: "Catalog not found" });
-  }
-
-  const apiUrl = new URL(`/stremio/list/${encodeURIComponent(listId)}`, CATALOGGY_API_BASE);
-  apiUrl.searchParams.set("type", catalogType);
-
-  const upstreamResponse = await fetch(apiUrl, {
+const fetchListItems = async (listId: string): Promise<ListItemResponse[]> => {
+  const apiUrl = new URL(`/lists/${encodeURIComponent(listId)}/items`, CATALOGGY_API_BASE);
+  const response = await fetch(apiUrl, {
     headers: CATALOGGY_API_TOKEN ? { Authorization: `Bearer ${CATALOGGY_API_TOKEN}` } : {}
   });
 
-  const payload = await upstreamResponse.json().catch(() => ({ metas: [] }));
-
-  if (!upstreamResponse.ok) {
-    return reply.code(upstreamResponse.status).send(payload);
+  if (!response.ok) {
+    throw new Error(`API responded with ${response.status}`);
   }
 
-  return reply.send(payload);
+  const payload = (await response.json()) as { items?: ListItemResponse[] };
+  return payload.items ?? [];
+};
+
+const itemsToMetas = (items: ListItemResponse[], type: string): StremioMetaPreview[] =>
+  items
+    .filter((item) => item.type === type)
+    .map((item) => ({
+      id: item.imdbId,
+      type: item.type,
+      name: item.metadata?.name ?? item.imdbId,
+      ...(item.metadata?.poster ? { poster: item.metadata.poster } : {}),
+      posterShape: "poster" as const
+    }));
+
+const parseExtra = (extra: string): Record<string, string> => {
+  const params: Record<string, string> = {};
+  for (const pair of extra.split("&")) {
+    const [key, ...rest] = pair.split("=");
+    if (key) {
+      params[decodeURIComponent(key)] = decodeURIComponent(rest.join("="));
+    }
+  }
+  return params;
+};
+
+app.get<{ Params: { type: string; id: string } }>("/catalog/:type/:id.json", async (request, reply) => {
+  reply.header("Access-Control-Allow-Origin", "*");
+  reply.header("Content-Type", "application/json");
+
+  const { type, id } = request.params;
+  const parsed = parseCatalogId(id);
+
+  if (!parsed || type !== parsed.catalogType) {
+    return reply.code(200).send({ metas: [] });
+  }
+
+  try {
+    const items = await fetchListItems(parsed.listId);
+    const metas = itemsToMetas(items, type);
+    return reply.send({ metas });
+  } catch (error) {
+    request.log.error(error, "Failed to fetch catalog items");
+    return reply.send({ metas: [] });
+  }
+});
+
+app.get<{ Params: { type: string; id: string; extra: string } }>("/catalog/:type/:id/:extra.json", async (request, reply) => {
+  reply.header("Access-Control-Allow-Origin", "*");
+  reply.header("Content-Type", "application/json");
+
+  const { type, id, extra } = request.params;
+  const parsed = parseCatalogId(id);
+
+  if (!parsed || type !== parsed.catalogType) {
+    return reply.send({ metas: [] });
+  }
+
+  try {
+    const items = await fetchListItems(parsed.listId);
+    let metas = itemsToMetas(items, type);
+
+    const extraParams = parseExtra(extra);
+    if (extraParams.search) {
+      const query = extraParams.search.toLowerCase();
+      metas = metas.filter((m) => m.name.toLowerCase().includes(query));
+    }
+
+    return reply.send({ metas });
+  } catch (error) {
+    request.log.error(error, "Failed to fetch catalog items");
+    return reply.send({ metas: [] });
+  }
 });
 
 app.get<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async (request, reply) => {
