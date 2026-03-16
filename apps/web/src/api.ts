@@ -205,5 +205,20 @@ export const api = {
     return request<void>(`/series/${encodeURIComponent(imdbId)}/watch-next`, {
       method: "POST"
     });
+  },
+  getTraktStatus() {
+    return request<{ connected: boolean; configured: boolean; expiresAt: string | null }>("/trakt/status");
+  },
+  getTraktOAuthUrl() {
+    return request<{ url: string }>("/trakt/oauth/authorize");
+  },
+  traktImport() {
+    return request<{ imported: Record<string, number> }>("/trakt/import", { method: "POST" });
+  },
+  traktDisconnect() {
+    return request<{ disconnected: boolean }>("/trakt/disconnect", { method: "POST" });
+  },
+  refreshAllMetadata() {
+    return request<{ refreshed: number; total: number }>("/metadata/refresh-all", { method: "POST" });
   }
 };
