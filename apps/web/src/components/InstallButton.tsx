@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Download } from "lucide-react";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -47,9 +48,10 @@ export function InstallButton() {
         onClick={() => {
           void onInstall();
         }}
-        className="rounded-md border border-sky-400/60 bg-sky-500/10 px-3 py-2 text-xs font-medium text-sky-200 hover:bg-sky-500/20"
+        className="flex items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/80 px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
       >
-        Install Cataloggy
+        <Download className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Install</span>
       </button>
       {showManualHint && (
         <p className="max-w-xs text-right text-xs text-slate-400">
