@@ -71,6 +71,33 @@ export type CatalogMeta = {
   description?: string;
 };
 
+export type SeriesProgress = {
+  imdbId: string;
+  name: string;
+  poster?: string;
+  lastSeason: number;
+  lastEpisode: number;
+  nextSeason: number;
+  nextEpisode: number;
+};
+
+export type WatchEvent = {
+  id: string;
+  imdbId: string;
+  type: MediaType;
+  name: string;
+  poster?: string;
+  season?: number;
+  episode?: number;
+  watchedAt: string;
+};
+
+export type WatchStats = {
+  totalMovies: number;
+  totalEpisodes: number;
+  totalPlays: number;
+};
+
 const authHeaders = () => {
   const token = runtimeConfig.getToken();
   return {
@@ -157,5 +184,19 @@ export const api = {
       request<{ metas: CatalogMeta[] }>("/continue?limit=10"),
       request<{ metas: CatalogMeta[] }>("/recent?type=movie&limit=10")
     ]);
+  },
+  getSeriesProgress() {
+    return request<SeriesProgress[]>("/series/progress");
+  },
+  getWatchHistory(limit = 10) {
+    return request<WatchEvent[]>(`/watch/history?limit=${limit}`);
+  },
+  getWatchStats() {
+    return request<WatchStats>("/watch/stats");
+  },
+  markNextEpisodeWatched(imdbId: string) {
+    return request<void>(`/series/${encodeURIComponent(imdbId)}/watch-next`, {
+      method: "POST"
+    });
   }
 };
