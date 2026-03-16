@@ -22,9 +22,23 @@ function AddItemModal({
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
     inputRef.current?.focus();
+    return () => {
+      previousFocusRef.current?.focus();
+    };
   }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
 
   const doSearch = useCallback(async (q: string, t: MediaType) => {
     if (!q.trim()) {
@@ -69,34 +83,38 @@ function AddItemModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm pt-[10vh]" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm pt-[10vh]" onClick={onClose}>
       <div
-        className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-item-modal-title"
+        className="w-full max-w-lg rounded-2xl border border-slate-800/60 bg-slate-950 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-          <h3 className="text-lg font-semibold font-heading">Add to {listName}</h3>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+        <div className="flex items-center justify-between border-b border-slate-800/60 px-5 py-4">
+          <h3 id="add-item-modal-title" className="text-lg font-bold">Add to {listName}</h3>
+          <button onClick={onClose} aria-label="Close dialog" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Search input */}
-        <div className="flex gap-2 border-b border-slate-800 px-5 py-3">
+        <div className="flex gap-2 border-b border-slate-800/60 px-5 py-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
             <input
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search movies & series…"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-9 pr-3 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              placeholder="Search movies & series..."
+              aria-label="Search movies and series"
+              className="w-full rounded-full border border-slate-700/60 bg-slate-900 py-2.5 pl-9 pr-3 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15"
             />
           </div>
-          <div className="relative inline-flex rounded-full bg-slate-800 p-0.5">
+          <div className="relative inline-flex rounded-full bg-slate-800 p-0.5 border border-slate-700/40">
             <div
-              className="absolute top-0.5 h-[calc(100%-0.25rem)] w-[calc(50%-0.125rem)] rounded-full bg-sky-500 transition-transform duration-200"
+              className="absolute top-0.5 h-[calc(100%-0.25rem)] w-[calc(50%-0.125rem)] rounded-full bg-red-500 transition-transform duration-200"
               style={{ transform: type === "series" ? "translateX(100%)" : "translateX(0)" }}
             />
             {(["movie", "series"] as const).map((opt) => (
@@ -115,8 +133,8 @@ function AddItemModal({
 
         {/* Results */}
         <div className="max-h-[50vh] overflow-y-auto px-5 py-3">
-          {error && <p className="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/30 px-3 py-2 text-xs text-rose-300">{error}</p>}
-          {searching && <p className="py-6 text-center text-sm text-slate-500">Searching…</p>}
+          {error && <p className="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-300">{error}</p>}
+          {searching && <p className="py-6 text-center text-sm text-slate-500">Searching...</p>}
           {!searching && query.trim() && results.length === 0 && (
             <p className="py-6 text-center text-sm text-slate-500">No results found.</p>
           )}
@@ -127,9 +145,9 @@ function AddItemModal({
                 type="button"
                 disabled={adding[r.imdbId]}
                 onClick={() => handleAdd(r)}
-                className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-slate-800 disabled:opacity-50"
+                className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-slate-900/80 disabled:opacity-50 transition-colors"
               >
-                <div className="h-14 w-10 flex-none overflow-hidden rounded-md bg-slate-800 ring-1 ring-white/5">
+                <div className="h-14 w-10 flex-none overflow-hidden rounded-lg bg-slate-800 ring-1 ring-white/5">
                   {r.poster ? (
                     <img src={r.poster} alt="" className="h-full w-full object-cover" />
                   ) : (
@@ -137,10 +155,10 @@ function AddItemModal({
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-slate-200">{r.name}</p>
+                  <p className="truncate text-sm font-semibold text-slate-200">{r.name}</p>
                   <p className="text-xs text-slate-500">{r.year ?? "Unknown"} &middot; {r.type}</p>
                 </div>
-                <Plus className="h-4 w-4 flex-none text-sky-400" />
+                <Plus className="h-4 w-4 flex-none text-red-400" />
               </button>
             ))}
           </div>
@@ -228,7 +246,7 @@ export function ListsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
+    <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
       {/* Sidebar */}
       <aside className="w-full shrink-0 lg:w-64">
         {/* Mobile: horizontal scrollable tabs */}
@@ -238,13 +256,13 @@ export function ListsPage() {
               key={list.id}
               type="button"
               onClick={() => setSelectedListId(list.id)}
-              className={`flex-none rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors lg:w-full ${
+              className={`flex-none rounded-xl border px-4 py-3.5 text-left text-sm font-medium transition-all lg:w-full ${
                 selectedListId === list.id
-                  ? "border-sky-500/50 bg-sky-500/10 text-sky-300"
-                  : "border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700 hover:bg-slate-800/80"
+                  ? "border-red-500/40 bg-red-500/10 text-red-300 shadow-lg shadow-red-500/5"
+                  : "border-slate-800/60 bg-slate-900/40 text-slate-300 hover:border-slate-700 hover:bg-slate-900/70"
               }`}
             >
-              <p className="truncate font-heading">{list.name}</p>
+              <p className="truncate font-semibold">{list.name}</p>
               <p className="mt-0.5 text-xs text-slate-500">
                 {list.items.length} {list.items.length === 1 ? "item" : "items"}
               </p>
@@ -256,12 +274,12 @@ export function ListsPage() {
           <input
             value={newListName}
             onChange={(e) => setNewListName(e.target.value)}
-            placeholder="New list name…"
-            className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+            placeholder="New list name..."
+            className="min-w-0 flex-1 rounded-xl border border-slate-700/60 bg-slate-900 px-3.5 py-2.5 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15"
           />
           <button
             type="submit"
-            className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium hover:bg-emerald-500"
+            className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold hover:bg-emerald-500 transition-colors"
           >
             Create
           </button>
@@ -271,24 +289,31 @@ export function ListsPage() {
       {/* Main content area */}
       <main className="min-w-0 flex-1">
         {error && (
-          <p className="mb-4 rounded-lg bg-rose-500/10 border border-rose-500/30 px-4 py-2 text-rose-300">{error}</p>
+          <p className="mb-4 rounded-xl bg-rose-500/5 border border-rose-500/20 px-4 py-3 text-rose-300 text-sm">{error}</p>
         )}
 
         {!selectedList ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <FolderOpen className="mb-3 h-12 w-12 text-slate-600" />
-            <p className="text-lg font-medium text-slate-400">No list selected</p>
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-900 ring-1 ring-slate-800">
+              <FolderOpen className="h-10 w-10 text-slate-700" />
+            </div>
+            <p className="mt-4 text-lg font-semibold text-slate-400">No list selected</p>
             <p className="mt-1 text-sm text-slate-500">Select a list from the sidebar or create a new one.</p>
           </div>
         ) : (
           <>
             {/* List header */}
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold font-heading text-slate-100">{selectedList.name}</h2>
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-white">{selectedList.name}</h2>
+                <p className="mt-0.5 text-sm text-slate-500">
+                  {items.length} {items.length === 1 ? "item" : "items"}
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium hover:bg-sky-500"
+                className="flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-semibold hover:bg-red-600 transition-colors shadow-lg shadow-red-500/20"
               >
                 <Plus className="h-4 w-4" />
                 Add
@@ -297,25 +322,27 @@ export function ListsPage() {
 
             {/* Items grid */}
             {loadingItems ? (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="animate-pulse">
-                    <div className="rounded-xl bg-slate-800" style={{ aspectRatio: "2/3" }} />
-                    <div className="mt-2 h-3 w-3/4 rounded bg-slate-800" />
-                    <div className="mt-1 h-2.5 w-1/2 rounded bg-slate-800" />
+                  <div key={i}>
+                    <div className="skeleton rounded-xl" style={{ aspectRatio: "2/3" }} />
+                    <div className="skeleton mt-2 h-4 w-3/4 rounded" />
+                    <div className="skeleton mt-1 h-3 w-1/2 rounded" />
                   </div>
                 ))}
               </div>
             ) : items.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <FolderOpen className="mb-3 h-12 w-12 text-slate-600" />
-                <p className="text-lg font-medium text-slate-400">This list is empty</p>
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-900 ring-1 ring-slate-800">
+                  <FolderOpen className="h-10 w-10 text-slate-700" />
+                </div>
+                <p className="mt-4 text-lg font-semibold text-slate-400">This list is empty</p>
                 <p className="mt-1 text-sm text-slate-500">
-                  Click <span className="text-sky-400">+ Add</span> to search and add titles.
+                  Click <span className="font-semibold text-red-400">+ Add</span> to search and add titles.
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {items.map((item) => {
                   const name = item.metadata?.name ?? item.imdbId;
                   const poster = item.metadata?.poster;
@@ -323,35 +350,37 @@ export function ListsPage() {
                   return (
                     <div key={`${item.type}:${item.imdbId}`} className="group">
                       {/* Poster */}
-                      <div className="relative overflow-hidden rounded-xl bg-slate-800 shadow-lg ring-1 ring-white/10" style={{ aspectRatio: "2/3" }}>
+                      <div className="card-lift relative overflow-hidden rounded-xl bg-slate-800 ring-1 ring-white/10" style={{ aspectRatio: "2/3" }}>
                         {poster ? (
-                          <img src={poster} alt={name} className="h-full w-full object-cover" loading="lazy" />
+                          <img src={poster} alt={name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center">
+                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900">
                             <Film className="h-10 w-10 text-slate-600" />
                           </div>
                         )}
                         {/* Type badge */}
-                        <span className={`absolute top-2 left-2 rounded-md px-1.5 py-0.5 text-2xs font-semibold uppercase shadow ${
+                        <span className={`absolute top-2.5 left-2.5 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-lg ${
                           item.type === "movie"
-                            ? "bg-sky-600 text-white"
-                            : "bg-violet-600 text-white"
+                            ? "bg-red-500/90 text-white"
+                            : "bg-violet-600/90 text-white"
                         }`}>
                           {item.type === "movie" ? "Movie" : "Series"}
                         </span>
+                        {/* Hover overlay with gradient */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
                         {/* Remove button on hover */}
                         <button
                           type="button"
                           disabled={removingIds[item.imdbId]}
                           onClick={() => handleRemove(item)}
-                          className="absolute top-2 right-2 rounded-lg bg-black/60 p-1.5 text-slate-300 opacity-0 transition-opacity hover:bg-rose-500/80 hover:text-white group-hover:opacity-100 disabled:opacity-50"
+                          className="absolute top-2.5 right-2.5 rounded-full bg-black/60 p-2 text-slate-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-all duration-200 hover:bg-rose-500 hover:text-white disabled:opacity-50 backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                           aria-label="Remove from list"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                       {/* Title & year */}
-                      <p className="mt-1.5 truncate text-sm font-medium text-slate-200">{name}</p>
+                      <p className="mt-2.5 truncate text-sm font-semibold text-slate-100">{name}</p>
                       <p className="text-xs text-slate-500">{year ?? "Unknown year"}</p>
                     </div>
                   );

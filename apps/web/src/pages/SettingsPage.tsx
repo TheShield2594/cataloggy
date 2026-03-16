@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { api, runtimeConfig } from "../api";
 import { ChevronDown, Key, Link, Database, Info, Eye, EyeOff, Loader2, Check, AlertCircle, Unplug } from "lucide-react";
 
@@ -9,6 +9,9 @@ function Section({ title, icon, defaultOpen, children }: { title: string; icon: 
   const [open, setOpen] = useState(defaultOpen ?? false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | undefined>(defaultOpen ? undefined : 0);
+  const id = useId();
+  const buttonId = `${id}-toggle`;
+  const panelId = `${id}-panel`;
 
   useEffect(() => {
     if (!contentRef.current) return;
@@ -23,13 +26,16 @@ function Section({ title, icon, defaultOpen, children }: { title: string; icon: 
   }, [open]);
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60">
+    <div className="rounded-2xl border border-slate-800/60 bg-slate-900/40 overflow-hidden">
       <button
+        id={buttonId}
         type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-slate-800/40"
+        className="flex w-full items-center gap-3 px-5 py-[1.125rem] text-left transition-colors hover:bg-slate-800/30"
       >
-        <span className="text-slate-400">{icon}</span>
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-800/60 text-slate-400">{icon}</span>
         <span className="flex-1 text-base font-semibold">{title}</span>
         <ChevronDown
           size={18}
@@ -37,11 +43,14 @@ function Section({ title, icon, defaultOpen, children }: { title: string; icon: 
         />
       </button>
       <div
+        id={panelId}
         ref={contentRef}
+        role="region"
+        aria-labelledby={buttonId}
         style={{ height: height !== undefined ? `${height}px` : "auto" }}
         className="overflow-hidden transition-[height] duration-300 ease-in-out"
       >
-        <div className="border-t border-slate-800 px-5 py-4">{children}</div>
+        <div className="border-t border-slate-800/40 px-5 py-5">{children}</div>
       </div>
     </div>
   );
@@ -50,8 +59,8 @@ function Section({ title, icon, defaultOpen, children }: { title: string; icon: 
 function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-        ok ? "bg-emerald-500/10 text-emerald-400" : "bg-slate-700/50 text-slate-400"
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
+        ok ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20" : "bg-slate-800 text-slate-400 ring-1 ring-slate-700/60"
       }`}
     >
       <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-400" : "bg-slate-500"}`} />
@@ -73,8 +82,8 @@ function ApiTokenSection() {
   };
 
   return (
-    <form onSubmit={save} className="space-y-3">
-      <p className="text-sm text-slate-400">
+    <form onSubmit={save} className="space-y-4">
+      <p className="text-sm text-slate-400 leading-relaxed">
         The API token authenticates requests to your Cataloggy server. It is stored in localStorage.
       </p>
       <div className="relative">
@@ -83,12 +92,12 @@ function ApiTokenSection() {
           value={token}
           onChange={(e) => setToken(e.target.value)}
           placeholder="Paste your API token"
-          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 pr-20 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          className="w-full rounded-xl border border-slate-700/60 bg-slate-950 px-4 py-3 pr-20 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15"
         />
         <button
           type="button"
           onClick={() => setShowToken((p) => !p)}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
+          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
           aria-label={showToken ? "Hide token" : "Show token"}
         >
           {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -97,7 +106,11 @@ function ApiTokenSection() {
       <p className="text-xs text-amber-400/80">Only use this on trusted devices.</p>
       <button
         type="submit"
-        className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium transition-colors hover:bg-sky-500"
+        className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
+          saved
+            ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
+            : "bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20"
+        }`}
       >
         {saved ? <><Check size={16} /> Saved</> : "Save token"}
       </button>
@@ -161,7 +174,7 @@ function TraktSection() {
   };
 
   if (loading) {
-    return <div className="flex items-center gap-2 text-sm text-slate-400"><Loader2 size={16} className="animate-spin" /> Checking Trakt status…</div>;
+    return <div className="flex items-center gap-2 text-sm text-slate-400"><Loader2 size={16} className="animate-spin" /> Checking Trakt status...</div>;
   }
 
   return (
@@ -179,7 +192,7 @@ function TraktSection() {
             type="button"
             onClick={connect}
             disabled={!status?.configured}
-            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium transition-colors hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Link size={16} /> Connect Trakt
           </button>
@@ -190,21 +203,21 @@ function TraktSection() {
               type="button"
               onClick={runImport}
               disabled={importing}
-              className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium transition-colors hover:bg-sky-500 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-red-600 disabled:opacity-60 shadow-lg shadow-red-500/20"
             >
-              {importing ? <><Loader2 size={16} className="animate-spin" /> Importing…</> : "Run Import"}
+              {importing ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : "Run Import"}
             </button>
             <button
               type="button"
               onClick={disconnect}
-              className="inline-flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium transition-colors hover:bg-rose-600"
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-rose-600 border border-slate-700/60"
             >
               <Unplug size={16} /> Disconnect
             </button>
             <button
               type="button"
               onClick={fetchStatus}
-              className="rounded-lg bg-slate-700 px-3 py-2 text-sm font-medium transition-colors hover:bg-slate-600"
+              className="rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-slate-700 border border-slate-700/60"
             >
               Refresh
             </button>
@@ -246,15 +259,15 @@ function DataSection() {
   };
 
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-slate-400">Re-fetch metadata (posters, descriptions, etc.) for all tracked items from TMDB.</p>
+    <div className="space-y-4">
+      <p className="text-sm text-slate-400 leading-relaxed">Re-fetch metadata (posters, descriptions, etc.) for all tracked items from TMDB.</p>
       <button
         type="button"
         onClick={refreshAll}
         disabled={syncing}
-        className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium transition-colors hover:bg-sky-500 disabled:opacity-60"
+        className="inline-flex items-center gap-2 rounded-xl bg-red-500 px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-red-600 disabled:opacity-60 shadow-lg shadow-red-500/20"
       >
-        {syncing ? <><Loader2 size={16} className="animate-spin" /> Syncing…</> : "Sync all metadata"}
+        {syncing ? <><Loader2 size={16} className="animate-spin" /> Syncing...</> : "Sync all metadata"}
       </button>
       {result && <p className="flex items-center gap-2 text-sm text-emerald-400"><Check size={16} /> {result}</p>}
       {error && <p className="flex items-center gap-2 text-sm text-rose-400"><AlertCircle size={16} /> {error}</p>}
@@ -264,8 +277,8 @@ function DataSection() {
 
 export function SettingsPage() {
   return (
-    <div className="mx-auto max-w-2xl space-y-3">
-      <h2 className="text-xl font-semibold">Settings</h2>
+    <div className="mx-auto max-w-2xl space-y-4">
+      <h2 className="text-2xl font-bold">Settings</h2>
 
       <Section title="API Token" icon={<Key size={20} />} defaultOpen>
         <ApiTokenSection />
@@ -280,9 +293,9 @@ export function SettingsPage() {
       </Section>
 
       <Section title="About" icon={<Info size={20} />}>
-        <div className="space-y-1 text-sm text-slate-400">
-          <p>Cataloggy <span className="font-mono text-slate-200">v{APP_VERSION}</span></p>
-          <p className="text-xs">A personal media catalog and watchlist manager.</p>
+        <div className="space-y-2 text-sm text-slate-400">
+          <p className="text-base font-semibold text-slate-200">Cataloggy <span className="font-mono text-red-400">v{APP_VERSION}</span></p>
+          <p className="text-sm">A personal media catalog and watchlist manager.</p>
         </div>
       </Section>
     </div>
