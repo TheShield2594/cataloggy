@@ -22,9 +22,23 @@ function AddItemModal({
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
     inputRef.current?.focus();
+    return () => {
+      previousFocusRef.current?.focus();
+    };
   }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
 
   const doSearch = useCallback(async (q: string, t: MediaType) => {
     if (!q.trim()) {
@@ -71,13 +85,16 @@ function AddItemModal({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm pt-[10vh]" onClick={onClose}>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-item-modal-title"
         className="w-full max-w-lg rounded-2xl border border-slate-800/60 bg-slate-950 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800/60 px-5 py-4">
-          <h3 className="text-lg font-bold">Add to {listName}</h3>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+          <h3 id="add-item-modal-title" className="text-lg font-bold">Add to {listName}</h3>
+          <button onClick={onClose} aria-label="Close dialog" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -91,6 +108,7 @@ function AddItemModal({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search movies & series..."
+              aria-label="Search movies and series"
               className="w-full rounded-full border border-slate-700/60 bg-slate-900 py-2.5 pl-9 pr-3 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15"
             />
           </div>
@@ -355,7 +373,7 @@ export function ListsPage() {
                           type="button"
                           disabled={removingIds[item.imdbId]}
                           onClick={() => handleRemove(item)}
-                          className="absolute top-2.5 right-2.5 rounded-full bg-black/60 p-2 text-slate-300 opacity-0 transition-all duration-200 hover:bg-rose-500 hover:text-white group-hover:opacity-100 disabled:opacity-50 backdrop-blur-sm"
+                          className="absolute top-2.5 right-2.5 rounded-full bg-black/60 p-2 text-slate-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-all duration-200 hover:bg-rose-500 hover:text-white disabled:opacity-50 backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                           aria-label="Remove from list"
                         >
                           <Trash2 className="h-4 w-4" />

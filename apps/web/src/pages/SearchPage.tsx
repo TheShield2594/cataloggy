@@ -8,7 +8,7 @@ type FilterType = "all" | MediaType;
 
 function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: number) => void }) {
   return (
-    <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 sm:bottom-6 max-sm:bottom-20 max-sm:right-4">
+    <div role="status" aria-live="polite" aria-atomic="true" className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 sm:bottom-6 max-sm:bottom-20 max-sm:right-4">
       {toasts.map((toast) => (
         <div
           key={toast.id}
@@ -22,11 +22,11 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
           style={{ borderLeftWidth: "4px" }}
         >
           {toast.type === "success" ? (
-            <Check className="h-5 w-5 flex-none text-emerald-400" />
+            <Check aria-hidden="true" className="h-5 w-5 flex-none text-emerald-400" />
           ) : toast.type === "error" ? (
-            <X className="h-5 w-5 flex-none text-rose-400" />
+            <X aria-hidden="true" className="h-5 w-5 flex-none text-rose-400" />
           ) : (
-            <Heart className="h-5 w-5 flex-none text-red-400" />
+            <Heart aria-hidden="true" className="h-5 w-5 flex-none text-red-400" />
           )}
           <span className="text-sm font-medium text-slate-200">{toast.message}</span>
         </div>
@@ -140,6 +140,7 @@ export function SearchPage() {
           setResults(response);
         }
       } catch (err) {
+        setResults([]);
         showToast(err instanceof Error ? err.message : "Search failed", "error");
       } finally {
         setIsSearching(false);
@@ -367,9 +368,18 @@ function ResultCard({
     <div className="group flex flex-col">
       {/* Poster */}
       <div
-        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-white/10"
+        role="button"
+        tabIndex={0}
+        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
         style={{ aspectRatio: "var(--poster-ratio)" }}
         onClick={() => onSelect(result)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelect(result);
+          }
+        }}
+        aria-label={`View details for ${result.name}`}
       >
         {result.poster ? (
           <img
@@ -406,7 +416,7 @@ function ResultCard({
             e.stopPropagation();
             onToggleDropdown(result.imdbId);
           }}
-          className="absolute bottom-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-white opacity-0 shadow-lg transition-all duration-300 hover:bg-red-600 hover:scale-110 group-hover:opacity-100"
+          className="absolute bottom-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shadow-lg transition-all duration-300 hover:bg-red-600 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
           aria-label={`Add ${result.name} to a list`}
         >
           <Plus className="h-4 w-4" strokeWidth={3} />

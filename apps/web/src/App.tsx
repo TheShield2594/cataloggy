@@ -19,7 +19,7 @@ export function App() {
   return (
     <div className="min-h-screen w-full">
       {/* Fixed header */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-slate-800/60 bg-slate-950/85 backdrop-blur-xl">
+      <header className="fixed top-0 left-0 right-0 z-30 border-b border-slate-800/60 bg-slate-950/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-6 px-6 py-3.5">
           <Link to="/" className="flex items-center gap-2.5 text-xl font-bold text-white">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-500">
@@ -70,7 +70,7 @@ export function App() {
       </main>
 
       {/* Mobile bottom tab bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 flex sm:hidden border-t border-slate-800/60 bg-slate-950/95 backdrop-blur-xl">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 flex sm:hidden border-t border-slate-800/60 bg-slate-950/95 backdrop-blur-xl">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = item.end

@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { api, runtimeConfig } from "../api";
 import { ChevronDown, Key, Link, Database, Info, Eye, EyeOff, Loader2, Check, AlertCircle, Unplug } from "lucide-react";
 
@@ -9,6 +9,9 @@ function Section({ title, icon, defaultOpen, children }: { title: string; icon: 
   const [open, setOpen] = useState(defaultOpen ?? false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | undefined>(defaultOpen ? undefined : 0);
+  const id = useId();
+  const buttonId = `${id}-toggle`;
+  const panelId = `${id}-panel`;
 
   useEffect(() => {
     if (!contentRef.current) return;
@@ -25,9 +28,12 @@ function Section({ title, icon, defaultOpen, children }: { title: string; icon: 
   return (
     <div className="rounded-2xl border border-slate-800/60 bg-slate-900/40 overflow-hidden">
       <button
+        id={buttonId}
         type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center gap-3 px-5 py-4.5 text-left transition-colors hover:bg-slate-800/30"
+        className="flex w-full items-center gap-3 px-5 py-[1.125rem] text-left transition-colors hover:bg-slate-800/30"
       >
         <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-800/60 text-slate-400">{icon}</span>
         <span className="flex-1 text-base font-semibold">{title}</span>
@@ -37,7 +43,10 @@ function Section({ title, icon, defaultOpen, children }: { title: string; icon: 
         />
       </button>
       <div
+        id={panelId}
         ref={contentRef}
+        role="region"
+        aria-labelledby={buttonId}
         style={{ height: height !== undefined ? `${height}px` : "auto" }}
         className="overflow-hidden transition-[height] duration-300 ease-in-out"
       >
