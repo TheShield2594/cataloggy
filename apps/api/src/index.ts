@@ -225,6 +225,27 @@ const fetchMetadata = async (type: MetadataType, imdbId: string): Promise<Metada
   return metadata;
 };
 
+const METADATA_FRESHNESS_MS = 7 * 24 * 60 * 60 * 1000;
+
+const syncMetadata = async (imdbId: string, type: MetadataType) => {
+  const existing = await prisma.metadata.findUnique({
+    where: { imdbId_type: { imdbId, type } }
+  });
+
+  if (existing && Date.now() - existing.updatedAt.getTime() < METADATA_FRESHNESS_MS) {
+    return existing;
+  }
+
+  const tmdb = TmdbClient.fromEnv();
+  const payload = await tmdb.findByImdbId(type, imdbId);
+
+  if (!payload) {
+    return existing ?? null;
+  }
+
+  return upsertMetadata(payload);
+};
+
 const parseCatalogLimit = (rawLimit: unknown) => {
   if (rawLimit === undefined) {
     return DEFAULT_STREMIO_LIMIT;
@@ -729,6 +750,31 @@ app.get<{ Params: { type: string; imdbId: string } }>("/meta/:type/:imdbId", asy
   } catch (error) {
     request.log.error(error, "Metadata fetch failed");
     return reply.code(500).send({ error: "Metadata fetch failed" });
+  }
+});
+
+app.post<{ Body: unknown }>("/metadata/sync", async (request, reply) => {
+  const body = request.body as Record<string, unknown> | null;
+  const imdbId = typeof body?.imdbId === "string" ? body.imdbId.trim() : "";
+  if (!imdbId) {
+    return reply.code(400).send({ error: "imdbId is required" });
+  }
+
+  const type = getMetadataType(body?.type as string | undefined);
+  if (!type) {
+    return reply.code(400).send({ error: "type must be one of: movie, series" });
+  }
+
+  try {
+    const metadata = await syncMetadata(imdbId, type);
+    if (!metadata) {
+      return reply.code(404).send({ error: "Metadata not found on TMDB" });
+    }
+
+    return metadata;
+  } catch (error) {
+    request.log.error(error, "Metadata sync failed");
+    return reply.code(500).send({ error: "Metadata sync failed" });
   }
 });
 
