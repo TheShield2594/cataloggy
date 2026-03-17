@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { api, runtimeConfig } from "../api";
-import { ChevronDown, Key, Link, Database, Info, Eye, EyeOff, Loader2, Check, AlertCircle, Unplug, Clapperboard } from "lucide-react";
+import { ChevronDown, Key, Link, Database, Info, Eye, EyeOff, Loader2, Check, AlertCircle, Unplug, Clapperboard, Image } from "lucide-react";
 
 declare const __APP_VERSION__: string;
 const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "unknown";
@@ -239,6 +239,121 @@ function TraktSection() {
   );
 }
 
+function RpdbSection() {
+  const [loading, setLoading] = useState(true);
+  const [configured, setConfigured] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const status = await api.getRpdbStatus();
+        setConfigured(status.configured);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load RPDB status");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await api.setRpdbKey(apiKey);
+      setConfigured(result.configured);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save RPDB key");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const disconnect = async () => {
+    try {
+      await api.removeRpdbKey();
+      setConfigured(false);
+      setApiKey("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove RPDB key");
+    }
+  };
+
+  if (loading) {
+    return <div className="flex items-center gap-2 text-sm text-slate-400"><Loader2 size={16} className="animate-spin" /> Checking RPDB status...</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-slate-400 leading-relaxed">
+        RPDB (Rating Poster Database) overlays rating badges directly onto poster images.
+        When enabled, all posters in Stremio will show IMDb/TMDB ratings on the poster artwork.
+        Get an API key at{" "}
+        <a href="https://ratingposterdb.com/api-key/" target="_blank" rel="noopener noreferrer" className="text-red-400 underline hover:text-red-300">
+          ratingposterdb.com
+        </a>.
+      </p>
+
+      <div className="flex items-center gap-3">
+        <StatusBadge ok={configured} label={configured ? "Active" : "Not configured"} />
+      </div>
+
+      {configured ? (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={disconnect}
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-rose-600 border border-slate-700/60"
+          >
+            <Unplug size={16} /> Remove Key
+          </button>
+        </div>
+      ) : (
+        <form onSubmit={save} className="space-y-3">
+          <div className="relative">
+            <input
+              type={showKey ? "text" : "password"}
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="Paste your RPDB API key"
+              className="w-full rounded-xl border border-slate-700/60 bg-slate-950 px-4 py-3 pr-20 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15"
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey((p) => !p)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
+              aria-label={showKey ? "Hide key" : "Show key"}
+            >
+              {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          <button
+            type="submit"
+            disabled={saving || !apiKey.trim()}
+            className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
+              saved
+                ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
+                : "bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20 disabled:opacity-50"
+            }`}
+          >
+            {saved ? <><Check size={16} /> Saved</> : saving ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : "Save RPDB Key"}
+          </button>
+        </form>
+      )}
+
+      {error && <p className="flex items-center gap-2 text-sm text-rose-400"><AlertCircle size={16} /> {error}</p>}
+    </div>
+  );
+}
+
 const CATALOG_LABELS: Record<string, string> = {
   my_watchlist_movies: "Watchlist Movies",
   my_watchlist_series: "Watchlist Series",
@@ -382,6 +497,10 @@ export function SettingsPage() {
 
       <Section title="Stremio Addon" icon={<Clapperboard size={20} />}>
         <AddonConfigSection />
+      </Section>
+
+      <Section title="RPDB Posters" icon={<Image size={20} />}>
+        <RpdbSection />
       </Section>
 
       <Section title="Data" icon={<Database size={20} />}>

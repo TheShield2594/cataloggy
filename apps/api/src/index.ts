@@ -1567,6 +1567,71 @@ app.post<{ Body: unknown }>("/addon/config", async (request, reply) => {
   return { config };
 });
 
+// ─── RPDB (Rating Poster Database) ───
+
+const RPDB_API_KEY_KV = "rpdb:apiKey";
+const RPDB_BASE_URL = "https://api.ratingposterdb.com";
+
+const getRpdbApiKey = async (): Promise<string | null> => {
+  const row = await prisma.kV.findUnique({ where: { key: RPDB_API_KEY_KV } });
+  return row?.value?.trim() || null;
+};
+
+const buildRpdbPosterUrl = (rpdbKey: string, imdbId: string): string =>
+  `${RPDB_BASE_URL}/${rpdbKey}/imdb/poster-default/${imdbId}.jpg`;
+
+app.get("/rpdb/status", async () => {
+  const apiKey = await getRpdbApiKey();
+  return {
+    configured: !!apiKey,
+    hasKey: !!apiKey,
+  };
+});
+
+app.post<{ Body: unknown }>("/rpdb/key", async (request, reply) => {
+  const body = request.body as { apiKey?: unknown } | null;
+  if (!body || typeof body.apiKey !== "string") {
+    return reply.code(400).send({ error: "apiKey must be a string" });
+  }
+
+  const apiKey = body.apiKey.trim();
+  if (!apiKey) {
+    // Remove key
+    await prisma.kV.deleteMany({ where: { key: RPDB_API_KEY_KV } });
+    return { configured: false };
+  }
+
+  await prisma.kV.upsert({
+    where: { key: RPDB_API_KEY_KV },
+    create: { key: RPDB_API_KEY_KV, value: apiKey, updatedAt: new Date() },
+    update: { value: apiKey, updatedAt: new Date() }
+  });
+  return { configured: true };
+});
+
+app.delete("/rpdb/key", async () => {
+  await prisma.kV.deleteMany({ where: { key: RPDB_API_KEY_KV } });
+  return { configured: false };
+});
+
+// Internal helper: get RPDB poster for a given IMDB ID (used by addon)
+app.get<{ Params: { imdbId: string } }>("/rpdb/poster/:imdbId", async (request, reply) => {
+  const rpdbKey = await getRpdbApiKey();
+  if (!rpdbKey) {
+    return reply.code(404).send({ error: "RPDB not configured" });
+  }
+  return { poster: buildRpdbPosterUrl(rpdbKey, request.params.imdbId) };
+});
+
+// Bulk endpoint for addon: get RPDB key status and key itself (internal only)
+app.get("/rpdb/config", async () => {
+  const apiKey = await getRpdbApiKey();
+  return {
+    enabled: !!apiKey,
+    apiKey: apiKey ?? null,
+  };
+});
+
 // ─── Duplicate detection ───
 
 app.get<{ Params: { imdbId: string }; Querystring: { type?: string } }>("/items/:imdbId/lists", async (request, reply) => {

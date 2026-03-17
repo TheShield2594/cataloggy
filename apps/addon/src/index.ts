@@ -90,6 +90,11 @@ type AddonConfig = {
   enabledCatalogs: string[];
 };
 
+type RpdbConfig = {
+  enabled: boolean;
+  apiKey: string | null;
+};
+
 // ─── Caching ───
 
 let cachedManifest: { data: object; expiry: number } | null = null;
@@ -97,6 +102,10 @@ const MANIFEST_CACHE_TTL_MS = 60_000;
 
 let cachedGenres: { data: string[]; expiry: number } | null = null;
 const GENRES_CACHE_TTL_MS = 300_000;
+
+let cachedRpdb: { data: RpdbConfig; expiry: number } | null = null;
+const RPDB_CACHE_TTL_MS = 120_000;
+const RPDB_BASE_URL = "https://api.ratingposterdb.com";
 
 // ─── Routes ───
 
@@ -127,6 +136,31 @@ const fetchAddonConfig = async (): Promise<AddonConfig> => {
   } catch {
     return { enabledCatalogs: ["my_watchlist_movies", "my_watchlist_series", "my_recent_movies", "my_continue_series"] };
   }
+};
+
+const fetchRpdbConfig = async (): Promise<RpdbConfig> => {
+  const now = Date.now();
+  if (cachedRpdb && now < cachedRpdb.expiry) return cachedRpdb.data;
+
+  try {
+    const payload = await apiGet<RpdbConfig>("/rpdb/config");
+    cachedRpdb = { data: payload, expiry: now + RPDB_CACHE_TTL_MS };
+    return payload;
+  } catch {
+    const fallback: RpdbConfig = { enabled: false, apiKey: null };
+    return cachedRpdb?.data ?? fallback;
+  }
+};
+
+const applyRpdbPoster = (imdbId: string, rpdbKey: string): string =>
+  `${RPDB_BASE_URL}/${rpdbKey}/imdb/poster-default/${imdbId}.jpg`;
+
+const applyRpdbToMetas = (metas: StremioMetaPreview[], rpdbKey: string | null): StremioMetaPreview[] => {
+  if (!rpdbKey) return metas;
+  return metas.map((meta) => ({
+    ...meta,
+    poster: applyRpdbPoster(meta.id, rpdbKey),
+  }));
 };
 
 const buildManifest = (lists: CataloggyList[], genres: string[], _config: AddonConfig) => {
@@ -260,8 +294,8 @@ app.get<{ Params: { type: string; id: string } }>("/catalog/:type/:id.json", asy
   }
 
   try {
-    const items = await fetchListItems(parsed.listId);
-    const metas = itemsToMetas(items, type);
+    const [items, rpdb] = await Promise.all([fetchListItems(parsed.listId), fetchRpdbConfig()]);
+    const metas = applyRpdbToMetas(itemsToMetas(items, type), rpdb.apiKey);
     return reply.send({ metas });
   } catch (error) {
     request.log.error(error, "Failed to fetch catalog items");
@@ -281,10 +315,10 @@ app.get<{ Params: { type: string; id: string; extra: string } }>("/catalog/:type
   }
 
   try {
-    const items = await fetchListItems(parsed.listId);
+    const [items, rpdb] = await Promise.all([fetchListItems(parsed.listId), fetchRpdbConfig()]);
     const allMetas = itemsToMetas(items, type);
     const extraParams = parseExtra(extra);
-    const metas = applyExtraFilters(allMetas, extraParams);
+    const metas = applyRpdbToMetas(applyExtraFilters(allMetas, extraParams), rpdb.apiKey);
 
     return reply.send({ metas });
   } catch (error) {
@@ -310,7 +344,10 @@ app.get<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async 
 
   const apiUrl = new URL(`/meta/${type}/${encodeURIComponent(imdbId)}`, CATALOGGY_API_BASE);
 
-  const upstreamResponse = await fetch(apiUrl, { headers: apiHeaders() });
+  const [upstreamResponse, rpdb] = await Promise.all([
+    fetch(apiUrl, { headers: apiHeaders() }),
+    fetchRpdbConfig(),
+  ]);
   const payload = await upstreamResponse.json().catch(() => ({}));
 
   if (!upstreamResponse.ok) {
@@ -321,11 +358,16 @@ app.get<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async 
   const genres = Array.isArray(payload.genres) ? payload.genres : undefined;
   const rating = typeof payload.rating === "number" ? payload.rating : undefined;
 
+  // Use RPDB poster if configured, otherwise fall back to TMDB poster
+  const poster = rpdb.apiKey
+    ? applyRpdbPoster(imdbId, rpdb.apiKey)
+    : (typeof payload.poster === "string" ? payload.poster : undefined);
+
   const meta: Record<string, unknown> = {
     id: imdbId,
     type,
     name: typeof payload.name === "string" && payload.name.trim() ? payload.name : imdbId,
-    poster: typeof payload.poster === "string" ? payload.poster : undefined,
+    poster,
     background: typeof payload.background === "string" ? payload.background : undefined,
     description: typeof payload.description === "string" ? payload.description : undefined,
     releaseInfo,
