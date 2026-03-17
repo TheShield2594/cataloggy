@@ -103,10 +103,6 @@ type StremioMetaPreview = {
   genres?: string[];
 };
 
-type AddonConfig = {
-  enabledCatalogs: string[];
-};
-
 type RpdbConfig = {
   enabled: boolean;
   apiKey: string | null;
@@ -146,15 +142,6 @@ const fetchGenres = async (): Promise<string[]> => {
   }
 };
 
-const fetchAddonConfig = async (): Promise<AddonConfig> => {
-  try {
-    const payload = await apiGet<{ config: AddonConfig }>("/addon/config");
-    return payload.config;
-  } catch {
-    return { enabledCatalogs: ["my_watchlist_movies", "my_watchlist_series", "my_recent_movies", "my_continue_series"] };
-  }
-};
-
 const fetchRpdbConfig = async (): Promise<RpdbConfig> => {
   const now = Date.now();
   if (cachedRpdb && now < cachedRpdb.expiry) return cachedRpdb.data;
@@ -180,15 +167,11 @@ const applyRpdbToMetas = (metas: StremioMetaPreview[], rpdbKey: string | null): 
   }));
 };
 
-const buildManifest = (lists: CataloggyList[], genres: string[], _config: AddonConfig) => {
+const buildManifest = (lists: CataloggyList[], genres: string[]) => {
   const genreExtra = genres.length > 0
     ? [{ name: "genre", options: genres, isRequired: false }]
     : [];
 
-  // Note: config.enabledCatalogs uses fixed keys (my_watchlist_movies, etc.)
-  // while catalog IDs here are dynamic (cataloggy-${uuid}-movie). These are
-  // separate systems — the config controls the API's /stremio/catalog/* endpoints,
-  // not the addon manifest. All lists are included in the manifest.
   const catalogs = lists.flatMap((list) => [
     {
       type: "movie" as const,
@@ -237,12 +220,11 @@ app.get("/manifest.json", async (request: FastifyRequest, reply: FastifyReply) =
   }
 
   try {
-    const [lists, genres, config] = await Promise.all([
+    const [lists, genres] = await Promise.all([
       fetchAllLists(),
       fetchGenres(),
-      fetchAddonConfig(),
     ]);
-    const data = buildManifest(lists, genres, config);
+    const data = buildManifest(lists, genres);
     cachedManifest = { data, expiry: now + MANIFEST_CACHE_TTL_MS };
     return reply.send(data);
   } catch (error) {
