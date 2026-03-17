@@ -266,7 +266,8 @@ function RpdbSection() {
     setSaving(true);
     setError(null);
     try {
-      const result = await api.setRpdbKey(apiKey);
+      const trimmed = apiKey.trim();
+      const result = await api.setRpdbKey(trimmed);
       setConfigured(result.configured);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);

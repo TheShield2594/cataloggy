@@ -87,6 +87,7 @@ export type SeriesProgress = {
   nextEpisode: number;
   totalSeasons?: number | null;
   totalEpisodes?: number | null;
+  watchedEpisodes?: number | null;
 };
 
 export type WatchEvent = {

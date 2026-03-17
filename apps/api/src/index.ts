@@ -175,7 +175,7 @@ app.addHook("onRequest", async (request, reply) => {
 app.addHook("onRequest", async (request, reply) => {
   const url = request.url;
 
-  if (url === "/health" || url.startsWith("/addon/") || url === "/addon" || url.startsWith("/trakt/oauth/callback")) {
+  if (url === "/health" || url.startsWith("/addon/stremio") || url === "/addon" || url.startsWith("/trakt/oauth/callback")) {
     return;
   }
 
@@ -195,8 +195,26 @@ const getMetadataType = (rawType: string): MetadataType | null => {
   return null;
 };
 
-const upsertMetadata = async (metadata: MetadataPayload) =>
-  prisma.metadata.upsert({
+const upsertMetadata = async (metadata: MetadataPayload) => {
+  const update: Record<string, unknown> = {
+    tmdbId: metadata.tmdbId,
+    name: metadata.name,
+    year: metadata.year,
+    poster: metadata.poster,
+    background: metadata.background,
+    description: metadata.description,
+    genres: metadata.genres,
+    rating: metadata.rating,
+    voteCount: metadata.voteCount,
+    updatedAt: new Date()
+  };
+
+  // Only overwrite totalSeasons/totalEpisodes when the incoming payload has
+  // non-null values (i.e. from a detailed TMDB fetch, not a search result)
+  if (metadata.totalSeasons !== null) update.totalSeasons = metadata.totalSeasons;
+  if (metadata.totalEpisodes !== null) update.totalEpisodes = metadata.totalEpisodes;
+
+  return prisma.metadata.upsert({
     where: {
       imdbId_type: {
         imdbId: metadata.imdbId,
@@ -204,21 +222,9 @@ const upsertMetadata = async (metadata: MetadataPayload) =>
       }
     },
     create: metadata,
-    update: {
-      tmdbId: metadata.tmdbId,
-      name: metadata.name,
-      year: metadata.year,
-      poster: metadata.poster,
-      background: metadata.background,
-      description: metadata.description,
-      genres: metadata.genres,
-      rating: metadata.rating,
-      voteCount: metadata.voteCount,
-      totalSeasons: metadata.totalSeasons,
-      totalEpisodes: metadata.totalEpisodes,
-      updatedAt: new Date()
-    }
+    update
   });
+};
 
 const fetchMetadata = async (type: MetadataType, imdbId: string): Promise<MetadataPayload | null> => {
   const tmdb = TmdbClient.fromEnv();
@@ -728,7 +734,7 @@ app.get<{ Querystring: { type?: string; query?: string; q?: string } }>("/search
 
   const listItems = await prisma.listItem.findMany({
     where: { imdbId: { in: imdbIds }, type: { in: resultTypes } },
-    include: { list: { select: { name: true, kind: true } } }
+    include: { list: { select: { id: true, name: true, kind: true } } }
   });
 
   const listInfoKey = (imdbId: string, mediaType: string) => `${mediaType}:${imdbId}`;
@@ -743,7 +749,7 @@ app.get<{ Querystring: { type?: string; query?: string; q?: string } }>("/search
     if (item.list.kind === ListKind.watchlist) {
       info.inWatchlist = true;
     }
-    info.lists.push(item.list.name);
+    info.lists.push(item.list.id);
   }
 
   return results.map((result) => {
@@ -1362,13 +1368,18 @@ app.get("/watch/stats/detailed", async () => {
   twelveMonthsAgo.setDate(1);
   twelveMonthsAgo.setHours(0, 0, 0, 0);
 
-  const events = await prisma.watchEvent.findMany({
-    where: { watchedAt: { gte: twelveMonthsAgo } },
-    select: { type: true, imdbId: true, seriesImdbId: true, watchedAt: true, plays: true }
-  });
+  const [monthlyEvents, allEvents] = await Promise.all([
+    prisma.watchEvent.findMany({
+      where: { watchedAt: { gte: twelveMonthsAgo } },
+      select: { type: true, watchedAt: true }
+    }),
+    prisma.watchEvent.findMany({
+      select: { type: true, imdbId: true, seriesImdbId: true, watchedAt: true, plays: true }
+    })
+  ]);
 
   const monthlyMap = new Map<string, { movies: number; episodes: number }>();
-  for (const event of events) {
+  for (const event of monthlyEvents) {
     const key = `${event.watchedAt.getUTCFullYear()}-${String(event.watchedAt.getUTCMonth() + 1).padStart(2, "0")}`;
     let entry = monthlyMap.get(key);
     if (!entry) {
@@ -1389,9 +1400,9 @@ app.get("/watch/stats/detailed", async () => {
     monthly.push({ month: key, ...entry });
   }
 
-  // Genre distribution from watched content
-  const movieImdbIds = [...new Set(events.filter((e) => e.type === "movie").map((e) => e.imdbId))];
-  const seriesImdbIds = [...new Set(events.filter((e) => e.type === "episode" && e.seriesImdbId).map((e) => e.seriesImdbId!))];
+  // Genre distribution from watched content (full history)
+  const movieImdbIds = [...new Set(allEvents.filter((e) => e.type === "movie").map((e) => e.imdbId))];
+  const seriesImdbIds = [...new Set(allEvents.filter((e) => e.type === "episode" && e.seriesImdbId).map((e) => e.seriesImdbId!))];
 
   const allMetadataIds = [...movieImdbIds, ...seriesImdbIds];
   const metadata = allMetadataIds.length > 0
@@ -1412,8 +1423,8 @@ app.get("/watch/stats/detailed", async () => {
     .slice(0, 15)
     .map(([genre, count]) => ({ genre, count }));
 
-  // Watch streaks
-  const watchDays = new Set(events.map((e) => e.watchedAt.toISOString().slice(0, 10)));
+  // Watch streaks (full history)
+  const watchDays = new Set(allEvents.map((e) => e.watchedAt.toISOString().slice(0, 10)));
   let currentStreak = 0;
   let longestStreak = 0;
   let streak = 0;
@@ -1467,11 +1478,19 @@ app.get("/series/progress", async () => {
   }
 
   const imdbIds = progressRows.map((p) => p.seriesImdbId);
-  const metadata = await prisma.metadata.findMany({
-    where: { imdbId: { in: imdbIds }, type: "series" },
-    select: { imdbId: true, name: true, poster: true, totalSeasons: true, totalEpisodes: true }
-  });
+  const [metadata, episodeCounts] = await Promise.all([
+    prisma.metadata.findMany({
+      where: { imdbId: { in: imdbIds }, type: "series" },
+      select: { imdbId: true, name: true, poster: true, totalSeasons: true, totalEpisodes: true }
+    }),
+    prisma.watchEvent.groupBy({
+      by: ["seriesImdbId"],
+      where: { seriesImdbId: { in: imdbIds }, type: "episode" },
+      _count: { _all: true }
+    })
+  ]);
   const metaByImdbId = new Map(metadata.map((m) => [m.imdbId, m]));
+  const watchedBySeriesId = new Map(episodeCounts.map((e) => [e.seriesImdbId, e._count._all]));
 
   const progress = progressRows.map((row) => {
     const meta = metaByImdbId.get(row.seriesImdbId);
@@ -1485,6 +1504,7 @@ app.get("/series/progress", async () => {
       poster: meta?.poster ?? null,
       totalSeasons: meta?.totalSeasons ?? null,
       totalEpisodes: meta?.totalEpisodes ?? null,
+      watchedEpisodes: watchedBySeriesId.get(row.seriesImdbId) ?? null,
     };
   });
 
@@ -1634,7 +1654,7 @@ app.get("/rpdb/config", async () => {
 
 // ─── Duplicate detection ───
 
-app.get<{ Params: { imdbId: string }; Querystring: { type?: string } }>("/items/:imdbId/lists", async (request, reply) => {
+app.get<{ Params: { imdbId: string }; Querystring: { type?: string } }>("/items/:imdbId/lists", async (request) => {
   const { imdbId } = request.params;
   const typeFilter = request.query.type;
 
