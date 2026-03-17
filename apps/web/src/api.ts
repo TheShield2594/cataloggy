@@ -247,6 +247,18 @@ export const api = {
   refreshAllMetadata() {
     return request<{ refreshed: number; total: number }>("/metadata/refresh-all", { method: "POST" });
   },
+  getRpdbStatus() {
+    return request<{ configured: boolean; hasKey: boolean }>("/rpdb/status");
+  },
+  setRpdbKey(apiKey: string) {
+    return request<{ configured: boolean }>("/rpdb/key", {
+      method: "POST",
+      body: JSON.stringify({ apiKey })
+    });
+  },
+  removeRpdbKey() {
+    return request<{ configured: boolean }>("/rpdb/key", { method: "DELETE" });
+  },
   getDetailedStats() {
     return request<DetailedWatchStats>("/watch/stats/detailed");
   },
