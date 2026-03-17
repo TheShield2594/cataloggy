@@ -196,6 +196,8 @@ const getMetadataType = (rawType: string): MetadataType | null => {
 };
 
 const upsertMetadata = async (metadata: MetadataPayload) => {
+  const isDetailedPayload = metadata.totalSeasons !== null || metadata.totalEpisodes !== null;
+
   const update: Record<string, unknown> = {
     tmdbId: metadata.tmdbId,
     name: metadata.name,
@@ -206,13 +208,16 @@ const upsertMetadata = async (metadata: MetadataPayload) => {
     genres: metadata.genres,
     rating: metadata.rating,
     voteCount: metadata.voteCount,
-    updatedAt: new Date()
   };
 
-  // Only overwrite totalSeasons/totalEpisodes when the incoming payload has
-  // non-null values (i.e. from a detailed TMDB fetch, not a search result)
-  if (metadata.totalSeasons !== null) update.totalSeasons = metadata.totalSeasons;
-  if (metadata.totalEpisodes !== null) update.totalEpisodes = metadata.totalEpisodes;
+  // Only mark as fresh when the payload includes detailed fields (from
+  // findByImdbId), so partial search results don't prevent a later detail
+  // fetch via syncMetadata's METADATA_FRESHNESS_MS check
+  if (isDetailedPayload) {
+    update.updatedAt = new Date();
+    update.totalSeasons = metadata.totalSeasons;
+    update.totalEpisodes = metadata.totalEpisodes;
+  }
 
   return prisma.metadata.upsert({
     where: {
@@ -1372,7 +1377,7 @@ app.get("/watch/stats/detailed", async () => {
   const [monthlyEvents, distinctMovieIds, distinctSeriesIds, watchDates] = await Promise.all([
     prisma.watchEvent.findMany({
       where: { watchedAt: { gte: twelveMonthsAgo } },
-      select: { type: true, watchedAt: true }
+      select: { type: true, watchedAt: true, plays: true }
     }),
     prisma.watchEvent.findMany({
       where: { type: "movie" },
@@ -1397,8 +1402,8 @@ app.get("/watch/stats/detailed", async () => {
       entry = { movies: 0, episodes: 0 };
       monthlyMap.set(key, entry);
     }
-    if (event.type === "movie") entry.movies += 1;
-    else entry.episodes += 1;
+    if (event.type === "movie") entry.movies += event.plays;
+    else entry.episodes += event.plays;
   }
 
   // Fill in missing months
