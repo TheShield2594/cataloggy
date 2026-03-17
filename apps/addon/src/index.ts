@@ -14,6 +14,7 @@ const parseProxyPathPrefixes = (raw: string | undefined, fallback: readonly stri
 const CATALOGGY_API_BASE = process.env.CATALOGGY_API ?? process.env.CATALOGGY_API_BASE ?? "http://api:7000";
 const CATALOGGY_API_TOKEN = process.env.CATALOGGY_API_TOKEN;
 const ADDON_PUBLIC_BASE = process.env.ADDON_PUBLIC_BASE;
+const WEB_PUBLIC_BASE = process.env.CATALOGGY_WEB_PUBLIC ?? process.env.WEB_PUBLIC_BASE;
 const PROXY_PATH_PREFIXES = parseProxyPathPrefixes(process.env.PROXY_PATH_PREFIXES, ["/addon"] as const);
 
 const stripProxyPrefix = (url: string, prefix: string) => {
@@ -44,46 +45,168 @@ const app = Fastify({
   rewriteUrl: (request: RawRequestDefaultExpression) => normalizeProxyPath(request.url ?? "/")
 });
 
+// ─── API helpers ───
+
+const apiHeaders = (): Record<string, string> =>
+  CATALOGGY_API_TOKEN ? { Authorization: `Bearer ${CATALOGGY_API_TOKEN}` } : {};
+
+const FETCH_TIMEOUT_MS = 10_000;
+
+const fetchWithTimeout = async (url: string | URL, init?: RequestInit): Promise<Response> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`Request to ${String(url)} timed out after ${FETCH_TIMEOUT_MS}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const apiGet = async <T>(path: string): Promise<T> => {
+  const url = new URL(path, CATALOGGY_API_BASE);
+  const response = await fetchWithTimeout(url, { headers: apiHeaders() });
+  if (!response.ok) throw new Error(`API ${path} returned ${response.status}`);
+  return response.json() as Promise<T>;
+};
+
+// ─── Types ───
+
 type CataloggyList = {
   id: string;
   name: string;
   kind: "watchlist" | "custom";
 };
 
+type ListItemResponse = {
+  imdbId: string;
+  type: string;
+  metadata: {
+    name: string;
+    poster: string | null;
+    year: number | null;
+    genres?: string[];
+    rating?: number | null;
+  } | null;
+};
+
+type StremioMetaPreview = {
+  id: string;
+  type: string;
+  name: string;
+  poster?: string;
+  posterShape: "poster";
+  genres?: string[];
+};
+
+type RpdbConfig = {
+  enabled: boolean;
+  apiKey: string | null;
+};
+
+// ─── Caching ───
+
 let cachedManifest: { data: object; expiry: number } | null = null;
 const MANIFEST_CACHE_TTL_MS = 60_000;
+
+let cachedGenres: { data: string[]; expiry: number } | null = null;
+const GENRES_CACHE_TTL_MS = 300_000;
+
+let cachedRpdb: { data: RpdbConfig; expiry: number } | null = null;
+const RPDB_CACHE_TTL_MS = 120_000;
+const RPDB_BASE_URL = "https://api.ratingposterdb.com";
+
+// ─── Routes ───
 
 app.get("/health", async () => ({ status: "ok", service: "addon", publicBase: ADDON_PUBLIC_BASE ?? null }));
 
 const fetchAllLists = async (): Promise<CataloggyList[]> => {
-  const apiUrl = new URL("/lists", CATALOGGY_API_BASE);
-  const upstreamResponse = await fetch(apiUrl, {
-    headers: CATALOGGY_API_TOKEN ? { Authorization: `Bearer ${CATALOGGY_API_TOKEN}` } : {}
-  });
-
-  if (!upstreamResponse.ok) {
-    throw new Error(`Failed to fetch lists: ${upstreamResponse.status}`);
-  }
-
-  const payload = (await upstreamResponse.json()) as { lists?: CataloggyList[] };
+  const payload = await apiGet<{ lists?: CataloggyList[] }>("/lists");
   return payload.lists ?? [];
 };
 
-const buildManifest = (lists: CataloggyList[]) => {
+const fetchGenres = async (): Promise<string[]> => {
+  const now = Date.now();
+  if (cachedGenres && now < cachedGenres.expiry) return cachedGenres.data;
+
+  try {
+    const payload = await apiGet<{ genres: string[] }>("/genres");
+    cachedGenres = { data: payload.genres, expiry: now + GENRES_CACHE_TTL_MS };
+    return payload.genres;
+  } catch {
+    return cachedGenres?.data ?? [];
+  }
+};
+
+const fetchRpdbConfig = async (): Promise<RpdbConfig> => {
+  const now = Date.now();
+  if (cachedRpdb && now < cachedRpdb.expiry) return cachedRpdb.data;
+
+  try {
+    const payload = await apiGet<RpdbConfig>("/rpdb/config");
+    cachedRpdb = { data: payload, expiry: now + RPDB_CACHE_TTL_MS };
+    return payload;
+  } catch {
+    const fallback: RpdbConfig = { enabled: false, apiKey: null };
+    return cachedRpdb?.data ?? fallback;
+  }
+};
+
+const applyRpdbPoster = (imdbId: string, rpdbKey: string): string =>
+  `${RPDB_BASE_URL}/${rpdbKey}/imdb/poster-default/${imdbId}.jpg`;
+
+const applyRpdbToMetas = (metas: StremioMetaPreview[], rpdbKey: string | null): StremioMetaPreview[] => {
+  if (!rpdbKey) return metas;
+  return metas.map((meta) => ({
+    ...meta,
+    poster: applyRpdbPoster(meta.id, rpdbKey),
+  }));
+};
+
+const buildManifest = (lists: CataloggyList[], genres: string[]) => {
+  const genreExtra = genres.length > 0
+    ? [{ name: "genre", options: genres, isRequired: false }]
+    : [];
+
   const catalogs = lists.flatMap((list) => [
-    { type: "movie" as const, id: `cataloggy-${list.id}-movie`, name: list.name, extra: [{ name: "search", isRequired: false }] },
-    { type: "series" as const, id: `cataloggy-${list.id}-series`, name: list.name, extra: [{ name: "search", isRequired: false }] }
+    {
+      type: "movie" as const,
+      id: `cataloggy-${list.id}-movie`,
+      name: list.name,
+      extra: [
+        { name: "search", isRequired: false },
+        ...genreExtra,
+      ]
+    },
+    {
+      type: "series" as const,
+      id: `cataloggy-${list.id}-series`,
+      name: list.name,
+      extra: [
+        { name: "search", isRequired: false },
+        ...genreExtra,
+      ]
+    }
   ]);
+
+  const configUrl = WEB_PUBLIC_BASE ? `${WEB_PUBLIC_BASE}/settings` : undefined;
 
   return {
     id: "com.cataloggy.addon",
-    version: "0.1.0",
+    version: "0.2.0",
     name: "CataLoggy",
     description: "Personal catalogs powered by CataLoggy.",
-    resources: ["catalog"],
+    resources: ["catalog", "meta"],
     types: ["movie", "series"],
     idPrefixes: ["tt"],
-    catalogs
+    catalogs,
+    ...(configUrl ? {
+      behaviorHints: { configurable: true, configurationRequired: false },
+    } : {}),
   };
 };
 
@@ -97,8 +220,11 @@ app.get("/manifest.json", async (request: FastifyRequest, reply: FastifyReply) =
   }
 
   try {
-    const lists = await fetchAllLists();
-    const data = buildManifest(lists);
+    const [lists, genres] = await Promise.all([
+      fetchAllLists(),
+      fetchGenres(),
+    ]);
+    const data = buildManifest(lists, genres);
     cachedManifest = { data, expiry: now + MANIFEST_CACHE_TTL_MS };
     return reply.send(data);
   } catch (error) {
@@ -107,19 +233,7 @@ app.get("/manifest.json", async (request: FastifyRequest, reply: FastifyReply) =
   }
 });
 
-type ListItemResponse = {
-  imdbId: string;
-  type: string;
-  metadata: { name: string; poster: string | null; year: number | null } | null;
-};
-
-type StremioMetaPreview = {
-  id: string;
-  type: string;
-  name: string;
-  poster?: string;
-  posterShape: "poster";
-};
+// ─── Catalog routes ───
 
 const parseCatalogId = (id: string) => {
   const match = id.match(/^cataloggy-([0-9a-f-]+)-(movie|series)$/i);
@@ -128,16 +242,7 @@ const parseCatalogId = (id: string) => {
 };
 
 const fetchListItems = async (listId: string): Promise<ListItemResponse[]> => {
-  const apiUrl = new URL(`/lists/${encodeURIComponent(listId)}/items`, CATALOGGY_API_BASE);
-  const response = await fetch(apiUrl, {
-    headers: CATALOGGY_API_TOKEN ? { Authorization: `Bearer ${CATALOGGY_API_TOKEN}` } : {}
-  });
-
-  if (!response.ok) {
-    throw new Error(`API responded with ${response.status}`);
-  }
-
-  const payload = (await response.json()) as { items?: ListItemResponse[] };
+  const payload = await apiGet<{ items?: ListItemResponse[] }>(`/lists/${encodeURIComponent(listId)}/items`);
   return payload.items ?? [];
 };
 
@@ -149,7 +254,8 @@ const itemsToMetas = (items: ListItemResponse[], type: string): StremioMetaPrevi
       type: item.type,
       name: item.metadata?.name ?? item.imdbId,
       ...(item.metadata?.poster ? { poster: item.metadata.poster } : {}),
-      posterShape: "poster" as const
+      posterShape: "poster" as const,
+      ...(item.metadata?.genres?.length ? { genres: item.metadata.genres } : {}),
     }));
 
 const parseExtra = (extra: string): Record<string, string> => {
@@ -161,6 +267,22 @@ const parseExtra = (extra: string): Record<string, string> => {
     }
   }
   return params;
+};
+
+const applyExtraFilters = (metas: StremioMetaPreview[], extraParams: Record<string, string>): StremioMetaPreview[] => {
+  let filtered = metas;
+
+  if (extraParams.search) {
+    const query = extraParams.search.toLowerCase();
+    filtered = filtered.filter((m) => m.name.toLowerCase().includes(query));
+  }
+
+  if (extraParams.genre) {
+    const genre = extraParams.genre;
+    filtered = filtered.filter((m) => m.genres?.includes(genre));
+  }
+
+  return filtered;
 };
 
 app.get<{ Params: { type: string; id: string } }>("/catalog/:type/:id.json", async (request, reply) => {
@@ -175,8 +297,8 @@ app.get<{ Params: { type: string; id: string } }>("/catalog/:type/:id.json", asy
   }
 
   try {
-    const items = await fetchListItems(parsed.listId);
-    const metas = itemsToMetas(items, type);
+    const [items, rpdb] = await Promise.all([fetchListItems(parsed.listId), fetchRpdbConfig()]);
+    const metas = applyRpdbToMetas(itemsToMetas(items, type), rpdb.apiKey);
     return reply.send({ metas });
   } catch (error) {
     request.log.error(error, "Failed to fetch catalog items");
@@ -196,14 +318,10 @@ app.get<{ Params: { type: string; id: string; extra: string } }>("/catalog/:type
   }
 
   try {
-    const items = await fetchListItems(parsed.listId);
-    let metas = itemsToMetas(items, type);
-
+    const [items, rpdb] = await Promise.all([fetchListItems(parsed.listId), fetchRpdbConfig()]);
+    const allMetas = itemsToMetas(items, type);
     const extraParams = parseExtra(extra);
-    if (extraParams.search) {
-      const query = extraParams.search.toLowerCase();
-      metas = metas.filter((m) => m.name.toLowerCase().includes(query));
-    }
+    const metas = applyRpdbToMetas(applyExtraFilters(allMetas, extraParams), rpdb.apiKey);
 
     return reply.send({ metas });
   } catch (error) {
@@ -211,6 +329,8 @@ app.get<{ Params: { type: string; id: string; extra: string } }>("/catalog/:type
     return reply.send({ metas: [] });
   }
 });
+
+// ─── Meta route (with ratings, genres, episode info) ───
 
 app.get<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async (request, reply) => {
   reply.header("Access-Control-Allow-Origin", "*");
@@ -227,10 +347,10 @@ app.get<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async 
 
   const apiUrl = new URL(`/meta/${type}/${encodeURIComponent(imdbId)}`, CATALOGGY_API_BASE);
 
-  const upstreamResponse = await fetch(apiUrl, {
-    headers: CATALOGGY_API_TOKEN ? { Authorization: `Bearer ${CATALOGGY_API_TOKEN}` } : {}
-  });
-
+  const [upstreamResponse, rpdb] = await Promise.all([
+    fetchWithTimeout(apiUrl, { headers: apiHeaders() }),
+    fetchRpdbConfig(),
+  ]);
   const payload = await upstreamResponse.json().catch(() => ({}));
 
   if (!upstreamResponse.ok) {
@@ -238,20 +358,43 @@ app.get<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async 
   }
 
   const releaseInfo = typeof payload.year === "number" ? String(payload.year) : undefined;
+  const genres = Array.isArray(payload.genres) ? payload.genres : undefined;
+  const rating = typeof payload.rating === "number" ? payload.rating : undefined;
 
-  return reply.send({
-    meta: {
-      id: imdbId,
-      type,
-      name: typeof payload.name === "string" && payload.name.trim() ? payload.name : imdbId,
-      poster: typeof payload.poster === "string" ? payload.poster : undefined,
-      background: typeof payload.background === "string" ? payload.background : undefined,
-      description: typeof payload.description === "string" ? payload.description : undefined,
-      releaseInfo,
-      year: typeof payload.year === "number" ? payload.year : undefined
-    }
-  });
+  // Use RPDB poster if configured, otherwise fall back to TMDB poster
+  const poster = rpdb.apiKey
+    ? applyRpdbPoster(imdbId, rpdb.apiKey)
+    : (typeof payload.poster === "string" ? payload.poster : undefined);
+
+  const meta: Record<string, unknown> = {
+    id: imdbId,
+    type,
+    name: typeof payload.name === "string" && payload.name.trim() ? payload.name : imdbId,
+    poster,
+    background: typeof payload.background === "string" ? payload.background : undefined,
+    description: typeof payload.description === "string" ? payload.description : undefined,
+    releaseInfo,
+    year: typeof payload.year === "number" ? payload.year : undefined,
+  };
+
+  if (genres?.length) meta.genres = genres;
+  if (rating !== undefined) meta.imdbRating = String(rating);
+  if (typeof payload.totalSeasons === "number") meta.totalSeasons = payload.totalSeasons;
+  if (typeof payload.totalEpisodes === "number") meta.totalEpisodes = payload.totalEpisodes;
+
+  return reply.send({ meta });
 });
+
+// ─── Configure page redirect ───
+
+app.get("/configure", async (_request: FastifyRequest, reply: FastifyReply) => {
+  if (WEB_PUBLIC_BASE) {
+    return reply.redirect(`${WEB_PUBLIC_BASE}/settings`);
+  }
+  return reply.code(200).send({ message: "Configure CataLoggy through the web UI." });
+});
+
+// ─── Start ───
 
 const start = async () => {
   const port = Number(process.env.PORT ?? 7001);

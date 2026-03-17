@@ -1,15 +1,17 @@
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
-import { Clapperboard, LayoutDashboard, Search, List, Settings } from "lucide-react";
+import { BarChart3, Clapperboard, LayoutDashboard, Search, List, Settings } from "lucide-react";
 import { InstallButton } from "./components/InstallButton";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ListsPage } from "./pages/ListsPage";
 import { SearchPage } from "./pages/SearchPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { StatsPage } from "./pages/StatsPage";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/search", label: "Search", icon: Search, end: false },
   { to: "/lists", label: "Lists", icon: List, end: false },
+  { to: "/stats", label: "Stats", icon: BarChart3, end: false },
   { to: "/settings", label: "Settings", icon: Settings, end: false },
 ] as const;
 
@@ -65,6 +67,7 @@ export function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/lists/*" element={<ListsPage />} />
+          <Route path="/stats" element={<StatsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
