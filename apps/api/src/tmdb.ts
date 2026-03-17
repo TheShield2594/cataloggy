@@ -12,6 +12,15 @@ type TmdbSearchResult = {
   release_date?: string;
   first_air_date?: string;
   media_type?: string;
+  genre_ids?: number[];
+  vote_average?: number;
+  vote_count?: number;
+};
+
+type TmdbDetailsResult = TmdbSearchResult & {
+  genres?: { id: number; name: string }[];
+  number_of_seasons?: number;
+  number_of_episodes?: number;
 };
 
 type TmdbExternalIds = {
@@ -22,7 +31,7 @@ type TmdbSearchResponse = {
   results?: TmdbSearchResult[];
 };
 
-type TmdbDetailsResponse = TmdbSearchResult;
+type TmdbDetailsResponse = TmdbDetailsResult;
 
 type TmdbFindResponse = {
   movie_results?: TmdbSearchResult[];
@@ -38,6 +47,21 @@ export type MetadataPayload = {
   poster: string | null;
   background: string | null;
   description: string | null;
+  genres: string[];
+  rating: number | null;
+  voteCount: number | null;
+  totalSeasons: number | null;
+  totalEpisodes: number | null;
+};
+
+// Standard TMDB genre IDs (movie + TV combined)
+const TMDB_GENRE_MAP: Record<number, string> = {
+  28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
+  99: "Documentary", 18: "Drama", 10751: "Family", 14: "Fantasy", 36: "History",
+  27: "Horror", 10402: "Music", 9648: "Mystery", 10749: "Romance", 878: "Sci-Fi",
+  10770: "TV Movie", 53: "Thriller", 10752: "War", 37: "Western",
+  10759: "Action & Adventure", 10762: "Kids", 10763: "News", 10764: "Reality",
+  10765: "Sci-Fi & Fantasy", 10766: "Soap", 10767: "Talk", 10768: "War & Politics",
 };
 
 export class TmdbClient {
@@ -119,7 +143,7 @@ export class TmdbClient {
     const mediaType = this.toMediaType(type);
     const details = await this.request<TmdbDetailsResponse>(`/${mediaType}/${result.id}`);
 
-    return this.toMetadataPayload(type, details, imdbId);
+    return this.toMetadataPayloadFromDetails(type, details, imdbId);
   }
 
   private async getExternalIds(mediaType: TmdbMediaType, tmdbId: number) {
@@ -129,6 +153,9 @@ export class TmdbClient {
   private toMetadataPayload(type: MetadataType, result: TmdbSearchResult, imdbId: string): MetadataPayload {
     const name = (type === MetadataType.movie ? result.title : result.name)?.trim() || imdbId;
     const dateValue = type === MetadataType.movie ? result.release_date : result.first_air_date;
+    const genres = (result.genre_ids ?? [])
+      .map((id) => TMDB_GENRE_MAP[id])
+      .filter((g): g is string => !!g);
 
     return {
       imdbId,
@@ -138,7 +165,34 @@ export class TmdbClient {
       year: this.extractYear(dateValue),
       poster: this.buildImageUrl(result.poster_path),
       background: this.buildImageUrl(result.backdrop_path),
-      description: result.overview?.trim() || null
+      description: result.overview?.trim() || null,
+      genres,
+      rating: typeof result.vote_average === "number" ? Math.round(result.vote_average * 10) / 10 : null,
+      voteCount: typeof result.vote_count === "number" ? result.vote_count : null,
+      totalSeasons: null,
+      totalEpisodes: null,
+    };
+  }
+
+  private toMetadataPayloadFromDetails(type: MetadataType, result: TmdbDetailsResponse, imdbId: string): MetadataPayload {
+    const name = (type === MetadataType.movie ? result.title : result.name)?.trim() || imdbId;
+    const dateValue = type === MetadataType.movie ? result.release_date : result.first_air_date;
+    const genres = (result.genres ?? []).map((g) => g.name).filter(Boolean);
+
+    return {
+      imdbId,
+      type,
+      tmdbId: result.id ?? null,
+      name,
+      year: this.extractYear(dateValue),
+      poster: this.buildImageUrl(result.poster_path),
+      background: this.buildImageUrl(result.backdrop_path),
+      description: result.overview?.trim() || null,
+      genres,
+      rating: typeof result.vote_average === "number" ? Math.round(result.vote_average * 10) / 10 : null,
+      voteCount: typeof result.vote_count === "number" ? result.vote_count : null,
+      totalSeasons: type === MetadataType.series && typeof result.number_of_seasons === "number" ? result.number_of_seasons : null,
+      totalEpisodes: type === MetadataType.series && typeof result.number_of_episodes === "number" ? result.number_of_episodes : null,
     };
   }
 

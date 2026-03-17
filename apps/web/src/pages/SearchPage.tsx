@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronRight, Clock, Film, Plus, Search, Tv, X, Heart } from "lucide-react";
+import { Check, ChevronRight, Clock, Film, Plus, Search, Star, Tv, X, Heart } from "lucide-react";
 import { api, CatalogList, MediaType, SearchResult, WatchEvent } from "../api";
 
 type FilterType = "all" | MediaType;
@@ -474,12 +474,25 @@ function ResultCard({
         <p className="truncate text-sm font-semibold text-slate-100">{result.name}</p>
         <div className="mt-0.5 flex items-center gap-2">
           <span className="text-xs text-slate-500">{result.year ?? "Unknown year"}</span>
+          {result.rating != null && result.rating > 0 && (
+            <span className="flex items-center gap-0.5 text-xs text-amber-400">
+              <Star className="h-3 w-3 fill-amber-400" />
+              {result.rating.toFixed(1)}
+            </span>
+          )}
           {listNames.length > 0 && (
-            <span className="rounded bg-slate-800 px-1.5 py-0.5 text-2xs font-medium text-slate-400">
-              In {listNames.length} {listNames.length === 1 ? "list" : "lists"}
+            <span className="rounded bg-slate-800 px-1.5 py-0.5 text-2xs font-medium text-slate-400" title={listNames.join(", ")}>
+              In {listNames.join(", ")}
             </span>
           )}
         </div>
+        {result.genres.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {result.genres.slice(0, 3).map((g) => (
+              <span key={g} className="rounded bg-slate-800/80 px-1.5 py-0.5 text-2xs text-slate-400">{g}</span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -558,6 +571,19 @@ function DetailPanel({
               {item.year && <span className="text-sm text-slate-400">{item.year}</span>}
             </div>
             <h2 className="mt-3 text-2xl font-bold text-white">{item.name}</h2>
+            {(item.rating != null && item.rating > 0 || item.genres.length > 0) && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {item.rating != null && item.rating > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-400 ring-1 ring-amber-500/20">
+                    <Star className="h-3 w-3 fill-amber-400" />
+                    {item.rating.toFixed(1)}
+                  </span>
+                )}
+                {item.genres.slice(0, 4).map((g) => (
+                  <span key={g} className="rounded-full bg-slate-800/80 px-2.5 py-1 text-xs text-slate-400">{g}</span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Lists */}
