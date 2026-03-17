@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "Metadata" ADD COLUMN "genres" TEXT[] DEFAULT ARRAY[]::TEXT[],
+ADD COLUMN "rating" DOUBLE PRECISION,
+ADD COLUMN "voteCount" INTEGER,
+ADD COLUMN "totalSeasons" INTEGER,
+ADD COLUMN "totalEpisodes" INTEGER;

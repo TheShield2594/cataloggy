@@ -44,6 +44,8 @@ export type SearchResult = {
   year: number | null;
   poster: string | null;
   description: string | null;
+  genres: string[];
+  rating: number | null;
   inWatchlist: boolean;
   lists: string[];
 };
@@ -83,6 +85,8 @@ export type SeriesProgress = {
   lastEpisode: number;
   nextSeason: number;
   nextEpisode: number;
+  totalSeasons?: number | null;
+  totalEpisodes?: number | null;
 };
 
 export type WatchEvent = {
@@ -100,6 +104,26 @@ export type WatchStats = {
   totalMovies: number;
   totalEpisodes: number;
   totalPlays: number;
+};
+
+export type DetailedWatchStats = {
+  monthly: { month: string; movies: number; episodes: number }[];
+  genreDistribution: { genre: string; count: number }[];
+  currentStreak: number;
+  longestStreak: number;
+  topRated: { imdbId: string; name: string; type: string; rating: number | null; poster: string | null }[];
+};
+
+export type AddonConfig = {
+  enabledCatalogs: string[];
+};
+
+export type ItemListMembership = {
+  listId: string;
+  listName: string;
+  listKind: string;
+  type: string;
+  addedAt: string;
 };
 
 const authHeaders = () => {
@@ -222,5 +246,20 @@ export const api = {
   },
   refreshAllMetadata() {
     return request<{ refreshed: number; total: number }>("/metadata/refresh-all", { method: "POST" });
-  }
+  },
+  getDetailedStats() {
+    return request<DetailedWatchStats>("/watch/stats/detailed");
+  },
+  getAddonConfig() {
+    return request<{ config: AddonConfig; availableCatalogs: string[] }>("/addon/config");
+  },
+  updateAddonConfig(enabledCatalogs: string[]) {
+    return request<{ config: AddonConfig }>("/addon/config", {
+      method: "POST",
+      body: JSON.stringify({ enabledCatalogs })
+    });
+  },
+  getItemLists(imdbId: string) {
+    return request<{ lists: ItemListMembership[] }>(`/items/${encodeURIComponent(imdbId)}/lists`);
+  },
 };

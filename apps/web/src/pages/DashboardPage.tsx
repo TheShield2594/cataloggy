@@ -297,7 +297,16 @@ export function DashboardPage() {
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-2.5 pb-2.5 pt-8">
                       <p className="text-2xs font-semibold text-slate-200">
                         S{s.lastSeason}:E{s.lastEpisode}
+                        {s.totalSeasons ? ` of S${s.totalSeasons}` : ""}
                       </p>
+                      {s.totalEpisodes && s.totalEpisodes > 0 && (
+                        <div className="mt-1 h-1 w-full rounded-full bg-white/20 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-red-500"
+                            style={{ width: `${Math.min(((s.lastEpisode + (s.lastSeason - 1) * (s.totalEpisodes / (s.totalSeasons ?? 1))) / s.totalEpisodes) * 100, 100)}%` }}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                   <p className="mt-2 w-[7.5rem] truncate text-sm font-medium text-slate-200">
