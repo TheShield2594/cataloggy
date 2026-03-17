@@ -80,6 +80,8 @@ type StremioMetaPreview = {
   poster?: string;
   year?: number;
   description?: string;
+  genres?: string[];
+  rating?: number;
 };
 
 type ContinueMetaPreview = StremioMetaPreview & {
@@ -173,7 +175,7 @@ app.addHook("onRequest", async (request, reply) => {
 app.addHook("onRequest", async (request, reply) => {
   const url = request.url;
 
-  if (url === "/health" || url.startsWith("/addon/") || url === "/addon" || url.startsWith("/trakt/oauth/callback")) {
+  if (url === "/health" || url.startsWith("/addon/stremio") || url === "/addon" || url.startsWith("/trakt/oauth/callback")) {
     return;
   }
 
@@ -193,8 +195,31 @@ const getMetadataType = (rawType: string): MetadataType | null => {
   return null;
 };
 
-const upsertMetadata = async (metadata: MetadataPayload) =>
-  prisma.metadata.upsert({
+const upsertMetadata = async (metadata: MetadataPayload) => {
+  const isDetailedPayload = metadata.totalSeasons !== null || metadata.totalEpisodes !== null;
+
+  const update: Record<string, unknown> = {
+    tmdbId: metadata.tmdbId,
+    name: metadata.name,
+    year: metadata.year,
+    poster: metadata.poster,
+    background: metadata.background,
+    description: metadata.description,
+    genres: metadata.genres,
+    rating: metadata.rating,
+    voteCount: metadata.voteCount,
+  };
+
+  // Only mark as fresh when the payload includes detailed fields (from
+  // findByImdbId), so partial search results don't prevent a later detail
+  // fetch via syncMetadata's METADATA_FRESHNESS_MS check
+  if (isDetailedPayload) {
+    update.updatedAt = new Date();
+    update.totalSeasons = metadata.totalSeasons;
+    update.totalEpisodes = metadata.totalEpisodes;
+  }
+
+  return prisma.metadata.upsert({
     where: {
       imdbId_type: {
         imdbId: metadata.imdbId,
@@ -202,16 +227,9 @@ const upsertMetadata = async (metadata: MetadataPayload) =>
       }
     },
     create: metadata,
-    update: {
-      tmdbId: metadata.tmdbId,
-      name: metadata.name,
-      year: metadata.year,
-      poster: metadata.poster,
-      background: metadata.background,
-      description: metadata.description,
-      updatedAt: new Date()
-    }
+    update
   });
+};
 
 const fetchMetadata = async (type: MetadataType, imdbId: string): Promise<MetadataPayload | null> => {
   const tmdb = TmdbClient.fromEnv();
@@ -351,7 +369,9 @@ const buildMetasFromIds = async (ids: string[], type: StremioMetaType): Promise<
       name: true,
       poster: true,
       year: true,
-      description: true
+      description: true,
+      genres: true,
+      rating: true,
     }
   });
 
@@ -367,7 +387,9 @@ const buildMetasFromIds = async (ids: string[], type: StremioMetaType): Promise<
       name: titleByImdbId.get(id) || meta?.name || id,
       poster: meta?.poster ?? undefined,
       year: meta?.year ?? undefined,
-      description: meta?.description ?? undefined
+      description: meta?.description ?? undefined,
+      genres: meta?.genres ?? [],
+      rating: meta?.rating ?? undefined,
     };
   });
 };
@@ -717,7 +739,7 @@ app.get<{ Querystring: { type?: string; query?: string; q?: string } }>("/search
 
   const listItems = await prisma.listItem.findMany({
     where: { imdbId: { in: imdbIds }, type: { in: resultTypes } },
-    include: { list: { select: { name: true, kind: true } } }
+    include: { list: { select: { id: true, name: true, kind: true } } }
   });
 
   const listInfoKey = (imdbId: string, mediaType: string) => `${mediaType}:${imdbId}`;
@@ -732,7 +754,7 @@ app.get<{ Querystring: { type?: string; query?: string; q?: string } }>("/search
     if (item.list.kind === ListKind.watchlist) {
       info.inWatchlist = true;
     }
-    info.lists.push(item.list.name);
+    info.lists.push(item.list.id);
   }
 
   return results.map((result) => {
@@ -744,6 +766,8 @@ app.get<{ Querystring: { type?: string; query?: string; q?: string } }>("/search
       year: result.year,
       poster: result.poster,
       description: result.description,
+      genres: result.genres,
+      rating: result.rating,
       inWatchlist: info?.inWatchlist ?? false,
       lists: info?.lists ?? []
     };
@@ -813,6 +837,19 @@ app.post<{ Body: unknown }>("/metadata/sync", async (request, reply) => {
 });
 
 app.get("/health", async () => ({ status: "ok", service: "api" }));
+
+app.get("/genres", async () => {
+  const rows = await prisma.metadata.findMany({
+    where: { genres: { isEmpty: false } },
+    select: { genres: true }
+  });
+  const genreSet = new Set<string>();
+  for (const row of rows) {
+    for (const g of row.genres) genreSet.add(g);
+  }
+  const genres = [...genreSet].sort();
+  return { genres };
+});
 
 app.get("/users", async () => {
   const users = await prisma.user.findMany({ orderBy: { createdAt: "desc" } });
@@ -1145,7 +1182,7 @@ app.get<{ Params: { listId: string } }>("/lists/:listId/items", async (request, 
     orderBy: { addedAt: "desc" }
   });
 
-  const metadataMap = new Map<string, { name: string; poster: string | null; year: number | null }>();
+  const metadataMap = new Map<string, { name: string; poster: string | null; year: number | null; genres: string[]; rating: number | null }>();
   if (listItems.length > 0) {
     const metadata = await prisma.metadata.findMany({
       where: {
@@ -1154,11 +1191,11 @@ app.get<{ Params: { listId: string } }>("/lists/:listId/items", async (request, 
           type: item.type as unknown as MetadataType
         }))
       },
-      select: { imdbId: true, type: true, name: true, poster: true, year: true }
+      select: { imdbId: true, type: true, name: true, poster: true, year: true, genres: true, rating: true }
     });
 
     for (const m of metadata) {
-      metadataMap.set(`${m.imdbId}:${m.type}`, { name: m.name, poster: m.poster, year: m.year });
+      metadataMap.set(`${m.imdbId}:${m.type}`, { name: m.name, poster: m.poster, year: m.year, genres: m.genres, rating: m.rating });
     }
   }
 
@@ -1329,6 +1366,141 @@ app.get("/watch/stats", async () => {
   };
 });
 
+app.get("/watch/stats/detailed", async () => {
+  // Monthly breakdown for the last 12 months
+  const twelveMonthsAgo = new Date();
+  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+  twelveMonthsAgo.setDate(1);
+  twelveMonthsAgo.setHours(0, 0, 0, 0);
+
+  // Run targeted queries instead of loading all watch events into memory
+  const [monthlyEvents, distinctMovieIds, distinctSeriesIds, watchDates] = await Promise.all([
+    prisma.watchEvent.findMany({
+      where: { watchedAt: { gte: twelveMonthsAgo } },
+      select: { type: true, watchedAt: true, plays: true }
+    }),
+    prisma.watchEvent.findMany({
+      where: { type: "movie" },
+      select: { imdbId: true },
+      distinct: ["imdbId"]
+    }),
+    prisma.watchEvent.findMany({
+      where: { type: "episode", seriesImdbId: { not: null } },
+      select: { seriesImdbId: true },
+      distinct: ["seriesImdbId"]
+    }),
+    prisma.watchEvent.findMany({
+      select: { watchedAt: true }
+    })
+  ]);
+
+  const monthlyMap = new Map<string, { movies: number; episodes: number }>();
+  for (const event of monthlyEvents) {
+    const key = `${event.watchedAt.getUTCFullYear()}-${String(event.watchedAt.getUTCMonth() + 1).padStart(2, "0")}`;
+    let entry = monthlyMap.get(key);
+    if (!entry) {
+      entry = { movies: 0, episodes: 0 };
+      monthlyMap.set(key, entry);
+    }
+    if (event.type === "movie") entry.movies += event.plays;
+    else entry.episodes += event.plays;
+  }
+
+  // Fill in missing months
+  const monthly: { month: string; movies: number; episodes: number }[] = [];
+  const now = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const entry = monthlyMap.get(key) ?? { movies: 0, episodes: 0 };
+    monthly.push({ month: key, ...entry });
+  }
+
+  // Genre distribution from watched content (full history)
+  const movieImdbIds = distinctMovieIds.map((e) => e.imdbId);
+  const seriesImdbIds = distinctSeriesIds.map((e) => e.seriesImdbId!);
+
+  const allMetadataIds = [...movieImdbIds, ...seriesImdbIds];
+  const metadata = allMetadataIds.length > 0
+    ? await prisma.metadata.findMany({
+        where: { imdbId: { in: allMetadataIds } },
+        select: { genres: true }
+      })
+    : [];
+
+  const genreCounts = new Map<string, number>();
+  for (const m of metadata) {
+    for (const g of m.genres) {
+      genreCounts.set(g, (genreCounts.get(g) ?? 0) + 1);
+    }
+  }
+  const genreDistribution = [...genreCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([genre, count]) => ({ genre, count }));
+
+  // Watch streaks (full history, no day-count cap)
+  const watchDays = new Set(watchDates.map((e) => e.watchedAt.toISOString().slice(0, 10)));
+  const sortedDays = [...watchDays].sort();
+  let longestStreak = 0;
+  let currentStreak = 0;
+
+  if (sortedDays.length > 0) {
+    let streak = 1;
+    for (let i = 1; i < sortedDays.length; i++) {
+      const prev = new Date(sortedDays[i - 1]);
+      const curr = new Date(sortedDays[i]);
+      const diffMs = curr.getTime() - prev.getTime();
+      if (diffMs === 86_400_000) {
+        streak++;
+      } else {
+        if (streak > longestStreak) longestStreak = streak;
+        streak = 1;
+      }
+    }
+    if (streak > longestStreak) longestStreak = streak;
+
+    // currentStreak: length of trailing consecutive sequence ending today
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (watchDays.has(todayStr)) {
+      currentStreak = 1;
+      for (let i = sortedDays.length - 2; i >= 0; i--) {
+        const curr = new Date(sortedDays[i + 1]);
+        const prev = new Date(sortedDays[i]);
+        if (curr.getTime() - prev.getTime() === 86_400_000) {
+          currentStreak++;
+        } else {
+          break;
+        }
+      }
+    }
+  }
+
+  // Top rated watched content
+  const topRated = allMetadataIds.length > 0
+    ? await prisma.metadata.findMany({
+        where: { imdbId: { in: allMetadataIds }, rating: { not: null } },
+        select: { imdbId: true, name: true, type: true, rating: true, poster: true },
+        orderBy: { rating: "desc" },
+        take: 10
+      })
+    : [];
+
+  return {
+    monthly,
+    genreDistribution,
+    currentStreak,
+    longestStreak,
+    topRated: topRated.map((m) => ({
+      imdbId: m.imdbId,
+      name: m.name,
+      type: m.type,
+      rating: m.rating,
+      poster: m.poster,
+    })),
+  };
+});
+
 app.get("/series/progress", async () => {
   const progressRows = await prisma.seriesProgress.findMany({
     orderBy: { lastWatchedAt: "desc" }
@@ -1339,22 +1511,37 @@ app.get("/series/progress", async () => {
   }
 
   const imdbIds = progressRows.map((p) => p.seriesImdbId);
-  const metadata = await prisma.metadata.findMany({
-    where: { imdbId: { in: imdbIds }, type: "series" },
-    select: { imdbId: true, name: true, poster: true }
-  });
+  const [metadata, episodeCounts] = await Promise.all([
+    prisma.metadata.findMany({
+      where: { imdbId: { in: imdbIds }, type: "series" },
+      select: { imdbId: true, name: true, poster: true, totalSeasons: true, totalEpisodes: true }
+    }),
+    prisma.watchEvent.groupBy({
+      by: ["seriesImdbId", "season", "episode"],
+      where: { seriesImdbId: { in: imdbIds }, type: "episode" },
+      _count: { _all: true }
+    })
+  ]);
   const metaByImdbId = new Map(metadata.map((m) => [m.imdbId, m]));
+  const watchedBySeriesId = new Map<string | null, number>();
+  for (const row of episodeCounts) {
+    watchedBySeriesId.set(row.seriesImdbId, (watchedBySeriesId.get(row.seriesImdbId) ?? 0) + 1);
+  }
 
   const progress = progressRows.map((row) => {
     const meta = metaByImdbId.get(row.seriesImdbId);
     return {
+      imdbId: row.seriesImdbId,
       seriesImdbId: row.seriesImdbId,
       lastSeason: row.lastSeason,
       lastEpisode: row.lastEpisode,
       lastWatchedAt: row.lastWatchedAt,
       updatedAt: row.updatedAt,
       name: meta?.name ?? null,
-      poster: meta?.poster ?? null
+      poster: meta?.poster ?? null,
+      totalSeasons: meta?.totalSeasons ?? null,
+      totalEpisodes: meta?.totalEpisodes ?? null,
+      watchedEpisodes: watchedBySeriesId.get(row.seriesImdbId) ?? null,
     };
   });
 
@@ -1374,7 +1561,7 @@ app.get<{ Params: { imdbId: string } }>("/series/progress/:imdbId", async (reque
 
   const meta = await prisma.metadata.findUnique({
     where: { imdbId_type: { imdbId, type: "series" } },
-    select: { name: true, poster: true }
+    select: { name: true, poster: true, totalSeasons: true, totalEpisodes: true }
   });
 
   return {
@@ -1385,8 +1572,147 @@ app.get<{ Params: { imdbId: string } }>("/series/progress/:imdbId", async (reque
       lastWatchedAt: row.lastWatchedAt,
       updatedAt: row.updatedAt,
       name: meta?.name ?? null,
-      poster: meta?.poster ?? null
+      poster: meta?.poster ?? null,
+      totalSeasons: meta?.totalSeasons ?? null,
+      totalEpisodes: meta?.totalEpisodes ?? null,
     }
+  };
+});
+
+// ─── Addon Configuration ───
+
+const ADDON_CONFIG_KEY = "addon:config";
+
+type AddonConfig = {
+  enabledCatalogs: string[];
+};
+
+const DEFAULT_ADDON_CATALOGS = [
+  "my_watchlist_movies", "my_watchlist_series",
+  "my_recent_movies", "my_continue_series"
+];
+
+const getAddonConfig = async (): Promise<AddonConfig> => {
+  const row = await prisma.kV.findUnique({ where: { key: ADDON_CONFIG_KEY } });
+  if (!row) return { enabledCatalogs: DEFAULT_ADDON_CATALOGS };
+  try {
+    return JSON.parse(row.value) as AddonConfig;
+  } catch {
+    return { enabledCatalogs: DEFAULT_ADDON_CATALOGS };
+  }
+};
+
+app.get("/addon/config", async () => {
+  const config = await getAddonConfig();
+  return { config, availableCatalogs: DEFAULT_ADDON_CATALOGS };
+});
+
+app.post<{ Body: unknown }>("/addon/config", async (request, reply) => {
+  const body = request.body as { enabledCatalogs?: unknown } | null;
+  if (!body || !Array.isArray(body.enabledCatalogs)) {
+    return reply.code(400).send({ error: "enabledCatalogs must be an array of strings" });
+  }
+  const enabled = (body.enabledCatalogs as unknown[]).filter(
+    (c): c is string => typeof c === "string" && DEFAULT_ADDON_CATALOGS.includes(c)
+  );
+  const config: AddonConfig = { enabledCatalogs: enabled };
+  await prisma.kV.upsert({
+    where: { key: ADDON_CONFIG_KEY },
+    create: { key: ADDON_CONFIG_KEY, value: JSON.stringify(config), updatedAt: new Date() },
+    update: { value: JSON.stringify(config), updatedAt: new Date() }
+  });
+  return { config };
+});
+
+// ─── RPDB (Rating Poster Database) ───
+
+const RPDB_API_KEY_KV = "rpdb:apiKey";
+const RPDB_BASE_URL = "https://api.ratingposterdb.com";
+
+const getRpdbApiKey = async (): Promise<string | null> => {
+  const row = await prisma.kV.findUnique({ where: { key: RPDB_API_KEY_KV } });
+  return row?.value?.trim() || null;
+};
+
+const buildRpdbPosterUrl = (rpdbKey: string, imdbId: string): string =>
+  `${RPDB_BASE_URL}/${rpdbKey}/imdb/poster-default/${imdbId}.jpg`;
+
+app.get("/rpdb/status", async () => {
+  const apiKey = await getRpdbApiKey();
+  return {
+    configured: !!apiKey,
+    hasKey: !!apiKey,
+  };
+});
+
+app.post<{ Body: unknown }>("/rpdb/key", async (request, reply) => {
+  const body = request.body as { apiKey?: unknown } | null;
+  if (!body || typeof body.apiKey !== "string") {
+    return reply.code(400).send({ error: "apiKey must be a string" });
+  }
+
+  const apiKey = body.apiKey.trim();
+  if (!apiKey) {
+    // Remove key
+    await prisma.kV.deleteMany({ where: { key: RPDB_API_KEY_KV } });
+    return { configured: false };
+  }
+
+  await prisma.kV.upsert({
+    where: { key: RPDB_API_KEY_KV },
+    create: { key: RPDB_API_KEY_KV, value: apiKey, updatedAt: new Date() },
+    update: { value: apiKey, updatedAt: new Date() }
+  });
+  return { configured: true };
+});
+
+app.delete("/rpdb/key", async () => {
+  await prisma.kV.deleteMany({ where: { key: RPDB_API_KEY_KV } });
+  return { configured: false };
+});
+
+// Internal helper: get RPDB poster for a given IMDB ID (used by addon)
+app.get<{ Params: { imdbId: string } }>("/rpdb/poster/:imdbId", async (request, reply) => {
+  const rpdbKey = await getRpdbApiKey();
+  if (!rpdbKey) {
+    return reply.code(404).send({ error: "RPDB not configured" });
+  }
+  return { poster: buildRpdbPosterUrl(rpdbKey, request.params.imdbId) };
+});
+
+// Bulk endpoint for addon: get RPDB key status and key itself (internal only)
+app.get("/rpdb/config", async () => {
+  const apiKey = await getRpdbApiKey();
+  return {
+    enabled: !!apiKey,
+    apiKey: apiKey ?? null,
+  };
+});
+
+// ─── Duplicate detection ───
+
+app.get<{ Params: { imdbId: string }; Querystring: { type?: string } }>("/items/:imdbId/lists", async (request) => {
+  const { imdbId } = request.params;
+  const typeFilter = request.query.type;
+
+  const where: { imdbId: string; type?: ListItemType } = { imdbId };
+  if (typeFilter && Object.values(ListItemType).includes(typeFilter as ListItemType)) {
+    where.type = typeFilter as ListItemType;
+  }
+
+  const listItems = await prisma.listItem.findMany({
+    where,
+    include: { list: { select: { id: true, name: true, kind: true } } }
+  });
+
+  return {
+    lists: listItems.map((item) => ({
+      listId: item.list.id,
+      listName: item.list.name,
+      listKind: item.list.kind,
+      type: item.type,
+      addedAt: item.addedAt,
+    }))
   };
 });
 
