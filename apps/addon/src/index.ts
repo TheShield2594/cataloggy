@@ -180,13 +180,15 @@ const applyRpdbToMetas = (metas: StremioMetaPreview[], rpdbKey: string | null): 
   }));
 };
 
-const buildManifest = (lists: CataloggyList[], genres: string[], config: AddonConfig) => {
+const buildManifest = (lists: CataloggyList[], genres: string[], _config: AddonConfig) => {
   const genreExtra = genres.length > 0
     ? [{ name: "genre", options: genres, isRequired: false }]
     : [];
 
-  const enabledSet = new Set(config.enabledCatalogs);
-
+  // Note: config.enabledCatalogs uses fixed keys (my_watchlist_movies, etc.)
+  // while catalog IDs here are dynamic (cataloggy-${uuid}-movie). These are
+  // separate systems — the config controls the API's /stremio/catalog/* endpoints,
+  // not the addon manifest. All lists are included in the manifest.
   const catalogs = lists.flatMap((list) => [
     {
       type: "movie" as const,
@@ -206,7 +208,7 @@ const buildManifest = (lists: CataloggyList[], genres: string[], config: AddonCo
         ...genreExtra,
       ]
     }
-  ]).filter((catalog) => enabledSet.size === 0 || enabledSet.has(catalog.id));
+  ]);
 
   const configUrl = WEB_PUBLIC_BASE ? `${WEB_PUBLIC_BASE}/settings` : undefined;
 
