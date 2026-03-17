@@ -1368,13 +1368,24 @@ app.get("/watch/stats/detailed", async () => {
   twelveMonthsAgo.setDate(1);
   twelveMonthsAgo.setHours(0, 0, 0, 0);
 
-  const [monthlyEvents, allEvents] = await Promise.all([
+  // Run targeted queries instead of loading all watch events into memory
+  const [monthlyEvents, distinctMovieIds, distinctSeriesIds, watchDates] = await Promise.all([
     prisma.watchEvent.findMany({
       where: { watchedAt: { gte: twelveMonthsAgo } },
       select: { type: true, watchedAt: true }
     }),
     prisma.watchEvent.findMany({
-      select: { type: true, imdbId: true, seriesImdbId: true, watchedAt: true, plays: true }
+      where: { type: "movie" },
+      select: { imdbId: true },
+      distinct: ["imdbId"]
+    }),
+    prisma.watchEvent.findMany({
+      where: { type: "episode", seriesImdbId: { not: null } },
+      select: { seriesImdbId: true },
+      distinct: ["seriesImdbId"]
+    }),
+    prisma.watchEvent.findMany({
+      select: { watchedAt: true }
     })
   ]);
 
@@ -1401,8 +1412,8 @@ app.get("/watch/stats/detailed", async () => {
   }
 
   // Genre distribution from watched content (full history)
-  const movieImdbIds = [...new Set(allEvents.filter((e) => e.type === "movie").map((e) => e.imdbId))];
-  const seriesImdbIds = [...new Set(allEvents.filter((e) => e.type === "episode" && e.seriesImdbId).map((e) => e.seriesImdbId!))];
+  const movieImdbIds = distinctMovieIds.map((e) => e.imdbId);
+  const seriesImdbIds = distinctSeriesIds.map((e) => e.seriesImdbId!);
 
   const allMetadataIds = [...movieImdbIds, ...seriesImdbIds];
   const metadata = allMetadataIds.length > 0
@@ -1424,7 +1435,7 @@ app.get("/watch/stats/detailed", async () => {
     .map(([genre, count]) => ({ genre, count }));
 
   // Watch streaks (full history, no day-count cap)
-  const watchDays = new Set(allEvents.map((e) => e.watchedAt.toISOString().slice(0, 10)));
+  const watchDays = new Set(watchDates.map((e) => e.watchedAt.toISOString().slice(0, 10)));
   const sortedDays = [...watchDays].sort();
   let longestStreak = 0;
   let currentStreak = 0;
