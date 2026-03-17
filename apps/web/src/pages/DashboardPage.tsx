@@ -299,11 +299,11 @@ export function DashboardPage() {
                         S{s.lastSeason}:E{s.lastEpisode}
                         {s.totalSeasons ? ` of S${s.totalSeasons}` : ""}
                       </p>
-                      {s.totalEpisodes && s.totalEpisodes > 0 && (
+                      {typeof s.watchedEpisodes === "number" && s.totalEpisodes && s.totalEpisodes > 0 && (
                         <div className="mt-1 h-1 w-full rounded-full bg-white/20 overflow-hidden">
                           <div
                             className="h-full rounded-full bg-red-500"
-                            style={{ width: `${Math.min(((s.lastEpisode + (s.lastSeason - 1) * (s.totalEpisodes / (s.totalSeasons ?? 1))) / s.totalEpisodes) * 100, 100)}%` }}
+                            style={{ width: `${Math.min(Math.max((s.watchedEpisodes / s.totalEpisodes) * 100, 0), 100)}%` }}
                           />
                         </div>
                       )}

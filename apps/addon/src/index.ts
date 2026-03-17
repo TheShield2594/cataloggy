@@ -50,9 +50,26 @@ const app = Fastify({
 const apiHeaders = (): Record<string, string> =>
   CATALOGGY_API_TOKEN ? { Authorization: `Bearer ${CATALOGGY_API_TOKEN}` } : {};
 
+const FETCH_TIMEOUT_MS = 10_000;
+
+const fetchWithTimeout = async (url: string | URL, init?: RequestInit): Promise<Response> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`Request to ${String(url)} timed out after ${FETCH_TIMEOUT_MS}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const apiGet = async <T>(path: string): Promise<T> => {
   const url = new URL(path, CATALOGGY_API_BASE);
-  const response = await fetch(url, { headers: apiHeaders() });
+  const response = await fetchWithTimeout(url, { headers: apiHeaders() });
   if (!response.ok) throw new Error(`API ${path} returned ${response.status}`);
   return response.json() as Promise<T>;
 };
@@ -163,10 +180,12 @@ const applyRpdbToMetas = (metas: StremioMetaPreview[], rpdbKey: string | null): 
   }));
 };
 
-const buildManifest = (lists: CataloggyList[], genres: string[], _config: AddonConfig) => {
+const buildManifest = (lists: CataloggyList[], genres: string[], config: AddonConfig) => {
   const genreExtra = genres.length > 0
     ? [{ name: "genre", options: genres, isRequired: false }]
     : [];
+
+  const enabledSet = new Set(config.enabledCatalogs);
 
   const catalogs = lists.flatMap((list) => [
     {
@@ -187,7 +206,7 @@ const buildManifest = (lists: CataloggyList[], genres: string[], _config: AddonC
         ...genreExtra,
       ]
     }
-  ]);
+  ]).filter((catalog) => enabledSet.size === 0 || enabledSet.has(catalog.id));
 
   const configUrl = WEB_PUBLIC_BASE ? `${WEB_PUBLIC_BASE}/settings` : undefined;
 
@@ -345,7 +364,7 @@ app.get<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async 
   const apiUrl = new URL(`/meta/${type}/${encodeURIComponent(imdbId)}`, CATALOGGY_API_BASE);
 
   const [upstreamResponse, rpdb] = await Promise.all([
-    fetch(apiUrl, { headers: apiHeaders() }),
+    fetchWithTimeout(apiUrl, { headers: apiHeaders() }),
     fetchRpdbConfig(),
   ]);
   const payload = await upstreamResponse.json().catch(() => ({}));
