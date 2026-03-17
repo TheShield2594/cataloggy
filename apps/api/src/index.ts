@@ -1423,23 +1423,40 @@ app.get("/watch/stats/detailed", async () => {
     .slice(0, 15)
     .map(([genre, count]) => ({ genre, count }));
 
-  // Watch streaks (full history)
+  // Watch streaks (full history, no day-count cap)
   const watchDays = new Set(allEvents.map((e) => e.watchedAt.toISOString().slice(0, 10)));
-  let currentStreak = 0;
+  const sortedDays = [...watchDays].sort();
   let longestStreak = 0;
-  let streak = 0;
-  const today = new Date();
-  for (let i = 0; i < 365; i++) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const dayStr = d.toISOString().slice(0, 10);
-    if (watchDays.has(dayStr)) {
-      streak++;
-      if (streak > longestStreak) longestStreak = streak;
-      if (i === 0 || currentStreak > 0) currentStreak = streak;
-    } else {
-      if (i === 0) currentStreak = 0;
-      streak = 0;
+  let currentStreak = 0;
+
+  if (sortedDays.length > 0) {
+    let streak = 1;
+    for (let i = 1; i < sortedDays.length; i++) {
+      const prev = new Date(sortedDays[i - 1]);
+      const curr = new Date(sortedDays[i]);
+      const diffMs = curr.getTime() - prev.getTime();
+      if (diffMs === 86_400_000) {
+        streak++;
+      } else {
+        if (streak > longestStreak) longestStreak = streak;
+        streak = 1;
+      }
+    }
+    if (streak > longestStreak) longestStreak = streak;
+
+    // currentStreak: length of trailing consecutive sequence ending today
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (watchDays.has(todayStr)) {
+      currentStreak = 1;
+      for (let i = sortedDays.length - 2; i >= 0; i--) {
+        const curr = new Date(sortedDays[i + 1]);
+        const prev = new Date(sortedDays[i]);
+        if (curr.getTime() - prev.getTime() === 86_400_000) {
+          currentStreak++;
+        } else {
+          break;
+        }
+      }
     }
   }
 
@@ -1484,17 +1501,21 @@ app.get("/series/progress", async () => {
       select: { imdbId: true, name: true, poster: true, totalSeasons: true, totalEpisodes: true }
     }),
     prisma.watchEvent.groupBy({
-      by: ["seriesImdbId"],
+      by: ["seriesImdbId", "season", "episode"],
       where: { seriesImdbId: { in: imdbIds }, type: "episode" },
       _count: { _all: true }
     })
   ]);
   const metaByImdbId = new Map(metadata.map((m) => [m.imdbId, m]));
-  const watchedBySeriesId = new Map(episodeCounts.map((e) => [e.seriesImdbId, e._count._all]));
+  const watchedBySeriesId = new Map<string | null, number>();
+  for (const row of episodeCounts) {
+    watchedBySeriesId.set(row.seriesImdbId, (watchedBySeriesId.get(row.seriesImdbId) ?? 0) + 1);
+  }
 
   const progress = progressRows.map((row) => {
     const meta = metaByImdbId.get(row.seriesImdbId);
     return {
+      imdbId: row.seriesImdbId,
       seriesImdbId: row.seriesImdbId,
       lastSeason: row.lastSeason,
       lastEpisode: row.lastEpisode,
