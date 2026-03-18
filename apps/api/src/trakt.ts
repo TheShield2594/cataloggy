@@ -7,7 +7,7 @@ const DEFAULT_TOKEN_ROW_ID = "default";
 const DEFAULT_TOKEN_EXPIRY_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
 export function computeTokenExpiresAt(expiresIn: number | undefined): Date {
-  return typeof expiresIn === "number" && Number.isFinite(expiresIn)
+  return typeof expiresIn === "number" && Number.isFinite(expiresIn) && expiresIn > 0
     ? new Date(Date.now() + expiresIn * 1000)
     : new Date(Date.now() + DEFAULT_TOKEN_EXPIRY_MS);
 }
