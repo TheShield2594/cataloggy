@@ -550,6 +550,7 @@ function StarRating({
       try {
         await api.deleteRating(type, imdbId);
         setUserRating(null);
+        setHoverRating(null);
       } catch (err) {
         onError?.(err instanceof Error ? err.message : "Failed to remove rating");
       } finally {
@@ -561,6 +562,7 @@ function StarRating({
     try {
       const res = await api.setRating(imdbId, type, rating);
       setUserRating(res.rating.rating);
+      setHoverRating(null);
     } catch (err) {
       onError?.(err instanceof Error ? err.message : "Failed to save rating");
     } finally {
@@ -568,12 +570,27 @@ function StarRating({
     }
   };
 
+  const retryLoadRating = useCallback(() => {
+    setLoadError(null);
+    setLoaded(false);
+    void (async () => {
+      try {
+        const res = await api.getRating(type, imdbId);
+        setUserRating(res.rating.rating);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) {
+          // no rating
+        } else {
+          setLoadError(err instanceof Error ? err.message : "Failed to load rating");
+        }
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, [imdbId, type]);
+
   if (!loaded) {
     return <div className="skeleton h-8 w-40 rounded-lg" />;
-  }
-
-  if (loadError) {
-    return <p className="text-xs text-rose-400">{loadError}</p>;
   }
 
   const displayRating = hoverRating ?? userRating ?? 0;
@@ -609,6 +626,12 @@ function StarRating({
           <span className="ml-2 text-sm font-semibold text-amber-400">{userRating}/10</span>
         )}
       </div>
+      {loadError && (
+        <p className="mt-1 flex items-center gap-2 text-xs text-rose-400">
+          {loadError}
+          <button type="button" onClick={retryLoadRating} className="underline hover:text-rose-300">Retry</button>
+        </p>
+      )}
     </div>
   );
 }

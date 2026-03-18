@@ -96,21 +96,31 @@ function Poster({
   alt: string;
   className?: string;
 }) {
-  return src ? (
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  // Reset failure state when src changes
+  useEffect(() => { setLoadFailed(false); }, [src]);
+
+  if (!src || loadFailed) {
+    return (
+      <div
+        className={`flex items-center justify-center bg-gradient-to-br ${getGradient(alt)} ${className}`}
+      >
+        <span className="text-xl font-bold text-white/40 select-none">
+          {getInitials(alt)}
+        </span>
+      </div>
+    );
+  }
+
+  return (
     <img
       src={src}
       alt={alt}
       className={`object-cover ${className}`}
       loading="lazy"
+      onError={() => setLoadFailed(true)}
     />
-  ) : (
-    <div
-      className={`flex items-center justify-center bg-gradient-to-br ${getGradient(alt)} ${className}`}
-    >
-      <span className="text-xl font-bold text-white/40 select-none">
-        {getInitials(alt)}
-      </span>
-    </div>
   );
 }
 
@@ -308,7 +318,7 @@ export function DashboardPage() {
       recsScroll.checkScroll();
     }, 50);
     return () => clearTimeout(timer);
-  }, [loading, trendingLoading, recsLoading, continueScroll.checkScroll, recentScroll.checkScroll, trendingScroll.checkScroll, recsScroll.checkScroll]);
+  }, [loading, trendingLoading, recsLoading, progress.length, history.length, continueScroll.checkScroll, recentScroll.checkScroll, trendingScroll.checkScroll, recsScroll.checkScroll]);
 
   const handleMarkNext = async (imdbId: string) => {
     setMarkingNext((prev) => new Set(prev).add(imdbId));
@@ -457,6 +467,7 @@ export function DashboardPage() {
                         type="button"
                         disabled={isMarking || isDone}
                         onClick={() => void handleMarkNext(s.imdbId)}
+                        aria-label={isMarking ? "Marking next episode" : isDone ? "Episode marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
                         className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all ${
                           isDone
                             ? "bg-emerald-500/20 text-emerald-400"

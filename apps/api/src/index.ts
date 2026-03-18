@@ -1663,14 +1663,19 @@ app.post<{ Body: unknown }>("/settings/preferences", async (request, reply) => {
   const now = new Date();
 
   if (typeof body.language === "string" && body.language.trim()) {
-    const lang = body.language.trim();
-    if (!LANGUAGE_PATTERN.test(lang)) {
+    const raw = body.language.trim();
+    // Normalize casing: language subtag lowercase, region subtag uppercase (e.g., "en-US")
+    const parts = raw.split("-");
+    const normalizedLang = parts.length === 2
+      ? `${parts[0].toLowerCase()}-${parts[1].toUpperCase()}`
+      : parts[0].toLowerCase();
+    if (!LANGUAGE_PATTERN.test(normalizedLang)) {
       return reply.code(400).send({ error: "language must be a valid language code (e.g., 'en-US', 'fr')" });
     }
     await prisma.kV.upsert({
       where: { key: LANGUAGE_KV_KEY },
-      create: { key: LANGUAGE_KV_KEY, value: lang, updatedAt: now },
-      update: { value: lang, updatedAt: now },
+      create: { key: LANGUAGE_KV_KEY, value: normalizedLang, updatedAt: now },
+      update: { value: normalizedLang, updatedAt: now },
     });
   }
 
