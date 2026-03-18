@@ -5,16 +5,23 @@ import {
   Tv,
   Play,
   ChevronRight,
+  ChevronLeft,
   Check,
+  Star,
+  TrendingUp,
+  Sparkles,
 } from "lucide-react";
 import {
   api,
+  CalendarEntry,
   runtimeConfig,
   SeriesProgress,
+  TrendingMeta,
   WatchEvent,
   WatchStats,
 } from "../api";
 import { Link } from "react-router-dom";
+import { useHorizontalScroll, getInitials, getGradient } from "../components/carousel-utils";
 
 function timeAgo(dateStr: string): string {
   const now = Date.now();
@@ -38,14 +45,12 @@ function timeAgo(dateStr: string): string {
 
 function StatsSkeleton() {
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="flex items-center gap-6">
       {Array.from({ length: 3 }).map((_, i) => (
-        <div
-          key={i}
-          className="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-5"
-        >
-          <div className="skeleton mb-3 h-8 w-16 rounded-lg" />
-          <div className="skeleton h-4 w-24 rounded" />
+        <div key={i} className="flex items-center gap-2">
+          <div className="skeleton h-5 w-5 rounded" />
+          <div className="skeleton h-5 w-12 rounded" />
+          <div className="skeleton h-4 w-20 rounded" />
         </div>
       ))}
     </div>
@@ -57,10 +62,9 @@ function ContinueWatchingSkeleton() {
     <div className="flex gap-4 overflow-hidden pb-2">
       {Array.from({ length: 5 }).map((_, i) => (
         <div key={i} className="flex-none">
-          <div className="skeleton h-44 w-[7.5rem] rounded-xl" />
-          <div className="skeleton mt-2 h-3.5 w-24 rounded" />
-          <div className="skeleton mt-1 h-3 w-16 rounded" />
-          <div className="skeleton mt-2 h-8 w-[7.5rem] rounded-lg" />
+          <div className="skeleton h-[16.5rem] w-[11rem] rounded-xl" />
+          <div className="skeleton mt-2.5 h-4 w-32 rounded" />
+          <div className="skeleton mt-1.5 h-3 w-20 rounded" />
         </div>
       ))}
     </div>
@@ -69,25 +73,19 @@ function ContinueWatchingSkeleton() {
 
 function RecentlyWatchedSkeleton() {
   return (
-    <div className="space-y-2">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <div
-          key={i}
-          className="flex items-center gap-3 rounded-xl border border-slate-800/40 bg-slate-900/40 p-3"
-        >
-          <div className="skeleton h-16 w-11 flex-none rounded-lg" />
-          <div className="flex-1 space-y-2">
-            <div className="skeleton h-4 w-36 rounded" />
-            <div className="skeleton h-3 w-20 rounded" />
-          </div>
-          <div className="skeleton h-3 w-14 rounded" />
+    <div className="flex gap-4 overflow-hidden pb-2">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex-none">
+          <div className="skeleton h-[16.5rem] w-[11rem] rounded-xl" />
+          <div className="skeleton mt-2.5 h-4 w-28 rounded" />
+          <div className="skeleton mt-1.5 h-3 w-16 rounded" />
         </div>
       ))}
     </div>
   );
 }
 
-/* ─── Poster component ─── */
+/* ─── Poster component with initials fallback ─── */
 
 function Poster({
   src,
@@ -98,18 +96,136 @@ function Poster({
   alt: string;
   className?: string;
 }) {
-  return src ? (
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  // Reset failure state when src changes
+  useEffect(() => { setLoadFailed(false); }, [src]);
+
+  if (!src || loadFailed) {
+    return (
+      <div
+        className={`flex items-center justify-center bg-gradient-to-br ${getGradient(alt)} ${className}`}
+      >
+        <span className="text-xl font-bold text-white/40 select-none">
+          {getInitials(alt)}
+        </span>
+      </div>
+    );
+  }
+
+  return (
     <img
       src={src}
       alt={alt}
       className={`object-cover ${className}`}
       loading="lazy"
+      onError={() => setLoadFailed(true)}
     />
-  ) : (
-    <div
-      className={`flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 ${className}`}
-    >
-      <Film className="h-6 w-6 text-slate-600" />
+  );
+}
+
+/* ─── Discovery Card (shared by trending + recommendations) ─── */
+
+type DiscoveryItem = {
+  id: string;
+  name: string;
+  poster?: string;
+  rating?: number;
+  genres?: string[];
+  year?: number;
+  type?: string;
+};
+
+function DiscoveryCard({ item, badge }: { item: DiscoveryItem; badge?: React.ReactNode }) {
+  return (
+    <div className="flex-none group" style={{ width: "11rem" }}>
+      <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
+        <Poster src={item.poster} alt={item.name} className="h-full w-full" />
+        {item.rating != null && item.rating > 0 && (
+          <div className="absolute top-2.5 left-2.5">
+            <span className="inline-flex items-center gap-1 rounded-md bg-black/70 px-2 py-0.5 text-2xs font-semibold text-amber-400 backdrop-blur-sm">
+              <Star className="h-2.5 w-2.5 fill-amber-400" />
+              {item.rating.toFixed(1)}
+            </span>
+          </div>
+        )}
+        {badge && <div className="absolute top-2.5 right-2.5">{badge}</div>}
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/60 to-transparent px-3 pb-3 pt-10">
+          {item.genres && item.genres.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {item.genres.slice(0, 2).map((g) => (
+                <span key={g} className="rounded bg-white/10 px-1.5 py-0.5 text-2xs text-slate-300 backdrop-blur-sm">{g}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <p className="mt-2.5 truncate text-sm font-semibold text-slate-200">{item.name}</p>
+      <p className="text-2xs text-slate-500">
+        {item.year ?? ""}{item.type ? ` ${item.type === "movie" ? "Movie" : "Series"}` : ""}
+      </p>
+    </div>
+  );
+}
+
+/* ─── Scroll Arrow Buttons ─── */
+
+function ScrollArrows({
+  canScrollLeft,
+  canScrollRight,
+  onScroll,
+}: {
+  canScrollLeft: boolean;
+  canScrollRight: boolean;
+  onScroll: (dir: "left" | "right") => void;
+}) {
+  if (!canScrollLeft && !canScrollRight) return null;
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={() => onScroll("left")}
+        disabled={!canScrollLeft}
+        className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/60 bg-slate-900/80 text-slate-400 transition-all hover:border-slate-600 hover:bg-slate-800 hover:text-white disabled:opacity-30 disabled:cursor-default disabled:hover:border-slate-700/60 disabled:hover:bg-slate-900/80 disabled:hover:text-slate-400"
+        aria-label="Scroll left"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={() => onScroll("right")}
+        disabled={!canScrollRight}
+        className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/60 bg-slate-900/80 text-slate-400 transition-all hover:border-slate-600 hover:bg-slate-800 hover:text-white disabled:opacity-30 disabled:cursor-default disabled:hover:border-slate-700/60 disabled:hover:bg-slate-900/80 disabled:hover:text-slate-400"
+        aria-label="Scroll right"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+/* ─── Section header ─── */
+
+function SectionHeader({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count?: number;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-4 flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <h2 className="text-lg font-bold text-white">{title}</h2>
+        {count !== undefined && count > 0 && (
+          <span className="rounded-full bg-slate-800/80 px-2.5 py-0.5 text-xs font-medium text-slate-400 tabular-nums">
+            {count}
+          </span>
+        )}
+      </div>
+      {children}
     </div>
   );
 }
@@ -124,14 +240,26 @@ export function DashboardPage() {
   const [history, setHistory] = useState<WatchEvent[]>([]);
   const [stats, setStats] = useState<WatchStats | null>(null);
 
+  const [trendingMovies, setTrendingMovies] = useState<TrendingMeta[]>([]);
+  const [trendingLoading, setTrendingLoading] = useState(true);
+  const [recommendations, setRecommendations] = useState<TrendingMeta[]>([]);
+  const [recsLoading, setRecsLoading] = useState(true);
+  const [calendarEntries, setCalendarEntries] = useState<CalendarEntry[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(true);
+
   const [markingNext, setMarkingNext] = useState<Set<string>>(new Set());
   const [markedDone, setMarkedDone] = useState<Set<string>>(new Set());
+
+  const continueScroll = useHorizontalScroll();
+  const recentScroll = useHorizontalScroll();
+  const trendingScroll = useHorizontalScroll();
+  const recsScroll = useHorizontalScroll();
 
   const load = useCallback(async () => {
     try {
       const [progressRes, historyRes, statsRes] = await Promise.all([
         api.getSeriesProgress(),
-        api.getWatchHistory(10),
+        api.getWatchHistory(20),
         api.getWatchStats(),
       ]);
       setProgress(progressRes);
@@ -146,16 +274,57 @@ export function DashboardPage() {
     }
   }, []);
 
+  // Load discovery data separately (non-blocking)
+  useEffect(() => {
+    let mounted = true;
+    void (async () => {
+      try {
+        const res = await api.getTrending("movie", "week");
+        if (mounted) setTrendingMovies(res.metas);
+      } catch { /* optional */ } finally {
+        if (mounted) setTrendingLoading(false);
+      }
+    })();
+    void (async () => {
+      try {
+        const res = await api.getPersonalRecommendations("movie", 20);
+        if (mounted) setRecommendations(res.metas);
+      } catch { /* optional */ } finally {
+        if (mounted) setRecsLoading(false);
+      }
+    })();
+    void (async () => {
+      try {
+        const res = await api.getCalendar(14);
+        if (mounted) setCalendarEntries(res.calendar);
+      } catch { /* optional */ } finally {
+        if (mounted) setCalendarLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Re-check scroll arrows after data loads
+  useEffect(() => {
+    if (loading) return;
+    const timer = setTimeout(() => {
+      continueScroll.checkScroll();
+      recentScroll.checkScroll();
+      trendingScroll.checkScroll();
+      recsScroll.checkScroll();
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [loading, trendingLoading, recsLoading, progress.length, history.length, continueScroll.checkScroll, recentScroll.checkScroll, trendingScroll.checkScroll, recsScroll.checkScroll]);
 
   const handleMarkNext = async (imdbId: string) => {
     setMarkingNext((prev) => new Set(prev).add(imdbId));
     try {
       await api.markNextEpisodeWatched(imdbId);
       setMarkedDone((prev) => new Set(prev).add(imdbId));
-      // Refresh data after a brief moment so the user sees the checkmark
       setTimeout(() => {
         setMarkedDone((prev) => {
           const next = new Set(prev);
@@ -209,134 +378,127 @@ export function DashboardPage() {
     );
   }
 
-  /* ─── Stats row ─── */
-  const statsCards = stats
-    ? [
-        {
-          label: "Movies Watched",
-          value: stats.totalMovies,
-          icon: Film,
-          gradient: "from-red-500/10 to-transparent",
-          iconColor: "text-red-400",
-          borderColor: "border-red-500/20",
-        },
-        {
-          label: "Episodes Watched",
-          value: stats.totalEpisodes,
-          icon: Tv,
-          gradient: "from-violet-500/10 to-transparent",
-          iconColor: "text-violet-400",
-          borderColor: "border-violet-500/20",
-        },
-        {
-          label: "Total Plays",
-          value: stats.totalPlays,
-          icon: Play,
-          gradient: "from-amber-500/10 to-transparent",
-          iconColor: "text-amber-400",
-          borderColor: "border-amber-500/20",
-        },
-      ]
-    : null;
-
   return (
     <div className="space-y-10">
-      {/* ── Stats ── */}
+      {/* ── Inline stats bar ── */}
       <section>
         {loading ? (
           <StatsSkeleton />
-        ) : statsCards ? (
-          <div className="grid grid-cols-3 gap-4">
-            {statsCards.map((card) => (
-              <div
-                key={card.label}
-                className={`rounded-2xl border ${card.borderColor} bg-gradient-to-br ${card.gradient} bg-slate-900/40 p-5 transition-colors hover:bg-slate-900/60`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800/80 ${card.iconColor}`}>
-                    <card.icon className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <span className="text-2xl font-bold text-white tabular-nums">
-                      {card.value.toLocaleString()}
-                    </span>
-                    <p className="text-xs text-slate-400 font-medium">{card.label}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+        ) : stats ? (
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="flex items-center gap-2">
+              <Film className="h-4 w-4 text-red-400" />
+              <span className="text-lg font-bold text-white tabular-nums">{stats.totalMovies.toLocaleString()}</span>
+              <span className="text-sm text-slate-500">movies</span>
+            </div>
+            <div className="h-4 w-px bg-slate-800" />
+            <div className="flex items-center gap-2">
+              <Tv className="h-4 w-4 text-violet-400" />
+              <span className="text-lg font-bold text-white tabular-nums">{stats.totalEpisodes.toLocaleString()}</span>
+              <span className="text-sm text-slate-500">episodes</span>
+            </div>
+            <div className="h-4 w-px bg-slate-800" />
+            <div className="flex items-center gap-2">
+              <Play className="h-4 w-4 text-amber-400" />
+              <span className="text-lg font-bold text-white tabular-nums">{stats.totalPlays.toLocaleString()}</span>
+              <span className="text-sm text-slate-500">total plays</span>
+            </div>
           </div>
         ) : null}
       </section>
 
       {/* ── Continue Watching ── */}
       <section>
-        <h2 className="mb-4 text-xl font-bold">
-          Continue Watching
-        </h2>
+        <SectionHeader title="Continue Watching" count={progress.length}>
+          {!loading && progress.length > 0 && (
+            <ScrollArrows
+              canScrollLeft={continueScroll.canScrollLeft}
+              canScrollRight={continueScroll.canScrollRight}
+              onScroll={continueScroll.scroll}
+            />
+          )}
+        </SectionHeader>
         {loading ? (
           <ContinueWatchingSkeleton />
         ) : progress.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            No series in progress. Start watching something!
-          </p>
+          <div className="rounded-2xl border border-dashed border-slate-800 py-12 text-center">
+            <Tv className="mx-auto h-10 w-10 text-slate-700" />
+            <p className="mt-3 text-sm text-slate-500">
+              No series in progress. Start watching something!
+            </p>
+          </div>
         ) : (
-          <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
+          <div
+            ref={continueScroll.ref}
+            className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
+          >
             {progress.map((s) => {
               const isMarking = markingNext.has(s.imdbId);
               const isDone = markedDone.has(s.imdbId);
+              const progressPct =
+                typeof s.watchedEpisodes === "number" && s.totalEpisodes && s.totalEpisodes > 0
+                  ? Math.min(Math.max((s.watchedEpisodes / s.totalEpisodes) * 100, 0), 100)
+                  : null;
               return (
-                <div key={s.imdbId} className="flex-none snap-start group">
-                  <div className="relative h-44 w-[7.5rem] overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:scale-[1.03]">
+                <div key={s.imdbId} className="flex-none group" style={{ width: "11rem" }}>
+                  <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
                     <Poster
                       src={s.poster}
                       alt={s.name}
                       className="h-full w-full"
                     />
-                    {/* Bottom gradient with episode info */}
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-2.5 pb-2.5 pt-8">
-                      <p className="text-2xs font-semibold text-slate-200">
-                        S{s.lastSeason}:E{s.lastEpisode}
-                        {s.totalSeasons ? ` of S${s.totalSeasons}` : ""}
-                      </p>
-                      {typeof s.watchedEpisodes === "number" && s.totalEpisodes && s.totalEpisodes > 0 && (
-                        <div className="mt-1 h-1 w-full rounded-full bg-white/20 overflow-hidden">
+                    {/* Bottom gradient overlay with episode info + mark button */}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/80 to-transparent px-3 pb-3 pt-16">
+                      {/* Progress bar */}
+                      {progressPct !== null && (
+                        <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-white/15">
                           <div
-                            className="h-full rounded-full bg-red-500"
-                            style={{ width: `${Math.min(Math.max((s.watchedEpisodes / s.totalEpisodes) * 100, 0), 100)}%` }}
+                            className="h-full rounded-full bg-red-500 transition-all duration-500"
+                            style={{ width: `${progressPct}%` }}
                           />
                         </div>
                       )}
+                      <p className="text-xs text-slate-400">
+                        S{s.lastSeason}:E{s.lastEpisode}
+                        {s.totalSeasons ? ` · ${s.totalSeasons} seasons` : ""}
+                      </p>
+                      {/* Mark next button */}
+                      <button
+                        type="button"
+                        disabled={isMarking || isDone}
+                        onClick={() => void handleMarkNext(s.imdbId)}
+                        aria-label={isMarking ? "Marking next episode" : isDone ? "Episode marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
+                        className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all ${
+                          isDone
+                            ? "bg-emerald-500/20 text-emerald-400"
+                            : isMarking
+                              ? "bg-slate-800/80 text-slate-400"
+                              : "bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm"
+                        }`}
+                      >
+                        {isDone ? (
+                          <>
+                            <Check className="h-3.5 w-3.5" /> Marked
+                          </>
+                        ) : isMarking ? (
+                          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+                        ) : (
+                          <>
+                            <ChevronRight className="h-3.5 w-3.5" />
+                            Mark S{s.nextSeason}:E{s.nextEpisode}
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
-                  <p className="mt-2 w-[7.5rem] truncate text-sm font-medium text-slate-200">
+                  <p className="mt-2.5 truncate text-sm font-semibold text-slate-200">
                     {s.name}
                   </p>
-                  <button
-                    type="button"
-                    disabled={isMarking || isDone}
-                    onClick={() => void handleMarkNext(s.imdbId)}
-                    className={`mt-2 flex w-[7.5rem] items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition-all ${
-                      isDone
-                        ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
-                        : isMarking
-                          ? "bg-slate-800 text-slate-400"
-                          : "bg-red-500/15 text-red-400 ring-1 ring-red-500/20 hover:bg-red-500/25"
-                    }`}
-                  >
-                    {isDone ? (
-                      <>
-                        <Check className="h-3.5 w-3.5" /> Marked
-                      </>
-                    ) : isMarking ? (
-                      <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
-                    ) : (
-                      <>
-                        <ChevronRight className="h-3.5 w-3.5" />
-                        S{s.nextSeason}:E{s.nextEpisode}
-                      </>
-                    )}
-                  </button>
+                  {progressPct !== null && (
+                    <p className="text-2xs text-slate-500">
+                      {s.watchedEpisodes} of {s.totalEpisodes} episodes
+                    </p>
+                  )}
                 </div>
               );
             })}
@@ -346,49 +508,216 @@ export function DashboardPage() {
 
       {/* ── Recently Watched ── */}
       <section>
-        <h2 className="mb-4 text-xl font-bold">
-          Recently Watched
-        </h2>
+        <SectionHeader title="Recently Watched" count={history.length}>
+          {!loading && history.length > 0 && (
+            <ScrollArrows
+              canScrollLeft={recentScroll.canScrollLeft}
+              canScrollRight={recentScroll.canScrollRight}
+              onScroll={recentScroll.scroll}
+            />
+          )}
+        </SectionHeader>
         {loading ? (
           <RecentlyWatchedSkeleton />
         ) : history.length === 0 ? (
-          <p className="text-sm text-slate-500">No watch history yet.</p>
+          <div className="rounded-2xl border border-dashed border-slate-800 py-12 text-center">
+            <Film className="mx-auto h-10 w-10 text-slate-700" />
+            <p className="mt-3 text-sm text-slate-500">No watch history yet.</p>
+          </div>
         ) : (
-          <div className="space-y-2">
+          <div
+            ref={recentScroll.ref}
+            className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
+          >
             {history.map((event) => (
-              <div
-                key={event.id}
-                className="flex items-center gap-4 rounded-xl border border-slate-800/40 bg-slate-900/30 p-3 transition-all hover:bg-slate-900/60 hover:border-slate-700/60"
-              >
-                <div className="h-16 w-11 flex-none overflow-hidden rounded-lg ring-1 ring-white/5">
+              <div key={event.id} className="flex-none group" style={{ width: "11rem" }}>
+                <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
                   <Poster
                     src={event.poster}
                     alt={event.name}
                     className="h-full w-full"
                   />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-100">
-                    {event.name}
-                  </p>
-                  <p className="mt-0.5 text-xs text-slate-500">
+                  {/* Bottom gradient with metadata */}
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent px-3 pb-3 pt-12">
                     {event.type === "series" &&
                     event.season != null &&
-                    event.episode != null
-                      ? `S${event.season}:E${event.episode}`
-                      : event.type === "movie"
-                        ? "Movie"
-                        : ""}
-                  </p>
+                    event.episode != null ? (
+                      <span className="inline-block rounded bg-white/10 px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm">
+                        S{event.season}:E{event.episode}
+                      </span>
+                    ) : event.type === "movie" ? (
+                      <span className="inline-flex items-center gap-1 rounded bg-red-500/20 px-2 py-0.5 text-xs font-semibold text-red-300 backdrop-blur-sm">
+                        <Film className="h-3 w-3" /> Movie
+                      </span>
+                    ) : null}
+                  </div>
+                  {/* Time ago badge */}
+                  <div className="absolute top-2.5 right-2.5">
+                    <span className="rounded-md bg-black/70 px-2 py-0.5 text-2xs font-medium text-slate-300 backdrop-blur-sm">
+                      {timeAgo(event.watchedAt)}
+                    </span>
+                  </div>
                 </div>
-                <span className="flex-none rounded-full bg-slate-800/60 px-2.5 py-1 text-2xs font-medium text-slate-400">
-                  {timeAgo(event.watchedAt)}
-                </span>
+                <p className="mt-2.5 truncate text-sm font-semibold text-slate-200">
+                  {event.name}
+                </p>
+                <p className="text-2xs text-slate-500">
+                  {event.type === "series" &&
+                  event.season != null &&
+                  event.episode != null
+                    ? `Season ${event.season}, Episode ${event.episode}`
+                    : event.type === "movie"
+                      ? "Movie"
+                      : ""}
+                </p>
               </div>
             ))}
           </div>
         )}
       </section>
+
+      {/* ── Trending Movies ── */}
+      <section>
+        <SectionHeader title="Trending This Week">
+          <div className="flex items-center gap-3">
+            {!trendingLoading && trendingMovies.length > 0 && (
+              <ScrollArrows
+                canScrollLeft={trendingScroll.canScrollLeft}
+                canScrollRight={trendingScroll.canScrollRight}
+                onScroll={trendingScroll.scroll}
+              />
+            )}
+            <Link
+              to="/search"
+              className="text-sm font-medium text-red-400 hover:text-red-300 transition-colors"
+            >
+              Search &rarr;
+            </Link>
+          </div>
+        </SectionHeader>
+        {trendingLoading ? (
+          <ContinueWatchingSkeleton />
+        ) : trendingMovies.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-800 py-12 text-center">
+            <TrendingUp className="mx-auto h-10 w-10 text-slate-700" />
+            <p className="mt-3 text-sm text-slate-500">
+              Unable to load trending content. Please try again or check your network connection.
+            </p>
+          </div>
+        ) : (
+          <div
+            ref={trendingScroll.ref}
+            className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
+          >
+            {trendingMovies.map((item) => (
+              <DiscoveryCard key={item.id} item={item} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ── Recommended For You ── */}
+      {(recsLoading || recommendations.length > 0) && (
+        <section>
+          <SectionHeader title="Recommended For You">
+            {!recsLoading && recommendations.length > 0 && (
+              <ScrollArrows
+                canScrollLeft={recsScroll.canScrollLeft}
+                canScrollRight={recsScroll.canScrollRight}
+                onScroll={recsScroll.scroll}
+              />
+            )}
+          </SectionHeader>
+          {recsLoading ? (
+            <ContinueWatchingSkeleton />
+          ) : (
+            <div
+              ref={recsScroll.ref}
+              className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
+            >
+              {recommendations.map((item) => (
+                <DiscoveryCard
+                  key={item.id}
+                  item={item}
+                  badge={
+                    <span className="inline-flex items-center gap-1 rounded-md bg-violet-600/80 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
+                      <Sparkles className="h-2.5 w-2.5" />
+                    </span>
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── Upcoming Episodes ── */}
+      {(calendarLoading || calendarEntries.length > 0) && (
+        <section>
+          <SectionHeader title="Upcoming Episodes" count={calendarEntries.length} />
+          {calendarLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="skeleton h-20 rounded-xl" />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {calendarEntries.map((entry) => {
+                // Parse YYYY-MM-DD as local date (not UTC)
+                const [y, m, d] = entry.airDate.split("-").map(Number);
+                const airDate = new Date(y, m - 1, d);
+                const isToday = airDate.toDateString() === new Date().toDateString();
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const isTomorrow = airDate.toDateString() === tomorrow.toDateString();
+                const dateLabel = isToday
+                  ? "Today"
+                  : isTomorrow
+                    ? "Tomorrow"
+                    : airDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+
+                return (
+                  <div
+                    key={`${entry.seriesImdbId}-s${entry.season}e${entry.episode}`}
+                    className="flex items-center gap-4 rounded-xl border border-slate-800/40 bg-slate-900/30 p-3 transition-all hover:bg-slate-900/60 hover:border-slate-700/60"
+                  >
+                    <div className="h-16 w-11 flex-none overflow-hidden rounded-lg ring-1 ring-white/5">
+                      <Poster
+                        src={entry.poster ?? undefined}
+                        alt={entry.seriesName}
+                        className="h-full w-full"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-100">
+                        {entry.seriesName}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        S{entry.season}:E{entry.episode} — {entry.episodeName}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 flex-none">
+                      <span className={`rounded-full px-2.5 py-0.5 text-2xs font-semibold ${
+                        isToday
+                          ? "bg-red-500/15 text-red-400"
+                          : isTomorrow
+                            ? "bg-amber-500/15 text-amber-400"
+                            : "bg-slate-800/60 text-slate-400"
+                      }`}>
+                        {dateLabel}
+                      </span>
+                      <span className="text-2xs text-slate-600">
+                        {airDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

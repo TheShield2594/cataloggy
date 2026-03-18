@@ -1,3 +1,10 @@
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 const API_BASE_DEFAULT = import.meta.env.VITE_API_BASE ?? "http://localhost:7000";
 const API_BASE_OVERRIDE_KEY = "cataloggy_api_base_override";
 const TOKEN_KEY = "cataloggy_token";
@@ -119,6 +126,41 @@ export type AddonConfig = {
   enabledCatalogs: string[];
 };
 
+export type TrendingMeta = {
+  id: string;
+  type: MediaType;
+  name: string;
+  poster?: string;
+  year?: number;
+  description?: string;
+  genres?: string[];
+  rating?: number;
+};
+
+export type UserRating = {
+  imdbId: string;
+  type: MediaType;
+  rating: number;
+  ratedAt: string;
+};
+
+export type UserPreferences = {
+  language: string;
+  region: string;
+  spoilerProtection: boolean;
+};
+
+export type CalendarEntry = {
+  seriesImdbId: string;
+  seriesName: string;
+  poster: string | null;
+  season: number;
+  episode: number;
+  episodeName: string;
+  airDate: string;
+  overview: string | null;
+};
+
 export type ItemListMembership = {
   listId: string;
   listName: string;
@@ -163,7 +205,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || `Request failed: ${response.status}`);
+    throw new ApiError(message || `Request failed: ${response.status}`, response.status);
   }
 
   if (response.status === 204) {
@@ -277,5 +319,63 @@ export const api = {
   },
   getItemLists(imdbId: string) {
     return request<{ lists: ItemListMembership[] }>(`/items/${encodeURIComponent(imdbId)}/lists`);
+  },
+  // Trending & Popular
+  getTrending(type: MediaType, window: "day" | "week" = "week") {
+    return request<{ metas: TrendingMeta[] }>(`/trending?type=${type}&window=${window}`);
+  },
+  getPopular(type: MediaType) {
+    return request<{ metas: TrendingMeta[] }>(`/popular?type=${type}`);
+  },
+  // Ratings
+  setRating(imdbId: string, type: MediaType, rating: number) {
+    return request<{ rating: UserRating }>("/ratings", {
+      method: "POST",
+      body: JSON.stringify({ imdbId, type, rating }),
+    });
+  },
+  getRating(type: MediaType, imdbId: string) {
+    return request<{ rating: UserRating }>(`/ratings/${type}/${encodeURIComponent(imdbId)}`);
+  },
+  deleteRating(type: MediaType, imdbId: string) {
+    return request<void>(`/ratings/${type}/${encodeURIComponent(imdbId)}`, { method: "DELETE" });
+  },
+  getAllRatings(type?: MediaType, limit = 50) {
+    const params = new URLSearchParams();
+    if (type) params.set("type", type);
+    params.set("limit", String(limit));
+    return request<{ ratings: UserRating[] }>(`/ratings?${params}`);
+  },
+  // Recommendations
+  getPersonalRecommendations(type: MediaType, limit = 20) {
+    return request<{ metas: TrendingMeta[] }>(`/recommendations/personal?type=${type}&limit=${limit}`);
+  },
+  getRecommendations(type: MediaType, imdbId: string) {
+    return request<{ metas: TrendingMeta[] }>(`/recommendations?type=${type}&imdbId=${encodeURIComponent(imdbId)}`);
+  },
+  // Calendar
+  getCalendar(days = 30) {
+    return request<{ calendar: CalendarEntry[] }>(`/calendar?days=${days}`);
+  },
+  // Streaming
+  getStreamingCatalog(type: MediaType, provider: string) {
+    return request<{ metas: TrendingMeta[]; provider: string }>(`/streaming?type=${type}&provider=${encodeURIComponent(provider)}`);
+  },
+  getStreamingProviders() {
+    return request<{ providers: Array<{ key: string; id: number; name: string }> }>("/streaming/providers");
+  },
+  // Anime
+  getAnimeCatalog(type: MediaType) {
+    return request<{ metas: TrendingMeta[] }>(`/anime?type=${type}`);
+  },
+  // Preferences (language, region, spoiler protection)
+  getPreferences() {
+    return request<UserPreferences>("/settings/preferences");
+  },
+  updatePreferences(prefs: Partial<UserPreferences>) {
+    return request<UserPreferences>("/settings/preferences", {
+      method: "POST",
+      body: JSON.stringify(prefs),
+    });
   },
 };
