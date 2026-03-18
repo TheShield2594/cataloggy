@@ -31,6 +31,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-cataloggy}
       PORT: 7000
       CATALOGGY_ALLOWED_ORIGINS: ${CATALOGGY_ALLOWED_ORIGINS:-${CATALOGGY_WEB_PUBLIC:-http://localhost:7002}}
+      CATALOGGY_API_PUBLIC: ${CATALOGGY_API_PUBLIC:-http://localhost:7000}
+      TRAKT_REDIRECT_URI: ${TRAKT_REDIRECT_URI:-}
     ports:
       - "7000:7000"
     depends_on:

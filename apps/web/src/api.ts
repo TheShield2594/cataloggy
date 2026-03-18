@@ -234,7 +234,7 @@ export const api = {
     });
   },
   getTraktStatus() {
-    return request<{ connected: boolean; configured: boolean; expiresAt: string | null }>("/trakt/status");
+    return request<{ connected: boolean; configured: boolean; expiresAt: string | null; redirectUri: string }>("/trakt/status");
   },
   getTraktOAuthUrl() {
     return request<{ url: string }>("/trakt/oauth/authorize");
