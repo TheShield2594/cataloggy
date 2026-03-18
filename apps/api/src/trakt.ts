@@ -4,6 +4,13 @@ import type { PrismaClient } from "@prisma/client";
 const TRAKT_API_BASE = "https://api.trakt.tv";
 const MAX_PAGES = 100;
 const DEFAULT_TOKEN_ROW_ID = "default";
+const DEFAULT_TOKEN_EXPIRY_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+
+export function computeTokenExpiresAt(expiresIn: number | undefined): Date {
+  return typeof expiresIn === "number" && Number.isFinite(expiresIn)
+    ? new Date(Date.now() + expiresIn * 1000)
+    : new Date(Date.now() + DEFAULT_TOKEN_EXPIRY_MS);
+}
 
 type TraktIds = {
   imdb?: string | null;
@@ -273,10 +280,7 @@ export class TraktClient {
     this.accessToken = tokenResponse.access_token;
     this.refreshToken = tokenResponse.refresh_token;
 
-    const expiresAt =
-      typeof tokenResponse.expires_in === "number" && Number.isFinite(tokenResponse.expires_in)
-        ? new Date(Date.now() + tokenResponse.expires_in * 1000)
-        : new Date(0);
+    const expiresAt = computeTokenExpiresAt(tokenResponse.expires_in);
 
     await this.prisma.traktToken.upsert({
       where: { id: DEFAULT_TOKEN_ROW_ID },
