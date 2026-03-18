@@ -7,11 +7,14 @@ import {
   ChevronRight,
   ChevronLeft,
   Check,
+  Star,
+  TrendingUp,
 } from "lucide-react";
 import {
   api,
   runtimeConfig,
   SeriesProgress,
+  TrendingMeta,
   WatchEvent,
   WatchStats,
 } from "../api";
@@ -244,11 +247,15 @@ export function DashboardPage() {
   const [history, setHistory] = useState<WatchEvent[]>([]);
   const [stats, setStats] = useState<WatchStats | null>(null);
 
+  const [trendingMovies, setTrendingMovies] = useState<TrendingMeta[]>([]);
+  const [trendingLoading, setTrendingLoading] = useState(true);
+
   const [markingNext, setMarkingNext] = useState<Set<string>>(new Set());
   const [markedDone, setMarkedDone] = useState<Set<string>>(new Set());
 
   const continueScroll = useHorizontalScroll();
   const recentScroll = useHorizontalScroll();
+  const trendingScroll = useHorizontalScroll();
 
   const load = useCallback(async () => {
     try {
@@ -269,6 +276,20 @@ export function DashboardPage() {
     }
   }, []);
 
+  // Load trending separately (non-blocking)
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await api.getTrending("movie", "week");
+        setTrendingMovies(res.metas);
+      } catch {
+        // trending is optional, don't block on failure
+      } finally {
+        setTrendingLoading(false);
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -279,9 +300,10 @@ export function DashboardPage() {
       setTimeout(() => {
         continueScroll.checkScroll();
         recentScroll.checkScroll();
+        trendingScroll.checkScroll();
       }, 50);
     }
-  }, [loading, progress, history]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loading, progress, history, trendingMovies]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleMarkNext = async (imdbId: string) => {
     setMarkingNext((prev) => new Set(prev).add(imdbId));
@@ -531,6 +553,81 @@ export function DashboardPage() {
                     : event.type === "movie"
                       ? "Movie"
                       : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ── Trending Movies ── */}
+      <section>
+        <SectionHeader title="Trending This Week">
+          <div className="flex items-center gap-3">
+            {!trendingLoading && trendingMovies.length > 0 && (
+              <ScrollArrows
+                canScrollLeft={trendingScroll.canScrollLeft}
+                canScrollRight={trendingScroll.canScrollRight}
+                onScroll={trendingScroll.scroll}
+              />
+            )}
+            <Link
+              to="/search"
+              className="text-sm font-medium text-red-400 hover:text-red-300 transition-colors"
+            >
+              Search &rarr;
+            </Link>
+          </div>
+        </SectionHeader>
+        {trendingLoading ? (
+          <ContinueWatchingSkeleton />
+        ) : trendingMovies.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-800 py-12 text-center">
+            <TrendingUp className="mx-auto h-10 w-10 text-slate-700" />
+            <p className="mt-3 text-sm text-slate-500">
+              Unable to load trending content. Check TMDB API key in settings.
+            </p>
+          </div>
+        ) : (
+          <div
+            ref={trendingScroll.ref}
+            className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
+          >
+            {trendingMovies.map((item) => (
+              <div key={item.id} className="flex-none group" style={{ width: "11rem" }}>
+                <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
+                  <Poster
+                    src={item.poster}
+                    alt={item.name}
+                    className="h-full w-full"
+                  />
+                  {/* Rating badge */}
+                  {item.rating != null && item.rating > 0 && (
+                    <div className="absolute top-2.5 left-2.5">
+                      <span className="inline-flex items-center gap-1 rounded-md bg-black/70 px-2 py-0.5 text-2xs font-semibold text-amber-400 backdrop-blur-sm">
+                        <Star className="h-2.5 w-2.5 fill-amber-400" />
+                        {item.rating.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                  {/* Bottom gradient */}
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/60 to-transparent px-3 pb-3 pt-10">
+                    {item.genres && item.genres.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {item.genres.slice(0, 2).map((g) => (
+                          <span key={g} className="rounded bg-white/10 px-1.5 py-0.5 text-2xs text-slate-300 backdrop-blur-sm">
+                            {g}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <p className="mt-2.5 truncate text-sm font-semibold text-slate-200">
+                  {item.name}
+                </p>
+                <p className="text-2xs text-slate-500">
+                  {item.year ?? ""} {item.type === "movie" ? "Movie" : "Series"}
                 </p>
               </div>
             ))}
