@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
-import { api, runtimeConfig, UserPreferences } from "../api";
+import { api, runtimeConfig } from "../api";
 import { ChevronDown, Key, Link, Database, Info, Eye, EyeOff, Loader2, Check, AlertCircle, Unplug, Clapperboard, Image, Globe, Shield } from "lucide-react";
 
 declare const __APP_VERSION__: string;
@@ -368,10 +368,24 @@ function RpdbSection() {
 }
 
 const CATALOG_LABELS: Record<string, string> = {
-  my_watchlist_movies: "Watchlist Movies",
-  my_watchlist_series: "Watchlist Series",
-  my_recent_movies: "Recently Watched Movies",
-  my_continue_series: "Continue Watching Series",
+  "cataloggy-trending-movie": "Trending Movies",
+  "cataloggy-trending-series": "Trending Series",
+  "cataloggy-popular-movie": "Popular Movies",
+  "cataloggy-popular-series": "Popular Series",
+  "cataloggy-recommended-movie": "Recommended Movies",
+  "cataloggy-recommended-series": "Recommended Series",
+  "cataloggy-anime-series": "Anime",
+  "cataloggy-anime-movie": "Anime Movies",
+  "cataloggy-netflix-movie": "Netflix Movies",
+  "cataloggy-netflix-series": "Netflix Series",
+  "cataloggy-disney-movie": "Disney+ Movies",
+  "cataloggy-disney-series": "Disney+ Series",
+  "cataloggy-amazon-movie": "Prime Video Movies",
+  "cataloggy-amazon-series": "Prime Video Series",
+  "cataloggy-apple-movie": "Apple TV+ Movies",
+  "cataloggy-apple-series": "Apple TV+ Series",
+  "cataloggy-max-movie": "Max Movies",
+  "cataloggy-max-series": "Max Series",
 };
 
 function AddonConfigSection() {
@@ -577,8 +591,9 @@ function PreferencesSection() {
 
       {/* Language */}
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-slate-300">Metadata Language</label>
+        <label htmlFor="pref-language" className="mb-1.5 block text-sm font-medium text-slate-300">Metadata Language</label>
         <select
+          id="pref-language"
           value={language}
           onChange={(e) => { setLanguage(e.target.value); setSaved(false); }}
           className="w-full rounded-xl border border-slate-700/60 bg-slate-950 px-4 py-3 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15"
@@ -594,8 +609,9 @@ function PreferencesSection() {
 
       {/* Region */}
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-slate-300">Streaming Region</label>
+        <label htmlFor="pref-region" className="mb-1.5 block text-sm font-medium text-slate-300">Streaming Region</label>
         <select
+          id="pref-region"
           value={region}
           onChange={(e) => { setRegion(e.target.value); setSaved(false); }}
           className="w-full rounded-xl border border-slate-700/60 bg-slate-950 px-4 py-3 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15"
@@ -610,8 +626,9 @@ function PreferencesSection() {
       </div>
 
       {/* Spoiler Protection */}
-      <label className="flex items-start gap-3 rounded-xl border border-slate-800/40 bg-slate-900/30 px-4 py-3.5 cursor-pointer transition-colors hover:bg-slate-900/60">
+      <label htmlFor="pref-spoiler" className="flex items-start gap-3 rounded-xl border border-slate-800/40 bg-slate-900/30 px-4 py-3.5 cursor-pointer transition-colors hover:bg-slate-900/60">
         <input
+          id="pref-spoiler"
           type="checkbox"
           checked={spoilerProtection}
           onChange={(e) => { setSpoilerProtection(e.target.checked); setSaved(false); }}

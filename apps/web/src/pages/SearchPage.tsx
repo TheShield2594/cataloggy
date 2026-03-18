@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronRight, Clock, Film, Plus, Search, Star, Tv, X, Heart } from "lucide-react";
-import { api, CatalogList, MediaType, SearchResult, UserRating, WatchEvent } from "../api";
+import { api, CatalogList, MediaType, SearchResult, WatchEvent } from "../api";
 
 type FilterType = "all" | MediaType;
 
@@ -513,16 +513,20 @@ function StarRating({
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    setUserRating(null);
+    setLoaded(false);
+    let canceled = false;
     void (async () => {
       try {
         const res = await api.getRating(type, imdbId);
-        setUserRating(res.rating.rating);
+        if (!canceled) setUserRating(res.rating.rating);
       } catch {
         // no rating exists
       } finally {
-        setLoaded(true);
+        if (!canceled) setLoaded(true);
       }
     })();
+    return () => { canceled = true; };
   }, [imdbId, type]);
 
   const handleRate = async (rating: number) => {

@@ -269,7 +269,7 @@ const upsertMetadata = async (metadata: MetadataPayload) => {
 };
 
 const fetchMetadata = async (type: MetadataType, imdbId: string): Promise<MetadataPayload | null> => {
-  const tmdb = TmdbClient.fromEnv();
+  const tmdb = await getTmdb();
   const metadata = await tmdb.findByImdbId(type, imdbId);
 
   if (!metadata) {
@@ -291,7 +291,7 @@ const syncMetadata = async (imdbId: string, type: MetadataType) => {
     return existing;
   }
 
-  const tmdb = TmdbClient.fromEnv();
+  const tmdb = await getTmdb();
   const payload = await tmdb.findByImdbId(type, imdbId);
 
   if (!payload) {
@@ -757,7 +757,7 @@ app.get<{ Querystring: { type?: string; query?: string; q?: string } }>("/search
 
   let tmdb: TmdbClient;
   try {
-    tmdb = TmdbClient.fromEnv();
+    tmdb = await getTmdb();
   } catch (error) {
     request.log.error(error, "TMDB client initialization failed");
     return reply.code(500).send({ error: "TMDB integration is not configured" });
@@ -891,7 +891,7 @@ app.get<{ Querystring: { type?: string; window?: string } }>("/trending", async 
   if (cached && now < cached.expiry) return { metas: cached.data };
 
   try {
-    const tmdb = TmdbClient.fromEnv();
+    const tmdb = await getTmdb();
     const results = await tmdb.trending(type, timeWindow);
     // Cache metadata for each item
     await Promise.all(results.map((r) => upsertMetadata(r)));
@@ -924,7 +924,7 @@ app.get<{ Querystring: { type?: string } }>("/popular", async (request, reply) =
   if (cached && now < cached.expiry) return { metas: cached.data };
 
   try {
-    const tmdb = TmdbClient.fromEnv();
+    const tmdb = await getTmdb();
     const results = await tmdb.popular(type);
     await Promise.all(results.map((r) => upsertMetadata(r)));
     const metas: StremioMetaPreview[] = results.map((r) => ({
@@ -1060,7 +1060,7 @@ app.get<{ Querystring: { imdbId?: string; type?: string } }>("/recommendations",
 
 async function getRecommendations(rawType: string, type: MetadataType, tmdbId: number, cacheKey: string, now: number) {
   try {
-    const tmdb = TmdbClient.fromEnv();
+    const tmdb = await getTmdb();
     const results = await tmdb.recommendations(type, tmdbId);
     await Promise.all(results.map((r) => upsertMetadata(r)));
     const metas: StremioMetaPreview[] = results.map((r) => ({
@@ -1117,15 +1117,52 @@ app.get<{ Querystring: { type?: string; limit?: string } }>("/recommendations/pe
   const tmdbIds = metas.filter((m) => m.tmdbId !== null).map((m) => m.tmdbId as number);
   if (tmdbIds.length === 0) return { metas: [] };
 
-  // Fetch recommendations from each seed, deduplicate
-  const tmdb = TmdbClient.fromEnv();
+  // Fetch recommendations from each seed, deduplicate, with per-seed cache
+  const tmdb = await getTmdb();
   const seen = new Set<string>(seedImdbIds); // exclude items user already watched
   const allRecs: StremioMetaPreview[] = [];
 
   for (const tmdbId of tmdbIds.slice(0, 3)) {
+    if (allRecs.length >= limit) break;
     try {
-      const recs = await tmdb.recommendations(type, tmdbId);
+      // Check per-seed cache first
+      const seedCacheKey = `recs:seed:${rawType}:${tmdbId}`;
+      const cachedSeed = trendingCache.get(seedCacheKey);
+      let recs: MetadataPayload[];
+      if (cachedSeed && Date.now() < cachedSeed.expiry) {
+        // Reconstruct payloads from cached metas
+        recs = (cachedSeed.data as StremioMetaPreview[]).map((m) => ({
+          imdbId: m.id,
+          type,
+          tmdbId: null,
+          name: m.name,
+          year: m.year ?? null,
+          poster: m.poster ?? null,
+          background: null,
+          description: m.description ?? null,
+          genres: m.genres ?? [],
+          rating: m.rating ?? null,
+          voteCount: null,
+          totalSeasons: null,
+          totalEpisodes: null,
+        }));
+      } else {
+        recs = await tmdb.recommendations(type, tmdbId);
+        // Cache the raw results for this seed
+        const seedMetas: StremioMetaPreview[] = recs.map((r) => ({
+          id: r.imdbId,
+          type: rawType as StremioMetaType,
+          name: r.name,
+          poster: r.poster ?? undefined,
+          year: r.year ?? undefined,
+          description: r.description ?? undefined,
+          genres: r.genres,
+          rating: r.rating ?? undefined,
+        }));
+        trendingCache.set(seedCacheKey, { data: seedMetas, expiry: Date.now() + TRENDING_CACHE_TTL_MS });
+      }
       for (const r of recs) {
+        if (allRecs.length >= limit) break;
         if (seen.has(r.imdbId)) continue;
         seen.add(r.imdbId);
         allRecs.push({
@@ -1143,13 +1180,54 @@ app.get<{ Querystring: { type?: string; limit?: string } }>("/recommendations/pe
     } catch {
       // skip failed seeds
     }
-    if (allRecs.length >= limit) break;
   }
 
   return { metas: allRecs.slice(0, limit) };
 });
 
 // ─── Plex / Jellyfin Webhooks ───
+
+// ─── Shared watch event recording helper ───
+
+type RecordWatchParams = {
+  type: "episode" | "movie";
+  imdbId: string;
+  seriesImdbId?: string;
+  season?: number | null;
+  episode?: number | null;
+  watchedAt: Date;
+  source: string;
+  request: FastifyRequest;
+};
+
+const recordWatchEvent = async (params: RecordWatchParams) => {
+  const { type, imdbId, seriesImdbId, season, episode, watchedAt, source, request: req } = params;
+
+  if (type === "episode") {
+    const eventImdbId = `${seriesImdbId ?? imdbId}:${season}:${episode}`;
+    const watchEvent = await prisma.watchEvent.create({
+      data: {
+        type: "episode",
+        imdbId: eventImdbId,
+        seriesImdbId: seriesImdbId ?? imdbId,
+        season: season ?? null,
+        episode: episode ?? null,
+        watchedAt,
+      },
+    });
+    if (season != null && episode != null && seriesImdbId) {
+      await upsertSeriesProgressIfNewer(seriesImdbId, { lastSeason: season, lastEpisode: episode, lastWatchedAt: watchedAt });
+    }
+    req.log.info({ imdbId: eventImdbId, seriesImdbId, season, episode }, `${source} scrobble: episode recorded`);
+    return { status: "recorded" as const, watchEvent };
+  }
+
+  const watchEvent = await prisma.watchEvent.create({
+    data: { type: "movie", imdbId, watchedAt },
+  });
+  req.log.info({ imdbId }, `${source} scrobble: movie recorded`);
+  return { status: "recorded" as const, watchEvent };
+};
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET?.trim();
 
@@ -1254,31 +1332,12 @@ app.post("/webhooks/plex", async (request, reply) => {
   if (metadata.type === "episode") {
     const season = metadata.parentIndex ?? null;
     const episode = metadata.index ?? null;
-    // For episodes, we need the series IMDb ID. Try to find via metadata.
-    // The episode imdbId might not be available; use the series title to look up.
-    const watchEvent = await prisma.watchEvent.create({
-      data: {
-        type: "episode",
-        imdbId: `${imdbId}:${season}:${episode}`,
-        seriesImdbId: imdbId,
-        season,
-        episode,
-        watchedAt: now,
-      },
-    });
-    if (season !== null && episode !== null) {
-      await upsertSeriesProgressIfNewer(imdbId, { lastSeason: season, lastEpisode: episode, lastWatchedAt: now });
-    }
-    request.log.info({ imdbId, season, episode }, "Plex scrobble: episode recorded");
-    return reply.code(201).send({ status: "recorded", watchEvent });
+    const result = await recordWatchEvent({ type: "episode", imdbId, seriesImdbId: imdbId, season, episode, watchedAt: now, source: "Plex", request });
+    return reply.code(201).send(result);
   }
 
-  // Movie
-  const watchEvent = await prisma.watchEvent.create({
-    data: { type: "movie", imdbId, watchedAt: now },
-  });
-  request.log.info({ imdbId }, "Plex scrobble: movie recorded");
-  return reply.code(201).send({ status: "recorded", watchEvent });
+  const result = await recordWatchEvent({ type: "movie", imdbId, watchedAt: now, source: "Plex", request });
+  return reply.code(201).send(result);
 });
 
 app.post("/webhooks/jellyfin", async (request, reply) => {
@@ -1318,31 +1377,12 @@ app.post("/webhooks/jellyfin", async (request, reply) => {
   if (body.ItemType === "Episode") {
     const season = typeof body.Season === "number" ? body.Season : null;
     const episode = typeof body.Episode === "number" ? body.Episode : null;
-    const seriesImdbId = imdbId; // Jellyfin typically sends series IMDB ID
-
-    const watchEvent = await prisma.watchEvent.create({
-      data: {
-        type: "episode",
-        imdbId: `${seriesImdbId}:${season}:${episode}`,
-        seriesImdbId,
-        season,
-        episode,
-        watchedAt: now,
-      },
-    });
-    if (season !== null && episode !== null) {
-      await upsertSeriesProgressIfNewer(seriesImdbId, { lastSeason: season, lastEpisode: episode, lastWatchedAt: now });
-    }
-    request.log.info({ imdbId, season, episode }, "Jellyfin scrobble: episode recorded");
-    return reply.code(201).send({ status: "recorded", watchEvent });
+    const result = await recordWatchEvent({ type: "episode", imdbId, seriesImdbId: imdbId, season, episode, watchedAt: now, source: "Jellyfin", request });
+    return reply.code(201).send(result);
   }
 
-  // Movie
-  const watchEvent = await prisma.watchEvent.create({
-    data: { type: "movie", imdbId, watchedAt: now },
-  });
-  request.log.info({ imdbId }, "Jellyfin scrobble: movie recorded");
-  return reply.code(201).send({ status: "recorded", watchEvent });
+  const result = await recordWatchEvent({ type: "movie", imdbId, watchedAt: now, source: "Jellyfin", request });
+  return reply.code(201).send(result);
 });
 
 // ─── Calendar / Upcoming Episodes ───
@@ -1377,7 +1417,7 @@ app.get<{ Querystring: { days?: string } }>("/calendar", async (request) => {
 
   const metaByImdbId = new Map(metadata.map((m) => [m.imdbId, m]));
 
-  const tmdb = TmdbClient.fromEnv();
+  const tmdb = await getTmdb();
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
   const futureDate = new Date(today);
@@ -2327,16 +2367,49 @@ type AddonConfig = {
   enabledCatalogs: string[];
 };
 
-const DEFAULT_ADDON_CATALOGS = [
-  "my_watchlist_movies", "my_watchlist_series",
-  "my_recent_movies", "my_continue_series"
+// All available catalog IDs that the addon manifest can include
+const ALL_ADDON_CATALOGS = [
+  // Discovery catalogs
+  "cataloggy-trending-movie", "cataloggy-trending-series",
+  "cataloggy-popular-movie", "cataloggy-popular-series",
+  "cataloggy-recommended-movie", "cataloggy-recommended-series",
+  // Anime
+  "cataloggy-anime-series", "cataloggy-anime-movie",
+  // Streaming service catalogs
+  "cataloggy-netflix-movie", "cataloggy-netflix-series",
+  "cataloggy-disney-movie", "cataloggy-disney-series",
+  "cataloggy-amazon-movie", "cataloggy-amazon-series",
+  "cataloggy-apple-movie", "cataloggy-apple-series",
+  "cataloggy-max-movie", "cataloggy-max-series",
 ];
+
+// Default enabled catalogs for new installs
+const DEFAULT_ADDON_CATALOGS = [
+  "cataloggy-trending-movie", "cataloggy-trending-series",
+  "cataloggy-popular-movie", "cataloggy-popular-series",
+  "cataloggy-recommended-movie", "cataloggy-recommended-series",
+];
+
+// Map legacy my_* IDs to new cataloggy-* IDs (for saved configs from before migration)
+const LEGACY_CATALOG_MAP: Record<string, string> = {
+  my_watchlist_movies: "cataloggy-trending-movie",
+  my_watchlist_series: "cataloggy-trending-series",
+  my_recent_movies: "cataloggy-popular-movie",
+  my_continue_series: "cataloggy-popular-series",
+};
+
+const migrateLegacyCatalogs = (catalogs: string[]): string[] =>
+  catalogs.map((c) => LEGACY_CATALOG_MAP[c] ?? c);
 
 const getAddonConfig = async (): Promise<AddonConfig> => {
   const row = await prisma.kV.findUnique({ where: { key: ADDON_CONFIG_KEY } });
   if (!row) return { enabledCatalogs: DEFAULT_ADDON_CATALOGS };
   try {
-    return JSON.parse(row.value) as AddonConfig;
+    const parsed = JSON.parse(row.value) as AddonConfig;
+    // Migrate legacy IDs on read
+    const migrated = migrateLegacyCatalogs(parsed.enabledCatalogs);
+    const valid = migrated.filter((c) => ALL_ADDON_CATALOGS.includes(c));
+    return { enabledCatalogs: valid.length > 0 ? valid : DEFAULT_ADDON_CATALOGS };
   } catch {
     return { enabledCatalogs: DEFAULT_ADDON_CATALOGS };
   }
@@ -2344,7 +2417,7 @@ const getAddonConfig = async (): Promise<AddonConfig> => {
 
 app.get("/addon/config", async () => {
   const config = await getAddonConfig();
-  return { config, availableCatalogs: DEFAULT_ADDON_CATALOGS };
+  return { config, availableCatalogs: ALL_ADDON_CATALOGS };
 });
 
 app.post<{ Body: unknown }>("/addon/config", async (request, reply) => {
@@ -2353,7 +2426,7 @@ app.post<{ Body: unknown }>("/addon/config", async (request, reply) => {
     return reply.code(400).send({ error: "enabledCatalogs must be an array of strings" });
   }
   const enabled = (body.enabledCatalogs as unknown[]).filter(
-    (c): c is string => typeof c === "string" && DEFAULT_ADDON_CATALOGS.includes(c)
+    (c): c is string => typeof c === "string" && ALL_ADDON_CATALOGS.includes(c)
   );
   const config: AddonConfig = { enabledCatalogs: enabled };
   await prisma.kV.upsert({
@@ -2700,7 +2773,7 @@ app.post("/metadata/refresh-all", async (request, reply) => {
 
   const BATCH_SIZE = 5;
   const BATCH_DELAY_MS = 500;
-  const tmdb = TmdbClient.fromEnv();
+  const tmdb = await getTmdb();
   let refreshed = 0;
 
   for (let i = 0; i < allMetadata.length; i += BATCH_SIZE) {

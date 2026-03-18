@@ -244,7 +244,26 @@ const fetchDiscoveryMetas = async (catalogId: string): Promise<StremioMetaPrevie
 
 // ─── Manifest ───
 
-const buildManifest = (lists: CataloggyList[], genres: string[]) => {
+// Fetch enabled catalogs from API
+let cachedEnabledCatalogs: { data: string[]; expiry: number } | null = null;
+const ENABLED_CATALOGS_CACHE_TTL_MS = 60_000;
+
+const fetchEnabledCatalogs = async (): Promise<string[] | null> => {
+  const now = Date.now();
+  if (cachedEnabledCatalogs && now < cachedEnabledCatalogs.expiry) {
+    return cachedEnabledCatalogs.data;
+  }
+  try {
+    const res = await apiGet<{ config: { enabledCatalogs: string[] } }>("/addon/config");
+    const catalogs = res.config.enabledCatalogs;
+    cachedEnabledCatalogs = { data: catalogs, expiry: now + ENABLED_CATALOGS_CACHE_TTL_MS };
+    return catalogs;
+  } catch {
+    return cachedEnabledCatalogs?.data ?? null;
+  }
+};
+
+const buildManifest = (lists: CataloggyList[], genres: string[], enabledCatalogs: string[] | null) => {
   const genreExtra = genres.length > 0
     ? [{ name: "genre", options: genres, isRequired: false }]
     : [];
@@ -280,7 +299,12 @@ const buildManifest = (lists: CataloggyList[], genres: string[]) => {
     ],
   }));
 
-  const catalogs = [...listCatalogs, ...discoveryCatalogs];
+  // Filter discovery catalogs by enabledCatalogs if available
+  const filteredDiscovery = enabledCatalogs
+    ? discoveryCatalogs.filter((c) => enabledCatalogs.includes(c.id))
+    : discoveryCatalogs;
+
+  const catalogs = [...listCatalogs, ...filteredDiscovery];
 
   const configUrl = WEB_PUBLIC_BASE ? `${WEB_PUBLIC_BASE}/settings` : undefined;
 
@@ -309,11 +333,12 @@ app.get("/manifest.json", async (request: FastifyRequest, reply: FastifyReply) =
   }
 
   try {
-    const [lists, genres] = await Promise.all([
+    const [lists, genres, enabledCatalogs] = await Promise.all([
       fetchAllLists(),
       fetchGenres(),
+      fetchEnabledCatalogs(),
     ]);
-    const data = buildManifest(lists, genres);
+    const data = buildManifest(lists, genres, enabledCatalogs);
     cachedManifest = { data, expiry: now + MANIFEST_CACHE_TTL_MS };
     return reply.send(data);
   } catch (error) {
@@ -484,20 +509,25 @@ app.get<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async 
   // Spoiler protection: hide description for series the user hasn't finished
   let description = typeof payload.description === "string" ? payload.description : undefined;
   if (spoilerEnabled && type === "series" && description) {
-    // Check if user is currently watching this series
+    const spoilerMsg = "[Spoiler protection enabled — description hidden until you finish this series]";
+    let shouldHide = true; // default: hide unless confirmed completed
     try {
       const progressRes = await apiGet<{
         progress?: { lastSeason: number; lastEpisode: number; totalEpisodes?: number | null; watchedEpisodes?: number | null };
       }>(`/series/progress/${encodeURIComponent(imdbId)}`);
       if (progressRes.progress) {
         const { watchedEpisodes, totalEpisodes } = progressRes.progress;
-        // If user hasn't finished the series, redact the description
-        if (typeof watchedEpisodes === "number" && typeof totalEpisodes === "number" && watchedEpisodes < totalEpisodes) {
-          description = "[Spoiler protection enabled — description hidden until you finish this series]";
+        // Only show description if user has finished all episodes
+        if (typeof watchedEpisodes === "number" && typeof totalEpisodes === "number" && watchedEpisodes >= totalEpisodes) {
+          shouldHide = false;
         }
       }
+      // No progress row = not started = hide
     } catch {
-      // No progress found = user hasn't started, don't hide description
+      // Error fetching progress = hide to be safe
+    }
+    if (shouldHide) {
+      description = spoilerMsg;
     }
   }
 
