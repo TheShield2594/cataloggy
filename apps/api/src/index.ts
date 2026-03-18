@@ -186,7 +186,7 @@ app.addHook("onRequest", async (request, reply) => {
 app.addHook("onRequest", async (request, reply) => {
   const url = request.url;
 
-  if (url === "/health" || url.startsWith("/addon/stremio") || url === "/addon" || url.startsWith("/trakt/oauth/callback")) {
+  if (url === "/health" || url.startsWith("/addon/stremio") || url === "/addon" || url.startsWith("/trakt/oauth/callback") || url.startsWith("/webhooks/")) {
     return;
   }
 
@@ -996,6 +996,415 @@ app.get<{ Querystring: { type?: string; limit?: string } }>("/ratings", async (r
 
   const ratings = rows.map((r) => JSON.parse(r.value));
   return { ratings };
+});
+
+// ─── Recommendations (TMDB) ───
+
+app.get<{ Querystring: { imdbId?: string; type?: string } }>("/recommendations", async (request, reply) => {
+  const imdbId = request.query.imdbId?.trim();
+  const rawType = request.query.type ?? "movie";
+  const type = getMetadataType(rawType);
+  if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
+  if (!imdbId) return reply.code(400).send({ error: "imdbId is required" });
+
+  const cacheKey = `recs:${rawType}:${imdbId}`;
+  const now = Date.now();
+  const cached = trendingCache.get(cacheKey);
+  if (cached && now < cached.expiry) return { metas: cached.data };
+
+  // Look up tmdbId from metadata
+  const meta = await prisma.metadata.findUnique({
+    where: { imdbId_type: { imdbId, type } },
+    select: { tmdbId: true },
+  });
+
+  if (!meta?.tmdbId) {
+    // Try to fetch metadata first
+    try {
+      const fetched = await fetchMetadata(type, imdbId);
+      if (!fetched?.tmdbId) return { metas: [] };
+      return await getRecommendations(rawType, type, fetched.tmdbId, cacheKey, now);
+    } catch {
+      return { metas: [] };
+    }
+  }
+
+  return await getRecommendations(rawType, type, meta.tmdbId, cacheKey, now);
+});
+
+async function getRecommendations(rawType: string, type: MetadataType, tmdbId: number, cacheKey: string, now: number) {
+  try {
+    const tmdb = TmdbClient.fromEnv();
+    const results = await tmdb.recommendations(type, tmdbId);
+    await Promise.all(results.map((r) => upsertMetadata(r)));
+    const metas: StremioMetaPreview[] = results.map((r) => ({
+      id: r.imdbId,
+      type: rawType as StremioMetaType,
+      name: r.name,
+      poster: r.poster ?? undefined,
+      year: r.year ?? undefined,
+      description: r.description ?? undefined,
+      genres: r.genres,
+      rating: r.rating ?? undefined,
+    }));
+    trendingCache.set(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    return { metas };
+  } catch {
+    return { metas: [] };
+  }
+}
+
+// Personalized recommendations based on recently watched
+app.get<{ Querystring: { type?: string; limit?: string } }>("/recommendations/personal", async (request) => {
+  const rawType = request.query.type ?? "movie";
+  const type = getMetadataType(rawType);
+  if (!type) return { metas: [] };
+  const limit = Math.min(Math.max(Number(request.query.limit) || 20, 1), 40);
+
+  // Get recently watched items of this type
+  const recentItems = rawType === "movie"
+    ? await prisma.watchEvent.findMany({
+        where: { type: "movie" },
+        orderBy: { watchedAt: "desc" },
+        take: 5,
+        distinct: ["imdbId"],
+        select: { imdbId: true },
+      })
+    : await prisma.seriesProgress.findMany({
+        orderBy: { lastWatchedAt: "desc" },
+        take: 5,
+        select: { seriesImdbId: true },
+      });
+
+  const seedImdbIds = rawType === "movie"
+    ? recentItems.map((r) => (r as { imdbId: string }).imdbId)
+    : recentItems.map((r) => (r as { seriesImdbId: string }).seriesImdbId);
+
+  if (seedImdbIds.length === 0) return { metas: [] };
+
+  // Look up tmdbIds for seeds
+  const metas = await prisma.metadata.findMany({
+    where: { imdbId: { in: seedImdbIds }, type },
+    select: { tmdbId: true, imdbId: true },
+  });
+
+  const tmdbIds = metas.filter((m) => m.tmdbId !== null).map((m) => m.tmdbId as number);
+  if (tmdbIds.length === 0) return { metas: [] };
+
+  // Fetch recommendations from each seed, deduplicate
+  const tmdb = TmdbClient.fromEnv();
+  const seen = new Set<string>(seedImdbIds); // exclude items user already watched
+  const allRecs: StremioMetaPreview[] = [];
+
+  for (const tmdbId of tmdbIds.slice(0, 3)) {
+    try {
+      const recs = await tmdb.recommendations(type, tmdbId);
+      for (const r of recs) {
+        if (seen.has(r.imdbId)) continue;
+        seen.add(r.imdbId);
+        allRecs.push({
+          id: r.imdbId,
+          type: rawType as StremioMetaType,
+          name: r.name,
+          poster: r.poster ?? undefined,
+          year: r.year ?? undefined,
+          description: r.description ?? undefined,
+          genres: r.genres,
+          rating: r.rating ?? undefined,
+        });
+        void upsertMetadata(r);
+      }
+    } catch {
+      // skip failed seeds
+    }
+    if (allRecs.length >= limit) break;
+  }
+
+  return { metas: allRecs.slice(0, limit) };
+});
+
+// ─── Plex / Jellyfin Webhooks ───
+
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET?.trim();
+
+const verifyWebhookSecret = (request: FastifyRequest): boolean => {
+  if (!WEBHOOK_SECRET) return true; // no secret configured = accept all
+  const provided = (request.query as Record<string, string>).token
+    ?? request.headers["x-webhook-secret"] as string | undefined;
+  return provided === WEBHOOK_SECRET;
+};
+
+// Register content type parser for multipart (Plex sends multipart/form-data)
+app.addContentTypeParser("multipart/form-data", { parseAs: "string" }, (_request, body, done) => {
+  done(null, body);
+});
+
+app.post("/webhooks/plex", async (request, reply) => {
+  if (!verifyWebhookSecret(request)) {
+    return reply.code(403).send({ error: "Invalid webhook secret" });
+  }
+
+  let payloadStr: string | null = null;
+
+  // Plex sends multipart/form-data with a "payload" field
+  const rawBody = request.body;
+  if (typeof rawBody === "string") {
+    // Extract JSON payload from multipart body
+    const contentType = request.headers["content-type"] ?? "";
+    const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^\s;]+))/);
+    const boundary = boundaryMatch?.[1] ?? boundaryMatch?.[2];
+
+    if (boundary) {
+      const parts = rawBody.split(`--${boundary}`);
+      for (const part of parts) {
+        if (part.includes('name="payload"')) {
+          const jsonStart = part.indexOf("{");
+          const jsonEnd = part.lastIndexOf("}");
+          if (jsonStart !== -1 && jsonEnd !== -1) {
+            payloadStr = part.slice(jsonStart, jsonEnd + 1);
+          }
+        }
+      }
+    }
+  } else if (rawBody && typeof rawBody === "object") {
+    // Fallback: might arrive as parsed JSON
+    payloadStr = JSON.stringify(rawBody);
+  }
+
+  if (!payloadStr) {
+    return reply.code(400).send({ error: "No payload found" });
+  }
+
+  let payload: {
+    event?: string;
+    Metadata?: {
+      type?: string;
+      title?: string;
+      grandparentTitle?: string;
+      parentIndex?: number;
+      index?: number;
+      Guid?: Array<{ id?: string }>;
+      guid?: string;
+    };
+  };
+
+  try {
+    payload = JSON.parse(payloadStr);
+  } catch {
+    return reply.code(400).send({ error: "Invalid JSON payload" });
+  }
+
+  // Only process "media.scrobble" events (playback completed)
+  const event = payload.event;
+  if (event !== "media.scrobble") {
+    request.log.info({ event }, "Plex webhook ignored (not a scrobble event)");
+    return reply.code(200).send({ status: "ignored", event });
+  }
+
+  const metadata = payload.Metadata;
+  if (!metadata) {
+    return reply.code(400).send({ error: "No Metadata in payload" });
+  }
+
+  // Extract IMDb ID from Guid array
+  let imdbId: string | null = null;
+  for (const guid of metadata.Guid ?? []) {
+    const match = guid.id?.match(/imdb:\/\/(tt\d+)/);
+    if (match) { imdbId = match[1]; break; }
+  }
+  // Fallback: check top-level guid
+  if (!imdbId && metadata.guid) {
+    const match = metadata.guid.match(/imdb:\/\/(tt\d+)/);
+    if (match) imdbId = match[1];
+  }
+
+  if (!imdbId) {
+    request.log.warn({ metadata }, "Plex webhook: no IMDb ID found");
+    return reply.code(200).send({ status: "skipped", reason: "no_imdb_id" });
+  }
+
+  const now = new Date();
+
+  if (metadata.type === "episode") {
+    const season = metadata.parentIndex ?? null;
+    const episode = metadata.index ?? null;
+    // For episodes, we need the series IMDb ID. Try to find via metadata.
+    // The episode imdbId might not be available; use the series title to look up.
+    const watchEvent = await prisma.watchEvent.create({
+      data: {
+        type: "episode",
+        imdbId: `${imdbId}:${season}:${episode}`,
+        seriesImdbId: imdbId,
+        season,
+        episode,
+        watchedAt: now,
+      },
+    });
+    if (season !== null && episode !== null) {
+      await upsertSeriesProgressIfNewer(imdbId, { lastSeason: season, lastEpisode: episode, lastWatchedAt: now });
+    }
+    request.log.info({ imdbId, season, episode }, "Plex scrobble: episode recorded");
+    return reply.code(201).send({ status: "recorded", watchEvent });
+  }
+
+  // Movie
+  const watchEvent = await prisma.watchEvent.create({
+    data: { type: "movie", imdbId, watchedAt: now },
+  });
+  request.log.info({ imdbId }, "Plex scrobble: movie recorded");
+  return reply.code(201).send({ status: "recorded", watchEvent });
+});
+
+app.post("/webhooks/jellyfin", async (request, reply) => {
+  if (!verifyWebhookSecret(request)) {
+    return reply.code(403).send({ error: "Invalid webhook secret" });
+  }
+
+  const body = request.body as {
+    NotificationType?: string;
+    ItemType?: string;
+    Name?: string;
+    SeriesName?: string;
+    Season?: number;
+    Episode?: number;
+    Provider_imdb?: string;
+    SeriesId?: string;
+  } | null;
+
+  if (!body) {
+    return reply.code(400).send({ error: "Empty body" });
+  }
+
+  // Only process PlaybackStop events (finished watching)
+  if (body.NotificationType !== "PlaybackStop") {
+    request.log.info({ type: body.NotificationType }, "Jellyfin webhook ignored");
+    return reply.code(200).send({ status: "ignored", type: body.NotificationType });
+  }
+
+  const imdbId = body.Provider_imdb?.trim();
+  if (!imdbId) {
+    request.log.warn({ body }, "Jellyfin webhook: no IMDb ID");
+    return reply.code(200).send({ status: "skipped", reason: "no_imdb_id" });
+  }
+
+  const now = new Date();
+
+  if (body.ItemType === "Episode") {
+    const season = typeof body.Season === "number" ? body.Season : null;
+    const episode = typeof body.Episode === "number" ? body.Episode : null;
+    const seriesImdbId = imdbId; // Jellyfin typically sends series IMDB ID
+
+    const watchEvent = await prisma.watchEvent.create({
+      data: {
+        type: "episode",
+        imdbId: `${seriesImdbId}:${season}:${episode}`,
+        seriesImdbId,
+        season,
+        episode,
+        watchedAt: now,
+      },
+    });
+    if (season !== null && episode !== null) {
+      await upsertSeriesProgressIfNewer(seriesImdbId, { lastSeason: season, lastEpisode: episode, lastWatchedAt: now });
+    }
+    request.log.info({ imdbId, season, episode }, "Jellyfin scrobble: episode recorded");
+    return reply.code(201).send({ status: "recorded", watchEvent });
+  }
+
+  // Movie
+  const watchEvent = await prisma.watchEvent.create({
+    data: { type: "movie", imdbId, watchedAt: now },
+  });
+  request.log.info({ imdbId }, "Jellyfin scrobble: movie recorded");
+  return reply.code(201).send({ status: "recorded", watchEvent });
+});
+
+// ─── Calendar / Upcoming Episodes ───
+
+type CalendarEntry = {
+  seriesImdbId: string;
+  seriesName: string;
+  poster: string | null;
+  season: number;
+  episode: number;
+  episodeName: string;
+  airDate: string;
+  overview: string | null;
+};
+
+app.get<{ Querystring: { days?: string } }>("/calendar", async (request) => {
+  const daysAhead = Math.min(Math.max(Number(request.query.days) || 30, 1), 90);
+
+  // Get all series the user is watching
+  const progressRows = await prisma.seriesProgress.findMany({
+    orderBy: { lastWatchedAt: "desc" },
+    take: 30, // limit to avoid too many TMDB calls
+  });
+
+  if (progressRows.length === 0) return { calendar: [] };
+
+  const seriesImdbIds = progressRows.map((p) => p.seriesImdbId);
+  const metadata = await prisma.metadata.findMany({
+    where: { imdbId: { in: seriesImdbIds }, type: "series" },
+    select: { imdbId: true, tmdbId: true, name: true, poster: true },
+  });
+
+  const metaByImdbId = new Map(metadata.map((m) => [m.imdbId, m]));
+
+  const tmdb = TmdbClient.fromEnv();
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const futureDate = new Date(today);
+  futureDate.setDate(futureDate.getDate() + daysAhead);
+
+  const calendar: CalendarEntry[] = [];
+
+  // Fetch upcoming episodes for each series (in parallel, batched)
+  const batchSize = 5;
+  for (let i = 0; i < seriesImdbIds.length; i += batchSize) {
+    const batch = seriesImdbIds.slice(i, i + batchSize);
+    const results = await Promise.allSettled(
+      batch.map(async (imdbId) => {
+        const meta = metaByImdbId.get(imdbId);
+        if (!meta?.tmdbId) return [];
+
+        const details = await tmdb.getShowDetails(meta.tmdbId);
+        if (!details) return [];
+
+        const entries: CalendarEntry[] = [];
+
+        if (details.nextEpisodeToAir) {
+          const ep = details.nextEpisodeToAir;
+          const airDate = new Date(ep.air_date);
+          if (airDate >= today && airDate <= futureDate) {
+            entries.push({
+              seriesImdbId: imdbId,
+              seriesName: meta.name,
+              poster: meta.poster,
+              season: ep.season_number,
+              episode: ep.episode_number,
+              episodeName: ep.name,
+              airDate: ep.air_date,
+              overview: ep.overview ?? null,
+            });
+          }
+        }
+
+        return entries;
+      })
+    );
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        calendar.push(...result.value);
+      }
+    }
+  }
+
+  // Sort by air date
+  calendar.sort((a, b) => a.airDate.localeCompare(b.airDate));
+
+  return { calendar };
 });
 
 app.get("/health", async () => ({ status: "ok", service: "api" }));

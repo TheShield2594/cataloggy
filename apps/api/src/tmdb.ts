@@ -166,6 +166,45 @@ export class TmdbClient {
     return withImdb.filter((item): item is MetadataPayload => item !== null);
   }
 
+  async recommendations(type: MetadataType, tmdbId: number): Promise<MetadataPayload[]> {
+    const mediaType = this.toMediaType(type);
+    const response = await this.request<TmdbSearchResponse>(`/${mediaType}/${tmdbId}/recommendations`);
+    const results = response.results ?? [];
+
+    const withImdb = await Promise.all(
+      results.slice(0, 20).map(async (result) => {
+        if (!result.id) return null;
+        const externalIds = await this.getExternalIds(mediaType, result.id);
+        const imdbId = externalIds.imdb_id?.trim();
+        if (!imdbId) return null;
+        return this.toMetadataPayload(type, result, imdbId);
+      })
+    );
+
+    return withImdb.filter((item): item is MetadataPayload => item !== null);
+  }
+
+  async getShowDetails(tmdbId: number): Promise<{
+    nextEpisodeToAir: { season_number: number; episode_number: number; name: string; air_date: string; overview?: string } | null;
+    lastEpisodeToAir: { season_number: number; episode_number: number; name: string; air_date: string } | null;
+    status: string | null;
+  } | null> {
+    try {
+      const data = await this.request<{
+        next_episode_to_air?: { season_number: number; episode_number: number; name: string; air_date: string; overview?: string } | null;
+        last_episode_to_air?: { season_number: number; episode_number: number; name: string; air_date: string } | null;
+        status?: string;
+      }>(`/tv/${tmdbId}`);
+      return {
+        nextEpisodeToAir: data.next_episode_to_air ?? null,
+        lastEpisodeToAir: data.last_episode_to_air ?? null,
+        status: data.status ?? null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   async findByImdbId(type: MetadataType, imdbId: string): Promise<MetadataPayload | null> {
     const findResponse = await this.request<TmdbFindResponse>(`/find/${encodeURIComponent(imdbId)}`, {
       external_source: "imdb_id"
