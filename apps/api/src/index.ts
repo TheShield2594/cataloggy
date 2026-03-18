@@ -2,9 +2,35 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 import { ItemType, ListItemType, ListKind, MetadataType, Prisma, PrismaClient, WatchEventType } from "@prisma/client";
 import { TraktClient, computeTokenExpiresAt } from "./trakt.js";
-import { MetadataPayload, TmdbClient } from "./tmdb.js";
+import { MetadataPayload, STREAMING_PROVIDERS, TmdbClient } from "./tmdb.js";
 
 const prisma = new PrismaClient();
+
+// ─── Language / preferences helpers ───
+
+const LANGUAGE_KV_KEY = "settings:language";
+const REGION_KV_KEY = "settings:region";
+const SPOILER_PROTECTION_KV_KEY = "settings:spoilerProtection";
+
+const getLanguageSetting = async (): Promise<string> => {
+  const row = await prisma.kV.findUnique({ where: { key: LANGUAGE_KV_KEY } });
+  return row?.value ?? "en-US";
+};
+
+const getRegionSetting = async (): Promise<string> => {
+  const row = await prisma.kV.findUnique({ where: { key: REGION_KV_KEY } });
+  return row?.value ?? "US";
+};
+
+const getSpoilerProtection = async (): Promise<boolean> => {
+  const row = await prisma.kV.findUnique({ where: { key: SPOILER_PROTECTION_KV_KEY } });
+  return row?.value === "true";
+};
+
+const getTmdb = async () => {
+  const lang = await getLanguageSetting();
+  return TmdbClient.fromEnv(lang);
+};
 
 const htmlEscapeMap: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 function escapeHtml(str: string): string {
@@ -186,7 +212,7 @@ app.addHook("onRequest", async (request, reply) => {
 app.addHook("onRequest", async (request, reply) => {
   const url = request.url;
 
-  if (url === "/health" || url.startsWith("/addon/stremio") || url === "/addon" || url.startsWith("/trakt/oauth/callback")) {
+  if (url === "/health" || url.startsWith("/addon/stremio") || url === "/addon" || url.startsWith("/trakt/oauth/callback") || url.startsWith("/webhooks/")) {
     return;
   }
 
@@ -243,7 +269,7 @@ const upsertMetadata = async (metadata: MetadataPayload) => {
 };
 
 const fetchMetadata = async (type: MetadataType, imdbId: string): Promise<MetadataPayload | null> => {
-  const tmdb = TmdbClient.fromEnv();
+  const tmdb = await getTmdb();
   const metadata = await tmdb.findByImdbId(type, imdbId);
 
   if (!metadata) {
@@ -265,7 +291,7 @@ const syncMetadata = async (imdbId: string, type: MetadataType) => {
     return existing;
   }
 
-  const tmdb = TmdbClient.fromEnv();
+  const tmdb = await getTmdb();
   const payload = await tmdb.findByImdbId(type, imdbId);
 
   if (!payload) {
@@ -731,7 +757,7 @@ app.get<{ Querystring: { type?: string; query?: string; q?: string } }>("/search
 
   let tmdb: TmdbClient;
   try {
-    tmdb = TmdbClient.fromEnv();
+    tmdb = await getTmdb();
   } catch (error) {
     request.log.error(error, "TMDB client initialization failed");
     return reply.code(500).send({ error: "TMDB integration is not configured" });
@@ -845,6 +871,845 @@ app.post<{ Body: unknown }>("/metadata/sync", async (request, reply) => {
     request.log.error(error, "Metadata sync failed");
     return reply.code(500).send({ error: "Metadata sync failed" });
   }
+});
+
+// ─── Trending / Popular (TMDB) ───
+
+type TrendingCacheEntry = { data: StremioMetaPreview[]; expiry: number };
+const trendingCache = new Map<string, TrendingCacheEntry>();
+const TRENDING_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const MAX_TRENDING_CACHE_SIZE = 100;
+
+// TTL-aware cache helpers
+const trendingCacheGet = (key: string): TrendingCacheEntry | undefined => {
+  const entry = trendingCache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() >= entry.expiry) {
+    trendingCache.delete(key);
+    return undefined;
+  }
+  return entry;
+};
+
+const trendingCacheSet = (key: string, entry: TrendingCacheEntry) => {
+  // Evict oldest entries if at capacity
+  if (trendingCache.size >= MAX_TRENDING_CACHE_SIZE && !trendingCache.has(key)) {
+    const oldest = trendingCache.keys().next().value;
+    if (oldest !== undefined) trendingCache.delete(oldest);
+  }
+  trendingCache.set(key, entry);
+};
+
+app.get<{ Querystring: { type?: string; window?: string } }>("/trending", async (request, reply) => {
+  const rawType = request.query.type ?? "movie";
+  const type = getMetadataType(rawType);
+  if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
+
+  const timeWindow = request.query.window === "day" ? "day" as const : "week" as const;
+  const cacheKey = `trending:${rawType}:${timeWindow}`;
+  const now = Date.now();
+  const cached = trendingCacheGet(cacheKey);
+  if (cached && now < cached.expiry) return { metas: cached.data };
+
+  try {
+    const tmdb = await getTmdb();
+    const results = await tmdb.trending(type, timeWindow);
+    // Cache metadata for each item
+    await Promise.all(results.map((r) => upsertMetadata(r)));
+    const metas: StremioMetaPreview[] = results.map((r) => ({
+      id: r.imdbId,
+      type: rawType as StremioMetaType,
+      name: r.name,
+      poster: r.poster ?? undefined,
+      year: r.year ?? undefined,
+      description: r.description ?? undefined,
+      genres: r.genres,
+      rating: r.rating ?? undefined,
+    }));
+    trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    return { metas };
+  } catch (error) {
+    request.log.error(error, "Trending fetch failed");
+    return reply.code(500).send({ error: "Failed to fetch trending content" });
+  }
+});
+
+app.get<{ Querystring: { type?: string } }>("/popular", async (request, reply) => {
+  const rawType = request.query.type ?? "movie";
+  const type = getMetadataType(rawType);
+  if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
+
+  const cacheKey = `popular:${rawType}`;
+  const now = Date.now();
+  const cached = trendingCacheGet(cacheKey);
+  if (cached && now < cached.expiry) return { metas: cached.data };
+
+  try {
+    const tmdb = await getTmdb();
+    const results = await tmdb.popular(type);
+    await Promise.all(results.map((r) => upsertMetadata(r)));
+    const metas: StremioMetaPreview[] = results.map((r) => ({
+      id: r.imdbId,
+      type: rawType as StremioMetaType,
+      name: r.name,
+      poster: r.poster ?? undefined,
+      year: r.year ?? undefined,
+      description: r.description ?? undefined,
+      genres: r.genres,
+      rating: r.rating ?? undefined,
+    }));
+    trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    return { metas };
+  } catch (error) {
+    request.log.error(error, "Popular fetch failed");
+    return reply.code(500).send({ error: "Failed to fetch popular content" });
+  }
+});
+
+// ─── User Ratings ───
+
+app.post<{ Body: unknown }>("/ratings", async (request, reply) => {
+  const body = request.body as { imdbId?: unknown; type?: unknown; rating?: unknown } | null;
+  if (!body) return reply.code(400).send({ error: "Body is required" });
+
+  const imdbId = typeof body.imdbId === "string" ? body.imdbId.trim() : "";
+  if (!imdbId) return reply.code(400).send({ error: "imdbId is required" });
+
+  const rawType = typeof body.type === "string" ? body.type : "";
+  if (rawType !== "movie" && rawType !== "series") {
+    return reply.code(400).send({ error: "type must be one of: movie, series" });
+  }
+
+  const rating = typeof body.rating === "number" && Number.isFinite(body.rating) ? body.rating : null;
+  if (rating === null || rating < 1 || rating > 10) {
+    return reply.code(400).send({ error: "rating must be a number between 1 and 10" });
+  }
+
+  const roundedRating = Math.round(rating * 10) / 10;
+
+  const row = await prisma.kV.upsert({
+    where: { key: `rating:${rawType}:${imdbId}` },
+    create: {
+      key: `rating:${rawType}:${imdbId}`,
+      value: JSON.stringify({ imdbId, type: rawType, rating: roundedRating, ratedAt: new Date().toISOString() }),
+      updatedAt: new Date(),
+    },
+    update: {
+      value: JSON.stringify({ imdbId, type: rawType, rating: roundedRating, ratedAt: new Date().toISOString() }),
+      updatedAt: new Date(),
+    },
+  });
+
+  const parsed = JSON.parse(row.value);
+  return reply.code(200).send({ rating: parsed });
+});
+
+app.delete<{ Params: { type: string; imdbId: string } }>("/ratings/:type/:imdbId", async (request, reply) => {
+  const { type, imdbId } = request.params;
+  if (type !== "movie" && type !== "series") {
+    return reply.code(400).send({ error: "type must be one of: movie, series" });
+  }
+
+  try {
+    await prisma.kV.delete({ where: { key: `rating:${type}:${imdbId}` } });
+  } catch {
+    // not found is fine
+  }
+  return reply.code(204).send();
+});
+
+app.get<{ Params: { type: string; imdbId: string } }>("/ratings/:type/:imdbId", async (request, reply) => {
+  const { type, imdbId } = request.params;
+  if (type !== "movie" && type !== "series") {
+    return reply.code(400).send({ error: "type must be one of: movie, series" });
+  }
+
+  const row = await prisma.kV.findUnique({ where: { key: `rating:${type}:${imdbId}` } });
+  if (!row) return reply.code(404).send({ error: "No rating found" });
+
+  return { rating: JSON.parse(row.value) };
+});
+
+app.get<{ Querystring: { type?: string; limit?: string } }>("/ratings", async (request) => {
+  const typeFilter = request.query.type;
+  const limit = Math.min(Math.max(Number(request.query.limit) || 50, 1), 200);
+
+  const prefix = typeFilter ? `rating:${typeFilter}:` : "rating:";
+  const rows = await prisma.kV.findMany({
+    where: { key: { startsWith: prefix } },
+    orderBy: { updatedAt: "desc" },
+    take: limit,
+  });
+
+  const ratings = rows.map((r) => JSON.parse(r.value));
+  return { ratings };
+});
+
+// ─── Recommendations (TMDB) ───
+
+app.get<{ Querystring: { imdbId?: string; type?: string } }>("/recommendations", async (request, reply) => {
+  const imdbId = request.query.imdbId?.trim();
+  const rawType = request.query.type ?? "movie";
+  const type = getMetadataType(rawType);
+  if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
+  if (!imdbId) return reply.code(400).send({ error: "imdbId is required" });
+
+  const cacheKey = `recs:${rawType}:${imdbId}`;
+  const now = Date.now();
+  const cached = trendingCacheGet(cacheKey);
+  if (cached && now < cached.expiry) return { metas: cached.data };
+
+  // Look up tmdbId from metadata
+  const meta = await prisma.metadata.findUnique({
+    where: { imdbId_type: { imdbId, type } },
+    select: { tmdbId: true },
+  });
+
+  if (!meta?.tmdbId) {
+    // Try to fetch metadata first
+    try {
+      const fetched = await fetchMetadata(type, imdbId);
+      if (!fetched?.tmdbId) return { metas: [] };
+      return await getRecommendations(rawType, type, fetched.tmdbId, cacheKey, now);
+    } catch {
+      return { metas: [] };
+    }
+  }
+
+  return await getRecommendations(rawType, type, meta.tmdbId, cacheKey, now);
+});
+
+async function getRecommendations(rawType: string, type: MetadataType, tmdbId: number, cacheKey: string, now: number) {
+  try {
+    const tmdb = await getTmdb();
+    const results = await tmdb.recommendations(type, tmdbId);
+    await Promise.all(results.map((r) => upsertMetadata(r)));
+    const metas: StremioMetaPreview[] = results.map((r) => ({
+      id: r.imdbId,
+      type: rawType as StremioMetaType,
+      name: r.name,
+      poster: r.poster ?? undefined,
+      year: r.year ?? undefined,
+      description: r.description ?? undefined,
+      genres: r.genres,
+      rating: r.rating ?? undefined,
+    }));
+    trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    return { metas };
+  } catch {
+    return { metas: [] };
+  }
+}
+
+// Personalized recommendations based on recently watched
+app.get<{ Querystring: { type?: string; limit?: string } }>("/recommendations/personal", async (request) => {
+  const rawType = request.query.type ?? "movie";
+  const type = getMetadataType(rawType);
+  if (!type) return { metas: [] };
+  const limit = Math.min(Math.max(Number(request.query.limit) || 20, 1), 40);
+
+  // Get recently watched items of this type
+  const recentItems = rawType === "movie"
+    ? await prisma.watchEvent.findMany({
+        where: { type: "movie" },
+        orderBy: { watchedAt: "desc" },
+        take: 5,
+        distinct: ["imdbId"],
+        select: { imdbId: true },
+      })
+    : await prisma.seriesProgress.findMany({
+        orderBy: { lastWatchedAt: "desc" },
+        take: 5,
+        select: { seriesImdbId: true },
+      });
+
+  const seedImdbIds = rawType === "movie"
+    ? recentItems.map((r) => (r as { imdbId: string }).imdbId)
+    : recentItems.map((r) => (r as { seriesImdbId: string }).seriesImdbId);
+
+  if (seedImdbIds.length === 0) return { metas: [] };
+
+  // Look up tmdbIds for seeds
+  const metas = await prisma.metadata.findMany({
+    where: { imdbId: { in: seedImdbIds }, type },
+    select: { tmdbId: true, imdbId: true },
+  });
+
+  const tmdbIds = metas.filter((m) => m.tmdbId !== null).map((m) => m.tmdbId as number);
+  if (tmdbIds.length === 0) return { metas: [] };
+
+  // Fetch recommendations from each seed, deduplicate, with per-seed cache
+  let tmdb: TmdbClient;
+  try {
+    tmdb = await getTmdb();
+  } catch {
+    return { metas: [] };
+  }
+  const seen = new Set<string>(seedImdbIds); // exclude items user already watched
+  const allRecs: StremioMetaPreview[] = [];
+
+  for (const tmdbId of tmdbIds.slice(0, 3)) {
+    if (allRecs.length >= limit) break;
+    try {
+      // Check per-seed cache first
+      const seedCacheKey = `recs:seed:${rawType}:${tmdbId}`;
+      const cachedSeed = trendingCacheGet(seedCacheKey);
+      let recs: MetadataPayload[];
+      if (cachedSeed && Date.now() < cachedSeed.expiry) {
+        // Reconstruct payloads from cached metas
+        recs = (cachedSeed.data as StremioMetaPreview[]).map((m) => ({
+          imdbId: m.id,
+          type,
+          tmdbId: null,
+          name: m.name,
+          year: m.year ?? null,
+          poster: m.poster ?? null,
+          background: null,
+          description: m.description ?? null,
+          genres: m.genres ?? [],
+          rating: m.rating ?? null,
+          voteCount: null,
+          totalSeasons: null,
+          totalEpisodes: null,
+        }));
+      } else {
+        recs = await tmdb.recommendations(type, tmdbId);
+        // Cache the raw results for this seed
+        const seedMetas: StremioMetaPreview[] = recs.map((r) => ({
+          id: r.imdbId,
+          type: rawType as StremioMetaType,
+          name: r.name,
+          poster: r.poster ?? undefined,
+          year: r.year ?? undefined,
+          description: r.description ?? undefined,
+          genres: r.genres,
+          rating: r.rating ?? undefined,
+        }));
+        trendingCacheSet(seedCacheKey, { data: seedMetas, expiry: Date.now() + TRENDING_CACHE_TTL_MS });
+      }
+      for (const r of recs) {
+        if (allRecs.length >= limit) break;
+        if (seen.has(r.imdbId)) continue;
+        seen.add(r.imdbId);
+        allRecs.push({
+          id: r.imdbId,
+          type: rawType as StremioMetaType,
+          name: r.name,
+          poster: r.poster ?? undefined,
+          year: r.year ?? undefined,
+          description: r.description ?? undefined,
+          genres: r.genres,
+          rating: r.rating ?? undefined,
+        });
+        if (r.tmdbId !== null) void upsertMetadata(r);
+      }
+    } catch {
+      // skip failed seeds
+    }
+  }
+
+  return { metas: allRecs.slice(0, limit) };
+});
+
+// ─── Plex / Jellyfin Webhooks ───
+
+// ─── Shared watch event recording helper ───
+
+type RecordWatchParams = {
+  type: "episode" | "movie";
+  imdbId: string;
+  seriesImdbId?: string;
+  season?: number | null;
+  episode?: number | null;
+  watchedAt: Date;
+  source: string;
+  request: FastifyRequest;
+};
+
+const recordWatchEvent = async (params: RecordWatchParams) => {
+  const { type, imdbId, seriesImdbId, season, episode, watchedAt, source, request: req } = params;
+
+  // Same-day dedupe: if an event for the same key exists on the same UTC day, increment plays
+  const dayStart = new Date(watchedAt);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayEnd = new Date(watchedAt);
+  dayEnd.setUTCHours(23, 59, 59, 999);
+
+  if (type === "episode") {
+    const resolvedSeriesImdbId = seriesImdbId ?? imdbId;
+
+    const watchEvent = await prisma.$transaction(async (tx) => {
+      const existing = await tx.watchEvent.findFirst({
+        where: { seriesImdbId: resolvedSeriesImdbId, season: season ?? null, episode: episode ?? null, watchedAt: { gte: dayStart, lte: dayEnd } },
+      });
+
+      if (existing) {
+        const updated = await tx.watchEvent.update({
+          where: { id: existing.id },
+          data: { plays: existing.plays + 1, watchedAt },
+        });
+        req.log.info({ imdbId: resolvedSeriesImdbId, season, episode, plays: updated.plays }, `${source} scrobble: episode play incremented`);
+        return updated;
+      }
+
+      const created = await tx.watchEvent.create({
+        data: { type: "episode", imdbId: resolvedSeriesImdbId, seriesImdbId: resolvedSeriesImdbId, season: season ?? null, episode: episode ?? null, watchedAt },
+      });
+      req.log.info({ imdbId: resolvedSeriesImdbId, season, episode }, `${source} scrobble: episode recorded`);
+      return created;
+    });
+
+    if (season != null && episode != null) {
+      await upsertSeriesProgressIfNewer(resolvedSeriesImdbId, { lastSeason: season, lastEpisode: episode, lastWatchedAt: watchedAt });
+    }
+    return { status: "recorded" as const, watchEvent };
+  }
+
+  // Movie
+  const watchEvent = await prisma.$transaction(async (tx) => {
+    const existing = await tx.watchEvent.findFirst({
+      where: { imdbId, type: "movie", watchedAt: { gte: dayStart, lte: dayEnd } },
+    });
+
+    if (existing) {
+      const updated = await tx.watchEvent.update({
+        where: { id: existing.id },
+        data: { plays: existing.plays + 1, watchedAt },
+      });
+      req.log.info({ imdbId, plays: updated.plays }, `${source} scrobble: movie play incremented`);
+      return updated;
+    }
+
+    const created = await tx.watchEvent.create({
+      data: { type: "movie", imdbId, watchedAt },
+    });
+    req.log.info({ imdbId }, `${source} scrobble: movie recorded`);
+    return created;
+  });
+
+  return { status: "recorded" as const, watchEvent };
+};
+
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET?.trim();
+
+const verifyWebhookSecret = (request: FastifyRequest): boolean => {
+  if (!WEBHOOK_SECRET) return true; // no secret configured = accept all
+  const provided = (request.query as Record<string, string>).token
+    ?? request.headers["x-webhook-secret"] as string | undefined;
+  return provided === WEBHOOK_SECRET;
+};
+
+// Register content type parser for multipart (Plex sends multipart/form-data)
+app.addContentTypeParser("multipart/form-data", { parseAs: "string" }, (_request, body, done) => {
+  done(null, body);
+});
+
+/**
+ * Extract the "payload" field value from a multipart/form-data body string.
+ * Returns the JSON string or null if not found.
+ */
+function extractMultipartPayload(rawBody: string, contentType: string): string | null {
+  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^\s;]+))/);
+  const boundary = boundaryMatch?.[1] ?? boundaryMatch?.[2];
+  if (!boundary) return null;
+
+  const parts = rawBody.split(`--${boundary}`);
+  for (const part of parts) {
+    // Match the Content-Disposition header for the "payload" field
+    if (!/name="payload"/i.test(part)) continue;
+
+    // The body starts after the first blank line (header/body separator)
+    const headerEnd = part.indexOf("\r\n\r\n");
+    const altHeaderEnd = part.indexOf("\n\n");
+    const bodyStart = headerEnd !== -1 ? headerEnd + 4 : altHeaderEnd !== -1 ? altHeaderEnd + 2 : -1;
+    if (bodyStart === -1) continue;
+
+    const body = part.slice(bodyStart).trim();
+    // Validate it looks like JSON before returning
+    if (body.startsWith("{") && body.endsWith("}")) {
+      return body;
+    }
+  }
+  return null;
+}
+
+app.post("/webhooks/plex", async (request, reply) => {
+  if (!verifyWebhookSecret(request)) {
+    return reply.code(403).send({ error: "Invalid webhook secret" });
+  }
+
+  let payloadStr: string | null = null;
+
+  // Plex sends multipart/form-data with a "payload" field
+  const rawBody = request.body;
+  if (typeof rawBody === "string") {
+    payloadStr = extractMultipartPayload(rawBody, request.headers["content-type"] ?? "");
+  } else if (rawBody && typeof rawBody === "object") {
+    // Fallback: might arrive as parsed JSON
+    payloadStr = JSON.stringify(rawBody);
+  }
+
+  if (!payloadStr) {
+    return reply.code(400).send({ error: "No payload found. Expected multipart/form-data with a 'payload' field." });
+  }
+
+  let payload: {
+    event?: string;
+    Metadata?: {
+      type?: string;
+      title?: string;
+      grandparentTitle?: string;
+      parentIndex?: number;
+      index?: number;
+      Guid?: Array<{ id?: string }>;
+      guid?: string;
+    };
+  };
+
+  try {
+    payload = JSON.parse(payloadStr);
+  } catch {
+    return reply.code(400).send({ error: "Invalid JSON payload" });
+  }
+
+  // Only process "media.scrobble" events (playback completed)
+  const event = payload.event;
+  if (event !== "media.scrobble") {
+    request.log.info({ event }, "Plex webhook ignored (not a scrobble event)");
+    return reply.code(200).send({ status: "ignored", event });
+  }
+
+  const metadata = payload.Metadata;
+  if (!metadata) {
+    return reply.code(400).send({ error: "No Metadata in payload" });
+  }
+
+  // Extract IMDb ID from Guid array
+  let imdbId: string | null = null;
+  for (const guid of metadata.Guid ?? []) {
+    const match = guid.id?.match(/imdb:\/\/(tt\d+)/);
+    if (match) { imdbId = match[1]; break; }
+  }
+  // Fallback: check top-level guid
+  if (!imdbId && metadata.guid) {
+    const match = metadata.guid.match(/imdb:\/\/(tt\d+)/);
+    if (match) imdbId = match[1];
+  }
+
+  if (!imdbId) {
+    request.log.warn({ metadata }, "Plex webhook: no IMDb ID found");
+    return reply.code(200).send({ status: "skipped", reason: "no_imdb_id" });
+  }
+
+  const now = new Date();
+
+  if (metadata.type === "episode") {
+    const season = metadata.parentIndex ?? null;
+    const episode = metadata.index ?? null;
+    const result = await recordWatchEvent({ type: "episode", imdbId, seriesImdbId: imdbId, season, episode, watchedAt: now, source: "Plex", request });
+    return reply.code(201).send(result);
+  }
+
+  const result = await recordWatchEvent({ type: "movie", imdbId, watchedAt: now, source: "Plex", request });
+  return reply.code(201).send(result);
+});
+
+app.post("/webhooks/jellyfin", async (request, reply) => {
+  if (!verifyWebhookSecret(request)) {
+    return reply.code(403).send({ error: "Invalid webhook secret" });
+  }
+
+  const body = request.body as {
+    NotificationType?: string;
+    ItemType?: string;
+    Name?: string;
+    SeriesName?: string;
+    Season?: number;
+    Episode?: number;
+    Provider_imdb?: string;
+    SeriesId?: string;
+  } | null;
+
+  if (!body) {
+    return reply.code(400).send({ error: "Empty body" });
+  }
+
+  // Only process PlaybackStop events (finished watching)
+  if (body.NotificationType !== "PlaybackStop") {
+    request.log.info({ type: body.NotificationType }, "Jellyfin webhook ignored");
+    return reply.code(200).send({ status: "ignored", type: body.NotificationType });
+  }
+
+  const imdbId = body.Provider_imdb?.trim();
+  if (!imdbId) {
+    request.log.warn({ body }, "Jellyfin webhook: no IMDb ID");
+    return reply.code(200).send({ status: "skipped", reason: "no_imdb_id" });
+  }
+
+  const now = new Date();
+
+  if (body.ItemType === "Episode") {
+    const season = typeof body.Season === "number" ? body.Season : null;
+    const episode = typeof body.Episode === "number" ? body.Episode : null;
+    const result = await recordWatchEvent({ type: "episode", imdbId, seriesImdbId: imdbId, season, episode, watchedAt: now, source: "Jellyfin", request });
+    return reply.code(201).send(result);
+  }
+
+  const result = await recordWatchEvent({ type: "movie", imdbId, watchedAt: now, source: "Jellyfin", request });
+  return reply.code(201).send(result);
+});
+
+// ─── Calendar / Upcoming Episodes ───
+
+type CalendarEntry = {
+  seriesImdbId: string;
+  seriesName: string;
+  poster: string | null;
+  season: number;
+  episode: number;
+  episodeName: string;
+  airDate: string;
+  overview: string | null;
+};
+
+app.get<{ Querystring: { days?: string } }>("/calendar", async (request) => {
+  const daysAhead = Math.min(Math.max(Number(request.query.days) || 30, 1), 90);
+
+  // Get all series the user is watching
+  const progressRows = await prisma.seriesProgress.findMany({
+    orderBy: { lastWatchedAt: "desc" },
+    take: 30, // limit to avoid too many TMDB calls
+  });
+
+  if (progressRows.length === 0) return { calendar: [] };
+
+  const seriesImdbIds = progressRows.map((p) => p.seriesImdbId);
+  const metadata = await prisma.metadata.findMany({
+    where: { imdbId: { in: seriesImdbIds }, type: "series" },
+    select: { imdbId: true, tmdbId: true, name: true, poster: true },
+  });
+
+  const metaByImdbId = new Map(metadata.map((m) => [m.imdbId, m]));
+
+  let tmdb: TmdbClient;
+  try {
+    tmdb = await getTmdb();
+  } catch {
+    return { calendar: [] };
+  }
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const futureDate = new Date(today);
+  futureDate.setDate(futureDate.getDate() + daysAhead);
+
+  const calendar: CalendarEntry[] = [];
+
+  // Fetch upcoming episodes for each series (in parallel, batched)
+  const batchSize = 5;
+  for (let i = 0; i < seriesImdbIds.length; i += batchSize) {
+    const batch = seriesImdbIds.slice(i, i + batchSize);
+    const results = await Promise.allSettled(
+      batch.map(async (imdbId) => {
+        const meta = metaByImdbId.get(imdbId);
+        if (!meta?.tmdbId) return [];
+
+        const details = await tmdb.getShowDetails(meta.tmdbId);
+        if (!details) return [];
+
+        const entries: CalendarEntry[] = [];
+
+        if (details.nextEpisodeToAir) {
+          const ep = details.nextEpisodeToAir;
+          const airDate = new Date(ep.air_date);
+          if (airDate >= today && airDate <= futureDate) {
+            entries.push({
+              seriesImdbId: imdbId,
+              seriesName: meta.name,
+              poster: meta.poster,
+              season: ep.season_number,
+              episode: ep.episode_number,
+              episodeName: ep.name,
+              airDate: ep.air_date,
+              overview: ep.overview ?? null,
+            });
+          }
+        }
+
+        return entries;
+      })
+    );
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        calendar.push(...result.value);
+      }
+    }
+  }
+
+  // Sort by air date
+  calendar.sort((a, b) => a.airDate.localeCompare(b.airDate));
+
+  return { calendar };
+});
+
+// ─── Streaming Service Catalogs ───
+
+app.get<{ Querystring: { type?: string; provider?: string; region?: string } }>("/streaming", async (request, reply) => {
+  const rawType = request.query.type ?? "movie";
+  const type = getMetadataType(rawType);
+  if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
+
+  const providerKey = request.query.provider?.toLowerCase();
+  if (!providerKey || !STREAMING_PROVIDERS[providerKey]) {
+    return reply.code(400).send({
+      error: "provider is required",
+      available: Object.entries(STREAMING_PROVIDERS).map(([key, val]) => ({ key, ...val })),
+    });
+  }
+
+  const region = request.query.region ?? await getRegionSetting();
+  const provider = STREAMING_PROVIDERS[providerKey];
+  const cacheKey = `streaming:${providerKey}:${rawType}:${region}`;
+  const now = Date.now();
+  const cached = trendingCacheGet(cacheKey);
+  if (cached && now < cached.expiry) return { metas: cached.data, provider: provider.name };
+
+  try {
+    const tmdb = await getTmdb();
+    const results = await tmdb.discoverByProvider(type, provider.id, region);
+    await Promise.all(results.map((r) => upsertMetadata(r)));
+    const metas: StremioMetaPreview[] = results.map((r) => ({
+      id: r.imdbId,
+      type: rawType as StremioMetaType,
+      name: r.name,
+      poster: r.poster ?? undefined,
+      year: r.year ?? undefined,
+      description: r.description ?? undefined,
+      genres: r.genres,
+      rating: r.rating ?? undefined,
+    }));
+    trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    return { metas, provider: provider.name };
+  } catch (error) {
+    request.log.error(error, "Streaming catalog fetch failed");
+    return reply.code(500).send({ error: "Failed to fetch streaming catalog" });
+  }
+});
+
+app.get("/streaming/providers", async () => {
+  return {
+    providers: Object.entries(STREAMING_PROVIDERS).map(([key, val]) => ({ key, ...val })),
+  };
+});
+
+// ─── Anime Catalog ───
+
+app.get<{ Querystring: { type?: string } }>("/anime", async (request, reply) => {
+  const rawType = request.query.type ?? "series";
+  const type = getMetadataType(rawType);
+  if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
+
+  const cacheKey = `anime:${rawType}`;
+  const now = Date.now();
+  const cached = trendingCacheGet(cacheKey);
+  if (cached && now < cached.expiry) return { metas: cached.data };
+
+  try {
+    const tmdb = await getTmdb();
+    const results = await tmdb.discoverAnime(type);
+    await Promise.all(results.map((r) => upsertMetadata(r)));
+    const metas: StremioMetaPreview[] = results.map((r) => ({
+      id: r.imdbId,
+      type: rawType as StremioMetaType,
+      name: r.name,
+      poster: r.poster ?? undefined,
+      year: r.year ?? undefined,
+      description: r.description ?? undefined,
+      genres: r.genres,
+      rating: r.rating ?? undefined,
+    }));
+    trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    return { metas };
+  } catch (error) {
+    request.log.error(error, "Anime catalog fetch failed");
+    return reply.code(500).send({ error: "Failed to fetch anime catalog" });
+  }
+});
+
+// ─── Settings (Language, Region, Spoiler Protection) ───
+
+app.get("/settings/preferences", async () => {
+  const [language, region, spoilerProtection] = await Promise.all([
+    getLanguageSetting(),
+    getRegionSetting(),
+    getSpoilerProtection(),
+  ]);
+  return {
+    language,
+    region,
+    spoilerProtection,
+    availableProviders: Object.entries(STREAMING_PROVIDERS).map(([key, val]) => ({ key, ...val })),
+  };
+});
+
+app.post<{ Body: unknown }>("/settings/preferences", async (request, reply) => {
+  const body = request.body as { language?: unknown; region?: unknown; spoilerProtection?: unknown } | null;
+  if (!body) return reply.code(400).send({ error: "Body is required" });
+
+  // Validate patterns: language = "xx" or "xx-YY", region = two uppercase letters
+  const LANGUAGE_PATTERN = /^[a-z]{2}(-[A-Z]{2})?$/;
+  const REGION_PATTERN = /^[A-Z]{2}$/;
+
+  const now = new Date();
+
+  if (typeof body.language === "string" && body.language.trim()) {
+    const raw = body.language.trim();
+    // Normalize casing: language subtag lowercase, region subtag uppercase (e.g., "en-US")
+    const parts = raw.split("-");
+    const normalizedLang = parts.length === 2
+      ? `${parts[0].toLowerCase()}-${parts[1].toUpperCase()}`
+      : parts[0].toLowerCase();
+    if (!LANGUAGE_PATTERN.test(normalizedLang)) {
+      return reply.code(400).send({ error: "language must be a valid language code (e.g., 'en-US', 'fr')" });
+    }
+    await prisma.kV.upsert({
+      where: { key: LANGUAGE_KV_KEY },
+      create: { key: LANGUAGE_KV_KEY, value: normalizedLang, updatedAt: now },
+      update: { value: normalizedLang, updatedAt: now },
+    });
+  }
+
+  if (typeof body.region === "string" && body.region.trim()) {
+    const reg = body.region.trim().toUpperCase();
+    if (!REGION_PATTERN.test(reg)) {
+      return reply.code(400).send({ error: "region must be a valid two-letter country code (e.g., 'US', 'GB')" });
+    }
+    await prisma.kV.upsert({
+      where: { key: REGION_KV_KEY },
+      create: { key: REGION_KV_KEY, value: reg, updatedAt: now },
+      update: { value: reg, updatedAt: now },
+    });
+  }
+
+  if (typeof body.spoilerProtection === "boolean") {
+    await prisma.kV.upsert({
+      where: { key: SPOILER_PROTECTION_KV_KEY },
+      create: { key: SPOILER_PROTECTION_KV_KEY, value: String(body.spoilerProtection), updatedAt: now },
+      update: { value: String(body.spoilerProtection), updatedAt: now },
+    });
+  }
+
+  // Clear metadata cache to pick up language changes
+  trendingCache.clear();
+
+  return await (async () => {
+    const [language, region, spoilerProtection] = await Promise.all([
+      getLanguageSetting(),
+      getRegionSetting(),
+      getSpoilerProtection(),
+    ]);
+    return { language, region, spoilerProtection };
+  })();
 });
 
 app.get("/health", async () => ({ status: "ok", service: "api" }));
@@ -1570,10 +2435,17 @@ app.get<{ Params: { imdbId: string } }>("/series/progress/:imdbId", async (reque
     return reply.code(404).send({ error: "No progress found for this series" });
   }
 
-  const meta = await prisma.metadata.findUnique({
-    where: { imdbId_type: { imdbId, type: "series" } },
-    select: { name: true, poster: true, totalSeasons: true, totalEpisodes: true }
-  });
+  const [meta, uniqueEpisodes] = await Promise.all([
+    prisma.metadata.findUnique({
+      where: { imdbId_type: { imdbId, type: "series" } },
+      select: { name: true, poster: true, totalSeasons: true, totalEpisodes: true }
+    }),
+    prisma.watchEvent.groupBy({
+      by: ["season", "episode"],
+      where: { seriesImdbId: imdbId, type: "episode" }
+    }),
+  ]);
+  const watchedCount = uniqueEpisodes.length;
 
   return {
     progress: {
@@ -1586,6 +2458,7 @@ app.get<{ Params: { imdbId: string } }>("/series/progress/:imdbId", async (reque
       poster: meta?.poster ?? null,
       totalSeasons: meta?.totalSeasons ?? null,
       totalEpisodes: meta?.totalEpisodes ?? null,
+      watchedEpisodes: watchedCount,
     }
   };
 });
@@ -1598,16 +2471,52 @@ type AddonConfig = {
   enabledCatalogs: string[];
 };
 
-const DEFAULT_ADDON_CATALOGS = [
-  "my_watchlist_movies", "my_watchlist_series",
-  "my_recent_movies", "my_continue_series"
+// All available catalog IDs that the addon manifest can include
+const ALL_ADDON_CATALOGS = [
+  // Discovery catalogs
+  "cataloggy-trending-movie", "cataloggy-trending-series",
+  "cataloggy-popular-movie", "cataloggy-popular-series",
+  "cataloggy-recommended-movie", "cataloggy-recommended-series",
+  // Anime
+  "cataloggy-anime-series", "cataloggy-anime-movie",
+  // Streaming service catalogs
+  "cataloggy-netflix-movie", "cataloggy-netflix-series",
+  "cataloggy-disney-movie", "cataloggy-disney-series",
+  "cataloggy-amazon-movie", "cataloggy-amazon-series",
+  "cataloggy-apple-movie", "cataloggy-apple-series",
+  "cataloggy-max-movie", "cataloggy-max-series",
 ];
+
+// Default enabled catalogs for new installs
+const DEFAULT_ADDON_CATALOGS = [
+  "cataloggy-trending-movie", "cataloggy-trending-series",
+  "cataloggy-popular-movie", "cataloggy-popular-series",
+  "cataloggy-recommended-movie", "cataloggy-recommended-series",
+];
+
+// Map legacy my_* IDs to new cataloggy-* IDs (for saved configs from before migration)
+const LEGACY_CATALOG_MAP: Record<string, string> = {
+  my_watchlist_movies: "cataloggy-trending-movie",
+  my_watchlist_series: "cataloggy-trending-series",
+  my_recent_movies: "cataloggy-popular-movie",
+  my_continue_series: "cataloggy-popular-series",
+};
+
+const migrateLegacyCatalogs = (catalogs: string[]): string[] =>
+  catalogs.map((c) => LEGACY_CATALOG_MAP[c] ?? c);
 
 const getAddonConfig = async (): Promise<AddonConfig> => {
   const row = await prisma.kV.findUnique({ where: { key: ADDON_CONFIG_KEY } });
   if (!row) return { enabledCatalogs: DEFAULT_ADDON_CATALOGS };
   try {
-    return JSON.parse(row.value) as AddonConfig;
+    const parsed = JSON.parse(row.value) as AddonConfig;
+    if (!Array.isArray(parsed.enabledCatalogs)) return { enabledCatalogs: DEFAULT_ADDON_CATALOGS };
+    // Preserve explicit empty selection
+    if (parsed.enabledCatalogs.length === 0) return { enabledCatalogs: [] };
+    // Migrate legacy IDs on read
+    const migrated = migrateLegacyCatalogs(parsed.enabledCatalogs);
+    const valid = migrated.filter((c) => ALL_ADDON_CATALOGS.includes(c));
+    return { enabledCatalogs: valid.length > 0 ? valid : DEFAULT_ADDON_CATALOGS };
   } catch {
     return { enabledCatalogs: DEFAULT_ADDON_CATALOGS };
   }
@@ -1615,7 +2524,7 @@ const getAddonConfig = async (): Promise<AddonConfig> => {
 
 app.get("/addon/config", async () => {
   const config = await getAddonConfig();
-  return { config, availableCatalogs: DEFAULT_ADDON_CATALOGS };
+  return { config, availableCatalogs: ALL_ADDON_CATALOGS };
 });
 
 app.post<{ Body: unknown }>("/addon/config", async (request, reply) => {
@@ -1624,7 +2533,7 @@ app.post<{ Body: unknown }>("/addon/config", async (request, reply) => {
     return reply.code(400).send({ error: "enabledCatalogs must be an array of strings" });
   }
   const enabled = (body.enabledCatalogs as unknown[]).filter(
-    (c): c is string => typeof c === "string" && DEFAULT_ADDON_CATALOGS.includes(c)
+    (c): c is string => typeof c === "string" && ALL_ADDON_CATALOGS.includes(c)
   );
   const config: AddonConfig = { enabledCatalogs: enabled };
   await prisma.kV.upsert({
@@ -1971,7 +2880,13 @@ app.post("/metadata/refresh-all", async (request, reply) => {
 
   const BATCH_SIZE = 5;
   const BATCH_DELAY_MS = 500;
-  const tmdb = TmdbClient.fromEnv();
+  let tmdb: TmdbClient;
+  try {
+    tmdb = await getTmdb();
+  } catch (error) {
+    request.log.error(error, "TMDB initialization failed for metadata refresh");
+    return reply.code(500).send({ error: "TMDB initialization failed" });
+  }
   let refreshed = 0;
 
   for (let i = 0; i < allMetadata.length; i += BATCH_SIZE) {

@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronRight, Clock, Film, Plus, Search, Star, Tv, X, Heart } from "lucide-react";
-import { api, CatalogList, MediaType, SearchResult, WatchEvent } from "../api";
+import { api, ApiError, CatalogList, MediaType, SearchResult, WatchEvent } from "../api";
 
 type FilterType = "all" | MediaType;
 
@@ -327,6 +327,7 @@ export function SearchPage() {
           historyLoading={panelHistoryLoading}
           listMap={listMap}
           onClose={() => setSelectedItem(null)}
+          onShowToast={showToast}
         />
       )}
 
@@ -498,6 +499,143 @@ function ResultCard({
   );
 }
 
+/* ─── Star Rating Component ───────────────────────────────── */
+
+function StarRating({
+  imdbId,
+  type,
+  onError,
+}: {
+  imdbId: string;
+  type: MediaType;
+  onError?: (message: string) => void;
+}) {
+  const [userRating, setUserRating] = useState<number | null>(null);
+  const [hoverRating, setHoverRating] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setUserRating(null);
+    setHoverRating(null);
+    setLoaded(false);
+    setLoadError(null);
+    let canceled = false;
+    void (async () => {
+      try {
+        const res = await api.getRating(type, imdbId);
+        if (!canceled) setUserRating(res.rating.rating);
+      } catch (err) {
+        if (!canceled) {
+          // 404 = no rating exists, anything else is a real error
+          if (err instanceof ApiError && err.status === 404) {
+            // no rating — leave null
+          } else {
+            setLoadError(err instanceof Error ? err.message : "Failed to load rating");
+          }
+        }
+      } finally {
+        if (!canceled) setLoaded(true);
+      }
+    })();
+    return () => { canceled = true; };
+  }, [imdbId, type]);
+
+  const handleRate = async (rating: number) => {
+    if (saving) return;
+    // If clicking same rating, remove it
+    if (userRating === rating) {
+      setSaving(true);
+      try {
+        await api.deleteRating(type, imdbId);
+        setUserRating(null);
+        setHoverRating(null);
+      } catch (err) {
+        onError?.(err instanceof Error ? err.message : "Failed to remove rating");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await api.setRating(imdbId, type, rating);
+      setUserRating(res.rating.rating);
+      setHoverRating(null);
+    } catch (err) {
+      onError?.(err instanceof Error ? err.message : "Failed to save rating");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const retryLoadRating = useCallback(() => {
+    setLoadError(null);
+    setLoaded(false);
+    void (async () => {
+      try {
+        const res = await api.getRating(type, imdbId);
+        setUserRating(res.rating.rating);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) {
+          // no rating
+        } else {
+          setLoadError(err instanceof Error ? err.message : "Failed to load rating");
+        }
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, [imdbId, type]);
+
+  if (!loaded) {
+    return <div className="skeleton h-8 w-40 rounded-lg" />;
+  }
+
+  const displayRating = hoverRating ?? userRating ?? 0;
+
+  return (
+    <div>
+      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <Star className="h-3.5 w-3.5" />
+        Your Rating
+      </h3>
+      <div className="flex items-center gap-1">
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
+          <button
+            key={star}
+            type="button"
+            disabled={saving}
+            onClick={() => void handleRate(star)}
+            onMouseEnter={() => setHoverRating(star)}
+            onMouseLeave={() => setHoverRating(null)}
+            className="p-0.5 transition-transform hover:scale-125 disabled:opacity-50"
+            aria-label={`Rate ${star} out of 10`}
+          >
+            <Star
+              className={`h-5 w-5 transition-colors ${
+                star <= displayRating
+                  ? "fill-amber-400 text-amber-400"
+                  : "text-slate-600 hover:text-slate-500"
+              }`}
+            />
+          </button>
+        ))}
+        {userRating !== null && (
+          <span className="ml-2 text-sm font-semibold text-amber-400">{userRating}/10</span>
+        )}
+      </div>
+      {loadError && (
+        <p className="mt-1 flex items-center gap-2 text-xs text-rose-400">
+          {loadError}
+          <button type="button" onClick={retryLoadRating} className="underline hover:text-rose-300">Retry</button>
+        </p>
+      )}
+    </div>
+  );
+}
+
 /* ─── Detail Side Panel ───────────────────────────────────── */
 
 function DetailPanel({
@@ -506,12 +644,14 @@ function DetailPanel({
   historyLoading,
   listMap,
   onClose,
+  onShowToast,
 }: {
   item: SearchResult;
   history: WatchEvent[];
   historyLoading: boolean;
   listMap: Map<string, CatalogList>;
   onClose: () => void;
+  onShowToast: (message: string, type: "success" | "error" | "info") => void;
 }) {
   const listNames = item.lists
     .map((id) => listMap.get(id)?.name)
@@ -600,6 +740,9 @@ function DetailPanel({
               ))}
             </div>
           )}
+
+          {/* User Rating */}
+          <StarRating imdbId={item.imdbId} type={item.type} onError={(msg) => onShowToast(msg, "error")} />
 
           {/* Description */}
           {item.description && (
