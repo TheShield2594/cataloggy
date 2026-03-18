@@ -1,79 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { Plus, Film, Tv, ChevronLeft, ChevronRight } from "lucide-react";
 import { CatalogMeta } from "../api";
-
-/* ─── Poster fallback helpers ─── */
-
-const FALLBACK_GRADIENTS = [
-  "from-rose-900 to-slate-900",
-  "from-violet-900 to-slate-900",
-  "from-blue-900 to-slate-900",
-  "from-emerald-900 to-slate-900",
-  "from-amber-900 to-slate-900",
-  "from-cyan-900 to-slate-900",
-  "from-fuchsia-900 to-slate-900",
-  "from-orange-900 to-slate-900",
-];
-
-function getInitials(name: string): string {
-  return name
-    .split(/[\s:–—-]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
-}
-
-function getGradient(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
-  return FALLBACK_GRADIENTS[Math.abs(hash) % FALLBACK_GRADIENTS.length];
-}
-
-/* ─── Scroll hook ─── */
-
-function useHorizontalScroll() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [node, setNode] = useState<HTMLDivElement | null>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-
-  // Callback ref to detect when the DOM node mounts
-  const setRef = useCallback((el: HTMLDivElement | null) => {
-    (ref as React.MutableRefObject<HTMLDivElement | null>).current = el;
-    setNode(el);
-  }, []);
-
-  const checkScroll = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 4);
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
-  }, []);
-
-  useEffect(() => {
-    const el = node;
-    if (!el) return;
-    checkScroll();
-    el.addEventListener("scroll", checkScroll, { passive: true });
-    const observer = new ResizeObserver(checkScroll);
-    observer.observe(el);
-    return () => {
-      el.removeEventListener("scroll", checkScroll);
-      observer.disconnect();
-    };
-  }, [node, checkScroll]);
-
-  const scroll = useCallback((direction: "left" | "right") => {
-    const el = ref.current;
-    if (!el) return;
-    const amount = el.clientWidth * 0.75;
-    el.scrollBy({ left: direction === "left" ? -amount : amount, behavior: "smooth" });
-  }, []);
-
-  return { ref: setRef, canScrollLeft, canScrollRight, scroll, checkScroll };
-}
+import { useHorizontalScroll, getInitials, getGradient } from "./carousel-utils";
 
 type Props = {
   title: string;
@@ -88,8 +16,9 @@ export function MediaList({ title, items, count, onSeeAll, onAddItem }: Props) {
 
   // Re-check after items load
   useEffect(() => {
-    setTimeout(checkScroll, 50);
-  }, [items, checkScroll]);
+    const timer = setTimeout(checkScroll, 50);
+    return () => clearTimeout(timer);
+  }, [items.length, checkScroll]);
 
   return (
     <section>
