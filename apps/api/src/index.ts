@@ -1139,7 +1139,12 @@ app.get<{ Querystring: { type?: string; limit?: string } }>("/recommendations/pe
   if (tmdbIds.length === 0) return { metas: [] };
 
   // Fetch recommendations from each seed, deduplicate, with per-seed cache
-  const tmdb = await getTmdb();
+  let tmdb: TmdbClient;
+  try {
+    tmdb = await getTmdb();
+  } catch {
+    return { metas: [] };
+  }
   const seen = new Set<string>(seedImdbIds); // exclude items user already watched
   const allRecs: StremioMetaPreview[] = [];
 
@@ -1231,26 +1236,28 @@ const recordWatchEvent = async (params: RecordWatchParams) => {
   dayEnd.setUTCHours(23, 59, 59, 999);
 
   if (type === "episode") {
-    const eventImdbId = `${seriesImdbId ?? imdbId}:${season}:${episode}`;
     const resolvedSeriesImdbId = seriesImdbId ?? imdbId;
 
-    const existing = await prisma.watchEvent.findFirst({
-      where: { imdbId: eventImdbId, season: season ?? null, episode: episode ?? null, watchedAt: { gte: dayStart, lte: dayEnd } },
-    });
+    const watchEvent = await prisma.$transaction(async (tx) => {
+      const existing = await tx.watchEvent.findFirst({
+        where: { seriesImdbId: resolvedSeriesImdbId, season: season ?? null, episode: episode ?? null, watchedAt: { gte: dayStart, lte: dayEnd } },
+      });
 
-    let watchEvent;
-    if (existing) {
-      watchEvent = await prisma.watchEvent.update({
-        where: { id: existing.id },
-        data: { plays: existing.plays + 1, watchedAt },
+      if (existing) {
+        const updated = await tx.watchEvent.update({
+          where: { id: existing.id },
+          data: { plays: existing.plays + 1, watchedAt },
+        });
+        req.log.info({ imdbId: resolvedSeriesImdbId, season, episode, plays: updated.plays }, `${source} scrobble: episode play incremented`);
+        return updated;
+      }
+
+      const created = await tx.watchEvent.create({
+        data: { type: "episode", imdbId: resolvedSeriesImdbId, seriesImdbId: resolvedSeriesImdbId, season: season ?? null, episode: episode ?? null, watchedAt },
       });
-      req.log.info({ imdbId: eventImdbId, plays: watchEvent.plays }, `${source} scrobble: episode play incremented`);
-    } else {
-      watchEvent = await prisma.watchEvent.create({
-        data: { type: "episode", imdbId: eventImdbId, seriesImdbId: resolvedSeriesImdbId, season: season ?? null, episode: episode ?? null, watchedAt },
-      });
-      req.log.info({ imdbId: eventImdbId, seriesImdbId: resolvedSeriesImdbId, season, episode }, `${source} scrobble: episode recorded`);
-    }
+      req.log.info({ imdbId: resolvedSeriesImdbId, season, episode }, `${source} scrobble: episode recorded`);
+      return created;
+    });
 
     if (season != null && episode != null) {
       await upsertSeriesProgressIfNewer(resolvedSeriesImdbId, { lastSeason: season, lastEpisode: episode, lastWatchedAt: watchedAt });
@@ -1259,23 +1266,27 @@ const recordWatchEvent = async (params: RecordWatchParams) => {
   }
 
   // Movie
-  const existing = await prisma.watchEvent.findFirst({
-    where: { imdbId, type: "movie", watchedAt: { gte: dayStart, lte: dayEnd } },
-  });
-
-  if (existing) {
-    const watchEvent = await prisma.watchEvent.update({
-      where: { id: existing.id },
-      data: { plays: existing.plays + 1, watchedAt },
+  const watchEvent = await prisma.$transaction(async (tx) => {
+    const existing = await tx.watchEvent.findFirst({
+      where: { imdbId, type: "movie", watchedAt: { gte: dayStart, lte: dayEnd } },
     });
-    req.log.info({ imdbId, plays: watchEvent.plays }, `${source} scrobble: movie play incremented`);
-    return { status: "recorded" as const, watchEvent };
-  }
 
-  const watchEvent = await prisma.watchEvent.create({
-    data: { type: "movie", imdbId, watchedAt },
+    if (existing) {
+      const updated = await tx.watchEvent.update({
+        where: { id: existing.id },
+        data: { plays: existing.plays + 1, watchedAt },
+      });
+      req.log.info({ imdbId, plays: updated.plays }, `${source} scrobble: movie play incremented`);
+      return updated;
+    }
+
+    const created = await tx.watchEvent.create({
+      data: { type: "movie", imdbId, watchedAt },
+    });
+    req.log.info({ imdbId }, `${source} scrobble: movie recorded`);
+    return created;
   });
-  req.log.info({ imdbId }, `${source} scrobble: movie recorded`);
+
   return { status: "recorded" as const, watchEvent };
 };
 
@@ -1467,7 +1478,12 @@ app.get<{ Querystring: { days?: string } }>("/calendar", async (request) => {
 
   const metaByImdbId = new Map(metadata.map((m) => [m.imdbId, m]));
 
-  const tmdb = await getTmdb();
+  let tmdb: TmdbClient;
+  try {
+    tmdb = await getTmdb();
+  } catch {
+    return { calendar: [] };
+  }
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
   const futureDate = new Date(today);
@@ -2389,15 +2405,17 @@ app.get<{ Params: { imdbId: string } }>("/series/progress/:imdbId", async (reque
     return reply.code(404).send({ error: "No progress found for this series" });
   }
 
-  const [meta, watchedCount] = await Promise.all([
+  const [meta, uniqueEpisodes] = await Promise.all([
     prisma.metadata.findUnique({
       where: { imdbId_type: { imdbId, type: "series" } },
       select: { name: true, poster: true, totalSeasons: true, totalEpisodes: true }
     }),
-    prisma.watchEvent.count({
+    prisma.watchEvent.groupBy({
+      by: ["season", "episode"],
       where: { seriesImdbId: imdbId, type: "episode" }
     }),
   ]);
+  const watchedCount = uniqueEpisodes.length;
 
   return {
     progress: {
@@ -2462,6 +2480,9 @@ const getAddonConfig = async (): Promise<AddonConfig> => {
   if (!row) return { enabledCatalogs: DEFAULT_ADDON_CATALOGS };
   try {
     const parsed = JSON.parse(row.value) as AddonConfig;
+    if (!Array.isArray(parsed.enabledCatalogs)) return { enabledCatalogs: DEFAULT_ADDON_CATALOGS };
+    // Preserve explicit empty selection
+    if (parsed.enabledCatalogs.length === 0) return { enabledCatalogs: [] };
     // Migrate legacy IDs on read
     const migrated = migrateLegacyCatalogs(parsed.enabledCatalogs);
     const valid = migrated.filter((c) => ALL_ADDON_CATALOGS.includes(c));

@@ -21,7 +21,7 @@ import {
   WatchStats,
 } from "../api";
 import { Link } from "react-router-dom";
-import { useHorizontalScroll, getInitials, getGradient, FALLBACK_GRADIENTS } from "../components/carousel-utils";
+import { useHorizontalScroll, getInitials, getGradient } from "../components/carousel-utils";
 
 function timeAgo(dateStr: string): string {
   const now = Date.now();

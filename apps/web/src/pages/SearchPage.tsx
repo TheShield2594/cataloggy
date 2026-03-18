@@ -503,9 +503,11 @@ function ResultCard({
 function StarRating({
   imdbId,
   type,
+  onError,
 }: {
   imdbId: string;
   type: MediaType;
+  onError?: (message: string) => void;
 }) {
   const [userRating, setUserRating] = useState<number | null>(null);
   const [hoverRating, setHoverRating] = useState<number | null>(null);
@@ -541,7 +543,9 @@ function StarRating({
       try {
         await api.deleteRating(type, imdbId);
         setUserRating(null);
-      } catch { /* ignore */ } finally {
+      } catch (err) {
+        onError?.(err instanceof Error ? err.message : "Failed to remove rating");
+      } finally {
         setSaving(false);
       }
       return;
@@ -550,7 +554,9 @@ function StarRating({
     try {
       const res = await api.setRating(imdbId, type, rating);
       setUserRating(res.rating.rating);
-    } catch { /* ignore */ } finally {
+    } catch (err) {
+      onError?.(err instanceof Error ? err.message : "Failed to save rating");
+    } finally {
       setSaving(false);
     }
   };
@@ -700,7 +706,7 @@ function DetailPanel({
           )}
 
           {/* User Rating */}
-          <StarRating imdbId={item.imdbId} type={item.type} />
+          <StarRating imdbId={item.imdbId} type={item.type} onError={(msg) => showToast(msg, "error")} />
 
           {/* Description */}
           {item.description && (
