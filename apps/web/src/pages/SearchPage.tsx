@@ -184,7 +184,7 @@ export function SearchPage() {
       setLists((prev) =>
         prev.map((l) =>
           l.id === listId
-            ? { ...l, items: [...l.items, { listId, type: result.type, imdbId: result.imdbId, addedAt: new Date().toISOString() }] }
+            ? { ...l, itemCount: l.itemCount + 1 }
             : l
         )
       );
