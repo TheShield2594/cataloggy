@@ -1,10 +1,15 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 import { ItemType, ListItemType, ListKind, MetadataType, Prisma, PrismaClient, WatchEventType } from "@prisma/client";
-import { TraktClient } from "./trakt.js";
+import { TraktClient, computeTokenExpiresAt } from "./trakt.js";
 import { MetadataPayload, TmdbClient } from "./tmdb.js";
 
 const prisma = new PrismaClient();
+
+const htmlEscapeMap: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+function escapeHtml(str: string): string {
+  return str.replace(/[&<>"']/g, (ch) => htmlEscapeMap[ch]);
+}
 
 const parseProxyPathPrefixes = (raw: string | undefined, fallback: readonly string[]) => {
   const parsed = (raw ?? "")
@@ -1874,11 +1879,11 @@ app.get("/trakt/oauth/callback", async (request, reply) => {
   };
 
   if (oauthError) {
-    const message = oauthErrorDescription ?? oauthError;
     request.log.warn({ error: oauthError, error_description: oauthErrorDescription }, "Trakt OAuth denied");
-    return reply.type("text/html").send(`
+    const safeMessage = escapeHtml(oauthErrorDescription ?? oauthError);
+    return reply.code(403).type("text/html").send(`
       <html><body style="background:#0f172a;color:#e2e8f0;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">
-        <div style="text-align:center"><h1>Trakt Authorization Failed</h1><p>${message}</p><p style="color:#94a3b8;margin-top:1rem">You can close this tab and try again.</p></div>
+        <div style="text-align:center"><h1>Trakt Authorization Failed</h1><p>${safeMessage}</p><p style="color:#94a3b8;margin-top:1rem">You can close this tab and try again.</p></div>
       </body></html>
     `);
   }
@@ -1935,7 +1940,7 @@ app.get("/trakt/oauth/callback", async (request, reply) => {
     } else if (tokenResponse.status === 403) {
       detail = "Trakt redirect URI mismatch. Check TRAKT_REDIRECT_URI matches what is registered in your Trakt app settings.";
     }
-    return reply.type("text/html").send(`
+    return reply.code(502).type("text/html").send(`
       <html><body style="background:#0f172a;color:#e2e8f0;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">
         <div style="text-align:center"><h1>Trakt Connection Failed</h1><p>${detail}</p><p style="color:#94a3b8;margin-top:1rem">You can close this tab and try again.</p></div>
       </body></html>
@@ -1943,9 +1948,7 @@ app.get("/trakt/oauth/callback", async (request, reply) => {
   }
 
   const tokens = (await tokenResponse.json()) as { access_token: string; refresh_token: string; expires_in?: number };
-  const expiresAt = typeof tokens.expires_in === "number" && Number.isFinite(tokens.expires_in)
-    ? new Date(Date.now() + tokens.expires_in * 1000)
-    : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // default 90 days if missing
+  const expiresAt = computeTokenExpiresAt(tokens.expires_in);
 
   await prisma.traktToken.upsert({
     where: { id: "default" },
