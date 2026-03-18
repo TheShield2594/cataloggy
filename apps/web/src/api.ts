@@ -127,12 +127,15 @@ export type ItemListMembership = {
   addedAt: string;
 };
 
-const authHeaders = () => {
+const authHeaders = (hasBody: boolean) => {
   const token = runtimeConfig.getToken();
-  return {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json"
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`
   };
+  if (hasBody) {
+    headers["Content-Type"] = "application/json";
+  }
+  return headers;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -145,7 +148,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
       signal: controller.signal,
       headers: {
-        ...authHeaders(),
+        ...authHeaders(init?.body != null),
         ...(init?.headers ?? {})
       }
     });
