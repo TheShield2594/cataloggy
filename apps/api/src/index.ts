@@ -11,6 +11,12 @@ function escapeHtml(str: string): string {
   return str.replace(/[&<>"']/g, (ch) => htmlEscapeMap[ch]);
 }
 
+function renderOAuthHtml(detail: string, title = "Trakt Connection Failed"): string {
+  return `<html><body style="background:#0f172a;color:#e2e8f0;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">
+  <div style="text-align:center"><h1>${title}</h1><p>${detail}</p><p style="color:#94a3b8;margin-top:1rem">You can close this tab and return to Cataloggy.</p></div>
+</body></html>`;
+}
+
 const parseProxyPathPrefixes = (raw: string | undefined, fallback: readonly string[]) => {
   const parsed = (raw ?? "")
     .split(",")
@@ -1881,11 +1887,7 @@ app.get("/trakt/oauth/callback", async (request, reply) => {
   if (oauthError) {
     request.log.warn({ error: oauthError, error_description: oauthErrorDescription }, "Trakt OAuth denied");
     const safeMessage = escapeHtml(oauthErrorDescription ?? oauthError);
-    return reply.code(403).type("text/html").send(`
-      <html><body style="background:#0f172a;color:#e2e8f0;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">
-        <div style="text-align:center"><h1>Trakt Authorization Failed</h1><p>${safeMessage}</p><p style="color:#94a3b8;margin-top:1rem">You can close this tab and try again.</p></div>
-      </body></html>
-    `);
+    return reply.code(403).type("text/html").send(renderOAuthHtml(safeMessage, "Trakt Authorization Failed"));
   }
 
   if (!code) {
@@ -1923,11 +1925,7 @@ app.get("/trakt/oauth/callback", async (request, reply) => {
       ? "Trakt token exchange timed out. Please try again."
       : "Could not reach Trakt servers. Please check your network and try again.";
     request.log.error(err, "Trakt token exchange fetch failed");
-    return reply.type("text/html").code(502).send(`
-      <html><body style="background:#0f172a;color:#e2e8f0;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">
-        <div style="text-align:center"><h1>Trakt Connection Failed</h1><p>${detail}</p><p style="color:#94a3b8;margin-top:1rem">You can close this tab and try again.</p></div>
-      </body></html>
-    `);
+    return reply.code(502).type("text/html").send(renderOAuthHtml(detail));
   }
   clearTimeout(tokenExchangeTimeout);
 
@@ -1940,11 +1938,7 @@ app.get("/trakt/oauth/callback", async (request, reply) => {
     } else if (tokenResponse.status === 403) {
       detail = "Trakt redirect URI mismatch. Check TRAKT_REDIRECT_URI matches what is registered in your Trakt app settings.";
     }
-    return reply.code(502).type("text/html").send(`
-      <html><body style="background:#0f172a;color:#e2e8f0;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">
-        <div style="text-align:center"><h1>Trakt Connection Failed</h1><p>${detail}</p><p style="color:#94a3b8;margin-top:1rem">You can close this tab and try again.</p></div>
-      </body></html>
-    `);
+    return reply.code(502).type("text/html").send(renderOAuthHtml(detail));
   }
 
   const tokens = (await tokenResponse.json()) as { access_token: string; refresh_token: string; expires_in?: number };
@@ -1958,11 +1952,7 @@ app.get("/trakt/oauth/callback", async (request, reply) => {
 
   traktClient = null;
 
-  return reply.type("text/html").send(`
-    <html><body style="background:#0f172a;color:#e2e8f0;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">
-      <div style="text-align:center"><h1>Trakt Connected!</h1><p>You can close this tab and return to Cataloggy.</p></div>
-    </body></html>
-  `);
+  return reply.type("text/html").send(renderOAuthHtml("You can close this tab and return to Cataloggy.", "Trakt Connected!"));
 });
 
 app.post("/trakt/disconnect", async (_request, reply) => {
