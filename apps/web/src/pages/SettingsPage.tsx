@@ -119,7 +119,7 @@ function ApiTokenSection() {
 }
 
 function TraktSection() {
-  const [status, setStatus] = useState<{ connected: boolean; configured: boolean } | null>(null);
+  const [status, setStatus] = useState<{ connected: boolean; configured: boolean; redirectUri?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
@@ -185,6 +185,18 @@ function TraktSection() {
           <span className="text-xs text-amber-400">Trakt credentials not configured on the server</span>
         )}
       </div>
+
+      {status?.redirectUri && !status.connected && status.configured && (
+        <div className="rounded-xl border border-slate-800/40 bg-slate-950/50 px-4 py-3 space-y-1">
+          <p className="text-xs text-slate-400">
+            Your Trakt app's <strong className="text-slate-300">Redirect URI</strong> must be set to:
+          </p>
+          <code className="block text-sm text-red-400 break-all select-all">{status.redirectUri}</code>
+          <p className="text-xs text-slate-500">
+            Set this at trakt.tv under Settings &gt; Your API Apps &gt; Edit. A mismatch causes an OAuth error.
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {!status?.connected && (
