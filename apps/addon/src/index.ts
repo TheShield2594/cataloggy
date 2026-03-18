@@ -74,6 +74,20 @@ const apiGet = async <T>(path: string): Promise<T> => {
   return response.json() as Promise<T>;
 };
 
+const apiPost = async <T>(path: string, body?: unknown): Promise<T> => {
+  const url = new URL(path, CATALOGGY_API_BASE);
+  const response = await fetchWithTimeout(url, {
+    method: "POST",
+    headers: {
+      ...apiHeaders(),
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  if (!response.ok) throw new Error(`API POST ${path} returned ${response.status}`);
+  return response.json() as Promise<T>;
+};
+
 // ─── Types ───
 
 type CataloggyList = {
@@ -103,6 +117,12 @@ type StremioMetaPreview = {
   genres?: string[];
 };
 
+type StremioSubtitle = {
+  id: string;
+  url: string;
+  lang: string;
+};
+
 type RpdbConfig = {
   enabled: boolean;
   apiKey: string | null;
@@ -119,6 +139,10 @@ const GENRES_CACHE_TTL_MS = 300_000;
 let cachedRpdb: { data: RpdbConfig; expiry: number } | null = null;
 const RPDB_CACHE_TTL_MS = 120_000;
 const RPDB_BASE_URL = "https://api.ratingposterdb.com";
+
+type CacheEntry<T> = { data: T; expiry: number };
+const trendingPopularCache = new Map<string, CacheEntry<StremioMetaPreview[]>>();
+const TRENDING_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 // ─── Routes ───
 
@@ -167,12 +191,51 @@ const applyRpdbToMetas = (metas: StremioMetaPreview[], rpdbKey: string | null): 
   }));
 };
 
+// ─── Trending/Popular catalog helpers ───
+
+const DISCOVERY_CATALOGS = [
+  { id: "cataloggy-trending-movie", type: "movie" as const, name: "Trending Movies", endpoint: "/trending?type=movie" },
+  { id: "cataloggy-trending-series", type: "series" as const, name: "Trending Series", endpoint: "/trending?type=series" },
+  { id: "cataloggy-popular-movie", type: "movie" as const, name: "Popular Movies", endpoint: "/popular?type=movie" },
+  { id: "cataloggy-popular-series", type: "series" as const, name: "Popular Series", endpoint: "/popular?type=series" },
+];
+
+const isDiscoveryCatalog = (id: string) => DISCOVERY_CATALOGS.some((c) => c.id === id);
+const getDiscoveryCatalog = (id: string) => DISCOVERY_CATALOGS.find((c) => c.id === id);
+
+const fetchDiscoveryMetas = async (catalogId: string): Promise<StremioMetaPreview[]> => {
+  const now = Date.now();
+  const cached = trendingPopularCache.get(catalogId);
+  if (cached && now < cached.expiry) return cached.data;
+
+  const catalog = getDiscoveryCatalog(catalogId);
+  if (!catalog) return [];
+
+  try {
+    const payload = await apiGet<{ metas: Array<{ id: string; type: string; name: string; poster?: string; genres?: string[] }> }>(catalog.endpoint);
+    const metas: StremioMetaPreview[] = (payload.metas ?? []).map((m) => ({
+      id: m.id,
+      type: m.type,
+      name: m.name,
+      ...(m.poster ? { poster: m.poster } : {}),
+      posterShape: "poster" as const,
+      ...(m.genres?.length ? { genres: m.genres } : {}),
+    }));
+    trendingPopularCache.set(catalogId, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    return metas;
+  } catch {
+    return cached?.data ?? [];
+  }
+};
+
+// ─── Manifest ───
+
 const buildManifest = (lists: CataloggyList[], genres: string[]) => {
   const genreExtra = genres.length > 0
     ? [{ name: "genre", options: genres, isRequired: false }]
     : [];
 
-  const catalogs = lists.flatMap((list) => [
+  const listCatalogs = lists.flatMap((list) => [
     {
       type: "movie" as const,
       id: `cataloggy-${list.id}-movie`,
@@ -193,14 +256,26 @@ const buildManifest = (lists: CataloggyList[], genres: string[]) => {
     }
   ]);
 
+  const discoveryCatalogs = DISCOVERY_CATALOGS.map((c) => ({
+    type: c.type,
+    id: c.id,
+    name: c.name,
+    extra: [
+      { name: "search", isRequired: false },
+      ...genreExtra,
+    ],
+  }));
+
+  const catalogs = [...listCatalogs, ...discoveryCatalogs];
+
   const configUrl = WEB_PUBLIC_BASE ? `${WEB_PUBLIC_BASE}/settings` : undefined;
 
   return {
     id: "com.cataloggy.addon",
-    version: "0.2.0",
+    version: "0.3.0",
     name: "CataLoggy",
-    description: "Personal catalogs powered by CataLoggy.",
-    resources: ["catalog", "meta"],
+    description: "Personal catalogs, tracking, and discovery powered by CataLoggy.",
+    resources: ["catalog", "meta", "subtitles"],
     types: ["movie", "series"],
     idPrefixes: ["tt"],
     catalogs,
@@ -285,21 +360,38 @@ const applyExtraFilters = (metas: StremioMetaPreview[], extraParams: Record<stri
   return filtered;
 };
 
+const handleCatalog = async (type: string, id: string, extra?: string) => {
+  // Check discovery catalogs first
+  if (isDiscoveryCatalog(id)) {
+    const catalog = getDiscoveryCatalog(id);
+    if (!catalog || catalog.type !== type) return { metas: [] };
+
+    const rpdb = await fetchRpdbConfig();
+    let metas = await fetchDiscoveryMetas(id);
+    if (extra) {
+      metas = applyExtraFilters(metas, parseExtra(extra));
+    }
+    return { metas: applyRpdbToMetas(metas, rpdb.apiKey) };
+  }
+
+  // User list catalogs
+  const parsed = parseCatalogId(id);
+  if (!parsed || type !== parsed.catalogType) return { metas: [] };
+
+  const [items, rpdb] = await Promise.all([fetchListItems(parsed.listId), fetchRpdbConfig()]);
+  let metas = itemsToMetas(items, type);
+  if (extra) {
+    metas = applyExtraFilters(metas, parseExtra(extra));
+  }
+  return { metas: applyRpdbToMetas(metas, rpdb.apiKey) };
+};
+
 app.get<{ Params: { type: string; id: string } }>("/catalog/:type/:id.json", async (request, reply) => {
   reply.header("Access-Control-Allow-Origin", "*");
   reply.header("Content-Type", "application/json");
 
-  const { type, id } = request.params;
-  const parsed = parseCatalogId(id);
-
-  if (!parsed || type !== parsed.catalogType) {
-    return reply.code(200).send({ metas: [] });
-  }
-
   try {
-    const [items, rpdb] = await Promise.all([fetchListItems(parsed.listId), fetchRpdbConfig()]);
-    const metas = applyRpdbToMetas(itemsToMetas(items, type), rpdb.apiKey);
-    return reply.send({ metas });
+    return reply.send(await handleCatalog(request.params.type, request.params.id));
   } catch (error) {
     request.log.error(error, "Failed to fetch catalog items");
     return reply.send({ metas: [] });
@@ -310,20 +402,8 @@ app.get<{ Params: { type: string; id: string; extra: string } }>("/catalog/:type
   reply.header("Access-Control-Allow-Origin", "*");
   reply.header("Content-Type", "application/json");
 
-  const { type, id, extra } = request.params;
-  const parsed = parseCatalogId(id);
-
-  if (!parsed || type !== parsed.catalogType) {
-    return reply.send({ metas: [] });
-  }
-
   try {
-    const [items, rpdb] = await Promise.all([fetchListItems(parsed.listId), fetchRpdbConfig()]);
-    const allMetas = itemsToMetas(items, type);
-    const extraParams = parseExtra(extra);
-    const metas = applyRpdbToMetas(applyExtraFilters(allMetas, extraParams), rpdb.apiKey);
-
-    return reply.send({ metas });
+    return reply.send(await handleCatalog(request.params.type, request.params.id, request.params.extra));
   } catch (error) {
     request.log.error(error, "Failed to fetch catalog items");
     return reply.send({ metas: [] });
@@ -384,6 +464,105 @@ app.get<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async 
 
   return reply.send({ meta });
 });
+
+// ─── Subtitles route (mark as watched from Stremio) ───
+
+app.get<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", async (request, reply) => {
+  reply.header("Access-Control-Allow-Origin", "*");
+  reply.header("Content-Type", "application/json");
+
+  const { type, id } = request.params;
+  if (type !== "movie" && type !== "series") {
+    return reply.send({ subtitles: [] });
+  }
+
+  // Parse IMDb ID — Stremio sends "tt1234567" for movies, "tt1234567:1:2" for episodes
+  const parts = id.split(":");
+  const imdbId = parts[0];
+  if (!imdbId?.startsWith("tt")) {
+    return reply.send({ subtitles: [] });
+  }
+
+  const addonBase = ADDON_PUBLIC_BASE ?? `http://localhost:${process.env.PORT ?? 7001}`;
+
+  if (type === "movie") {
+    const subtitles: StremioSubtitle[] = [{
+      id: `cataloggy-watch-${imdbId}`,
+      url: `${addonBase}/mark-watched/${type}/${imdbId}.srt`,
+      lang: "CataLoggy: Mark Watched",
+    }];
+    return reply.send({ subtitles });
+  }
+
+  // For series, include season/episode info if available
+  if (type === "series" && parts.length >= 3) {
+    const season = parseInt(parts[1], 10);
+    const episode = parseInt(parts[2], 10);
+    if (!isNaN(season) && !isNaN(episode)) {
+      const subtitles: StremioSubtitle[] = [{
+        id: `cataloggy-watch-${imdbId}-s${season}e${episode}`,
+        url: `${addonBase}/mark-watched/episode/${imdbId}/${season}/${episode}.srt`,
+        lang: `CataLoggy: Mark S${season}E${episode} Watched`,
+      }];
+      return reply.send({ subtitles });
+    }
+  }
+
+  return reply.send({ subtitles: [] });
+});
+
+// ─── Mark watched endpoints (return minimal SRT after recording) ───
+
+const MINIMAL_SRT = `1
+00:00:00,000 --> 00:00:03,000
+Marked as watched on CataLoggy
+`;
+
+app.get<{ Params: { type: string; imdbId: string } }>("/mark-watched/:type/:imdbId.srt", async (request, reply) => {
+  reply.header("Access-Control-Allow-Origin", "*");
+  reply.header("Content-Type", "text/srt; charset=utf-8");
+
+  const { type, imdbId } = request.params;
+
+  try {
+    if (type === "movie") {
+      await apiPost("/watch", { type: "movie", imdbId });
+    }
+    // For series without episode info, just log it
+    request.log.info({ type, imdbId }, "Marked as watched from Stremio");
+  } catch (error) {
+    request.log.error(error, "Failed to mark as watched");
+  }
+
+  return reply.send(MINIMAL_SRT);
+});
+
+app.get<{ Params: { type: string; imdbId: string; season: string; episode: string } }>(
+  "/mark-watched/:type/:imdbId/:season/:episode.srt",
+  async (request, reply) => {
+    reply.header("Access-Control-Allow-Origin", "*");
+    reply.header("Content-Type", "text/srt; charset=utf-8");
+
+    const { imdbId, season: seasonStr, episode: episodeStr } = request.params;
+    const season = parseInt(seasonStr, 10);
+    const episode = parseInt(episodeStr, 10);
+
+    try {
+      await apiPost("/watch", {
+        type: "episode",
+        imdbId: `${imdbId}:${season}:${episode}`, // episode-level ID
+        seriesImdbId: imdbId,
+        season,
+        episode,
+      });
+      request.log.info({ imdbId, season, episode }, "Marked episode as watched from Stremio");
+    } catch (error) {
+      request.log.error(error, "Failed to mark episode as watched");
+    }
+
+    return reply.send(MINIMAL_SRT);
+  }
+);
 
 // ─── Configure page redirect ───
 

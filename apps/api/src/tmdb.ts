@@ -130,6 +130,42 @@ export class TmdbClient {
     return withImdb.filter((item): item is MetadataPayload => item !== null);
   }
 
+  async trending(type: MetadataType, timeWindow: "day" | "week" = "week"): Promise<MetadataPayload[]> {
+    const mediaType = this.toMediaType(type);
+    const response = await this.request<TmdbSearchResponse>(`/trending/${mediaType}/${timeWindow}`);
+    const results = response.results ?? [];
+
+    const withImdb = await Promise.all(
+      results.slice(0, 20).map(async (result) => {
+        if (!result.id) return null;
+        const externalIds = await this.getExternalIds(mediaType, result.id);
+        const imdbId = externalIds.imdb_id?.trim();
+        if (!imdbId) return null;
+        return this.toMetadataPayload(type, result, imdbId);
+      })
+    );
+
+    return withImdb.filter((item): item is MetadataPayload => item !== null);
+  }
+
+  async popular(type: MetadataType): Promise<MetadataPayload[]> {
+    const mediaType = this.toMediaType(type);
+    const response = await this.request<TmdbSearchResponse>(`/${mediaType}/popular`);
+    const results = response.results ?? [];
+
+    const withImdb = await Promise.all(
+      results.slice(0, 20).map(async (result) => {
+        if (!result.id) return null;
+        const externalIds = await this.getExternalIds(mediaType, result.id);
+        const imdbId = externalIds.imdb_id?.trim();
+        if (!imdbId) return null;
+        return this.toMetadataPayload(type, result, imdbId);
+      })
+    );
+
+    return withImdb.filter((item): item is MetadataPayload => item !== null);
+  }
+
   async findByImdbId(type: MetadataType, imdbId: string): Promise<MetadataPayload | null> {
     const findResponse = await this.request<TmdbFindResponse>(`/find/${encodeURIComponent(imdbId)}`, {
       external_source: "imdb_id"

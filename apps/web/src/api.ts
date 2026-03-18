@@ -119,6 +119,24 @@ export type AddonConfig = {
   enabledCatalogs: string[];
 };
 
+export type TrendingMeta = {
+  id: string;
+  type: MediaType;
+  name: string;
+  poster?: string;
+  year?: number;
+  description?: string;
+  genres?: string[];
+  rating?: number;
+};
+
+export type UserRating = {
+  imdbId: string;
+  type: MediaType;
+  rating: number;
+  ratedAt: string;
+};
+
 export type ItemListMembership = {
   listId: string;
   listName: string;
@@ -277,5 +295,31 @@ export const api = {
   },
   getItemLists(imdbId: string) {
     return request<{ lists: ItemListMembership[] }>(`/items/${encodeURIComponent(imdbId)}/lists`);
+  },
+  // Trending & Popular
+  getTrending(type: MediaType, window: "day" | "week" = "week") {
+    return request<{ metas: TrendingMeta[] }>(`/trending?type=${type}&window=${window}`);
+  },
+  getPopular(type: MediaType) {
+    return request<{ metas: TrendingMeta[] }>(`/popular?type=${type}`);
+  },
+  // Ratings
+  setRating(imdbId: string, type: MediaType, rating: number) {
+    return request<{ rating: UserRating }>("/ratings", {
+      method: "POST",
+      body: JSON.stringify({ imdbId, type, rating }),
+    });
+  },
+  getRating(type: MediaType, imdbId: string) {
+    return request<{ rating: UserRating }>(`/ratings/${type}/${encodeURIComponent(imdbId)}`);
+  },
+  deleteRating(type: MediaType, imdbId: string) {
+    return request<void>(`/ratings/${type}/${encodeURIComponent(imdbId)}`, { method: "DELETE" });
+  },
+  getAllRatings(type?: MediaType, limit = 50) {
+    const params = new URLSearchParams();
+    if (type) params.set("type", type);
+    params.set("limit", String(limit));
+    return request<{ ratings: UserRating[] }>(`/ratings?${params}`);
   },
 };

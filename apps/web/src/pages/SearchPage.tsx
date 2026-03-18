@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronRight, Clock, Film, Plus, Search, Star, Tv, X, Heart } from "lucide-react";
-import { api, CatalogList, MediaType, SearchResult, WatchEvent } from "../api";
+import { api, CatalogList, MediaType, SearchResult, UserRating, WatchEvent } from "../api";
 
 type FilterType = "all" | MediaType;
 
@@ -498,6 +498,96 @@ function ResultCard({
   );
 }
 
+/* ─── Star Rating Component ───────────────────────────────── */
+
+function StarRating({
+  imdbId,
+  type,
+}: {
+  imdbId: string;
+  type: MediaType;
+}) {
+  const [userRating, setUserRating] = useState<number | null>(null);
+  const [hoverRating, setHoverRating] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await api.getRating(type, imdbId);
+        setUserRating(res.rating.rating);
+      } catch {
+        // no rating exists
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, [imdbId, type]);
+
+  const handleRate = async (rating: number) => {
+    if (saving) return;
+    // If clicking same rating, remove it
+    if (userRating === rating) {
+      setSaving(true);
+      try {
+        await api.deleteRating(type, imdbId);
+        setUserRating(null);
+      } catch { /* ignore */ } finally {
+        setSaving(false);
+      }
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await api.setRating(imdbId, type, rating);
+      setUserRating(res.rating.rating);
+    } catch { /* ignore */ } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!loaded) {
+    return <div className="skeleton h-8 w-40 rounded-lg" />;
+  }
+
+  const displayRating = hoverRating ?? userRating ?? 0;
+
+  return (
+    <div>
+      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <Star className="h-3.5 w-3.5" />
+        Your Rating
+      </h3>
+      <div className="flex items-center gap-1">
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
+          <button
+            key={star}
+            type="button"
+            disabled={saving}
+            onClick={() => void handleRate(star)}
+            onMouseEnter={() => setHoverRating(star)}
+            onMouseLeave={() => setHoverRating(null)}
+            className="p-0.5 transition-transform hover:scale-125 disabled:opacity-50"
+            aria-label={`Rate ${star} out of 10`}
+          >
+            <Star
+              className={`h-5 w-5 transition-colors ${
+                star <= displayRating
+                  ? "fill-amber-400 text-amber-400"
+                  : "text-slate-600 hover:text-slate-500"
+              }`}
+            />
+          </button>
+        ))}
+        {userRating !== null && (
+          <span className="ml-2 text-sm font-semibold text-amber-400">{userRating}/10</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Detail Side Panel ───────────────────────────────────── */
 
 function DetailPanel({
@@ -600,6 +690,9 @@ function DetailPanel({
               ))}
             </div>
           )}
+
+          {/* User Rating */}
+          <StarRating imdbId={item.imdbId} type={item.type} />
 
           {/* Description */}
           {item.description && (

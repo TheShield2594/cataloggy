@@ -847,6 +847,157 @@ app.post<{ Body: unknown }>("/metadata/sync", async (request, reply) => {
   }
 });
 
+// ─── Trending / Popular (TMDB) ───
+
+type TrendingCacheEntry = { data: StremioMetaPreview[]; expiry: number };
+const trendingCache = new Map<string, TrendingCacheEntry>();
+const TRENDING_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+app.get<{ Querystring: { type?: string; window?: string } }>("/trending", async (request, reply) => {
+  const rawType = request.query.type ?? "movie";
+  const type = getMetadataType(rawType);
+  if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
+
+  const timeWindow = request.query.window === "day" ? "day" as const : "week" as const;
+  const cacheKey = `trending:${rawType}:${timeWindow}`;
+  const now = Date.now();
+  const cached = trendingCache.get(cacheKey);
+  if (cached && now < cached.expiry) return { metas: cached.data };
+
+  try {
+    const tmdb = TmdbClient.fromEnv();
+    const results = await tmdb.trending(type, timeWindow);
+    // Cache metadata for each item
+    await Promise.all(results.map((r) => upsertMetadata(r)));
+    const metas: StremioMetaPreview[] = results.map((r) => ({
+      id: r.imdbId,
+      type: rawType as StremioMetaType,
+      name: r.name,
+      poster: r.poster ?? undefined,
+      year: r.year ?? undefined,
+      description: r.description ?? undefined,
+      genres: r.genres,
+      rating: r.rating ?? undefined,
+    }));
+    trendingCache.set(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    return { metas };
+  } catch (error) {
+    request.log.error(error, "Trending fetch failed");
+    return reply.code(500).send({ error: "Failed to fetch trending content" });
+  }
+});
+
+app.get<{ Querystring: { type?: string } }>("/popular", async (request, reply) => {
+  const rawType = request.query.type ?? "movie";
+  const type = getMetadataType(rawType);
+  if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
+
+  const cacheKey = `popular:${rawType}`;
+  const now = Date.now();
+  const cached = trendingCache.get(cacheKey);
+  if (cached && now < cached.expiry) return { metas: cached.data };
+
+  try {
+    const tmdb = TmdbClient.fromEnv();
+    const results = await tmdb.popular(type);
+    await Promise.all(results.map((r) => upsertMetadata(r)));
+    const metas: StremioMetaPreview[] = results.map((r) => ({
+      id: r.imdbId,
+      type: rawType as StremioMetaType,
+      name: r.name,
+      poster: r.poster ?? undefined,
+      year: r.year ?? undefined,
+      description: r.description ?? undefined,
+      genres: r.genres,
+      rating: r.rating ?? undefined,
+    }));
+    trendingCache.set(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    return { metas };
+  } catch (error) {
+    request.log.error(error, "Popular fetch failed");
+    return reply.code(500).send({ error: "Failed to fetch popular content" });
+  }
+});
+
+// ─── User Ratings ───
+
+app.post<{ Body: unknown }>("/ratings", async (request, reply) => {
+  const body = request.body as { imdbId?: unknown; type?: unknown; rating?: unknown } | null;
+  if (!body) return reply.code(400).send({ error: "Body is required" });
+
+  const imdbId = typeof body.imdbId === "string" ? body.imdbId.trim() : "";
+  if (!imdbId) return reply.code(400).send({ error: "imdbId is required" });
+
+  const rawType = typeof body.type === "string" ? body.type : "";
+  if (rawType !== "movie" && rawType !== "series") {
+    return reply.code(400).send({ error: "type must be one of: movie, series" });
+  }
+
+  const rating = typeof body.rating === "number" ? body.rating : null;
+  if (rating === null || rating < 1 || rating > 10) {
+    return reply.code(400).send({ error: "rating must be a number between 1 and 10" });
+  }
+
+  const roundedRating = Math.round(rating * 10) / 10;
+
+  const row = await prisma.kV.upsert({
+    where: { key: `rating:${rawType}:${imdbId}` },
+    create: {
+      key: `rating:${rawType}:${imdbId}`,
+      value: JSON.stringify({ imdbId, type: rawType, rating: roundedRating, ratedAt: new Date().toISOString() }),
+      updatedAt: new Date(),
+    },
+    update: {
+      value: JSON.stringify({ imdbId, type: rawType, rating: roundedRating, ratedAt: new Date().toISOString() }),
+      updatedAt: new Date(),
+    },
+  });
+
+  const parsed = JSON.parse(row.value);
+  return reply.code(200).send({ rating: parsed });
+});
+
+app.delete<{ Params: { type: string; imdbId: string } }>("/ratings/:type/:imdbId", async (request, reply) => {
+  const { type, imdbId } = request.params;
+  if (type !== "movie" && type !== "series") {
+    return reply.code(400).send({ error: "type must be one of: movie, series" });
+  }
+
+  try {
+    await prisma.kV.delete({ where: { key: `rating:${type}:${imdbId}` } });
+  } catch {
+    // not found is fine
+  }
+  return reply.code(204).send();
+});
+
+app.get<{ Params: { type: string; imdbId: string } }>("/ratings/:type/:imdbId", async (request, reply) => {
+  const { type, imdbId } = request.params;
+  if (type !== "movie" && type !== "series") {
+    return reply.code(400).send({ error: "type must be one of: movie, series" });
+  }
+
+  const row = await prisma.kV.findUnique({ where: { key: `rating:${type}:${imdbId}` } });
+  if (!row) return reply.code(404).send({ error: "No rating found" });
+
+  return { rating: JSON.parse(row.value) };
+});
+
+app.get<{ Querystring: { type?: string; limit?: string } }>("/ratings", async (request) => {
+  const typeFilter = request.query.type;
+  const limit = Math.min(Math.max(Number(request.query.limit) || 50, 1), 200);
+
+  const prefix = typeFilter ? `rating:${typeFilter}:` : "rating:";
+  const rows = await prisma.kV.findMany({
+    where: { key: { startsWith: prefix } },
+    orderBy: { updatedAt: "desc" },
+    take: limit,
+  });
+
+  const ratings = rows.map((r) => JSON.parse(r.value));
+  return { ratings };
+});
+
 app.get("/health", async () => ({ status: "ok", service: "api" }));
 
 app.get("/genres", async () => {
