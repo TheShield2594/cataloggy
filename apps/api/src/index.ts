@@ -2,9 +2,35 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 import { ItemType, ListItemType, ListKind, MetadataType, Prisma, PrismaClient, WatchEventType } from "@prisma/client";
 import { TraktClient, computeTokenExpiresAt } from "./trakt.js";
-import { MetadataPayload, TmdbClient } from "./tmdb.js";
+import { MetadataPayload, STREAMING_PROVIDERS, TmdbClient } from "./tmdb.js";
 
 const prisma = new PrismaClient();
+
+// ─── Language / preferences helpers ───
+
+const LANGUAGE_KV_KEY = "settings:language";
+const REGION_KV_KEY = "settings:region";
+const SPOILER_PROTECTION_KV_KEY = "settings:spoilerProtection";
+
+const getLanguageSetting = async (): Promise<string> => {
+  const row = await prisma.kV.findUnique({ where: { key: LANGUAGE_KV_KEY } });
+  return row?.value ?? "en-US";
+};
+
+const getRegionSetting = async (): Promise<string> => {
+  const row = await prisma.kV.findUnique({ where: { key: REGION_KV_KEY } });
+  return row?.value ?? "US";
+};
+
+const getSpoilerProtection = async (): Promise<boolean> => {
+  const row = await prisma.kV.findUnique({ where: { key: SPOILER_PROTECTION_KV_KEY } });
+  return row?.value === "true";
+};
+
+const getTmdb = async () => {
+  const lang = await getLanguageSetting();
+  return TmdbClient.fromEnv(lang);
+};
 
 const htmlEscapeMap: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 function escapeHtml(str: string): string {
@@ -1405,6 +1431,149 @@ app.get<{ Querystring: { days?: string } }>("/calendar", async (request) => {
   calendar.sort((a, b) => a.airDate.localeCompare(b.airDate));
 
   return { calendar };
+});
+
+// ─── Streaming Service Catalogs ───
+
+app.get<{ Querystring: { type?: string; provider?: string; region?: string } }>("/streaming", async (request, reply) => {
+  const rawType = request.query.type ?? "movie";
+  const type = getMetadataType(rawType);
+  if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
+
+  const providerKey = request.query.provider?.toLowerCase();
+  if (!providerKey || !STREAMING_PROVIDERS[providerKey]) {
+    return reply.code(400).send({
+      error: "provider is required",
+      available: Object.entries(STREAMING_PROVIDERS).map(([key, val]) => ({ key, ...val })),
+    });
+  }
+
+  const region = request.query.region ?? await getRegionSetting();
+  const provider = STREAMING_PROVIDERS[providerKey];
+  const cacheKey = `streaming:${providerKey}:${rawType}:${region}`;
+  const now = Date.now();
+  const cached = trendingCache.get(cacheKey);
+  if (cached && now < cached.expiry) return { metas: cached.data, provider: provider.name };
+
+  try {
+    const tmdb = await getTmdb();
+    const results = await tmdb.discoverByProvider(type, provider.id, region);
+    await Promise.all(results.map((r) => upsertMetadata(r)));
+    const metas: StremioMetaPreview[] = results.map((r) => ({
+      id: r.imdbId,
+      type: rawType as StremioMetaType,
+      name: r.name,
+      poster: r.poster ?? undefined,
+      year: r.year ?? undefined,
+      description: r.description ?? undefined,
+      genres: r.genres,
+      rating: r.rating ?? undefined,
+    }));
+    trendingCache.set(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    return { metas, provider: provider.name };
+  } catch (error) {
+    request.log.error(error, "Streaming catalog fetch failed");
+    return reply.code(500).send({ error: "Failed to fetch streaming catalog" });
+  }
+});
+
+app.get("/streaming/providers", async () => {
+  return {
+    providers: Object.entries(STREAMING_PROVIDERS).map(([key, val]) => ({ key, ...val })),
+  };
+});
+
+// ─── Anime Catalog ───
+
+app.get<{ Querystring: { type?: string } }>("/anime", async (request, reply) => {
+  const rawType = request.query.type ?? "series";
+  const type = getMetadataType(rawType);
+  if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
+
+  const cacheKey = `anime:${rawType}`;
+  const now = Date.now();
+  const cached = trendingCache.get(cacheKey);
+  if (cached && now < cached.expiry) return { metas: cached.data };
+
+  try {
+    const tmdb = await getTmdb();
+    const results = await tmdb.discoverAnime(type);
+    await Promise.all(results.map((r) => upsertMetadata(r)));
+    const metas: StremioMetaPreview[] = results.map((r) => ({
+      id: r.imdbId,
+      type: rawType as StremioMetaType,
+      name: r.name,
+      poster: r.poster ?? undefined,
+      year: r.year ?? undefined,
+      description: r.description ?? undefined,
+      genres: r.genres,
+      rating: r.rating ?? undefined,
+    }));
+    trendingCache.set(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    return { metas };
+  } catch (error) {
+    request.log.error(error, "Anime catalog fetch failed");
+    return reply.code(500).send({ error: "Failed to fetch anime catalog" });
+  }
+});
+
+// ─── Settings (Language, Region, Spoiler Protection) ───
+
+app.get("/settings/preferences", async () => {
+  const [language, region, spoilerProtection] = await Promise.all([
+    getLanguageSetting(),
+    getRegionSetting(),
+    getSpoilerProtection(),
+  ]);
+  return {
+    language,
+    region,
+    spoilerProtection,
+    availableProviders: Object.entries(STREAMING_PROVIDERS).map(([key, val]) => ({ key, ...val })),
+  };
+});
+
+app.post<{ Body: unknown }>("/settings/preferences", async (request, reply) => {
+  const body = request.body as { language?: unknown; region?: unknown; spoilerProtection?: unknown } | null;
+  if (!body) return reply.code(400).send({ error: "Body is required" });
+
+  const now = new Date();
+
+  if (typeof body.language === "string" && body.language.trim()) {
+    await prisma.kV.upsert({
+      where: { key: LANGUAGE_KV_KEY },
+      create: { key: LANGUAGE_KV_KEY, value: body.language.trim(), updatedAt: now },
+      update: { value: body.language.trim(), updatedAt: now },
+    });
+  }
+
+  if (typeof body.region === "string" && body.region.trim()) {
+    await prisma.kV.upsert({
+      where: { key: REGION_KV_KEY },
+      create: { key: REGION_KV_KEY, value: body.region.trim().toUpperCase(), updatedAt: now },
+      update: { value: body.region.trim().toUpperCase(), updatedAt: now },
+    });
+  }
+
+  if (typeof body.spoilerProtection === "boolean") {
+    await prisma.kV.upsert({
+      where: { key: SPOILER_PROTECTION_KV_KEY },
+      create: { key: SPOILER_PROTECTION_KV_KEY, value: String(body.spoilerProtection), updatedAt: now },
+      update: { value: String(body.spoilerProtection), updatedAt: now },
+    });
+  }
+
+  // Clear metadata cache to pick up language changes
+  trendingCache.clear();
+
+  return await (async () => {
+    const [language, region, spoilerProtection] = await Promise.all([
+      getLanguageSetting(),
+      getRegionSetting(),
+      getSpoilerProtection(),
+    ]);
+    return { language, region, spoilerProtection };
+  })();
 });
 
 app.get("/health", async () => ({ status: "ok", service: "api" }));

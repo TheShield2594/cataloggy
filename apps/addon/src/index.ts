@@ -200,6 +200,18 @@ const DISCOVERY_CATALOGS = [
   { id: "cataloggy-popular-series", type: "series" as const, name: "Popular Series", endpoint: "/popular?type=series" },
   { id: "cataloggy-recommended-movie", type: "movie" as const, name: "Recommended Movies", endpoint: "/recommendations/personal?type=movie" },
   { id: "cataloggy-recommended-series", type: "series" as const, name: "Recommended Series", endpoint: "/recommendations/personal?type=series" },
+  { id: "cataloggy-anime-series", type: "series" as const, name: "Anime", endpoint: "/anime?type=series" },
+  { id: "cataloggy-anime-movie", type: "movie" as const, name: "Anime Movies", endpoint: "/anime?type=movie" },
+  { id: "cataloggy-netflix-movie", type: "movie" as const, name: "Netflix Movies", endpoint: "/streaming?type=movie&provider=netflix" },
+  { id: "cataloggy-netflix-series", type: "series" as const, name: "Netflix Series", endpoint: "/streaming?type=series&provider=netflix" },
+  { id: "cataloggy-disney-movie", type: "movie" as const, name: "Disney+ Movies", endpoint: "/streaming?type=movie&provider=disney" },
+  { id: "cataloggy-disney-series", type: "series" as const, name: "Disney+ Series", endpoint: "/streaming?type=series&provider=disney" },
+  { id: "cataloggy-amazon-movie", type: "movie" as const, name: "Prime Video Movies", endpoint: "/streaming?type=movie&provider=amazon" },
+  { id: "cataloggy-amazon-series", type: "series" as const, name: "Prime Video Series", endpoint: "/streaming?type=series&provider=amazon" },
+  { id: "cataloggy-apple-movie", type: "movie" as const, name: "Apple TV+ Movies", endpoint: "/streaming?type=movie&provider=apple" },
+  { id: "cataloggy-apple-series", type: "series" as const, name: "Apple TV+ Series", endpoint: "/streaming?type=series&provider=apple" },
+  { id: "cataloggy-max-movie", type: "movie" as const, name: "Max Movies", endpoint: "/streaming?type=movie&provider=max" },
+  { id: "cataloggy-max-series", type: "series" as const, name: "Max Series", endpoint: "/streaming?type=series&provider=max" },
 ];
 
 const isDiscoveryCatalog = (id: string) => DISCOVERY_CATALOGS.some((c) => c.id === id);
@@ -412,7 +424,27 @@ app.get<{ Params: { type: string; id: string; extra: string } }>("/catalog/:type
   }
 });
 
-// ─── Meta route (with ratings, genres, episode info) ───
+// ─── Spoiler protection helper ───
+
+let cachedSpoilerProtection: { data: boolean; expiry: number } | null = null;
+const SPOILER_CACHE_TTL_MS = 60_000;
+
+const isSpoilerProtectionEnabled = async (): Promise<boolean> => {
+  const now = Date.now();
+  if (cachedSpoilerProtection && now < cachedSpoilerProtection.expiry) {
+    return cachedSpoilerProtection.data;
+  }
+  try {
+    const prefs = await apiGet<{ spoilerProtection?: boolean }>("/settings/preferences");
+    const enabled = prefs.spoilerProtection === true;
+    cachedSpoilerProtection = { data: enabled, expiry: now + SPOILER_CACHE_TTL_MS };
+    return enabled;
+  } catch {
+    return cachedSpoilerProtection?.data ?? false;
+  }
+};
+
+// ─── Meta route (with ratings, genres, episode info, spoiler protection) ───
 
 app.get<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async (request, reply) => {
   reply.header("Access-Control-Allow-Origin", "*");
@@ -429,9 +461,10 @@ app.get<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async 
 
   const apiUrl = new URL(`/meta/${type}/${encodeURIComponent(imdbId)}`, CATALOGGY_API_BASE);
 
-  const [upstreamResponse, rpdb] = await Promise.all([
+  const [upstreamResponse, rpdb, spoilerEnabled] = await Promise.all([
     fetchWithTimeout(apiUrl, { headers: apiHeaders() }),
     fetchRpdbConfig(),
+    isSpoilerProtectionEnabled(),
   ]);
   const payload = await upstreamResponse.json().catch(() => ({}));
 
@@ -448,13 +481,33 @@ app.get<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async 
     ? applyRpdbPoster(imdbId, rpdb.apiKey)
     : (typeof payload.poster === "string" ? payload.poster : undefined);
 
+  // Spoiler protection: hide description for series the user hasn't finished
+  let description = typeof payload.description === "string" ? payload.description : undefined;
+  if (spoilerEnabled && type === "series" && description) {
+    // Check if user is currently watching this series
+    try {
+      const progressRes = await apiGet<{
+        progress?: { lastSeason: number; lastEpisode: number; totalEpisodes?: number | null; watchedEpisodes?: number | null };
+      }>(`/series/progress/${encodeURIComponent(imdbId)}`);
+      if (progressRes.progress) {
+        const { watchedEpisodes, totalEpisodes } = progressRes.progress;
+        // If user hasn't finished the series, redact the description
+        if (typeof watchedEpisodes === "number" && typeof totalEpisodes === "number" && watchedEpisodes < totalEpisodes) {
+          description = "[Spoiler protection enabled — description hidden until you finish this series]";
+        }
+      }
+    } catch {
+      // No progress found = user hasn't started, don't hide description
+    }
+  }
+
   const meta: Record<string, unknown> = {
     id: imdbId,
     type,
     name: typeof payload.name === "string" && payload.name.trim() ? payload.name : imdbId,
     poster,
     background: typeof payload.background === "string" ? payload.background : undefined,
-    description: typeof payload.description === "string" ? payload.description : undefined,
+    description,
     releaseInfo,
     year: typeof payload.year === "number" ? payload.year : undefined,
   };

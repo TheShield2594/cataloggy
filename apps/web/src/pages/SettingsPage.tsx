@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
-import { api, runtimeConfig } from "../api";
-import { ChevronDown, Key, Link, Database, Info, Eye, EyeOff, Loader2, Check, AlertCircle, Unplug, Clapperboard, Image } from "lucide-react";
+import { api, runtimeConfig, UserPreferences } from "../api";
+import { ChevronDown, Key, Link, Database, Info, Eye, EyeOff, Loader2, Check, AlertCircle, Unplug, Clapperboard, Image, Globe, Shield } from "lucide-react";
 
 declare const __APP_VERSION__: string;
 const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "unknown";
@@ -495,6 +495,156 @@ function DataSection() {
   );
 }
 
+const COMMON_LANGUAGES = [
+  { code: "en-US", label: "English (US)" },
+  { code: "en-GB", label: "English (UK)" },
+  { code: "es-ES", label: "Spanish" },
+  { code: "fr-FR", label: "French" },
+  { code: "de-DE", label: "German" },
+  { code: "it-IT", label: "Italian" },
+  { code: "pt-BR", label: "Portuguese (Brazil)" },
+  { code: "pt-PT", label: "Portuguese (Portugal)" },
+  { code: "ja-JP", label: "Japanese" },
+  { code: "ko-KR", label: "Korean" },
+  { code: "zh-CN", label: "Chinese (Simplified)" },
+  { code: "zh-TW", label: "Chinese (Traditional)" },
+  { code: "ru-RU", label: "Russian" },
+  { code: "ar-SA", label: "Arabic" },
+  { code: "hi-IN", label: "Hindi" },
+  { code: "nl-NL", label: "Dutch" },
+  { code: "sv-SE", label: "Swedish" },
+  { code: "pl-PL", label: "Polish" },
+  { code: "tr-TR", label: "Turkish" },
+  { code: "th-TH", label: "Thai" },
+];
+
+const COMMON_REGIONS = [
+  "US", "GB", "CA", "AU", "DE", "FR", "ES", "IT", "BR", "MX",
+  "JP", "KR", "IN", "NL", "SE", "PL", "TR", "AR", "ZA", "SG",
+];
+
+function PreferencesSection() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [language, setLanguage] = useState("en-US");
+  const [region, setRegion] = useState("US");
+  const [spoilerProtection, setSpoilerProtection] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const prefs = await api.getPreferences();
+        setLanguage(prefs.language);
+        setRegion(prefs.region);
+        setSpoilerProtection(prefs.spoilerProtection);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load preferences");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await api.updatePreferences({ language, region, spoilerProtection });
+      setLanguage(updated.language);
+      setRegion(updated.region);
+      setSpoilerProtection(updated.spoilerProtection);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save preferences");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="flex items-center gap-2 text-sm text-slate-400"><Loader2 size={16} className="animate-spin" /> Loading preferences...</div>;
+  }
+
+  return (
+    <div className="space-y-5">
+      <p className="text-sm text-slate-400 leading-relaxed">
+        Configure metadata language, streaming region, and spoiler protection.
+        Changes affect TMDB metadata fetching and Stremio catalog content.
+      </p>
+
+      {/* Language */}
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-slate-300">Metadata Language</label>
+        <select
+          value={language}
+          onChange={(e) => { setLanguage(e.target.value); setSaved(false); }}
+          className="w-full rounded-xl border border-slate-700/60 bg-slate-950 px-4 py-3 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15"
+        >
+          {COMMON_LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>{l.label} ({l.code})</option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-slate-500">
+          Titles, descriptions, and metadata will be fetched in this language from TMDB.
+        </p>
+      </div>
+
+      {/* Region */}
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-slate-300">Streaming Region</label>
+        <select
+          value={region}
+          onChange={(e) => { setRegion(e.target.value); setSaved(false); }}
+          className="w-full rounded-xl border border-slate-700/60 bg-slate-950 px-4 py-3 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15"
+        >
+          {COMMON_REGIONS.map((r) => (
+            <option key={r} value={r}>{r}</option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-slate-500">
+          Streaming service catalogs (Netflix, Disney+, etc.) show content available in this region.
+        </p>
+      </div>
+
+      {/* Spoiler Protection */}
+      <label className="flex items-start gap-3 rounded-xl border border-slate-800/40 bg-slate-900/30 px-4 py-3.5 cursor-pointer transition-colors hover:bg-slate-900/60">
+        <input
+          type="checkbox"
+          checked={spoilerProtection}
+          onChange={(e) => { setSpoilerProtection(e.target.checked); setSaved(false); }}
+          className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-800 text-red-500 focus:ring-red-500/30"
+        />
+        <div>
+          <span className="text-sm font-medium text-slate-200 flex items-center gap-2">
+            <Shield size={14} className="text-violet-400" />
+            Spoiler Protection
+          </span>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Hides series descriptions in Stremio for shows you haven't finished watching yet.
+          </p>
+        </div>
+      </label>
+
+      <button
+        type="button"
+        onClick={save}
+        disabled={saving}
+        className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
+          saved
+            ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
+            : "bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20"
+        }`}
+      >
+        {saved ? <><Check size={16} /> Saved</> : saving ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : "Save Preferences"}
+      </button>
+      {error && <p className="flex items-center gap-2 text-sm text-rose-400"><AlertCircle size={16} /> {error}</p>}
+    </div>
+  );
+}
+
 export function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -510,6 +660,10 @@ export function SettingsPage() {
 
       <Section title="Stremio Addon" icon={<Clapperboard size={20} />}>
         <AddonConfigSection />
+      </Section>
+
+      <Section title="Preferences" icon={<Globe size={20} />}>
+        <PreferencesSection />
       </Section>
 
       <Section title="RPDB Posters" icon={<Image size={20} />}>

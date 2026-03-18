@@ -64,19 +64,36 @@ const TMDB_GENRE_MAP: Record<number, string> = {
   10765: "Sci-Fi & Fantasy", 10766: "Soap", 10767: "Talk", 10768: "War & Politics",
 };
 
+// Common streaming provider IDs on TMDB
+export const STREAMING_PROVIDERS: Record<string, { id: number; name: string }> = {
+  netflix: { id: 8, name: "Netflix" },
+  amazon: { id: 9, name: "Amazon Prime Video" },
+  disney: { id: 337, name: "Disney+" },
+  apple: { id: 350, name: "Apple TV+" },
+  hulu: { id: 15, name: "Hulu" },
+  max: { id: 1899, name: "Max" },
+  paramount: { id: 531, name: "Paramount+" },
+  peacock: { id: 386, name: "Peacock" },
+  crunchyroll: { id: 283, name: "Crunchyroll" },
+};
+
 export class TmdbClient {
   private static readonly baseUrl = "https://api.themoviedb.org/3";
   private static readonly imageBaseUrl = "https://image.tmdb.org/t/p/w500";
 
-  private constructor(private readonly apiKey: string) {}
+  private readonly language: string;
 
-  static fromEnv() {
+  private constructor(private readonly apiKey: string, language?: string) {
+    this.language = language ?? "en-US";
+  }
+
+  static fromEnv(language?: string) {
     const apiKey = process.env.TMDB_API_KEY?.trim();
     if (!apiKey) {
       throw new Error("TMDB_API_KEY is not configured");
     }
 
-    return new TmdbClient(apiKey);
+    return new TmdbClient(apiKey, language);
   }
 
   async search(type: MetadataType, query: string): Promise<MetadataPayload[]> {
@@ -169,6 +186,59 @@ export class TmdbClient {
   async recommendations(type: MetadataType, tmdbId: number): Promise<MetadataPayload[]> {
     const mediaType = this.toMediaType(type);
     const response = await this.request<TmdbSearchResponse>(`/${mediaType}/${tmdbId}/recommendations`);
+    const results = response.results ?? [];
+
+    const withImdb = await Promise.all(
+      results.slice(0, 20).map(async (result) => {
+        if (!result.id) return null;
+        const externalIds = await this.getExternalIds(mediaType, result.id);
+        const imdbId = externalIds.imdb_id?.trim();
+        if (!imdbId) return null;
+        return this.toMetadataPayload(type, result, imdbId);
+      })
+    );
+
+    return withImdb.filter((item): item is MetadataPayload => item !== null);
+  }
+
+  async discoverByProvider(type: MetadataType, providerId: number, region: string = "US"): Promise<MetadataPayload[]> {
+    const mediaType = this.toMediaType(type);
+    const response = await this.request<TmdbSearchResponse>(`/discover/${mediaType}`, {
+      with_watch_providers: String(providerId),
+      watch_region: region,
+      sort_by: "popularity.desc",
+    });
+    const results = response.results ?? [];
+
+    const withImdb = await Promise.all(
+      results.slice(0, 20).map(async (result) => {
+        if (!result.id) return null;
+        const externalIds = await this.getExternalIds(mediaType, result.id);
+        const imdbId = externalIds.imdb_id?.trim();
+        if (!imdbId) return null;
+        return this.toMetadataPayload(type, result, imdbId);
+      })
+    );
+
+    return withImdb.filter((item): item is MetadataPayload => item !== null);
+  }
+
+  async discoverAnime(type: MetadataType): Promise<MetadataPayload[]> {
+    const mediaType = this.toMediaType(type);
+    const params: Record<string, string> = {
+      with_genres: "16", // Animation
+      sort_by: "popularity.desc",
+    };
+    // For TV, filter by Japanese origin
+    if (mediaType === "tv") {
+      params.with_origin_country = "JP";
+    }
+    // For movies, use original language
+    if (mediaType === "movie") {
+      params.with_original_language = "ja";
+    }
+
+    const response = await this.request<TmdbSearchResponse>(`/discover/${mediaType}`, params);
     const results = response.results ?? [];
 
     const withImdb = await Promise.all(
@@ -299,6 +369,7 @@ export class TmdbClient {
   private async request<T>(path: string, searchParams?: Record<string, string>): Promise<T> {
     const url = new URL(`${TmdbClient.baseUrl}${path}`);
     url.searchParams.set("api_key", this.apiKey);
+    url.searchParams.set("language", this.language);
 
     if (searchParams) {
       for (const [key, value] of Object.entries(searchParams)) {

@@ -137,6 +137,12 @@ export type UserRating = {
   ratedAt: string;
 };
 
+export type UserPreferences = {
+  language: string;
+  region: string;
+  spoilerProtection: boolean;
+};
+
 export type CalendarEntry = {
   seriesImdbId: string;
   seriesName: string;
@@ -343,5 +349,26 @@ export const api = {
   // Calendar
   getCalendar(days = 30) {
     return request<{ calendar: CalendarEntry[] }>(`/calendar?days=${days}`);
+  },
+  // Streaming
+  getStreamingCatalog(type: MediaType, provider: string) {
+    return request<{ metas: TrendingMeta[]; provider: string }>(`/streaming?type=${type}&provider=${encodeURIComponent(provider)}`);
+  },
+  getStreamingProviders() {
+    return request<{ providers: Array<{ key: string; id: number; name: string }> }>("/streaming/providers");
+  },
+  // Anime
+  getAnimeCatalog(type: MediaType) {
+    return request<{ metas: TrendingMeta[] }>(`/anime?type=${type}`);
+  },
+  // Preferences (language, region, spoiler protection)
+  getPreferences() {
+    return request<UserPreferences>("/settings/preferences");
+  },
+  updatePreferences(prefs: Partial<UserPreferences>) {
+    return request<UserPreferences>("/settings/preferences", {
+      method: "POST",
+      body: JSON.stringify(prefs),
+    });
   },
 };
