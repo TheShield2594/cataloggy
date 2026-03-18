@@ -264,7 +264,7 @@ export function ListsPage() {
             >
               <p className="truncate font-semibold">{list.name}</p>
               <p className="mt-0.5 text-xs text-slate-500">
-                {list.items.length} {list.items.length === 1 ? "item" : "items"}
+                {list.itemCount} {list.itemCount === 1 ? "item" : "items"}
               </p>
             </button>
           ))}
