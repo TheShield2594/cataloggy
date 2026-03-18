@@ -35,8 +35,15 @@ function getGradient(name: string): string {
 
 function useHorizontalScroll() {
   const ref = useRef<HTMLDivElement>(null);
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+
+  // Callback ref to detect when the DOM node mounts
+  const setRef = useCallback((el: HTMLDivElement | null) => {
+    (ref as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    setNode(el);
+  }, []);
 
   const checkScroll = useCallback(() => {
     const el = ref.current;
@@ -46,7 +53,7 @@ function useHorizontalScroll() {
   }, []);
 
   useEffect(() => {
-    const el = ref.current;
+    const el = node;
     if (!el) return;
     checkScroll();
     el.addEventListener("scroll", checkScroll, { passive: true });
@@ -56,7 +63,7 @@ function useHorizontalScroll() {
       el.removeEventListener("scroll", checkScroll);
       observer.disconnect();
     };
-  }, [checkScroll]);
+  }, [node, checkScroll]);
 
   const scroll = useCallback((direction: "left" | "right") => {
     const el = ref.current;
@@ -65,7 +72,7 @@ function useHorizontalScroll() {
     el.scrollBy({ left: direction === "left" ? -amount : amount, behavior: "smooth" });
   }, []);
 
-  return { ref, canScrollLeft, canScrollRight, scroll, checkScroll };
+  return { ref: setRef, canScrollLeft, canScrollRight, scroll, checkScroll };
 }
 
 type Props = {
