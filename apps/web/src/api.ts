@@ -65,7 +65,7 @@ export type CatalogList = {
   id: string;
   name: string;
   kind: "watchlist" | "custom";
-  items: ListItem[];
+  itemCount: number;
 };
 
 export type CatalogMeta = {

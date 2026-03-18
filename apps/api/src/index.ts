@@ -910,7 +910,7 @@ app.post<{ Body: unknown }>("/lists", async (request, reply) => {
     }
   });
 
-  return reply.code(201).send({ list });
+  return reply.code(201).send({ list: { ...list, itemCount: 0 } });
 });
 
 app.get("/lists", async () => {
