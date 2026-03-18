@@ -114,6 +114,50 @@ function Poster({
   );
 }
 
+/* ─── Discovery Card (shared by trending + recommendations) ─── */
+
+type DiscoveryItem = {
+  id: string;
+  name: string;
+  poster?: string;
+  rating?: number;
+  genres?: string[];
+  year?: number;
+  type?: string;
+};
+
+function DiscoveryCard({ item, badge }: { item: DiscoveryItem; badge?: React.ReactNode }) {
+  return (
+    <div className="flex-none group" style={{ width: "11rem" }}>
+      <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
+        <Poster src={item.poster} alt={item.name} className="h-full w-full" />
+        {item.rating != null && item.rating > 0 && (
+          <div className="absolute top-2.5 left-2.5">
+            <span className="inline-flex items-center gap-1 rounded-md bg-black/70 px-2 py-0.5 text-2xs font-semibold text-amber-400 backdrop-blur-sm">
+              <Star className="h-2.5 w-2.5 fill-amber-400" />
+              {item.rating.toFixed(1)}
+            </span>
+          </div>
+        )}
+        {badge && <div className="absolute top-2.5 right-2.5">{badge}</div>}
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/60 to-transparent px-3 pb-3 pt-10">
+          {item.genres && item.genres.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {item.genres.slice(0, 2).map((g) => (
+                <span key={g} className="rounded bg-white/10 px-1.5 py-0.5 text-2xs text-slate-300 backdrop-blur-sm">{g}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <p className="mt-2.5 truncate text-sm font-semibold text-slate-200">{item.name}</p>
+      <p className="text-2xs text-slate-500">
+        {item.year ?? ""}{item.type ? ` ${item.type === "movie" ? "Movie" : "Series"}` : ""}
+      </p>
+    </div>
+  );
+}
+
 /* ─── Scroll Arrow Buttons ─── */
 
 function ScrollArrows({
@@ -222,30 +266,32 @@ export function DashboardPage() {
 
   // Load discovery data separately (non-blocking)
   useEffect(() => {
+    let mounted = true;
     void (async () => {
       try {
         const res = await api.getTrending("movie", "week");
-        setTrendingMovies(res.metas);
+        if (mounted) setTrendingMovies(res.metas);
       } catch { /* optional */ } finally {
-        setTrendingLoading(false);
+        if (mounted) setTrendingLoading(false);
       }
     })();
     void (async () => {
       try {
         const res = await api.getPersonalRecommendations("movie", 20);
-        setRecommendations(res.metas);
+        if (mounted) setRecommendations(res.metas);
       } catch { /* optional */ } finally {
-        setRecsLoading(false);
+        if (mounted) setRecsLoading(false);
       }
     })();
     void (async () => {
       try {
         const res = await api.getCalendar(14);
-        setCalendarEntries(res.calendar);
+        if (mounted) setCalendarEntries(res.calendar);
       } catch { /* optional */ } finally {
-        setCalendarLoading(false);
+        if (mounted) setCalendarLoading(false);
       }
     })();
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
@@ -262,7 +308,7 @@ export function DashboardPage() {
       recsScroll.checkScroll();
     }, 50);
     return () => clearTimeout(timer);
-  }, [loading, continueScroll.checkScroll, recentScroll.checkScroll, trendingScroll.checkScroll, recsScroll.checkScroll]);
+  }, [loading, trendingLoading, recsLoading, continueScroll.checkScroll, recentScroll.checkScroll, trendingScroll.checkScroll, recsScroll.checkScroll]);
 
   const handleMarkNext = async (imdbId: string) => {
     setMarkingNext((prev) => new Set(prev).add(imdbId));
@@ -553,42 +599,7 @@ export function DashboardPage() {
             className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
           >
             {trendingMovies.map((item) => (
-              <div key={item.id} className="flex-none group" style={{ width: "11rem" }}>
-                <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
-                  <Poster
-                    src={item.poster}
-                    alt={item.name}
-                    className="h-full w-full"
-                  />
-                  {/* Rating badge */}
-                  {item.rating != null && item.rating > 0 && (
-                    <div className="absolute top-2.5 left-2.5">
-                      <span className="inline-flex items-center gap-1 rounded-md bg-black/70 px-2 py-0.5 text-2xs font-semibold text-amber-400 backdrop-blur-sm">
-                        <Star className="h-2.5 w-2.5 fill-amber-400" />
-                        {item.rating.toFixed(1)}
-                      </span>
-                    </div>
-                  )}
-                  {/* Bottom gradient */}
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/60 to-transparent px-3 pb-3 pt-10">
-                    {item.genres && item.genres.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {item.genres.slice(0, 2).map((g) => (
-                          <span key={g} className="rounded bg-white/10 px-1.5 py-0.5 text-2xs text-slate-300 backdrop-blur-sm">
-                            {g}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <p className="mt-2.5 truncate text-sm font-semibold text-slate-200">
-                  {item.name}
-                </p>
-                <p className="text-2xs text-slate-500">
-                  {item.year ?? ""} {item.type === "movie" ? "Movie" : "Series"}
-                </p>
-              </div>
+              <DiscoveryCard key={item.id} item={item} />
             ))}
           </div>
         )}
@@ -614,45 +625,15 @@ export function DashboardPage() {
               className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
             >
               {recommendations.map((item) => (
-                <div key={item.id} className="flex-none group" style={{ width: "11rem" }}>
-                  <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
-                    <Poster
-                      src={item.poster}
-                      alt={item.name}
-                      className="h-full w-full"
-                    />
-                    {item.rating != null && item.rating > 0 && (
-                      <div className="absolute top-2.5 left-2.5">
-                        <span className="inline-flex items-center gap-1 rounded-md bg-black/70 px-2 py-0.5 text-2xs font-semibold text-amber-400 backdrop-blur-sm">
-                          <Star className="h-2.5 w-2.5 fill-amber-400" />
-                          {item.rating.toFixed(1)}
-                        </span>
-                      </div>
-                    )}
-                    <div className="absolute top-2.5 right-2.5">
-                      <span className="inline-flex items-center gap-1 rounded-md bg-violet-600/80 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
-                        <Sparkles className="h-2.5 w-2.5" />
-                      </span>
-                    </div>
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/60 to-transparent px-3 pb-3 pt-10">
-                      {item.genres && item.genres.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {item.genres.slice(0, 2).map((g) => (
-                            <span key={g} className="rounded bg-white/10 px-1.5 py-0.5 text-2xs text-slate-300 backdrop-blur-sm">
-                              {g}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <p className="mt-2.5 truncate text-sm font-semibold text-slate-200">
-                    {item.name}
-                  </p>
-                  <p className="text-2xs text-slate-500">
-                    {item.year ?? ""}
-                  </p>
-                </div>
+                <DiscoveryCard
+                  key={item.id}
+                  item={item}
+                  badge={
+                    <span className="inline-flex items-center gap-1 rounded-md bg-violet-600/80 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
+                      <Sparkles className="h-2.5 w-2.5" />
+                    </span>
+                  }
+                />
               ))}
             </div>
           )}
