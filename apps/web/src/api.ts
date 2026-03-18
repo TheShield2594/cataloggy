@@ -137,6 +137,17 @@ export type UserRating = {
   ratedAt: string;
 };
 
+export type CalendarEntry = {
+  seriesImdbId: string;
+  seriesName: string;
+  poster: string | null;
+  season: number;
+  episode: number;
+  episodeName: string;
+  airDate: string;
+  overview: string | null;
+};
+
 export type ItemListMembership = {
   listId: string;
   listName: string;
@@ -321,5 +332,16 @@ export const api = {
     if (type) params.set("type", type);
     params.set("limit", String(limit));
     return request<{ ratings: UserRating[] }>(`/ratings?${params}`);
+  },
+  // Recommendations
+  getPersonalRecommendations(type: MediaType, limit = 20) {
+    return request<{ metas: TrendingMeta[] }>(`/recommendations/personal?type=${type}&limit=${limit}`);
+  },
+  getRecommendations(type: MediaType, imdbId: string) {
+    return request<{ metas: TrendingMeta[] }>(`/recommendations?type=${type}&imdbId=${encodeURIComponent(imdbId)}`);
+  },
+  // Calendar
+  getCalendar(days = 30) {
+    return request<{ calendar: CalendarEntry[] }>(`/calendar?days=${days}`);
   },
 };

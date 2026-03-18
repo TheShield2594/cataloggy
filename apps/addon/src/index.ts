@@ -198,6 +198,8 @@ const DISCOVERY_CATALOGS = [
   { id: "cataloggy-trending-series", type: "series" as const, name: "Trending Series", endpoint: "/trending?type=series" },
   { id: "cataloggy-popular-movie", type: "movie" as const, name: "Popular Movies", endpoint: "/popular?type=movie" },
   { id: "cataloggy-popular-series", type: "series" as const, name: "Popular Series", endpoint: "/popular?type=series" },
+  { id: "cataloggy-recommended-movie", type: "movie" as const, name: "Recommended Movies", endpoint: "/recommendations/personal?type=movie" },
+  { id: "cataloggy-recommended-series", type: "series" as const, name: "Recommended Series", endpoint: "/recommendations/personal?type=series" },
 ];
 
 const isDiscoveryCatalog = (id: string) => DISCOVERY_CATALOGS.some((c) => c.id === id);

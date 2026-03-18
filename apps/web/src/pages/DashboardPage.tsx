@@ -9,9 +9,12 @@ import {
   Check,
   Star,
   TrendingUp,
+  Calendar,
+  Sparkles,
 } from "lucide-react";
 import {
   api,
+  CalendarEntry,
   runtimeConfig,
   SeriesProgress,
   TrendingMeta,
@@ -249,6 +252,10 @@ export function DashboardPage() {
 
   const [trendingMovies, setTrendingMovies] = useState<TrendingMeta[]>([]);
   const [trendingLoading, setTrendingLoading] = useState(true);
+  const [recommendations, setRecommendations] = useState<TrendingMeta[]>([]);
+  const [recsLoading, setRecsLoading] = useState(true);
+  const [calendarEntries, setCalendarEntries] = useState<CalendarEntry[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(true);
 
   const [markingNext, setMarkingNext] = useState<Set<string>>(new Set());
   const [markedDone, setMarkedDone] = useState<Set<string>>(new Set());
@@ -256,6 +263,7 @@ export function DashboardPage() {
   const continueScroll = useHorizontalScroll();
   const recentScroll = useHorizontalScroll();
   const trendingScroll = useHorizontalScroll();
+  const recsScroll = useHorizontalScroll();
 
   const load = useCallback(async () => {
     try {
@@ -276,16 +284,30 @@ export function DashboardPage() {
     }
   }, []);
 
-  // Load trending separately (non-blocking)
+  // Load discovery data separately (non-blocking)
   useEffect(() => {
     void (async () => {
       try {
         const res = await api.getTrending("movie", "week");
         setTrendingMovies(res.metas);
-      } catch {
-        // trending is optional, don't block on failure
-      } finally {
+      } catch { /* optional */ } finally {
         setTrendingLoading(false);
+      }
+    })();
+    void (async () => {
+      try {
+        const res = await api.getPersonalRecommendations("movie", 20);
+        setRecommendations(res.metas);
+      } catch { /* optional */ } finally {
+        setRecsLoading(false);
+      }
+    })();
+    void (async () => {
+      try {
+        const res = await api.getCalendar(14);
+        setCalendarEntries(res.calendar);
+      } catch { /* optional */ } finally {
+        setCalendarLoading(false);
       }
     })();
   }, []);
@@ -301,9 +323,10 @@ export function DashboardPage() {
         continueScroll.checkScroll();
         recentScroll.checkScroll();
         trendingScroll.checkScroll();
+        recsScroll.checkScroll();
       }, 50);
     }
-  }, [loading, progress, history, trendingMovies]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loading, progress, history, trendingMovies, recommendations]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleMarkNext = async (imdbId: string) => {
     setMarkingNext((prev) => new Set(prev).add(imdbId));
@@ -634,6 +657,137 @@ export function DashboardPage() {
           </div>
         )}
       </section>
+
+      {/* ── Recommended For You ── */}
+      {(recsLoading || recommendations.length > 0) && (
+        <section>
+          <SectionHeader title="Recommended For You">
+            {!recsLoading && recommendations.length > 0 && (
+              <ScrollArrows
+                canScrollLeft={recsScroll.canScrollLeft}
+                canScrollRight={recsScroll.canScrollRight}
+                onScroll={recsScroll.scroll}
+              />
+            )}
+          </SectionHeader>
+          {recsLoading ? (
+            <ContinueWatchingSkeleton />
+          ) : (
+            <div
+              ref={recsScroll.ref}
+              className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
+            >
+              {recommendations.map((item) => (
+                <div key={item.id} className="flex-none group" style={{ width: "11rem" }}>
+                  <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
+                    <Poster
+                      src={item.poster}
+                      alt={item.name}
+                      className="h-full w-full"
+                    />
+                    {item.rating != null && item.rating > 0 && (
+                      <div className="absolute top-2.5 left-2.5">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-black/70 px-2 py-0.5 text-2xs font-semibold text-amber-400 backdrop-blur-sm">
+                          <Star className="h-2.5 w-2.5 fill-amber-400" />
+                          {item.rating.toFixed(1)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="absolute top-2.5 right-2.5">
+                      <span className="inline-flex items-center gap-1 rounded-md bg-violet-600/80 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
+                        <Sparkles className="h-2.5 w-2.5" />
+                      </span>
+                    </div>
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/60 to-transparent px-3 pb-3 pt-10">
+                      {item.genres && item.genres.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {item.genres.slice(0, 2).map((g) => (
+                            <span key={g} className="rounded bg-white/10 px-1.5 py-0.5 text-2xs text-slate-300 backdrop-blur-sm">
+                              {g}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <p className="mt-2.5 truncate text-sm font-semibold text-slate-200">
+                    {item.name}
+                  </p>
+                  <p className="text-2xs text-slate-500">
+                    {item.year ?? ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── Upcoming Episodes ── */}
+      {(calendarLoading || calendarEntries.length > 0) && (
+        <section>
+          <SectionHeader title="Upcoming Episodes" count={calendarEntries.length} />
+          {calendarLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="skeleton h-20 rounded-xl" />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {calendarEntries.map((entry) => {
+                const airDate = new Date(entry.airDate);
+                const isToday = airDate.toDateString() === new Date().toDateString();
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const isTomorrow = airDate.toDateString() === tomorrow.toDateString();
+                const dateLabel = isToday
+                  ? "Today"
+                  : isTomorrow
+                    ? "Tomorrow"
+                    : airDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+
+                return (
+                  <div
+                    key={`${entry.seriesImdbId}-s${entry.season}e${entry.episode}`}
+                    className="flex items-center gap-4 rounded-xl border border-slate-800/40 bg-slate-900/30 p-3 transition-all hover:bg-slate-900/60 hover:border-slate-700/60"
+                  >
+                    <div className="h-16 w-11 flex-none overflow-hidden rounded-lg ring-1 ring-white/5">
+                      <Poster
+                        src={entry.poster ?? undefined}
+                        alt={entry.seriesName}
+                        className="h-full w-full"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-100">
+                        {entry.seriesName}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        S{entry.season}:E{entry.episode} — {entry.episodeName}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 flex-none">
+                      <span className={`rounded-full px-2.5 py-0.5 text-2xs font-semibold ${
+                        isToday
+                          ? "bg-red-500/15 text-red-400"
+                          : isTomorrow
+                            ? "bg-amber-500/15 text-amber-400"
+                            : "bg-slate-800/60 text-slate-400"
+                      }`}>
+                        {dateLabel}
+                      </span>
+                      <span className="text-2xs text-slate-600">
+                        {airDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }
