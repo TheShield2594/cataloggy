@@ -327,6 +327,7 @@ export function SearchPage() {
           historyLoading={panelHistoryLoading}
           listMap={listMap}
           onClose={() => setSelectedItem(null)}
+          onShowToast={showToast}
         />
       )}
 
@@ -513,20 +514,26 @@ function StarRating({
   const [hoverRating, setHoverRating] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     setUserRating(null);
     setHoverRating(null);
     setLoaded(false);
+    setLoadError(null);
     let canceled = false;
     void (async () => {
       try {
         const res = await api.getRating(type, imdbId);
         if (!canceled) setUserRating(res.rating.rating);
       } catch (err) {
-        // 404 = no rating exists, anything else is a real error
-        if (!(err instanceof ApiError && err.status === 404)) {
-          console.error("Failed to load rating:", err);
+        if (!canceled) {
+          // 404 = no rating exists, anything else is a real error
+          if (err instanceof ApiError && err.status === 404) {
+            // no rating — leave null
+          } else {
+            setLoadError(err instanceof Error ? err.message : "Failed to load rating");
+          }
         }
       } finally {
         if (!canceled) setLoaded(true);
@@ -563,6 +570,10 @@ function StarRating({
 
   if (!loaded) {
     return <div className="skeleton h-8 w-40 rounded-lg" />;
+  }
+
+  if (loadError) {
+    return <p className="text-xs text-rose-400">{loadError}</p>;
   }
 
   const displayRating = hoverRating ?? userRating ?? 0;
@@ -610,12 +621,14 @@ function DetailPanel({
   historyLoading,
   listMap,
   onClose,
+  onShowToast,
 }: {
   item: SearchResult;
   history: WatchEvent[];
   historyLoading: boolean;
   listMap: Map<string, CatalogList>;
   onClose: () => void;
+  onShowToast: (message: string, type: "success" | "error" | "info") => void;
 }) {
   const listNames = item.lists
     .map((id) => listMap.get(id)?.name)
@@ -706,7 +719,7 @@ function DetailPanel({
           )}
 
           {/* User Rating */}
-          <StarRating imdbId={item.imdbId} type={item.type} onError={(msg) => showToast(msg, "error")} />
+          <StarRating imdbId={item.imdbId} type={item.type} onError={(msg) => onShowToast(msg, "error")} />
 
           {/* Description */}
           {item.description && (

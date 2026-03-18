@@ -1304,6 +1304,35 @@ app.addContentTypeParser("multipart/form-data", { parseAs: "string" }, (_request
   done(null, body);
 });
 
+/**
+ * Extract the "payload" field value from a multipart/form-data body string.
+ * Returns the JSON string or null if not found.
+ */
+function extractMultipartPayload(rawBody: string, contentType: string): string | null {
+  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^\s;]+))/);
+  const boundary = boundaryMatch?.[1] ?? boundaryMatch?.[2];
+  if (!boundary) return null;
+
+  const parts = rawBody.split(`--${boundary}`);
+  for (const part of parts) {
+    // Match the Content-Disposition header for the "payload" field
+    if (!/name="payload"/i.test(part)) continue;
+
+    // The body starts after the first blank line (header/body separator)
+    const headerEnd = part.indexOf("\r\n\r\n");
+    const altHeaderEnd = part.indexOf("\n\n");
+    const bodyStart = headerEnd !== -1 ? headerEnd + 4 : altHeaderEnd !== -1 ? altHeaderEnd + 2 : -1;
+    if (bodyStart === -1) continue;
+
+    const body = part.slice(bodyStart).trim();
+    // Validate it looks like JSON before returning
+    if (body.startsWith("{") && body.endsWith("}")) {
+      return body;
+    }
+  }
+  return null;
+}
+
 app.post("/webhooks/plex", async (request, reply) => {
   if (!verifyWebhookSecret(request)) {
     return reply.code(403).send({ error: "Invalid webhook secret" });
@@ -1314,30 +1343,14 @@ app.post("/webhooks/plex", async (request, reply) => {
   // Plex sends multipart/form-data with a "payload" field
   const rawBody = request.body;
   if (typeof rawBody === "string") {
-    // Extract JSON payload from multipart body
-    const contentType = request.headers["content-type"] ?? "";
-    const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^\s;]+))/);
-    const boundary = boundaryMatch?.[1] ?? boundaryMatch?.[2];
-
-    if (boundary) {
-      const parts = rawBody.split(`--${boundary}`);
-      for (const part of parts) {
-        if (part.includes('name="payload"')) {
-          const jsonStart = part.indexOf("{");
-          const jsonEnd = part.lastIndexOf("}");
-          if (jsonStart !== -1 && jsonEnd !== -1) {
-            payloadStr = part.slice(jsonStart, jsonEnd + 1);
-          }
-        }
-      }
-    }
+    payloadStr = extractMultipartPayload(rawBody, request.headers["content-type"] ?? "");
   } else if (rawBody && typeof rawBody === "object") {
     // Fallback: might arrive as parsed JSON
     payloadStr = JSON.stringify(rawBody);
   }
 
   if (!payloadStr) {
-    return reply.code(400).send({ error: "No payload found" });
+    return reply.code(400).send({ error: "No payload found. Expected multipart/form-data with a 'payload' field." });
   }
 
   let payload: {
@@ -1643,21 +1656,33 @@ app.post<{ Body: unknown }>("/settings/preferences", async (request, reply) => {
   const body = request.body as { language?: unknown; region?: unknown; spoilerProtection?: unknown } | null;
   if (!body) return reply.code(400).send({ error: "Body is required" });
 
+  // Validate patterns: language = "xx" or "xx-YY", region = two uppercase letters
+  const LANGUAGE_PATTERN = /^[a-z]{2}(-[A-Z]{2})?$/;
+  const REGION_PATTERN = /^[A-Z]{2}$/;
+
   const now = new Date();
 
   if (typeof body.language === "string" && body.language.trim()) {
+    const lang = body.language.trim();
+    if (!LANGUAGE_PATTERN.test(lang)) {
+      return reply.code(400).send({ error: "language must be a valid language code (e.g., 'en-US', 'fr')" });
+    }
     await prisma.kV.upsert({
       where: { key: LANGUAGE_KV_KEY },
-      create: { key: LANGUAGE_KV_KEY, value: body.language.trim(), updatedAt: now },
-      update: { value: body.language.trim(), updatedAt: now },
+      create: { key: LANGUAGE_KV_KEY, value: lang, updatedAt: now },
+      update: { value: lang, updatedAt: now },
     });
   }
 
   if (typeof body.region === "string" && body.region.trim()) {
+    const reg = body.region.trim().toUpperCase();
+    if (!REGION_PATTERN.test(reg)) {
+      return reply.code(400).send({ error: "region must be a valid two-letter country code (e.g., 'US', 'GB')" });
+    }
     await prisma.kV.upsert({
       where: { key: REGION_KV_KEY },
-      create: { key: REGION_KV_KEY, value: body.region.trim().toUpperCase(), updatedAt: now },
-      update: { value: body.region.trim().toUpperCase(), updatedAt: now },
+      create: { key: REGION_KV_KEY, value: reg, updatedAt: now },
+      update: { value: reg, updatedAt: now },
     });
   }
 
@@ -2850,7 +2875,13 @@ app.post("/metadata/refresh-all", async (request, reply) => {
 
   const BATCH_SIZE = 5;
   const BATCH_DELAY_MS = 500;
-  const tmdb = await getTmdb();
+  let tmdb: TmdbClient;
+  try {
+    tmdb = await getTmdb();
+  } catch (error) {
+    request.log.error(error, "TMDB initialization failed for metadata refresh");
+    return reply.code(500).send({ error: "TMDB initialization failed" });
+  }
   let refreshed = 0;
 
   for (let i = 0; i < allMetadata.length; i += BATCH_SIZE) {
