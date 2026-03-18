@@ -1,10 +1,21 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 import { ItemType, ListItemType, ListKind, MetadataType, Prisma, PrismaClient, WatchEventType } from "@prisma/client";
-import { TraktClient } from "./trakt.js";
+import { TraktClient, computeTokenExpiresAt } from "./trakt.js";
 import { MetadataPayload, TmdbClient } from "./tmdb.js";
 
 const prisma = new PrismaClient();
+
+const htmlEscapeMap: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+function escapeHtml(str: string): string {
+  return str.replace(/[&<>"']/g, (ch) => htmlEscapeMap[ch]);
+}
+
+function renderOAuthHtml(detail: string, title = "Trakt Connection Failed"): string {
+  return `<html><body style="background:#0f172a;color:#e2e8f0;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">
+  <div style="text-align:center"><h1>${title}</h1><p>${detail}</p><p style="color:#94a3b8;margin-top:1rem">You can close this tab and return to Cataloggy.</p></div>
+</body></html>`;
+}
 
 const parseProxyPathPrefixes = (raw: string | undefined, fallback: readonly string[]) => {
   const parsed = (raw ?? "")
@@ -1867,7 +1878,18 @@ app.get("/trakt/oauth/authorize", async (_request, reply) => {
 });
 
 app.get("/trakt/oauth/callback", async (request, reply) => {
-  const { code } = request.query as { code?: string };
+  const { code, error: oauthError, error_description: oauthErrorDescription } = request.query as {
+    code?: string;
+    error?: string;
+    error_description?: string;
+  };
+
+  if (oauthError) {
+    request.log.warn({ error: oauthError, error_description: oauthErrorDescription }, "Trakt OAuth denied");
+    const safeMessage = escapeHtml(oauthErrorDescription ?? oauthError);
+    return reply.code(403).type("text/html").send(renderOAuthHtml(safeMessage, "Trakt Authorization Failed"));
+  }
+
   if (!code) {
     return reply.code(400).send({ error: "Missing authorization code" });
   }
@@ -1899,25 +1921,28 @@ app.get("/trakt/oauth/callback", async (request, reply) => {
     });
   } catch (err) {
     clearTimeout(tokenExchangeTimeout);
-    if (tokenExchangeController.signal.aborted) {
-      request.log.error("Trakt token exchange timed out after 30s");
-      return reply.code(502).send({ error: "Trakt token exchange timed out" });
-    }
+    const detail = tokenExchangeController.signal.aborted
+      ? "Trakt token exchange timed out. Please try again."
+      : "Could not reach Trakt servers. Please check your network and try again.";
     request.log.error(err, "Trakt token exchange fetch failed");
-    return reply.code(502).send({ error: "Failed to exchange authorization code" });
+    return reply.code(502).type("text/html").send(renderOAuthHtml(detail));
   }
   clearTimeout(tokenExchangeTimeout);
 
   if (!tokenResponse.ok) {
     const body = await tokenResponse.text();
     request.log.error({ status: tokenResponse.status, body }, "Trakt token exchange failed");
-    return reply.code(502).send({ error: "Failed to exchange authorization code" });
+    let detail = "Failed to exchange authorization code";
+    if (tokenResponse.status === 401) {
+      detail = "Trakt client credentials are invalid. Check TRAKT_CLIENT_ID and TRAKT_CLIENT_SECRET.";
+    } else if (tokenResponse.status === 403) {
+      detail = "Trakt redirect URI mismatch. Check TRAKT_REDIRECT_URI matches what is registered in your Trakt app settings.";
+    }
+    return reply.code(502).type("text/html").send(renderOAuthHtml(detail));
   }
 
   const tokens = (await tokenResponse.json()) as { access_token: string; refresh_token: string; expires_in?: number };
-  const expiresAt = typeof tokens.expires_in === "number" && Number.isFinite(tokens.expires_in)
-    ? new Date(Date.now() + tokens.expires_in * 1000)
-    : new Date(0);
+  const expiresAt = computeTokenExpiresAt(tokens.expires_in);
 
   await prisma.traktToken.upsert({
     where: { id: "default" },
@@ -1927,11 +1952,7 @@ app.get("/trakt/oauth/callback", async (request, reply) => {
 
   traktClient = null;
 
-  return reply.type("text/html").send(`
-    <html><body style="background:#0f172a;color:#e2e8f0;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">
-      <div style="text-align:center"><h1>Trakt Connected!</h1><p>You can close this tab and return to Cataloggy.</p></div>
-    </body></html>
-  `);
+  return reply.type("text/html").send(renderOAuthHtml("You can close this tab and return to Cataloggy.", "Trakt Connected!"));
 });
 
 app.post("/trakt/disconnect", async (_request, reply) => {
