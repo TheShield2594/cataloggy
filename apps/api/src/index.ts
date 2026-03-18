@@ -878,6 +878,27 @@ app.post<{ Body: unknown }>("/metadata/sync", async (request, reply) => {
 type TrendingCacheEntry = { data: StremioMetaPreview[]; expiry: number };
 const trendingCache = new Map<string, TrendingCacheEntry>();
 const TRENDING_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const MAX_TRENDING_CACHE_SIZE = 100;
+
+// TTL-aware cache helpers
+const trendingCacheGet = (key: string): TrendingCacheEntry | undefined => {
+  const entry = trendingCache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() >= entry.expiry) {
+    trendingCache.delete(key);
+    return undefined;
+  }
+  return entry;
+};
+
+const trendingCacheSet = (key: string, entry: TrendingCacheEntry) => {
+  // Evict oldest entries if at capacity
+  if (trendingCache.size >= MAX_TRENDING_CACHE_SIZE && !trendingCache.has(key)) {
+    const oldest = trendingCache.keys().next().value;
+    if (oldest !== undefined) trendingCache.delete(oldest);
+  }
+  trendingCache.set(key, entry);
+};
 
 app.get<{ Querystring: { type?: string; window?: string } }>("/trending", async (request, reply) => {
   const rawType = request.query.type ?? "movie";
@@ -887,7 +908,7 @@ app.get<{ Querystring: { type?: string; window?: string } }>("/trending", async 
   const timeWindow = request.query.window === "day" ? "day" as const : "week" as const;
   const cacheKey = `trending:${rawType}:${timeWindow}`;
   const now = Date.now();
-  const cached = trendingCache.get(cacheKey);
+  const cached = trendingCacheGet(cacheKey);
   if (cached && now < cached.expiry) return { metas: cached.data };
 
   try {
@@ -905,7 +926,7 @@ app.get<{ Querystring: { type?: string; window?: string } }>("/trending", async 
       genres: r.genres,
       rating: r.rating ?? undefined,
     }));
-    trendingCache.set(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
     return { metas };
   } catch (error) {
     request.log.error(error, "Trending fetch failed");
@@ -920,7 +941,7 @@ app.get<{ Querystring: { type?: string } }>("/popular", async (request, reply) =
 
   const cacheKey = `popular:${rawType}`;
   const now = Date.now();
-  const cached = trendingCache.get(cacheKey);
+  const cached = trendingCacheGet(cacheKey);
   if (cached && now < cached.expiry) return { metas: cached.data };
 
   try {
@@ -937,7 +958,7 @@ app.get<{ Querystring: { type?: string } }>("/popular", async (request, reply) =
       genres: r.genres,
       rating: r.rating ?? undefined,
     }));
-    trendingCache.set(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
     return { metas };
   } catch (error) {
     request.log.error(error, "Popular fetch failed");
@@ -959,7 +980,7 @@ app.post<{ Body: unknown }>("/ratings", async (request, reply) => {
     return reply.code(400).send({ error: "type must be one of: movie, series" });
   }
 
-  const rating = typeof body.rating === "number" ? body.rating : null;
+  const rating = typeof body.rating === "number" && Number.isFinite(body.rating) ? body.rating : null;
   if (rating === null || rating < 1 || rating > 10) {
     return reply.code(400).send({ error: "rating must be a number between 1 and 10" });
   }
@@ -1035,7 +1056,7 @@ app.get<{ Querystring: { imdbId?: string; type?: string } }>("/recommendations",
 
   const cacheKey = `recs:${rawType}:${imdbId}`;
   const now = Date.now();
-  const cached = trendingCache.get(cacheKey);
+  const cached = trendingCacheGet(cacheKey);
   if (cached && now < cached.expiry) return { metas: cached.data };
 
   // Look up tmdbId from metadata
@@ -1073,7 +1094,7 @@ async function getRecommendations(rawType: string, type: MetadataType, tmdbId: n
       genres: r.genres,
       rating: r.rating ?? undefined,
     }));
-    trendingCache.set(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
     return { metas };
   } catch {
     return { metas: [] };
@@ -1127,7 +1148,7 @@ app.get<{ Querystring: { type?: string; limit?: string } }>("/recommendations/pe
     try {
       // Check per-seed cache first
       const seedCacheKey = `recs:seed:${rawType}:${tmdbId}`;
-      const cachedSeed = trendingCache.get(seedCacheKey);
+      const cachedSeed = trendingCacheGet(seedCacheKey);
       let recs: MetadataPayload[];
       if (cachedSeed && Date.now() < cachedSeed.expiry) {
         // Reconstruct payloads from cached metas
@@ -1159,7 +1180,7 @@ app.get<{ Querystring: { type?: string; limit?: string } }>("/recommendations/pe
           genres: r.genres,
           rating: r.rating ?? undefined,
         }));
-        trendingCache.set(seedCacheKey, { data: seedMetas, expiry: Date.now() + TRENDING_CACHE_TTL_MS });
+        trendingCacheSet(seedCacheKey, { data: seedMetas, expiry: Date.now() + TRENDING_CACHE_TTL_MS });
       }
       for (const r of recs) {
         if (allRecs.length >= limit) break;
@@ -1175,7 +1196,7 @@ app.get<{ Querystring: { type?: string; limit?: string } }>("/recommendations/pe
           genres: r.genres,
           rating: r.rating ?? undefined,
         });
-        void upsertMetadata(r);
+        if (r.tmdbId !== null) void upsertMetadata(r);
       }
     } catch {
       // skip failed seeds
@@ -1203,22 +1224,51 @@ type RecordWatchParams = {
 const recordWatchEvent = async (params: RecordWatchParams) => {
   const { type, imdbId, seriesImdbId, season, episode, watchedAt, source, request: req } = params;
 
+  // Same-day dedupe: if an event for the same key exists on the same UTC day, increment plays
+  const dayStart = new Date(watchedAt);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayEnd = new Date(watchedAt);
+  dayEnd.setUTCHours(23, 59, 59, 999);
+
   if (type === "episode") {
     const eventImdbId = `${seriesImdbId ?? imdbId}:${season}:${episode}`;
-    const watchEvent = await prisma.watchEvent.create({
-      data: {
-        type: "episode",
-        imdbId: eventImdbId,
-        seriesImdbId: seriesImdbId ?? imdbId,
-        season: season ?? null,
-        episode: episode ?? null,
-        watchedAt,
-      },
+    const resolvedSeriesImdbId = seriesImdbId ?? imdbId;
+
+    const existing = await prisma.watchEvent.findFirst({
+      where: { imdbId: eventImdbId, season: season ?? null, episode: episode ?? null, watchedAt: { gte: dayStart, lte: dayEnd } },
     });
-    if (season != null && episode != null && seriesImdbId) {
-      await upsertSeriesProgressIfNewer(seriesImdbId, { lastSeason: season, lastEpisode: episode, lastWatchedAt: watchedAt });
+
+    let watchEvent;
+    if (existing) {
+      watchEvent = await prisma.watchEvent.update({
+        where: { id: existing.id },
+        data: { plays: existing.plays + 1, watchedAt },
+      });
+      req.log.info({ imdbId: eventImdbId, plays: watchEvent.plays }, `${source} scrobble: episode play incremented`);
+    } else {
+      watchEvent = await prisma.watchEvent.create({
+        data: { type: "episode", imdbId: eventImdbId, seriesImdbId: resolvedSeriesImdbId, season: season ?? null, episode: episode ?? null, watchedAt },
+      });
+      req.log.info({ imdbId: eventImdbId, seriesImdbId: resolvedSeriesImdbId, season, episode }, `${source} scrobble: episode recorded`);
     }
-    req.log.info({ imdbId: eventImdbId, seriesImdbId, season, episode }, `${source} scrobble: episode recorded`);
+
+    if (season != null && episode != null) {
+      await upsertSeriesProgressIfNewer(resolvedSeriesImdbId, { lastSeason: season, lastEpisode: episode, lastWatchedAt: watchedAt });
+    }
+    return { status: "recorded" as const, watchEvent };
+  }
+
+  // Movie
+  const existing = await prisma.watchEvent.findFirst({
+    where: { imdbId, type: "movie", watchedAt: { gte: dayStart, lte: dayEnd } },
+  });
+
+  if (existing) {
+    const watchEvent = await prisma.watchEvent.update({
+      where: { id: existing.id },
+      data: { plays: existing.plays + 1, watchedAt },
+    });
+    req.log.info({ imdbId, plays: watchEvent.plays }, `${source} scrobble: movie play incremented`);
     return { status: "recorded" as const, watchEvent };
   }
 
@@ -1492,7 +1542,7 @@ app.get<{ Querystring: { type?: string; provider?: string; region?: string } }>(
   const provider = STREAMING_PROVIDERS[providerKey];
   const cacheKey = `streaming:${providerKey}:${rawType}:${region}`;
   const now = Date.now();
-  const cached = trendingCache.get(cacheKey);
+  const cached = trendingCacheGet(cacheKey);
   if (cached && now < cached.expiry) return { metas: cached.data, provider: provider.name };
 
   try {
@@ -1509,7 +1559,7 @@ app.get<{ Querystring: { type?: string; provider?: string; region?: string } }>(
       genres: r.genres,
       rating: r.rating ?? undefined,
     }));
-    trendingCache.set(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
     return { metas, provider: provider.name };
   } catch (error) {
     request.log.error(error, "Streaming catalog fetch failed");
@@ -1532,7 +1582,7 @@ app.get<{ Querystring: { type?: string } }>("/anime", async (request, reply) => 
 
   const cacheKey = `anime:${rawType}`;
   const now = Date.now();
-  const cached = trendingCache.get(cacheKey);
+  const cached = trendingCacheGet(cacheKey);
   if (cached && now < cached.expiry) return { metas: cached.data };
 
   try {
@@ -1549,7 +1599,7 @@ app.get<{ Querystring: { type?: string } }>("/anime", async (request, reply) => 
       genres: r.genres,
       rating: r.rating ?? undefined,
     }));
-    trendingCache.set(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
     return { metas };
   } catch (error) {
     request.log.error(error, "Anime catalog fetch failed");
@@ -2339,10 +2389,15 @@ app.get<{ Params: { imdbId: string } }>("/series/progress/:imdbId", async (reque
     return reply.code(404).send({ error: "No progress found for this series" });
   }
 
-  const meta = await prisma.metadata.findUnique({
-    where: { imdbId_type: { imdbId, type: "series" } },
-    select: { name: true, poster: true, totalSeasons: true, totalEpisodes: true }
-  });
+  const [meta, watchedCount] = await Promise.all([
+    prisma.metadata.findUnique({
+      where: { imdbId_type: { imdbId, type: "series" } },
+      select: { name: true, poster: true, totalSeasons: true, totalEpisodes: true }
+    }),
+    prisma.watchEvent.count({
+      where: { seriesImdbId: imdbId, type: "episode" }
+    }),
+  ]);
 
   return {
     progress: {
@@ -2355,6 +2410,7 @@ app.get<{ Params: { imdbId: string } }>("/series/progress/:imdbId", async (reque
       poster: meta?.poster ?? null,
       totalSeasons: meta?.totalSeasons ?? null,
       totalEpisodes: meta?.totalEpisodes ?? null,
+      watchedEpisodes: watchedCount,
     }
   };
 });

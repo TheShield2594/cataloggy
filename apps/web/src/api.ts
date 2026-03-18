@@ -1,3 +1,10 @@
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 const API_BASE_DEFAULT = import.meta.env.VITE_API_BASE ?? "http://localhost:7000";
 const API_BASE_OVERRIDE_KEY = "cataloggy_api_base_override";
 const TOKEN_KEY = "cataloggy_token";
@@ -198,7 +205,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || `Request failed: ${response.status}`);
+    throw new ApiError(message || `Request failed: ${response.status}`, response.status);
   }
 
   if (response.status === 204) {

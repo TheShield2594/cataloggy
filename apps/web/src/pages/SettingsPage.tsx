@@ -545,6 +545,12 @@ function PreferencesSection() {
   const [language, setLanguage] = useState("en-US");
   const [region, setRegion] = useState("US");
   const [spoilerProtection, setSpoilerProtection] = useState(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Cleanup saved timer on unmount
+  useEffect(() => {
+    return () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current); };
+  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -570,7 +576,8 @@ function PreferencesSection() {
       setRegion(updated.region);
       setSpoilerProtection(updated.spoilerProtection);
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save preferences");
     } finally {
@@ -598,6 +605,9 @@ function PreferencesSection() {
           onChange={(e) => { setLanguage(e.target.value); setSaved(false); }}
           className="w-full rounded-xl border border-slate-700/60 bg-slate-950 px-4 py-3 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15"
         >
+          {!COMMON_LANGUAGES.some((l) => l.code === language) && (
+            <option value={language}>{language}</option>
+          )}
           {COMMON_LANGUAGES.map((l) => (
             <option key={l.code} value={l.code}>{l.label} ({l.code})</option>
           ))}
@@ -616,6 +626,9 @@ function PreferencesSection() {
           onChange={(e) => { setRegion(e.target.value); setSaved(false); }}
           className="w-full rounded-xl border border-slate-700/60 bg-slate-950 px-4 py-3 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15"
         >
+          {!COMMON_REGIONS.includes(region) && (
+            <option value={region}>{region}</option>
+          )}
           {COMMON_REGIONS.map((r) => (
             <option key={r} value={r}>{r}</option>
           ))}
