@@ -23,33 +23,19 @@ cataloggy/
 
 ## Docker Compose install (recommended)
 
-1. Prepare environment file:
+1. Edit `docker-compose.yml` and set your values directly in the `environment:` blocks:
 
-   ```bash
-   cp .env.example .env
-   ```
+   - **Required:** `API_TOKEN` (in `api` and `addon` services — keep them matching)
+   - **Recommended for LAN devices** (phone/Apple TV): update the URLs in `api`, `addon`, and `web` services to use your LAN IP instead of `localhost`
+   - **Optional integrations:** `TMDB_API_KEY`, `TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET` (in `api` service)
 
-2. Set only the values you care about in `.env`:
-
-   - Required: `API_TOKEN`
-   - Optional but recommended for LAN devices (phone/Apple TV):
-     - `CATALOGGY_PUBLIC_BASE`
-     - `CATALOGGY_API_PUBLIC`
-     - `CATALOGGY_ADDON_PUBLIC`
-     - `CATALOGGY_WEB_PUBLIC`
-   - Optional integrations:
-     - `TMDB_API_KEY`
-     - Trakt variables (`TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET`)
-
-   Everything else already has defaults in `docker-compose.yml`, so you can leave them blank.
-
-3. Start everything:
+2. Start everything:
 
    ```bash
    docker compose up --build
    ```
 
-4. Run the smoke checks:
+3. Run the smoke checks:
 
    ```bash
    pnpm smoke
