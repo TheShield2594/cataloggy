@@ -1,3 +1,6 @@
+-- CreateEnum
+CREATE TYPE "ScrobbleStatus" AS ENUM ('playing', 'paused', 'stopped');
+
 -- CreateTable
 CREATE TABLE "ScrobbleSession" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
@@ -6,7 +9,7 @@ CREATE TABLE "ScrobbleSession" (
     "seriesImdbId" TEXT,
     "season" INTEGER,
     "episode" INTEGER,
-    "status" TEXT NOT NULL DEFAULT 'playing',
+    "status" "ScrobbleStatus" NOT NULL DEFAULT 'playing',
     "progress" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "startedAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMPTZ(6) NOT NULL,
@@ -15,7 +18,4 @@ CREATE TABLE "ScrobbleSession" (
 );
 
 -- CreateIndex
-CREATE INDEX "ScrobbleSession_status_idx" ON "ScrobbleSession"("status");
-
--- CreateIndex
-CREATE INDEX "ScrobbleSession_imdbId_idx" ON "ScrobbleSession"("imdbId");
+CREATE INDEX "ScrobbleSession_imdbId_season_episode_status_idx" ON "ScrobbleSession"("imdbId", "season", "episode", "status");

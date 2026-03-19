@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
-import { ItemType, ListItemType, ListKind, MetadataType, Prisma, PrismaClient, WatchEventType } from "@prisma/client";
+import { ItemType, ListItemType, ListKind, MetadataType, Prisma, PrismaClient, ScrobbleStatus, WatchEventType } from "@prisma/client";
 import { TraktClient, computeTokenExpiresAt } from "./trakt.js";
 import { MetadataPayload, STREAMING_PROVIDERS, TmdbClient } from "./tmdb.js";
 
@@ -2923,6 +2923,22 @@ app.post("/metadata/refresh-all", async (request, reply) => {
 // ─── Scrobbling ───
 
 const SCROBBLE_COMPLETE_THRESHOLD = 80; // percentage at which a scrobble counts as "watched"
+const SCROBBLE_STALE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const SCROBBLE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // run cleanup every hour
+
+const cleanupStaleSessions = async () => {
+  const cutoff = new Date(Date.now() - SCROBBLE_STALE_TTL_MS);
+  const { count } = await prisma.scrobbleSession.updateMany({
+    where: {
+      status: { in: [ScrobbleStatus.playing, ScrobbleStatus.paused] },
+      updatedAt: { lt: cutoff }
+    },
+    data: { status: ScrobbleStatus.stopped }
+  });
+  if (count > 0) {
+    app.log.info({ count }, "Cleaned up stale scrobble sessions");
+  }
+};
 
 app.post<{ Body: unknown }>("/scrobble/start", async (request, reply) => {
   if (!request.body || typeof request.body !== "object") {
@@ -2953,29 +2969,32 @@ app.post<{ Body: unknown }>("/scrobble/start", async (request, reply) => {
   const episode = typeof body.episode === "number" && Number.isInteger(body.episode) ? body.episode : null;
   const progress = typeof body.progress === "number" ? Math.max(0, Math.min(100, body.progress)) : 0;
 
-  // Upsert: if there's already an active session for this content, update it
-  const existing = await prisma.scrobbleSession.findFirst({
-    where: {
-      imdbId,
-      season,
-      episode,
-      status: { in: ["playing", "paused"] }
-    }
-  });
-
-  if (existing) {
-    const updated = await prisma.scrobbleSession.update({
-      where: { id: existing.id },
-      data: { status: "playing", progress }
+  // Atomically find-and-update or create to avoid duplicate active sessions
+  const { session, created } = await prisma.$transaction(async (tx) => {
+    const existing = await tx.scrobbleSession.findFirst({
+      where: {
+        imdbId,
+        season,
+        episode,
+        status: { in: [ScrobbleStatus.playing, ScrobbleStatus.paused] }
+      }
     });
-    return reply.code(200).send({ session: updated });
-  }
 
-  const session = await prisma.scrobbleSession.create({
-    data: { type, imdbId, seriesImdbId, season, episode, status: "playing", progress }
+    if (existing) {
+      const updated = await tx.scrobbleSession.update({
+        where: { id: existing.id },
+        data: { status: ScrobbleStatus.playing, progress }
+      });
+      return { session: updated, created: false };
+    }
+
+    const newSession = await tx.scrobbleSession.create({
+      data: { type, imdbId, seriesImdbId, season, episode, status: ScrobbleStatus.playing, progress }
+    });
+    return { session: newSession, created: true };
   });
 
-  return reply.code(201).send({ session });
+  return reply.code(created ? 201 : 200).send({ session });
 });
 
 app.post<{ Body: unknown }>("/scrobble/pause", async (request, reply) => {
@@ -2994,7 +3013,7 @@ app.post<{ Body: unknown }>("/scrobble/pause", async (request, reply) => {
   const progress = typeof body.progress === "number" ? Math.max(0, Math.min(100, body.progress)) : undefined;
 
   const session = await prisma.scrobbleSession.findFirst({
-    where: { imdbId, season, episode, status: "playing" }
+    where: { imdbId, season, episode, status: ScrobbleStatus.playing }
   });
 
   if (!session) {
@@ -3003,7 +3022,7 @@ app.post<{ Body: unknown }>("/scrobble/pause", async (request, reply) => {
 
   const updated = await prisma.scrobbleSession.update({
     where: { id: session.id },
-    data: { status: "paused", ...(progress !== undefined ? { progress } : {}) }
+    data: { status: ScrobbleStatus.paused, ...(progress !== undefined ? { progress } : {}) }
   });
 
   return reply.code(200).send({ session: updated });
@@ -3025,7 +3044,7 @@ app.post<{ Body: unknown }>("/scrobble/stop", async (request, reply) => {
   const progress = typeof body.progress === "number" ? Math.max(0, Math.min(100, body.progress)) : undefined;
 
   const session = await prisma.scrobbleSession.findFirst({
-    where: { imdbId, season, episode, status: { in: ["playing", "paused"] } }
+    where: { imdbId, season, episode, status: { in: [ScrobbleStatus.playing, ScrobbleStatus.paused] } }
   });
 
   if (!session) {
@@ -3033,64 +3052,66 @@ app.post<{ Body: unknown }>("/scrobble/stop", async (request, reply) => {
   }
 
   const finalProgress = progress ?? session.progress;
+  const watchedAt = new Date();
+  const seriesImdbId = session.seriesImdbId;
 
-  // Mark session as stopped
-  await prisma.scrobbleSession.update({
-    where: { id: session.id },
-    data: { status: "stopped", progress: finalProgress }
-  });
-
-  // If the user watched enough, auto-record a watch event
-  let watchEvent = null;
-  if (finalProgress >= SCROBBLE_COMPLETE_THRESHOLD) {
-    const watchedAt = new Date();
-    const seriesImdbId = session.seriesImdbId;
-
-    const dayStart = new Date(watchedAt);
-    dayStart.setUTCHours(0, 0, 0, 0);
-    const dayEnd = new Date(watchedAt);
-    dayEnd.setUTCHours(23, 59, 59, 999);
-
-    const existingEvent = await prisma.watchEvent.findFirst({
-      where: {
-        imdbId,
-        season: session.season,
-        episode: session.episode,
-        watchedAt: { gte: dayStart, lte: dayEnd }
-      }
+  // Wrap session stop + watch event creation in a transaction for atomicity
+  const { stoppedSession, watchEvent } = await prisma.$transaction(async (tx) => {
+    const stoppedSession = await tx.scrobbleSession.update({
+      where: { id: session.id },
+      data: { status: ScrobbleStatus.stopped, progress: finalProgress }
     });
 
-    if (existingEvent) {
-      watchEvent = await prisma.watchEvent.update({
-        where: { id: existingEvent.id },
-        data: { plays: existingEvent.plays + 1 }
-      });
-    } else {
-      watchEvent = await prisma.watchEvent.create({
-        data: {
-          type: session.type,
+    let watchEvent = null;
+    if (finalProgress >= SCROBBLE_COMPLETE_THRESHOLD) {
+      const dayStart = new Date(watchedAt);
+      dayStart.setUTCHours(0, 0, 0, 0);
+      const dayEnd = new Date(watchedAt);
+      dayEnd.setUTCHours(23, 59, 59, 999);
+
+      const existingEvent = await tx.watchEvent.findFirst({
+        where: {
           imdbId,
-          seriesImdbId,
           season: session.season,
           episode: session.episode,
-          watchedAt,
-          plays: 1
+          watchedAt: { gte: dayStart, lte: dayEnd }
         }
       });
+
+      if (existingEvent) {
+        watchEvent = await tx.watchEvent.update({
+          where: { id: existingEvent.id },
+          data: { plays: existingEvent.plays + 1 }
+        });
+      } else {
+        watchEvent = await tx.watchEvent.create({
+          data: {
+            type: session.type,
+            imdbId,
+            seriesImdbId,
+            season: session.season,
+            episode: session.episode,
+            watchedAt,
+            plays: 1
+          }
+        });
+      }
     }
 
-    // Update series progress if applicable
-    if (session.type === "episode" && seriesImdbId && session.season !== null && session.episode !== null) {
-      await upsertSeriesProgressIfNewer(seriesImdbId, {
-        lastSeason: session.season,
-        lastEpisode: session.episode,
-        lastWatchedAt: watchedAt
-      });
-    }
+    return { stoppedSession, watchEvent };
+  });
+
+  // Update series progress outside transaction (idempotent)
+  if (watchEvent && session.type === "episode" && seriesImdbId && session.season !== null && session.episode !== null) {
+    await upsertSeriesProgressIfNewer(seriesImdbId, {
+      lastSeason: session.season,
+      lastEpisode: session.episode,
+      lastWatchedAt: watchedAt
+    });
   }
 
   return reply.code(200).send({
-    session: { id: session.id, status: "stopped", progress: finalProgress },
+    session: { id: stoppedSession.id, status: stoppedSession.status, progress: finalProgress },
     recorded: !!watchEvent,
     watchEvent
   });
@@ -3098,7 +3119,7 @@ app.post<{ Body: unknown }>("/scrobble/stop", async (request, reply) => {
 
 app.get("/scrobble/now-playing", async () => {
   const sessions = await prisma.scrobbleSession.findMany({
-    where: { status: { in: ["playing", "paused"] } },
+    where: { status: { in: [ScrobbleStatus.playing, ScrobbleStatus.paused] } },
     orderBy: { updatedAt: "desc" }
   });
 
@@ -3160,6 +3181,13 @@ const start = async () => {
   } else {
     app.log.info("Scheduled Trakt poll disabled because TRAKT_POLL_INTERVAL_SEC is set to 0");
   }
+
+  // Periodic cleanup of stale scrobble sessions
+  setInterval(() => {
+    void cleanupStaleSessions().catch((error) => {
+      app.log.error(error, "Scrobble session cleanup failed");
+    });
+  }, SCROBBLE_CLEANUP_INTERVAL_MS);
 
   await app.listen({ port, host: "0.0.0.0" });
 };
