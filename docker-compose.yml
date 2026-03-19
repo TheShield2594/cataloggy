@@ -1,20 +1,16 @@
 services:
   db:
     image: postgres:16
-    # Local development defaults; values can be overridden via .env
-    env_file:
-      - .env
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-cataloggy}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      # Exposed for local development only. Remove for production deployments.
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-cataloggy}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cataloggy"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -25,14 +21,20 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    env_file:
-      - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-cataloggy}
-      PORT: 7000
-      CATALOGGY_ALLOWED_ORIGINS: ${CATALOGGY_ALLOWED_ORIGINS:-${CATALOGGY_WEB_PUBLIC:-http://localhost:7002}}
-      CATALOGGY_API_PUBLIC: ${CATALOGGY_API_PUBLIC:-http://localhost:7000}
+      PORT: "7000"
+      API_TOKEN: ${API_TOKEN:-dev-token}
+      CATALOGGY_ALLOWED_ORIGINS: http://localhost:7002
+      CATALOGGY_API_PUBLIC: http://localhost:7000
+      # Optional integrations — set these in a .env file or export them.
+      # Leaving them unset is safe; the API validates at startup/request time
+      # and returns clear error messages if they are missing when needed.
+      TRAKT_CLIENT_ID: ${TRAKT_CLIENT_ID:-}
+      TRAKT_CLIENT_SECRET: ${TRAKT_CLIENT_SECRET:-}
       TRAKT_REDIRECT_URI: ${TRAKT_REDIRECT_URI:-}
+      TRAKT_POLL_INTERVAL_SEC: ${TRAKT_POLL_INTERVAL_SEC:-300}
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
     ports:
       - "7000:7000"
     depends_on:
@@ -51,13 +53,11 @@ services:
     build:
       context: .
       dockerfile: apps/addon/Dockerfile
-    env_file:
-      - .env
     environment:
-      PORT: 7001
-      CATALOGGY_API_BASE: ${CATALOGGY_API_BASE:-http://api:7000}
-      CATALOGGY_API_TOKEN: ${CATALOGGY_API_TOKEN:-${API_TOKEN:-dev-token}}
-      ADDON_PUBLIC_BASE: ${ADDON_PUBLIC_BASE:-${CATALOGGY_ADDON_PUBLIC:-http://localhost:7001}}
+      PORT: "7001"
+      CATALOGGY_API_BASE: http://api:7000
+      CATALOGGY_API_TOKEN: ${API_TOKEN:-dev-token}
+      ADDON_PUBLIC_BASE: http://localhost:7001
     ports:
       - "7001:7001"
     depends_on:
@@ -76,10 +76,8 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-    env_file:
-      - .env
     environment:
-      VITE_API_BASE: ${VITE_API_BASE:-${CATALOGGY_API_PUBLIC:-http://localhost:7000}}
+      VITE_API_BASE: http://localhost:7000
     ports:
       - "7002:7002"
     depends_on:
