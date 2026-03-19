@@ -23,11 +23,13 @@ cataloggy/
 
 ## Docker Compose install (recommended)
 
-1. Edit `docker-compose.yml` and set your values directly in the `environment:` blocks:
+1. Create a `.env` file (or export environment variables) to override defaults:
 
-   - **Required:** `API_TOKEN` (in `api` and `addon` services — keep them matching)
+   - **Required:** `API_TOKEN` (used by both `api` and `addon` services — they share the same variable)
    - **Recommended for LAN devices** (phone/Apple TV): update the URLs in `api`, `addon`, and `web` services to use your LAN IP instead of `localhost`
    - **Optional integrations:** `TMDB_API_KEY`, `TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET` (in `api` service)
+
+   > **Non-local deployments:** You **must** change `POSTGRES_PASSWORD` and `API_TOKEN` from their development defaults. Set them via a `.env` file next to `docker-compose.yml` or export them in your shell.
 
 2. Start everything:
 
