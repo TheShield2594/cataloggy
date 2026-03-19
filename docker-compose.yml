@@ -25,8 +25,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-cataloggy}
       PORT: "7000"
       API_TOKEN: ${API_TOKEN:-dev-token}
-      CATALOGGY_ALLOWED_ORIGINS: http://localhost:7002
-      CATALOGGY_API_PUBLIC: http://localhost:7000
+      CATALOGGY_ALLOWED_ORIGINS: ${CATALOGGY_ALLOWED_ORIGINS:-http://localhost:7002}
+      CATALOGGY_API_PUBLIC: ${CATALOGGY_API_PUBLIC:-http://localhost:7000}
       # Optional integrations — set these in a .env file or export them.
       # Leaving them unset is safe; the API validates at startup/request time
       # and returns clear error messages if they are missing when needed.
@@ -57,7 +57,7 @@ services:
       PORT: "7001"
       CATALOGGY_API_BASE: http://api:7000
       CATALOGGY_API_TOKEN: ${API_TOKEN:-dev-token}
-      ADDON_PUBLIC_BASE: http://localhost:7001
+      ADDON_PUBLIC_BASE: ${ADDON_PUBLIC_BASE:-http://localhost:7001}
     ports:
       - "7001:7001"
     depends_on:
@@ -77,7 +77,7 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     environment:
-      VITE_API_BASE: http://localhost:7000
+      VITE_API_BASE: ${VITE_API_BASE:-http://localhost:7000}
     ports:
       - "7002:7002"
     depends_on:
