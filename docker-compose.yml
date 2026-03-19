@@ -25,16 +25,16 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-cataloggy}
       PORT: "7000"
       API_TOKEN: ${API_TOKEN:-dev-token}
-      CATALOGGY_ALLOWED_ORIGINS: ${CATALOGGY_ALLOWED_ORIGINS:-http://localhost:7002}
-      CATALOGGY_API_PUBLIC: ${CATALOGGY_API_PUBLIC:-http://localhost:7000}
+      CATALOGGY_ALLOWED_ORIGINS: ${CATALOGGY_ALLOWED_ORIGINS:-http://192.168.1.20:7002}
+      CATALOGGY_API_PUBLIC: ${CATALOGGY_API_PUBLIC:-http://192.168.1.20:7000}
       # Optional integrations — set these in a .env file or export them.
       # Leaving them unset is safe; the API validates at startup/request time
       # and returns clear error messages if they are missing when needed.
-      TRAKT_CLIENT_ID: ${TRAKT_CLIENT_ID:-}
-      TRAKT_CLIENT_SECRET: ${TRAKT_CLIENT_SECRET:-}
-      TRAKT_REDIRECT_URI: ${TRAKT_REDIRECT_URI:-}
+      TRAKT_CLIENT_ID: ${TRAKT_CLIENT_ID:-6dfb7aff9fcb7d4cfdcbc3395216eb7ba184909cf27f1e286d3c106acd6a7074}
+      TRAKT_CLIENT_SECRET: ${TRAKT_CLIENT_SECRET:-01e2a98cb7b90ca5b88179a65e8900cc8b2f0e4fcf24de47190c3c5be99a37a0}
+      TRAKT_REDIRECT_URI: ${TRAKT_REDIRECT_URI:-http://192.168.1.20:7000/trakt/oauth/callback}
       TRAKT_POLL_INTERVAL_SEC: ${TRAKT_POLL_INTERVAL_SEC:-300}
-      TMDB_API_KEY: ${TMDB_API_KEY:-}
+      TMDB_API_KEY: ${TMDB_API_KEY:-e8b4fa576a0bb32a503915f57cf9b462}
     ports:
       - "7000:7000"
     depends_on:
@@ -57,7 +57,7 @@ services:
       PORT: "7001"
       CATALOGGY_API_BASE: http://api:7000
       CATALOGGY_API_TOKEN: ${API_TOKEN:-dev-token}
-      ADDON_PUBLIC_BASE: ${ADDON_PUBLIC_BASE:-http://localhost:7001}
+      ADDON_PUBLIC_BASE: ${ADDON_PUBLIC_BASE:-http://192.168.1.20:7001}
     ports:
       - "7001:7001"
     depends_on:
@@ -77,7 +77,7 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     environment:
-      VITE_API_BASE: ${VITE_API_BASE:-http://localhost:7000}
+      VITE_API_BASE: ${VITE_API_BASE:-http://192.168.1.20:7000}
     ports:
       - "7002:7002"
     depends_on:
