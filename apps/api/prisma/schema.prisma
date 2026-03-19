@@ -33,6 +33,12 @@ enum MetadataType {
   series
 }
 
+enum ScrobbleStatus {
+  playing
+  paused
+  stopped
+}
+
 model User {
   id        String   @id @default(uuid()) @db.Uuid
   email     String   @unique
@@ -109,19 +115,18 @@ model TraktToken {
 }
 
 model ScrobbleSession {
-  id           String         @id @default(uuid()) @db.Uuid
+  id           String          @id @default(uuid()) @db.Uuid
   type         WatchEventType
   imdbId       String
   seriesImdbId String?
   season       Int?
   episode      Int?
-  status       String         @default("playing") // playing, paused, stopped
-  progress     Float          @default(0) // 0-100 percentage
-  startedAt    DateTime       @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime       @updatedAt @db.Timestamptz(6)
+  status       ScrobbleStatus  @default(playing)
+  progress     Float           @default(0) // 0-100 percentage
+  startedAt    DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime        @updatedAt @db.Timestamptz(6)
 
-  @@index([status])
-  @@index([imdbId])
+  @@index([imdbId, season, episode, status])
 }
 
 model Metadata {

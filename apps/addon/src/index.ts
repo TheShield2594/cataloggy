@@ -678,9 +678,13 @@ app.post<{ Body: unknown }>("/scrobble/:action", async (request, reply) => {
     return reply.code(400).send({ error: "imdbId is required" });
   }
 
+  if (body.type !== "movie" && body.type !== "episode") {
+    return reply.code(400).send({ error: "type must be one of: movie, episode" });
+  }
+
   try {
     const result = await apiPost(`/scrobble/${action}`, {
-      type: body.type ?? "movie",
+      type: body.type,
       imdbId: body.imdbId,
       seriesImdbId: body.seriesImdbId ?? null,
       season: body.season ?? null,
