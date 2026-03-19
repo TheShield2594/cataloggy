@@ -649,6 +649,50 @@ app.get<{ Params: { type: string; imdbId: string; season: string; episode: strin
   }
 );
 
+// ─── Scrobble webhook (receives playback events from media players) ───
+
+type ScrobbleAction = "start" | "pause" | "stop";
+
+app.post<{ Body: unknown }>("/scrobble/:action", async (request, reply) => {
+  reply.header("Access-Control-Allow-Origin", "*");
+
+  const action = (request.params as { action: string }).action as ScrobbleAction;
+  if (!["start", "pause", "stop"].includes(action)) {
+    return reply.code(400).send({ error: "action must be one of: start, pause, stop" });
+  }
+
+  if (!request.body || typeof request.body !== "object") {
+    return reply.code(400).send({ error: "Request body is required" });
+  }
+
+  const body = request.body as {
+    imdbId?: unknown;
+    type?: unknown;
+    seriesImdbId?: unknown;
+    season?: unknown;
+    episode?: unknown;
+    progress?: unknown;
+  };
+
+  if (typeof body.imdbId !== "string" || !body.imdbId.trim()) {
+    return reply.code(400).send({ error: "imdbId is required" });
+  }
+
+  try {
+    const result = await apiPost(`/scrobble/${action}`, {
+      type: body.type ?? "movie",
+      imdbId: body.imdbId,
+      seriesImdbId: body.seriesImdbId ?? null,
+      season: body.season ?? null,
+      episode: body.episode ?? null,
+      progress: body.progress ?? 0
+    });
+    return reply.send(result);
+  } catch (error) {
+    request.log.error(error, `Failed to forward scrobble/${action} to API`);
+    return reply.code(502).send({ error: "Failed to forward scrobble event to API" });
+  }
+});
 // ─── Configure page redirect ───
 
 app.get("/configure", async (_request: FastifyRequest, reply: FastifyReply) => {
