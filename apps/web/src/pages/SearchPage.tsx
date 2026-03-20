@@ -209,7 +209,7 @@ export function SearchPage() {
   ];
 
   const hasSearched = results !== null;
-  const noResults = hasSearched && results.length === 0;
+  const noResults = hasSearched && (results?.length ?? 0) === 0;
 
   return (
     <div className="relative space-y-6">

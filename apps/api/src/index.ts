@@ -2413,7 +2413,7 @@ app.get("/series/progress", async () => {
       lastEpisode: row.lastEpisode,
       lastWatchedAt: row.lastWatchedAt,
       updatedAt: row.updatedAt,
-      name: meta?.name ?? null,
+      name: meta?.name ?? row.seriesImdbId,
       poster: meta?.poster ?? null,
       totalSeasons: meta?.totalSeasons ?? null,
       totalEpisodes: meta?.totalEpisodes ?? null,

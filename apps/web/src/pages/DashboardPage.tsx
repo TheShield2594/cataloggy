@@ -93,7 +93,7 @@ function Poster({
   className = "",
 }: {
   src?: string;
-  alt: string;
+  alt: string | null | undefined;
   className?: string;
 }) {
   const [loadFailed, setLoadFailed] = useState(false);
@@ -116,7 +116,7 @@ function Poster({
   return (
     <img
       src={src}
-      alt={alt}
+      alt={alt ?? "Poster"}
       className={`object-cover ${className}`}
       loading="lazy"
       onError={() => setLoadFailed(true)}
@@ -262,8 +262,8 @@ export function DashboardPage() {
         api.getWatchHistory(20),
         api.getWatchStats(),
       ]);
-      setProgress(progressRes);
-      setHistory(historyRes);
+      setProgress(progressRes ?? []);
+      setHistory(historyRes ?? []);
       setStats(statsRes);
     } catch (err) {
       setError(
@@ -280,7 +280,7 @@ export function DashboardPage() {
     void (async () => {
       try {
         const res = await api.getTrending("movie", "week");
-        if (mounted) setTrendingMovies(res.metas);
+        if (mounted) setTrendingMovies(res.metas ?? []);
       } catch { /* optional */ } finally {
         if (mounted) setTrendingLoading(false);
       }
@@ -288,7 +288,7 @@ export function DashboardPage() {
     void (async () => {
       try {
         const res = await api.getPersonalRecommendations("movie", 20);
-        if (mounted) setRecommendations(res.metas);
+        if (mounted) setRecommendations(res.metas ?? []);
       } catch { /* optional */ } finally {
         if (mounted) setRecsLoading(false);
       }
@@ -296,7 +296,7 @@ export function DashboardPage() {
     void (async () => {
       try {
         const res = await api.getCalendar(14);
-        if (mounted) setCalendarEntries(res.calendar);
+        if (mounted) setCalendarEntries(res.calendar ?? []);
       } catch { /* optional */ } finally {
         if (mounted) setCalendarLoading(false);
       }
