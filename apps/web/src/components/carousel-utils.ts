@@ -13,7 +13,8 @@ export const FALLBACK_GRADIENTS = [
   "from-orange-900 to-slate-900",
 ];
 
-export function getInitials(name: string): string {
+export function getInitials(name: string | null | undefined): string {
+  if (!name) return "?";
   return name
     .split(/[\s:–—-]+/)
     .filter(Boolean)
@@ -23,7 +24,8 @@ export function getInitials(name: string): string {
     .toUpperCase();
 }
 
-export function getGradient(name: string): string {
+export function getGradient(name: string | null | undefined): string {
+  if (!name) return FALLBACK_GRADIENTS[0];
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
   return FALLBACK_GRADIENTS[Math.abs(hash) % FALLBACK_GRADIENTS.length];
