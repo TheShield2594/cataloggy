@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   AlertCircle,
   Film,
@@ -15,6 +15,7 @@ import {
   api,
   CalendarEntry,
   runtimeConfig,
+  SearchResult,
   SeriesProgress,
   TrendingMeta,
   WatchEvent,
@@ -22,6 +23,7 @@ import {
 } from "../api";
 import { Link } from "react-router-dom";
 import { useHorizontalScroll, getInitials, getGradient } from "../components/carousel-utils";
+import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 
 function timeAgo(dateStr: string): string {
   const now = Date.now();
@@ -136,14 +138,16 @@ type DiscoveryItem = {
   type?: string;
 };
 
-function DiscoveryCard({ item, badge }: { item: DiscoveryItem; badge?: React.ReactNode }) {
+function DiscoveryCard({ item, badge, onSelect }: { item: DiscoveryItem; badge?: React.ReactNode; onSelect?: (item: DiscoveryItem) => void }) {
   return (
-    <a
-      href={`https://www.imdb.com/title/${item.id}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex-none group"
+    <div
+      role="button"
+      tabIndex={0}
+      className="flex-none group cursor-pointer"
       style={{ width: "11rem" }}
+      onClick={() => onSelect?.(item)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect?.(item); } }}
+      aria-label={`View details for ${item.name}`}
     >
       <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
         <Poster src={item.poster} alt={item.name} className="h-full w-full" />
@@ -156,6 +160,7 @@ function DiscoveryCard({ item, badge }: { item: DiscoveryItem; badge?: React.Rea
           </div>
         )}
         {badge && <div className="absolute top-2.5 right-2.5">{badge}</div>}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/60 to-transparent px-3 pb-3 pt-10">
           {item.genres && item.genres.length > 0 && (
             <div className="flex flex-wrap gap-1">
@@ -166,11 +171,11 @@ function DiscoveryCard({ item, badge }: { item: DiscoveryItem; badge?: React.Rea
           )}
         </div>
       </div>
-      <p className="mt-2.5 truncate text-sm font-semibold text-slate-200">{item.name}</p>
+      <p className="mt-2.5 truncate text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">{item.name}</p>
       <p className="text-2xs text-slate-500">
         {item.year ?? ""}{item.type ? ` ${item.type === "movie" ? "Movie" : "Series"}` : ""}
       </p>
-    </a>
+    </div>
   );
 }
 
@@ -260,6 +265,23 @@ export function DashboardPage() {
   const recentScroll = useHorizontalScroll();
   const trendingScroll = useHorizontalScroll();
   const recsScroll = useHorizontalScroll();
+
+  const { selectedItem, setSelectedItem, panelHistory, panelHistoryLoading } = useDetailPanel();
+
+  const toSearchResult = useCallback((imdbId: string, type: "movie" | "series", name: string, opts?: {
+    poster?: string; year?: number | null; description?: string | null; genres?: string[]; rating?: number | null;
+  }): SearchResult => ({
+    imdbId, type, name,
+    year: opts?.year ?? null,
+    poster: opts?.poster ?? null,
+    description: opts?.description ?? null,
+    genres: opts?.genres ?? [],
+    rating: opts?.rating ?? null,
+    inWatchlist: false,
+    lists: [],
+  }), []);
+
+  const emptyListMap = useMemo(() => new Map(), []);
 
   const load = useCallback(async () => {
     try {
@@ -453,14 +475,12 @@ export function DashboardPage() {
                       alt={s.name}
                       className="h-full w-full"
                     />
-                    {/* Stretch link covers the poster; the gradient overlay below renders on top via DOM order */}
-                    <a
-                      href={`https://www.imdb.com/title/${s.imdbId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="absolute inset-0"
-                      aria-label={`Open ${s.name} on IMDb`}
-                      tabIndex={-1}
+                    {/* Clickable overlay to open detail panel */}
+                    <button
+                      type="button"
+                      className="absolute inset-0 cursor-pointer"
+                      aria-label={`View details for ${s.name}`}
+                      onClick={() => setSelectedItem(toSearchResult(s.imdbId, "series", s.name, { poster: s.poster }))}
                     />
                     {/* Bottom gradient overlay with episode info + mark button */}
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/80 to-transparent px-3 pb-3 pt-16">
@@ -506,14 +526,13 @@ export function DashboardPage() {
                       </button>
                     </div>
                   </div>
-                  <a
-                    href={`https://www.imdb.com/title/${s.imdbId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2.5 block truncate text-sm font-semibold text-slate-200 hover:text-white transition-colors"
+                  <button
+                    type="button"
+                    className="mt-2.5 block truncate text-sm font-semibold text-slate-200 hover:text-white transition-colors text-left w-full"
+                    onClick={() => setSelectedItem(toSearchResult(s.imdbId, "series", s.name, { poster: s.poster }))}
                   >
                     {s.name}
-                  </a>
+                  </button>
                   {progressPct !== null && (
                     <p className="text-2xs text-slate-500">
                       {s.watchedEpisodes} of {s.totalEpisodes} episodes
@@ -550,13 +569,20 @@ export function DashboardPage() {
             className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
           >
             {history.map((event) => (
-              <a
+              <div
                 key={event.id}
-                href={`https://www.imdb.com/title/${event.imdbId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-none group"
+                role="button"
+                tabIndex={0}
+                className="flex-none group cursor-pointer"
                 style={{ width: "11rem" }}
+                onClick={() => setSelectedItem(toSearchResult(
+                  event.imdbId,
+                  event.type === "movie" ? "movie" : "series",
+                  event.name,
+                  { poster: event.poster }
+                ))}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedItem(toSearchResult(event.imdbId, event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster })); } }}
+                aria-label={`View details for ${event.name}`}
               >
                 <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
                   <Poster
@@ -585,7 +611,7 @@ export function DashboardPage() {
                     </span>
                   </div>
                 </div>
-                <p className="mt-2.5 truncate text-sm font-semibold text-slate-200">
+                <p className="mt-2.5 truncate text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">
                   {event.name}
                 </p>
                 <p className="text-2xs text-slate-500">
@@ -597,7 +623,7 @@ export function DashboardPage() {
                       ? "Movie"
                       : ""}
                 </p>
-              </a>
+              </div>
             ))}
           </div>
         )}
@@ -637,7 +663,11 @@ export function DashboardPage() {
             className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
           >
             {trendingMovies.map((item) => (
-              <DiscoveryCard key={item.id} item={item} />
+              <DiscoveryCard
+                key={item.id}
+                item={item}
+                onSelect={(i) => setSelectedItem(toSearchResult(i.id, i.type ?? "movie", i.name, { poster: i.poster, year: i.year, description: item.description, genres: i.genres, rating: i.rating }))}
+              />
             ))}
           </div>
         )}
@@ -666,6 +696,7 @@ export function DashboardPage() {
                 <DiscoveryCard
                   key={item.id}
                   item={item}
+                  onSelect={(i) => setSelectedItem(toSearchResult(i.id, i.type ?? "movie", i.name, { poster: i.poster, year: i.year, description: item.description, genres: i.genres, rating: i.rating }))}
                   badge={
                     <span className="inline-flex items-center gap-1 rounded-md bg-violet-600/80 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
                       <Sparkles className="h-2.5 w-2.5" />
@@ -676,6 +707,18 @@ export function DashboardPage() {
             </div>
           )}
         </section>
+      )}
+
+      {/* ── Detail Panel ── */}
+      {selectedItem && (
+        <DetailPanel
+          item={selectedItem}
+          history={panelHistory}
+          historyLoading={panelHistoryLoading}
+          listMap={emptyListMap}
+          onClose={() => setSelectedItem(null)}
+          onShowToast={() => {}}
+        />
       )}
 
       {/* ── Upcoming Episodes ── */}
