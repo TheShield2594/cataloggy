@@ -84,7 +84,7 @@ export function App() {
               key={item.to}
               to={item.to}
               className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-2xs font-medium transition-colors ${
-                isActive ? "text-red-400" : "text-slate-500"
+                isActive ? "text-red-400" : "text-slate-400"
               }`}
             >
               <Icon className="h-5 w-5" />
@@ -95,7 +95,7 @@ export function App() {
       </nav>
 
       {/* Footer */}
-      <footer className="border-t border-slate-800/40 py-8 text-center text-sm text-slate-600">
+      <footer className="border-t border-slate-800/40 py-8 text-center text-sm text-slate-400">
         Cataloggy &middot; Personal Media Tracker
       </footer>
     </div>

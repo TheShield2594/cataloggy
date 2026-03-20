@@ -93,7 +93,7 @@ function Poster({
       <div
         className={`flex items-center justify-center bg-gradient-to-br ${getGradient(alt)} ${className}`}
       >
-        <span className="text-xl font-bold text-white/40 select-none">
+        <span className="text-xl font-bold text-white/60 select-none">
           {getInitials(alt)}
         </span>
       </div>
@@ -157,11 +157,11 @@ function DiscoveryCard({ item, badge, reason, onSelect }: { item: DiscoveryItem;
         </div>
       </div>
       <p className="mt-2.5 truncate text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">{item.name}</p>
-      <p className="text-2xs text-slate-500">
+      <p className="text-2xs text-slate-400">
         {item.year ?? ""}{item.type ? ` ${item.type === "movie" ? "Movie" : "Series"}` : ""}
       </p>
       {reason && (
-        <p className="mt-0.5 truncate text-2xs italic text-slate-500" title={reason}>{reason}</p>
+        <p className="mt-0.5 truncate text-2xs italic text-slate-400" title={reason}>{reason}</p>
       )}
     </div>
   );
@@ -400,7 +400,7 @@ export function DashboardPage() {
           Unable to connect to the API
         </p>
         <p className="text-sm text-slate-400">{error}</p>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-slate-400">
           Current API base:{" "}
           <span className="font-mono text-red-300">
             {runtimeConfig.getApiBase()}
@@ -485,19 +485,19 @@ export function DashboardPage() {
             <div className="flex items-center gap-2">
               <Film className="h-4 w-4 text-red-400" />
               <span className="text-lg font-bold text-white tabular-nums">{stats.totalMovies.toLocaleString()}</span>
-              <span className="text-sm text-slate-500">movies</span>
+              <span className="text-sm text-slate-400">movies</span>
             </div>
             <div className="h-4 w-px bg-slate-800" />
             <div className="flex items-center gap-2">
               <Tv className="h-4 w-4 text-violet-400" />
               <span className="text-lg font-bold text-white tabular-nums">{stats.totalEpisodes.toLocaleString()}</span>
-              <span className="text-sm text-slate-500">episodes</span>
+              <span className="text-sm text-slate-400">episodes</span>
             </div>
             <div className="h-4 w-px bg-slate-800" />
             <div className="flex items-center gap-2">
               <Play className="h-4 w-4 text-amber-400" />
               <span className="text-lg font-bold text-white tabular-nums">{stats.totalPlays.toLocaleString()}</span>
-              <span className="text-sm text-slate-500">total plays</span>
+              <span className="text-sm text-slate-400">total plays</span>
             </div>
           </div>
         ) : null}
@@ -519,7 +519,7 @@ export function DashboardPage() {
         ) : progress.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-800 py-12 text-center">
             <Tv className="mx-auto h-10 w-10 text-slate-700" />
-            <p className="mt-3 text-sm text-slate-500">
+            <p className="mt-3 text-sm text-slate-400">
               No series in progress. Start watching something!
             </p>
           </div>
@@ -602,7 +602,7 @@ export function DashboardPage() {
                     {s.name}
                   </button>
                   {progressPct !== null && (
-                    <p className="text-2xs text-slate-500">
+                    <p className="text-2xs text-slate-400">
                       {s.watchedEpisodes} of {s.totalEpisodes} episodes
                     </p>
                   )}
@@ -629,7 +629,7 @@ export function DashboardPage() {
         ) : history.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-800 py-12 text-center">
             <Film className="mx-auto h-10 w-10 text-slate-700" />
-            <p className="mt-3 text-sm text-slate-500">No watch history yet.</p>
+            <p className="mt-3 text-sm text-slate-400">No watch history yet.</p>
           </div>
         ) : (
           <div
@@ -682,7 +682,7 @@ export function DashboardPage() {
                 <p className="mt-2.5 truncate text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">
                   {event.name}
                 </p>
-                <p className="text-2xs text-slate-500">
+                <p className="text-2xs text-slate-400">
                   {event.type === "episode" &&
                   event.season != null &&
                   event.episode != null
@@ -721,7 +721,7 @@ export function DashboardPage() {
         ) : trendingMovies.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-800 py-12 text-center">
             <TrendingUp className="mx-auto h-10 w-10 text-slate-700" />
-            <p className="mt-3 text-sm text-slate-500">
+            <p className="mt-3 text-sm text-slate-400">
               Unable to load trending content. Please try again or check your network connection.
             </p>
           </div>
@@ -755,7 +755,7 @@ export function DashboardPage() {
           </SectionHeader>
           {recsLoading ? (
             aiActive ? (
-              <p className="text-sm text-slate-500 italic">Generating AI recommendations…</p>
+              <p className="text-sm text-slate-400 italic">Generating AI recommendations…</p>
             ) : (
               <ContinueWatchingSkeleton />
             )
@@ -797,7 +797,7 @@ export function DashboardPage() {
           </SectionHeader>
           {seriesRecsLoading ? (
             aiActive ? (
-              <p className="text-sm text-slate-500 italic">Generating AI recommendations…</p>
+              <p className="text-sm text-slate-400 italic">Generating AI recommendations…</p>
             ) : (
               <ContinueWatchingSkeleton />
             )
@@ -880,7 +880,7 @@ export function DashboardPage() {
                       <p className="truncate text-sm font-semibold text-slate-100">
                         {entry.seriesName}
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-500">
+                      <p className="mt-0.5 text-xs text-slate-400">
                         S{entry.season}:E{entry.episode} — {entry.episodeName}
                       </p>
                     </div>
@@ -894,7 +894,7 @@ export function DashboardPage() {
                       }`}>
                         {dateLabel}
                       </span>
-                      <span className="text-2xs text-slate-600">
+                      <span className="text-2xs text-slate-500">
                         {airDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                       </span>
                     </div>

@@ -39,7 +39,7 @@ export default {
         sans: ["Outfit", "Inter", "system-ui", "-apple-system", "BlinkMacSystemFont", '"Segoe UI"', "sans-serif"],
       },
       fontSize: {
-        "2xs": ["0.625rem", { lineHeight: "0.875rem" }],
+        "2xs": ["0.6875rem", { lineHeight: "1rem" }],
       },
       aspectRatio: {
         poster: "2 / 3",
