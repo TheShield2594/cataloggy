@@ -27,6 +27,42 @@ const getSpoilerProtection = async (): Promise<boolean> => {
   return row?.value === "true";
 };
 
+// ─── AI Provider Config ───
+
+const AI_CONFIG_KEY = "ai:config";
+const AI_LAST_RECS_GENERATED_AT_KEY = "ai:lastRecsGeneratedAt";
+
+type AiProviderConfig = {
+  url: string;
+  headers: Record<string, string>;
+  payload: Record<string, unknown>;
+};
+
+const getAiConfig = async (): Promise<AiProviderConfig | null> => {
+  const row = await prisma.kV.findUnique({ where: { key: AI_CONFIG_KEY } });
+  if (!row) return null;
+  try {
+    return JSON.parse(row.value) as AiProviderConfig;
+  } catch {
+    return null;
+  }
+};
+
+const isAiConfigured = async (): Promise<boolean> => {
+  const config = await getAiConfig();
+  return !!(config?.url && config?.headers && config?.payload?.model);
+};
+
+const redactAiConfig = (config: AiProviderConfig): AiProviderConfig => ({
+  ...config,
+  headers: Object.fromEntries(
+    Object.entries(config.headers).map(([k, v]) => [
+      k,
+      k.toLowerCase() === "authorization" ? "Bearer ****" : v,
+    ])
+  ),
+});
+
 const getTmdb = async () => {
   const lang = await getLanguageSetting();
   return TmdbClient.fromEnv(lang);
@@ -95,6 +131,7 @@ const getTraktClient = async () => {
 const API_TOKEN = process.env.API_TOKEN;
 const TRAKT_LAST_POLLED_AT_KEY = "trakt:lastPolledAt";
 const TRAKT_POLL_INTERVAL_SEC = Number(process.env.TRAKT_POLL_INTERVAL_SEC ?? 300);
+const AI_REFRESH_INTERVAL_SEC = Number(process.env.AI_REFRESH_INTERVAL_SEC ?? 86400);
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const IS_DEVELOPMENT = process.env.NODE_ENV === "development";
 const PRODUCTION_UI_ORIGIN = "https://cataloggy.domain.com";
@@ -1103,7 +1140,7 @@ app.delete<{ Querystring: { log?: string } }>("/checkin", async (request, reply)
 
 // ─── Trending / Popular (TMDB) ───
 
-type TrendingCacheEntry = { data: StremioMetaPreview[]; expiry: number };
+type TrendingCacheEntry = { data: StremioMetaPreview[]; expiry: number; reasons?: Record<string, string> };
 const trendingCache = new Map<string, TrendingCacheEntry>();
 const TRENDING_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const MAX_TRENDING_CACHE_SIZE = 100;
@@ -1337,6 +1374,13 @@ app.get<{ Querystring: { type?: string; limit?: string } }>("/recommendations/pe
   if (!type) return { metas: [] };
   const limit = Math.min(Math.max(Number(request.query.limit) || 20, 1), 40);
 
+  // AI takes over when configured
+  if (await isAiConfigured()) {
+    const aiResult = await getAiRecommendations(rawType as "movie" | "series", limit);
+    if (aiResult) return { metas: aiResult.metas };
+    // Fall through to TMDB if AI fails
+  }
+
   // Get recently watched items of this type
   const recentItems = rawType === "movie"
     ? await prisma.watchEvent.findMany({
@@ -1441,6 +1485,293 @@ app.get<{ Querystring: { type?: string; limit?: string } }>("/recommendations/pe
   return { metas: applyRpdbToMetaList(allRecs.slice(0, limit), rpdbKeyPersonal) };
 });
 
+// AI-powered recommendations endpoint
+app.get<{ Querystring: { type?: string; limit?: string } }>("/recommendations/ai", async (request) => {
+  const rawType = request.query.type ?? "movie";
+  if (rawType !== "movie" && rawType !== "series") return { metas: [], reasons: {} };
+  const type = rawType as "movie" | "series";
+  const limit = Math.min(Math.max(Number(request.query.limit) || 10, 1), 20);
+
+  if (!await isAiConfigured()) {
+    // Fall back to personal recommendations when AI not configured
+    const recentItems = type === "movie"
+      ? await prisma.watchEvent.findMany({ where: { type: "movie" }, orderBy: { watchedAt: "desc" }, take: 3, distinct: ["imdbId"], select: { imdbId: true } })
+      : await prisma.seriesProgress.findMany({ orderBy: { lastWatchedAt: "desc" }, take: 3, select: { seriesImdbId: true } });
+    const seedIds = type === "movie"
+      ? (recentItems as { imdbId: string }[]).map((r) => r.imdbId)
+      : (recentItems as { seriesImdbId: string }[]).map((r) => r.seriesImdbId);
+    if (seedIds.length === 0) return { metas: [], reasons: {} };
+    const metaType = type === "movie" ? MetadataType.movie : MetadataType.series;
+    const seedMetas = await prisma.metadata.findMany({ where: { imdbId: { in: seedIds }, type: metaType }, select: { tmdbId: true } });
+    const tmdbIds = seedMetas.filter((m) => m.tmdbId).map((m) => m.tmdbId as number);
+    if (tmdbIds.length === 0) return { metas: [], reasons: {} };
+    try {
+      const tmdb = await getTmdb();
+      const seen = new Set<string>(seedIds);
+      const allRecs: StremioMetaPreview[] = [];
+      for (const tmdbId of tmdbIds.slice(0, 3)) {
+        if (allRecs.length >= limit) break;
+        const recs = await tmdb.recommendations(metaType, tmdbId);
+        for (const r of recs) {
+          if (allRecs.length >= limit) break;
+          if (seen.has(r.imdbId)) continue;
+          seen.add(r.imdbId);
+          allRecs.push({ id: r.imdbId, type, name: r.name, poster: r.poster ?? undefined, year: r.year ?? undefined, description: r.description ?? undefined, genres: r.genres, rating: r.rating ?? undefined });
+        }
+      }
+      const rpdbKey = await getRpdbApiKey();
+      return { metas: applyRpdbToMetaList(allRecs.slice(0, limit), rpdbKey), reasons: {} };
+    } catch { return { metas: [], reasons: {} }; }
+  }
+
+  const result = await getAiRecommendations(type, limit);
+  if (!result) {
+    // AI failed — fall back silently, return empty reasons
+    return { metas: [], reasons: {} };
+  }
+  return { metas: result.metas, reasons: result.reasons };
+});
+
+// Manual AI recommendation refresh
+app.post("/recommendations/ai/refresh", async () => {
+  for (const key of ["ai-recs:movie", "ai-recs:series"]) {
+    trendingCache.delete(key);
+  }
+  return { refreshed: true };
+});
+
+// ─── AI Recommendations Engine ───
+
+const buildTasteProfile = async () => {
+  // Top 50 most recent watch events distinct by imdbId
+  const recentEvents = await prisma.watchEvent.findMany({
+    orderBy: { watchedAt: "desc" },
+    take: 50,
+    distinct: ["imdbId"],
+    select: { imdbId: true, type: true, seriesImdbId: true },
+  });
+
+  const movieIds = recentEvents.filter((e) => e.type === "movie").map((e) => e.imdbId);
+  const seriesIds = recentEvents
+    .filter((e) => e.type === "episode" && e.seriesImdbId)
+    .map((e) => e.seriesImdbId!)
+    .filter(Boolean);
+  const allIds = [...new Set([...movieIds, ...seriesIds])];
+
+  const allMetadata = allIds.length > 0
+    ? await prisma.metadata.findMany({
+        where: { imdbId: { in: allIds } },
+        select: { imdbId: true, name: true, genres: true },
+      })
+    : [];
+
+  const metaByImdbId = new Map(allMetadata.map((m) => [m.imdbId, m]));
+
+  // Fetch ratings
+  const ratingRows = await prisma.kV.findMany({
+    where: { key: { startsWith: "rating:" } },
+    orderBy: { updatedAt: "desc" },
+    take: 50,
+  });
+
+  const ratings: Array<{ imdbId: string; rating: number }> = [];
+  for (const row of ratingRows) {
+    try {
+      const parsed = JSON.parse(row.value) as { imdbId?: string; rating?: number };
+      if (parsed.imdbId && typeof parsed.rating === "number") {
+        ratings.push({ imdbId: parsed.imdbId, rating: parsed.rating });
+      }
+    } catch { /* skip */ }
+  }
+
+  // Top genres by frequency
+  const genreFreq = new Map<string, number>();
+  for (const id of allIds) {
+    const meta = metaByImdbId.get(id);
+    if (meta) {
+      for (const g of meta.genres) {
+        genreFreq.set(g, (genreFreq.get(g) ?? 0) + 1);
+      }
+    }
+  }
+  const topGenres = [...genreFreq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([g]) => g);
+
+  // Top rated (>= 8) with names
+  const topRated = ratings
+    .filter((r) => r.rating >= 8)
+    .map((r) => {
+      const meta = metaByImdbId.get(r.imdbId);
+      return meta ? `${meta.name} (${r.rating}/10)` : null;
+    })
+    .filter((s): s is string => s !== null)
+    .slice(0, 15);
+
+  // Recent titles (last 20)
+  const recentTitles = recentEvents
+    .slice(0, 20)
+    .map((e) => {
+      const id = e.type === "episode" && e.seriesImdbId ? e.seriesImdbId : e.imdbId;
+      return metaByImdbId.get(id)?.name;
+    })
+    .filter((n): n is string => !!n);
+
+  const watchedImdbIds = new Set(allIds);
+
+  const avgRating = ratings.length > 0
+    ? Math.round((ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length) * 10) / 10
+    : null;
+
+  return { topGenres, topRated, recentTitles, watchedImdbIds, avgRating };
+};
+
+const callAiProvider = async (config: AiProviderConfig, prompt: string): Promise<string> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60_000);
+
+  const payload = {
+    ...config.payload,
+    messages: [{ role: "user", content: prompt }],
+    stream: false,
+    max_tokens: (config.payload.max_tokens as number | undefined) ?? 4096,
+  };
+
+  let response: Response;
+  try {
+    response = await fetch(config.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...config.headers,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`AI provider error (${response.status}): ${body.slice(0, 200)}`);
+  }
+
+  const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+  let content = data.choices?.[0]?.message?.content ?? "";
+
+  // Strip thinking blocks and markdown fences
+  content = content.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  content = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+
+  return content;
+};
+
+type AiRecItem = { title: string; year?: number; type: "movie" | "series"; reason: string };
+
+const parseRecsFromContent = (content: string): AiRecItem[] => {
+  const match = content.match(/\[[\s\S]*\]/);
+  if (!match) throw new Error("No JSON array in AI response");
+  return JSON.parse(match[0]) as AiRecItem[];
+};
+
+const AI_RECS_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+const getAiRecommendations = async (
+  type: "movie" | "series",
+  limit = 10
+): Promise<{ metas: StremioMetaPreview[]; reasons: Record<string, string> } | null> => {
+  const cacheKey = `ai-recs:${type}`;
+  const cached = trendingCacheGet(cacheKey);
+  if (cached) return { metas: cached.data, reasons: cached.reasons ?? {} };
+
+  const config = await getAiConfig();
+  if (!config) return null;
+
+  try {
+    const profile = await buildTasteProfile();
+    const avgRatingStr = profile.avgRating !== null ? `${profile.avgRating}/10` : "unrated";
+    const typeLabel = type === "movie" ? "movies" : "TV series";
+
+    const prompt = `You are a ${type} recommendation engine with deep knowledge of film and television.
+
+User taste profile:
+- Top genres: ${profile.topGenres.join(", ") || "unknown"}
+- Highly rated: ${profile.topRated.join(", ") || "none yet"}
+- Recently watched: ${profile.recentTitles.join(", ") || "nothing yet"}
+- Average rating they give: ${avgRatingStr}
+
+Recommend exactly ${limit} ${typeLabel} this user has NOT already watched. Be specific and varied.
+
+Return ONLY a JSON array, no other text, no markdown:
+[
+  {
+    "title": "exact title",
+    "year": release year as number,
+    "type": "${type}",
+    "reason": "one sentence why based on their taste"
+  }
+]`;
+
+    const content = await callAiProvider(config, prompt);
+    const recs = parseRecsFromContent(content);
+
+    const tmdb = await getTmdb();
+    const metaType = type === "movie" ? MetadataType.movie : MetadataType.series;
+    const rpdbKey = await getRpdbApiKey();
+    const metas: StremioMetaPreview[] = [];
+    const reasons: Record<string, string> = {};
+
+    for (const rec of recs) {
+      if (metas.length >= limit) break;
+      try {
+        const results = await tmdb.search(metaType, rec.title);
+        if (!results || results.length === 0) continue;
+        const first = results[0];
+        if (profile.watchedImdbIds.has(first.imdbId)) continue;
+        await upsertMetadata(first);
+        metas.push({
+          id: first.imdbId,
+          type,
+          name: first.name,
+          poster: withRpdbPoster(first.imdbId, first.poster, rpdbKey) ?? undefined,
+          year: first.year ?? undefined,
+          description: first.description ?? undefined,
+          genres: first.genres,
+          rating: first.rating ?? undefined,
+        });
+        reasons[first.imdbId] = rec.reason;
+      } catch { /* skip failed lookups */ }
+    }
+
+    trendingCacheSet(cacheKey, { data: metas, expiry: Date.now() + AI_RECS_TTL_MS, reasons });
+
+    const now = new Date();
+    await prisma.kV.upsert({
+      where: { key: AI_LAST_RECS_GENERATED_AT_KEY },
+      create: { key: AI_LAST_RECS_GENERATED_AT_KEY, value: now.toISOString(), updatedAt: now },
+      update: { value: now.toISOString(), updatedAt: now },
+    });
+
+    return { metas, reasons };
+  } catch (err) {
+    app.log.error(err, "AI recommendations generation failed");
+    return null;
+  }
+};
+
+const shouldRefreshAiRecs = async (): Promise<boolean> => {
+  if (!await isAiConfigured()) return false;
+
+  const lastGenRow = await prisma.kV.findUnique({ where: { key: AI_LAST_RECS_GENERATED_AT_KEY } });
+  if (!lastGenRow) return true;
+
+  const lastGen = new Date(lastGenRow.value);
+  const hoursSinceLastGen = (Date.now() - lastGen.getTime()) / (1000 * 60 * 60);
+  return hoursSinceLastGen >= 6;
+};
+
 // ─── Plex / Jellyfin Webhooks ───
 
 // ─── Shared watch event recording helper ───
@@ -1492,6 +1823,15 @@ const recordWatchEvent = async (params: RecordWatchParams) => {
     if (season != null && episode != null) {
       await upsertSeriesProgressIfNewer(resolvedSeriesImdbId, { lastSeason: season, lastEpisode: episode, lastWatchedAt: watchedAt });
     }
+    void (async () => {
+      try {
+        if (await shouldRefreshAiRecs()) {
+          trendingCache.delete("ai-recs:movie");
+          trendingCache.delete("ai-recs:series");
+          await Promise.allSettled([getAiRecommendations("movie", 15), getAiRecommendations("series", 15)]);
+        }
+      } catch { /* never let this affect the watch event response */ }
+    })();
     return { status: "recorded" as const, watchEvent };
   }
 
@@ -1517,6 +1857,15 @@ const recordWatchEvent = async (params: RecordWatchParams) => {
     return created;
   });
 
+  void (async () => {
+    try {
+      if (await shouldRefreshAiRecs()) {
+        trendingCache.delete("ai-recs:movie");
+        trendingCache.delete("ai-recs:series");
+        await Promise.allSettled([getAiRecommendations("movie", 15), getAiRecommendations("series", 15)]);
+      }
+    } catch { /* never let this affect the watch event response */ }
+  })();
   return { status: "recorded" as const, watchEvent };
 };
 
@@ -2793,6 +3142,8 @@ const ALL_ADDON_CATALOGS = [
   "cataloggy-trending-movie", "cataloggy-trending-series",
   "cataloggy-popular-movie", "cataloggy-popular-series",
   "cataloggy-recommended-movie", "cataloggy-recommended-series",
+  // AI catalogs (off by default; only appear in manifest when AI is configured)
+  "cataloggy-ai-movie", "cataloggy-ai-series",
   // Anime
   "cataloggy-anime-series", "cataloggy-anime-movie",
   // Streaming service catalogs
@@ -3044,6 +3395,113 @@ app.get("/rpdb/config", async () => {
     enabled: !!apiKey,
     apiKey: apiKey ?? null,
   };
+});
+
+// ─── AI Config Routes ───
+
+app.get("/ai/config", async () => {
+  const config = await getAiConfig();
+  const configured = !!(config?.url && config?.headers && config?.payload?.model);
+  const lastGenRow = await prisma.kV.findUnique({ where: { key: AI_LAST_RECS_GENERATED_AT_KEY } });
+  return {
+    configured,
+    config: configured ? redactAiConfig(config!) : null,
+    lastGeneratedAt: lastGenRow?.value ?? null,
+  };
+});
+
+app.post<{ Body: unknown }>("/ai/config", async (request, reply) => {
+  const body = request.body as { config?: unknown } | null;
+  const cfg = body?.config as Record<string, unknown> | undefined;
+
+  if (!cfg || typeof cfg.url !== "string" || !cfg.url.startsWith("http")) {
+    return reply.code(400).send({ error: "config.url must be a non-empty string starting with http" });
+  }
+  if (!cfg.headers || typeof cfg.headers !== "object" || Array.isArray(cfg.headers)) {
+    return reply.code(400).send({ error: "config.headers must be an object" });
+  }
+  if (!cfg.payload || typeof cfg.payload !== "object" || Array.isArray(cfg.payload)) {
+    return reply.code(400).send({ error: "config.payload must be an object" });
+  }
+  const payload = cfg.payload as Record<string, unknown>;
+  if (typeof payload.model !== "string" || !payload.model) {
+    return reply.code(400).send({ error: "config.payload.model must be a non-empty string" });
+  }
+
+  const validConfig: AiProviderConfig = {
+    url: cfg.url,
+    headers: cfg.headers as Record<string, string>,
+    payload: payload,
+  };
+
+  await prisma.kV.upsert({
+    where: { key: AI_CONFIG_KEY },
+    create: { key: AI_CONFIG_KEY, value: JSON.stringify(validConfig), updatedAt: new Date() },
+    update: { value: JSON.stringify(validConfig), updatedAt: new Date() },
+  });
+
+  // Bust cached AI recs so next request regenerates with new config
+  for (const key of ["ai-recs:movie", "ai-recs:series"]) {
+    trendingCache.delete(key);
+  }
+
+  return { configured: true };
+});
+
+app.delete("/ai/config", async () => {
+  await prisma.kV.deleteMany({ where: { key: AI_CONFIG_KEY } });
+  for (const key of ["ai-recs:movie", "ai-recs:series"]) {
+    trendingCache.delete(key);
+  }
+  return { configured: false };
+});
+
+app.post<{ Body: unknown }>("/ai/test", async (request) => {
+  const body = request.body as { config?: unknown } | null;
+  const cfg = body?.config as Record<string, unknown> | undefined;
+
+  if (!cfg || typeof cfg.url !== "string" || !cfg.url.startsWith("http") ||
+      !cfg.headers || typeof cfg.headers !== "object" || Array.isArray(cfg.headers) ||
+      !cfg.payload || typeof cfg.payload !== "object" || Array.isArray(cfg.payload) ||
+      typeof (cfg.payload as Record<string, unknown>).model !== "string") {
+    return { success: false, error: "Invalid config: url, headers, and payload.model are required" };
+  }
+
+  const testConfig: AiProviderConfig = {
+    url: cfg.url,
+    headers: cfg.headers as Record<string, string>,
+    payload: {
+      ...(cfg.payload as Record<string, unknown>),
+      messages: [{ role: "user", content: "Reply with the single word OK and nothing else. No punctuation." }],
+      stream: false,
+      max_tokens: 20,
+    },
+  };
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15_000);
+    let response: Response;
+    try {
+      response = await fetch(testConfig.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...testConfig.headers },
+        body: JSON.stringify(testConfig.payload),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+    if (!response.ok) {
+      const errBody = await response.text().catch(() => "");
+      return { success: false, error: `HTTP ${response.status}: ${errBody.slice(0, 200)}` };
+    }
+    const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const content = (data.choices?.[0]?.message?.content ?? "").trim().slice(0, 100);
+    return { success: true, response: content };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
 });
 
 // ─── Duplicate detection ───
@@ -3719,6 +4177,8 @@ const DISCOVERY_CATALOG_MAP: Record<string, { endpoint: string; type: StremioMet
   "cataloggy-popular-series":     { endpoint: "popular:series",          type: "series" },
   "cataloggy-recommended-movie":  { endpoint: "recommended:movie",       type: "movie" },
   "cataloggy-recommended-series": { endpoint: "recommended:series",      type: "series" },
+  "cataloggy-ai-movie":           { endpoint: "ai-recs:movie",           type: "movie" },
+  "cataloggy-ai-series":          { endpoint: "ai-recs:series",          type: "series" },
   "cataloggy-anime-series":       { endpoint: "anime:series",            type: "series" },
   "cataloggy-anime-movie":        { endpoint: "anime:movie",             type: "movie" },
   "cataloggy-netflix-movie":      { endpoint: "streaming:netflix:movie", type: "movie" },
@@ -3740,6 +4200,8 @@ const DISCOVERY_CATALOG_LABELS: Record<string, string> = {
   "cataloggy-popular-series":     "Popular Series",
   "cataloggy-recommended-movie":  "Recommended Movies",
   "cataloggy-recommended-series": "Recommended Series",
+  "cataloggy-ai-movie":           "AI Picks — Movies",
+  "cataloggy-ai-series":          "AI Picks — Series",
   "cataloggy-anime-series":       "Anime",
   "cataloggy-anime-movie":        "Anime Movies",
   "cataloggy-netflix-movie":      "Netflix Movies",
@@ -3755,11 +4217,18 @@ const DISCOVERY_CATALOG_LABELS: Record<string, string> = {
 };
 
 app.get("/addon/stremio/manifest.json", async () => {
-  const config = await getAddonConfig();
+  const [config, aiConfigured] = await Promise.all([getAddonConfig(), isAiConfigured()]);
+
+  const enabledCatalogs = config.enabledCatalogs.filter((id) => {
+    if (id === "cataloggy-ai-movie" || id === "cataloggy-ai-series") {
+      return aiConfigured;
+    }
+    return true;
+  });
 
   const catalogs: { id: string; type: string; name: string }[] = [
     ...CORE_STREMIO_CATALOGS.map((c) => ({ id: c.id, type: c.type, name: c.name })),
-    ...config.enabledCatalogs
+    ...enabledCatalogs
       .filter((id) => DISCOVERY_CATALOG_MAP[id])
       .map((id) => ({
         id,
@@ -3769,7 +4238,7 @@ app.get("/addon/stremio/manifest.json", async () => {
   ];
 
   // Add user list catalogs (each list exposes as two catalogs: movies + series)
-  const listCatalogIds = config.enabledCatalogs.filter((id) => id.startsWith("list:"));
+  const listCatalogIds = enabledCatalogs.filter((id) => id.startsWith("list:"));
   if (listCatalogIds.length > 0) {
     const listIds = listCatalogIds.map((id) => id.slice(5));
     const userLists = await prisma.list.findMany({
@@ -3862,7 +4331,21 @@ app.get<{ Params: { type: string; id: string }; Querystring: { skip?: string } }
         results = await tmdb.trending(metaType, window);
       } else if (cacheKey.startsWith("popular:")) {
         results = await tmdb.popular(metaType);
+      } else if (cacheKey.startsWith("ai-recs:")) {
+        const aiType = cacheKey.split(":")[1] as "movie" | "series";
+        const result = await getAiRecommendations(aiType, 20);
+        if (!result) return { metas: [] };
+        return { metas: result.metas };
       } else if (cacheKey.startsWith("recommended:")) {
+        // Use AI recommendations when configured
+        if (await isAiConfigured()) {
+          const aiResult = await getAiRecommendations(discovery.type, 20);
+          if (aiResult) {
+            trendingCacheSet(cacheKey, { data: aiResult.metas, expiry: Date.now() + TRENDING_CACHE_TTL_MS });
+            return { metas: aiResult.metas };
+          }
+          // Fall through to TMDB if AI fails
+        }
         const recentItems = metaType === MetadataType.movie
           ? (await prisma.watchEvent.findMany({ where: { type: "movie" }, orderBy: { watchedAt: "desc" }, take: 3, distinct: ["imdbId"], select: { imdbId: true } })).map((r) => r.imdbId)
           : (await prisma.seriesProgress.findMany({ orderBy: { lastWatchedAt: "desc" }, take: 3, select: { seriesImdbId: true } })).map((r) => r.seriesImdbId);
@@ -3935,6 +4418,31 @@ const start = async () => {
       app.log.error(error, "Scrobble session cleanup failed");
     });
   }, SCROBBLE_CLEANUP_INTERVAL_MS);
+
+  const refreshAiRecommendations = async () => {
+    if (!(await isAiConfigured())) return;
+    trendingCache.delete("ai-recs:movie");
+    trendingCache.delete("ai-recs:series");
+    await Promise.allSettled([
+      getAiRecommendations("movie", 15),
+      getAiRecommendations("series", 15),
+    ]);
+  };
+
+  if (AI_REFRESH_INTERVAL_SEC > 0) {
+    setTimeout(() => {
+      void refreshAiRecommendations().catch((error) => {
+        app.log.error(error, "Initial AI recommendations refresh failed");
+      });
+      setInterval(() => {
+        void refreshAiRecommendations().catch((error) => {
+          app.log.error(error, "Scheduled AI recommendations refresh failed");
+        });
+      }, AI_REFRESH_INTERVAL_SEC * 1000);
+    }, 2 * 60 * 1000); // 2-minute initial delay
+  } else {
+    app.log.info("Scheduled AI recommendations refresh disabled because AI_REFRESH_INTERVAL_SEC is set to 0");
+  }
 
   await app.listen({ port, host: "0.0.0.0" });
 };

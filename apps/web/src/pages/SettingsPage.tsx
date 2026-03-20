@@ -1,6 +1,7 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { api, runtimeConfig } from "../api";
-import { ChevronDown, Key, Link, Database, Info, Eye, EyeOff, Loader2, Check, AlertCircle, Unplug, Clapperboard, Image, Globe, Shield, Copy, ExternalLink, Star } from "lucide-react";
+import { ChevronDown, Key, Link, Database, Info, Eye, EyeOff, Loader2, Check, AlertCircle, Unplug, Clapperboard, Image, Globe, Shield, Copy, ExternalLink, Star, Sparkles, Clock } from "lucide-react";
+import { timeAgo } from "../utils/timeAgo";
 
 declare const __APP_VERSION__: string;
 const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "unknown";
@@ -500,6 +501,8 @@ const CATALOG_LABELS: Record<string, string> = {
   "cataloggy-apple-series": "Apple TV+ Series",
   "cataloggy-max-movie": "Max Movies",
   "cataloggy-max-series": "Max Series",
+  "cataloggy-ai-movie": "AI Picks — Movies",
+  "cataloggy-ai-series": "AI Picks — Series",
 };
 
 function AddonManifestUrl() {
@@ -566,14 +569,16 @@ function AddonConfigSection() {
   const [enabled, setEnabled] = useState<string[]>([]);
   const [available, setAvailable] = useState<string[]>([]);
   const [availableLists, setAvailableLists] = useState<{ id: string; name: string }[]>([]);
+  const [aiConfigured, setAiConfigured] = useState(false);
 
   useEffect(() => {
     void (async () => {
       try {
-        const res = await api.getAddonConfig();
+        const [res, aiRes] = await Promise.all([api.getAddonConfig(), api.getAiConfig().catch(() => ({ configured: false, config: null, lastGeneratedAt: null }))]);
         setEnabled(res.config.enabledCatalogs);
         setAvailable(res.availableCatalogs);
         setAvailableLists(res.availableLists ?? []);
+        setAiConfigured(aiRes.configured);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load config");
       } finally {
@@ -616,21 +621,37 @@ function AddonConfigSection() {
 
       {/* Discovery catalogs */}
       <div className="space-y-2">
-        {available.map((catalog) => (
-          <label
-            key={catalog}
-            className="flex items-center gap-3 rounded-xl border border-slate-800/40 bg-slate-900/30 px-4 py-3 cursor-pointer transition-colors hover:bg-slate-900/60"
-          >
-            <input
-              type="checkbox"
-              checked={enabled.includes(catalog)}
-              onChange={() => toggle(catalog)}
-              className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-red-500 focus:ring-red-500/30"
-            />
-            <span className="text-sm font-medium text-slate-200">{CATALOG_LABELS[catalog] ?? catalog}</span>
-          </label>
-        ))}
+        {available.map((catalog) => {
+          const isAiCatalog = catalog === "cataloggy-ai-movie" || catalog === "cataloggy-ai-series";
+          return (
+            <label
+              key={catalog}
+              className={`flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-colors ${
+                isAiCatalog
+                  ? "border-violet-700/40 bg-violet-950/20 hover:bg-violet-950/30"
+                  : "border-slate-800/40 bg-slate-900/30 hover:bg-slate-900/60"
+              } ${isAiCatalog && !aiConfigured ? "opacity-50" : ""}`}
+            >
+              <input
+                type="checkbox"
+                checked={enabled.includes(catalog)}
+                onChange={() => toggle(catalog)}
+                disabled={isAiCatalog && !aiConfigured}
+                className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-red-500 focus:ring-red-500/30"
+              />
+              <span className="flex-1 text-sm font-medium text-slate-200">{CATALOG_LABELS[catalog] ?? catalog}</span>
+              {isAiCatalog && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-violet-600/80 px-1.5 py-0.5 text-2xs font-semibold text-white">
+                  <Sparkles className="h-2.5 w-2.5" /> AI
+                </span>
+              )}
+            </label>
+          );
+        })}
       </div>
+      {available.some((c) => c === "cataloggy-ai-movie" || c === "cataloggy-ai-series") && !aiConfigured && (
+        <p className="text-xs text-slate-500 italic">Configure AI Recommendations to enable the AI Picks catalogs.</p>
+      )}
 
       {/* User lists */}
       {availableLists.length > 0 && (
@@ -669,6 +690,193 @@ function AddonConfigSection() {
       >
         {saved ? <><Check size={16} /> Saved</> : saving ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : "Save Configuration"}
       </button>
+      {error && <p className="flex items-center gap-2 text-sm text-rose-400"><AlertCircle size={16} /> {error}</p>}
+    </div>
+  );
+}
+
+const AI_PLACEHOLDER = JSON.stringify(
+  {
+    url: "https://integrate.api.nvidia.com/v1/chat/completions",
+    headers: { Authorization: "Bearer nvapi-YOUR_KEY" },
+    payload: { model: "nvidia/llama-3.3-nemotron-super-49b-v1", max_tokens: 1024 },
+  },
+  null,
+  2
+);
+
+function AiRecommendationsSection() {
+  const [loading, setLoading] = useState(true);
+  const [configured, setConfigured] = useState(false);
+  const [rawInput, setRawInput] = useState("");
+  const [jsonError, setJsonError] = useState<string | null>(null);
+  const [testStatus, setTestStatus] = useState<"ok" | "error" | null>(null);
+  const [testMessage, setTestMessage] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [lastGeneratedAt, setLastGeneratedAt] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await api.getAiConfig();
+        setConfigured(res.configured);
+        setLastGeneratedAt(res.lastGeneratedAt);
+        if (res.config) {
+          setRawInput(JSON.stringify(res.config, null, 2));
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load AI config");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const parseInput = (): Record<string, unknown> | null => {
+    try {
+      return JSON.parse(rawInput) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleChange = (value: string) => {
+    setRawInput(value);
+    setSaved(false);
+    setTestStatus(null);
+    try {
+      JSON.parse(value);
+      setJsonError(null);
+    } catch {
+      setJsonError("Invalid JSON");
+    }
+  };
+
+  const handleTest = async () => {
+    const parsed = parseInput();
+    if (!parsed) { setJsonError("Invalid JSON"); return; }
+    setTesting(true);
+    setTestStatus(null);
+    setTestMessage(null);
+    try {
+      const res = await api.testAiConfig(parsed);
+      setTestStatus(res.ok ? "ok" : "error");
+      setTestMessage(res.message);
+    } catch (err) {
+      setTestStatus("error");
+      setTestMessage(err instanceof Error ? err.message : "Test failed");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleSave = async () => {
+    const parsed = parseInput();
+    if (!parsed) { setJsonError("Invalid JSON"); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      await api.saveAiConfig(parsed);
+      setConfigured(true);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save config");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    setRemoving(true);
+    setError(null);
+    try {
+      await api.deleteAiConfig();
+      setConfigured(false);
+      setRawInput("");
+      setLastGeneratedAt(null);
+      setTestStatus(null);
+      setTestMessage(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove config");
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="flex items-center gap-2 text-sm text-slate-400"><Loader2 size={16} className="animate-spin" /> Loading...</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-slate-400 leading-relaxed">
+        Connect an OpenAI-compatible LLM to generate personalised recommendations based on your watch history.
+        Paste a JSON config with <code className="text-slate-300">url</code>, <code className="text-slate-300">headers</code>, and <code className="text-slate-300">payload</code> fields.
+      </p>
+
+      <div className="flex items-center gap-3">
+        <StatusBadge ok={configured} label={configured ? "Configured" : "Not configured"} />
+        {lastGeneratedAt && (
+          <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+            <Clock size={12} /> Last generated {timeAgo(lastGeneratedAt)}
+          </span>
+        )}
+      </div>
+
+      <textarea
+        value={rawInput}
+        onChange={(e) => handleChange(e.target.value)}
+        placeholder={AI_PLACEHOLDER}
+        rows={8}
+        className="w-full rounded-xl border border-slate-700/60 bg-slate-950/60 px-4 py-3 font-mono text-xs text-slate-200 placeholder:text-slate-600 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/30 resize-y"
+        spellCheck={false}
+      />
+      {jsonError && <p className="text-xs text-rose-400">{jsonError}</p>}
+
+      {testStatus && (
+        <p className={`flex items-center gap-2 text-sm ${testStatus === "ok" ? "text-emerald-400" : "text-rose-400"}`}>
+          {testStatus === "ok" ? <Check size={14} /> : <AlertCircle size={14} />}
+          {testMessage}
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={handleTest}
+          disabled={testing || !rawInput.trim() || !!jsonError}
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-200 transition-all hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {testing ? <><Loader2 size={14} className="animate-spin" /> Testing…</> : "Test Connection"}
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving || !rawInput.trim() || !!jsonError}
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
+            saved
+              ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
+              : "bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+          }`}
+        >
+          {saved ? <><Check size={14} /> Saved</> : saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : "Save Config"}
+        </button>
+        {configured && (
+          <button
+            type="button"
+            onClick={handleRemove}
+            disabled={removing}
+            className="inline-flex items-center gap-2 rounded-xl border border-rose-700/40 bg-rose-950/30 px-4 py-2 text-sm font-semibold text-rose-400 transition-all hover:bg-rose-950/50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {removing ? <><Loader2 size={14} className="animate-spin" /> Removing…</> : "Remove"}
+          </button>
+        )}
+      </div>
       {error && <p className="flex items-center gap-2 text-sm text-rose-400"><AlertCircle size={16} /> {error}</p>}
     </div>
   );
@@ -903,6 +1111,10 @@ export function SettingsPage() {
 
       <Section title="RPDB Posters" icon={<Image size={20} />}>
         <RpdbSection />
+      </Section>
+
+      <Section title="AI Recommendations" icon={<Sparkles size={20} />}>
+        <AiRecommendationsSection />
       </Section>
 
       <Section title="Data" icon={<Database size={20} />}>
