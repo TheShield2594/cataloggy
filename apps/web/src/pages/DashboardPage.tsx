@@ -116,7 +116,7 @@ function Poster({
   return (
     <img
       src={src}
-      alt={alt ?? ""}
+      alt={alt ?? "Poster"}
       className={`object-cover ${className}`}
       loading="lazy"
       onError={() => setLoadFailed(true)}
