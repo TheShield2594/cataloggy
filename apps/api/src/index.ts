@@ -853,8 +853,17 @@ app.get<{ Params: { type: string; imdbId: string } }>("/meta/:type/:imdbId", asy
     getRpdbApiKey(),
   ]);
 
-  if (existing) {
-    return { ...existing, poster: withRpdbPoster(imdbId, existing.poster, rpdbKey) };
+  const isDetailComplete = (row: typeof existing) =>
+    row != null &&
+    row.runtime != null &&
+    row.certification != null &&
+    row.status != null &&
+    row.network != null &&
+    row.releaseDate != null &&
+    (row.imdbRating != null || row.rtScore != null || row.mcScore != null);
+
+  if (isDetailComplete(existing)) {
+    return { ...existing, poster: withRpdbPoster(imdbId, existing!.poster, rpdbKey) };
   }
 
   try {
@@ -917,10 +926,15 @@ app.get<{ Params: { type: string; imdbId: string } }>("/meta/:type/:imdbId/cast"
   const cached = castCache.get(cacheKey);
   if (cached && now < cached.expiry) return { cast: cached.data };
 
-  const meta = await prisma.metadata.findUnique({
+  let meta = await prisma.metadata.findUnique({
     where: { imdbId_type: { imdbId, type } },
     select: { tmdbId: true },
   });
+
+  if (!meta?.tmdbId) {
+    await fetchMetadata(type, imdbId).catch(() => {});
+    meta = await prisma.metadata.findUnique({ where: { imdbId_type: { imdbId, type } }, select: { tmdbId: true } });
+  }
 
   if (!meta?.tmdbId) return { cast: [] };
 
@@ -934,17 +948,22 @@ app.get<{ Params: { type: string; imdbId: string } }>("/meta/:type/:imdbId/cast"
   }
 });
 
-app.get<{ Params: { imdbId: string } }>("/meta/series/:imdbId/seasons", async (request, reply) => {
+app.get<{ Params: { imdbId: string } }>("/meta/series/:imdbId/seasons", async (request) => {
   const imdbId = request.params.imdbId.trim();
   const cacheKey = `seasons:${imdbId}`;
   const now = Date.now();
   const cached = seasonsCache.get(cacheKey);
   if (cached && now < cached.expiry) return { seasons: cached.data };
 
-  const meta = await prisma.metadata.findUnique({
+  let meta = await prisma.metadata.findUnique({
     where: { imdbId_type: { imdbId, type: "series" } },
     select: { tmdbId: true },
   });
+
+  if (!meta?.tmdbId) {
+    await fetchMetadata("series", imdbId).catch(() => {});
+    meta = await prisma.metadata.findUnique({ where: { imdbId_type: { imdbId, type: "series" } }, select: { tmdbId: true } });
+  }
 
   if (!meta?.tmdbId) return { seasons: [] };
 
@@ -986,10 +1005,35 @@ app.delete<{ Params: { imdbId: string } }>("/show/:imdbId/drop", async (request)
 app.delete<{ Params: { eventId: string } }>("/watch/:eventId", async (request, reply) => {
   const { eventId } = request.params;
   try {
-    await prisma.watchEvent.delete({ where: { id: eventId } });
+    await prisma.$transaction(async (tx) => {
+      const event = await tx.watchEvent.findUnique({ where: { id: eventId } });
+      if (!event) throw Object.assign(new Error("not found"), { code: "NOT_FOUND" });
+
+      await tx.watchEvent.delete({ where: { id: eventId } });
+
+      // Repair seriesProgress when an episode is deleted
+      if (event.type === "episode" && event.seriesImdbId) {
+        const latest = await tx.watchEvent.findFirst({
+          where: { seriesImdbId: event.seriesImdbId, type: "episode", season: { not: null }, episode: { not: null } },
+          orderBy: { watchedAt: "desc" },
+        });
+
+        if (latest && latest.season != null && latest.episode != null) {
+          await tx.seriesProgress.update({
+            where: { seriesImdbId: event.seriesImdbId },
+            data: { lastSeason: latest.season, lastEpisode: latest.episode, lastWatchedAt: latest.watchedAt, updatedAt: new Date() },
+          });
+        } else {
+          await tx.seriesProgress.deleteMany({ where: { seriesImdbId: event.seriesImdbId } });
+        }
+      }
+    });
     return reply.code(204).send();
-  } catch {
-    return reply.code(404).send({ error: "Watch event not found" });
+  } catch (err: unknown) {
+    if (err instanceof Error && (err as NodeJS.ErrnoException).code === "NOT_FOUND") {
+      return reply.code(404).send({ error: "Watch event not found" });
+    }
+    throw err;
   }
 });
 
@@ -1040,18 +1084,16 @@ app.delete<{ Querystring: { log?: string } }>("/checkin", async (request, reply)
   if (row && request.query.log === "true") {
     try {
       const checkin = JSON.parse(row.value) as CheckInData;
-      await prisma.watchEvent.create({
-        data: {
-          type: checkin.type,
-          imdbId: checkin.type === "movie" ? checkin.imdbId : (checkin.seriesImdbId ?? checkin.imdbId),
-          ...(checkin.type === "episode" && {
-            seriesImdbId: checkin.seriesImdbId ?? checkin.imdbId,
-            season: checkin.season ?? null,
-            episode: checkin.episode ?? null,
-          }),
-          watchedAt: new Date(),
-          plays: 1,
-        },
+      const seriesImdbId = checkin.seriesImdbId ?? checkin.imdbId;
+      await recordWatchEvent({
+        type: checkin.type,
+        imdbId: checkin.type === "movie" ? checkin.imdbId : seriesImdbId,
+        seriesImdbId: checkin.type === "episode" ? seriesImdbId : undefined,
+        season: checkin.type === "episode" ? (checkin.season ?? null) : undefined,
+        episode: checkin.type === "episode" ? (checkin.episode ?? null) : undefined,
+        watchedAt: new Date(),
+        source: "checkin",
+        request,
       });
     } catch { /* best-effort */ }
   }
