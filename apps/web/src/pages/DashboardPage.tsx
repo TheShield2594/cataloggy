@@ -26,24 +26,7 @@ import {
 import { Link } from "react-router-dom";
 import { useHorizontalScroll, getInitials, getGradient } from "../components/carousel-utils";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
-
-function timeAgo(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const seconds = Math.floor((now - then) / 1000);
-
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo ago`;
-  const years = Math.floor(months / 12);
-  return `${years}y ago`;
-}
+import { timeAgo } from "../utils/timeAgo";
 
 /* ─── Skeleton placeholders ─── */
 
@@ -140,7 +123,7 @@ type DiscoveryItem = {
   type?: string;
 };
 
-function DiscoveryCard({ item, badge, onSelect }: { item: DiscoveryItem; badge?: React.ReactNode; onSelect?: (item: DiscoveryItem) => void }) {
+function DiscoveryCard({ item, badge, reason, onSelect }: { item: DiscoveryItem; badge?: React.ReactNode; reason?: string; onSelect?: (item: DiscoveryItem) => void }) {
   return (
     <div
       role="button"
@@ -177,6 +160,9 @@ function DiscoveryCard({ item, badge, onSelect }: { item: DiscoveryItem; badge?:
       <p className="text-2xs text-slate-500">
         {item.year ?? ""}{item.type ? ` ${item.type === "movie" ? "Movie" : "Series"}` : ""}
       </p>
+      {reason && (
+        <p className="mt-0.5 truncate text-2xs italic text-slate-500" title={reason}>{reason}</p>
+      )}
     </div>
   );
 }
@@ -259,6 +245,9 @@ export function DashboardPage() {
   const [recsLoading, setRecsLoading] = useState(true);
   const [seriesRecs, setSeriesRecs] = useState<TrendingMeta[]>([]);
   const [seriesRecsLoading, setSeriesRecsLoading] = useState(true);
+  const [aiActive, setAiActive] = useState(false);
+  const [movieReasons, setMovieReasons] = useState<Record<string, string>>({});
+  const [seriesReasons, setSeriesReasons] = useState<Record<string, string>>({});
   const [calendarEntries, setCalendarEntries] = useState<CalendarEntry[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(true);
 
@@ -324,16 +313,28 @@ export function DashboardPage() {
     })();
     void (async () => {
       try {
-        const res = await api.getPersonalRecommendations("movie", 20);
-        if (mounted) setRecommendations(res.metas ?? []);
+        const configRes = await api.getAiConfig();
+        if (mounted) setAiActive(configRes.configured);
+      } catch { /* optional */ }
+    })();
+    void (async () => {
+      try {
+        const res = await api.getAiRecommendations("movie", 20);
+        if (mounted) {
+          setRecommendations(res.metas ?? []);
+          setMovieReasons(res.reasons ?? {});
+        }
       } catch { /* optional */ } finally {
         if (mounted) setRecsLoading(false);
       }
     })();
     void (async () => {
       try {
-        const res = await api.getPersonalRecommendations("series", 20);
-        if (mounted) setSeriesRecs(res.metas ?? []);
+        const res = await api.getAiRecommendations("series", 20);
+        if (mounted) {
+          setSeriesRecs(res.metas ?? []);
+          setSeriesReasons(res.reasons ?? {});
+        }
       } catch { /* optional */ } finally {
         if (mounted) setSeriesRecsLoading(false);
       }
@@ -733,17 +734,17 @@ export function DashboardPage() {
               <DiscoveryCard
                 key={item.id}
                 item={item}
-                onSelect={(i) => setSelectedItem(toSearchResult(i.id, i.type ?? "movie", i.name, { poster: i.poster, year: i.year, description: item.description, genres: i.genres, rating: i.rating }))}
+                onSelect={(i) => setSelectedItem(toSearchResult(i.id, (i.type ?? "movie") as "movie" | "series", i.name, { poster: i.poster, year: i.year, description: item.description, genres: i.genres, rating: i.rating }))}
               />
             ))}
           </div>
         )}
       </section>
 
-      {/* ── Recommended For You ── */}
+      {/* ── Recommended Movies ── */}
       {(recsLoading || recommendations.length > 0) && (
         <section>
-          <SectionHeader title="Recommended For You">
+          <SectionHeader title={aiActive ? "AI Picks — Movies" : "Recommended For You"}>
             {!recsLoading && recommendations.length > 0 && (
               <ScrollArrows
                 canScrollLeft={recsScroll.canScrollLeft}
@@ -753,7 +754,11 @@ export function DashboardPage() {
             )}
           </SectionHeader>
           {recsLoading ? (
-            <ContinueWatchingSkeleton />
+            aiActive ? (
+              <p className="text-sm text-slate-500 italic">Generating AI recommendations…</p>
+            ) : (
+              <ContinueWatchingSkeleton />
+            )
           ) : (
             <div
               ref={recsScroll.ref}
@@ -763,10 +768,12 @@ export function DashboardPage() {
                 <DiscoveryCard
                   key={item.id}
                   item={item}
-                  onSelect={(i) => setSelectedItem(toSearchResult(i.id, i.type ?? "movie", i.name, { poster: i.poster, year: i.year, description: item.description, genres: i.genres, rating: i.rating }))}
+                  reason={movieReasons[item.id]}
+                  onSelect={(i) => setSelectedItem(toSearchResult(i.id, (i.type ?? "movie") as "movie" | "series", i.name, { poster: i.poster, year: i.year, description: item.description, genres: i.genres, rating: i.rating }))}
                   badge={
                     <span className="inline-flex items-center gap-1 rounded-md bg-violet-600/80 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
                       <Sparkles className="h-2.5 w-2.5" />
+                      {aiActive && <span>AI</span>}
                     </span>
                   }
                 />
@@ -776,10 +783,10 @@ export function DashboardPage() {
         </section>
       )}
 
-      {/* ── Recommended Series For You ── */}
+      {/* ── Recommended Series ── */}
       {(seriesRecsLoading || seriesRecs.length > 0) && (
         <section>
-          <SectionHeader title="Recommended Series For You">
+          <SectionHeader title={aiActive ? "AI Picks — Series" : "Recommended Series For You"}>
             {!seriesRecsLoading && seriesRecs.length > 0 && (
               <ScrollArrows
                 canScrollLeft={seriesRecsScroll.canScrollLeft}
@@ -789,7 +796,11 @@ export function DashboardPage() {
             )}
           </SectionHeader>
           {seriesRecsLoading ? (
-            <ContinueWatchingSkeleton />
+            aiActive ? (
+              <p className="text-sm text-slate-500 italic">Generating AI recommendations…</p>
+            ) : (
+              <ContinueWatchingSkeleton />
+            )
           ) : (
             <div
               ref={seriesRecsScroll.ref}
@@ -799,10 +810,12 @@ export function DashboardPage() {
                 <DiscoveryCard
                   key={item.id}
                   item={item}
+                  reason={seriesReasons[item.id]}
                   onSelect={(i) => setSelectedItem(toSearchResult(i.id, "series", i.name, { poster: i.poster, year: i.year, description: item.description, genres: i.genres, rating: i.rating }))}
                   badge={
                     <span className="inline-flex items-center gap-1 rounded-md bg-violet-600/80 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
                       <Sparkles className="h-2.5 w-2.5" />
+                      {aiActive && <span>AI</span>}
                     </span>
                   }
                 />
