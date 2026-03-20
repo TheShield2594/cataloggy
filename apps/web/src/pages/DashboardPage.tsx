@@ -447,12 +447,20 @@ export function DashboardPage() {
                   : null;
               return (
                 <div key={s.imdbId} className="flex-none group" style={{ width: "11rem" }}>
-                  {/* IMDb link wraps the poster only so the mark-next button stays functional */}
                   <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
                     <Poster
                       src={s.poster}
                       alt={s.name}
                       className="h-full w-full"
+                    />
+                    {/* Stretch link covers the poster; the gradient overlay below renders on top via DOM order */}
+                    <a
+                      href={`https://www.imdb.com/title/${s.imdbId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="absolute inset-0"
+                      aria-label={`Open ${s.name} on IMDb`}
+                      tabIndex={-1}
                     />
                     {/* Bottom gradient overlay with episode info + mark button */}
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/80 to-transparent px-3 pb-3 pt-16">
