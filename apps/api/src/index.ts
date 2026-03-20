@@ -1444,6 +1444,11 @@ app.get<{ Querystring: { type?: string; limit?: string } }>("/recommendations/pe
           voteCount: null,
           totalSeasons: null,
           totalEpisodes: null,
+          runtime: null,
+          certification: null,
+          status: null,
+          network: null,
+          releaseDate: null,
         }));
       } else {
         recs = await tmdb.recommendations(type, tmdbId);
