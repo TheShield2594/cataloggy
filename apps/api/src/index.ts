@@ -1979,6 +1979,10 @@ app.post<{ Params: { listId: string }; Body: unknown }>("/lists/:listId/items", 
       });
     });
 
+    // Trigger background metadata sync so posters/descriptions are available
+    const metadataTypeForSync = itemType === ItemType.movie ? MetadataType.movie : MetadataType.series;
+    void syncMetadata(imdbId, metadataTypeForSync).catch(() => {});
+
     return reply.code(201).send({ listItem });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -2606,7 +2610,11 @@ const getAddonConfig = async (): Promise<AddonConfig> => {
 
 app.get("/addon/config", async () => {
   const config = await getAddonConfig();
-  return { config, availableCatalogs: ALL_ADDON_CATALOGS };
+  const userLists = await prisma.list.findMany({
+    select: { id: true, name: true },
+    orderBy: { createdAt: "asc" }
+  });
+  return { config, availableCatalogs: ALL_ADDON_CATALOGS, availableLists: userLists };
 });
 
 app.post<{ Body: unknown }>("/addon/config", async (request, reply) => {
@@ -2614,8 +2622,22 @@ app.post<{ Body: unknown }>("/addon/config", async (request, reply) => {
   if (!body || !Array.isArray(body.enabledCatalogs)) {
     return reply.code(400).send({ error: "enabledCatalogs must be an array of strings" });
   }
+
+  // Fetch current user list IDs to validate list-based catalog entries
+  const userLists = await prisma.list.findMany({ select: { id: true } });
+  const validListIds = new Set(userLists.map((l) => l.id));
+
   const enabled = (body.enabledCatalogs as unknown[]).filter(
-    (c): c is string => typeof c === "string" && ALL_ADDON_CATALOGS.includes(c)
+    (c): c is string => {
+      if (typeof c !== "string") return false;
+      if (ALL_ADDON_CATALOGS.includes(c)) return true;
+      // Allow list:{uuid} entries for user-created lists
+      if (c.startsWith("list:")) {
+        const listId = c.slice(5);
+        return validListIds.has(listId);
+      }
+      return false;
+    }
   );
   const config: AddonConfig = { enabledCatalogs: enabled };
   await prisma.kV.upsert({
@@ -3406,6 +3428,23 @@ app.get("/addon/stremio/manifest.json", async () => {
       })),
   ];
 
+  // Add user list catalogs (each list exposes as two catalogs: movies + series)
+  const listCatalogIds = config.enabledCatalogs.filter((id) => id.startsWith("list:"));
+  if (listCatalogIds.length > 0) {
+    const listIds = listCatalogIds.map((id) => id.slice(5));
+    const userLists = await prisma.list.findMany({
+      where: { id: { in: listIds } },
+      select: { id: true, name: true }
+    });
+    const listById = new Map(userLists.map((l) => [l.id, l.name]));
+    for (const listId of listIds) {
+      const name = listById.get(listId);
+      if (!name) continue;
+      catalogs.push({ id: `list:${listId}`, type: "movie", name: `${name} – Movies` });
+      catalogs.push({ id: `list:${listId}`, type: "series", name: `${name} – Series` });
+    }
+  }
+
   return {
     id: STREMIO_ADDON_ID,
     version: STREMIO_ADDON_VERSION,
@@ -3449,6 +3488,15 @@ app.get<{ Params: { type: string; id: string }; Querystring: { skip?: string } }
     if (catalogId === "my_continue_series") {
       if (type !== "series") return reply.code(400).send({ metas: [] });
       const metas = await getContinueMetas(limit);
+      return { metas };
+    }
+
+    // User list catalogs (list:{uuid})
+    if (catalogId.startsWith("list:")) {
+      const listId = catalogId.slice(5);
+      const list = await prisma.list.findUnique({ where: { id: listId }, select: { id: true } });
+      if (!list) return reply.code(404).send({ metas: [] });
+      const metas = await getCustomListMetas(listId, type, limit);
       return { metas };
     }
 
