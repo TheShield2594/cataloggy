@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronUp, Film, Filter, Plus, Search, SlidersHorizontal, Star, Tv, X, Heart } from "lucide-react";
 import { api, CatalogList, MediaType, SearchResult } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
@@ -67,7 +67,6 @@ function applyFiltersAndSort(
   yearMax: string,
   ratingMin: string,
   runtime: RuntimeBucket,
-  provider: string,
   sort: SortOption,
 ): SearchResult[] {
   let filtered = results;
@@ -97,9 +96,6 @@ function applyFiltersAndSort(
   if (runtime) {
     filtered = filtered.filter((r) => matchesRuntime(r.runtime, runtime));
   }
-
-  // Provider filter — not available in basic search results, reserved for future use
-  // if (provider) { ... }
 
   // Sort
   switch (sort) {
@@ -134,11 +130,11 @@ export function SearchPage() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [providers, setProviders] = useState<{ key: string; name: string }[]>([]);
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const lastSearchRef = useRef<{ filter: FilterType; query: string }>({ filter: "all", query: "" });
+  const requestIdRef = useRef(0);
 
   const showToast = useCallback((message: string, type: Toast["type"] = "success") => {
     const id = ++toastId;
@@ -157,14 +153,6 @@ export function SearchPage() {
       } catch (err) {
         console.error(err);
         showToast(err instanceof Error ? err.message : "Failed to load lists", "error");
-      }
-    })();
-    void (async () => {
-      try {
-        const { providers: p } = await api.getStreamingProviders();
-        setProviders(p.map((x) => ({ key: x.key, name: x.name })));
-      } catch {
-        // Non-critical
       }
     })();
   }, [showToast]);
@@ -189,6 +177,7 @@ export function SearchPage() {
   const doSearch = useCallback(
     async (searchFilter: FilterType, searchQuery: string) => {
       if (!searchQuery.trim()) return;
+      const requestId = ++requestIdRef.current;
       setIsSearching(true);
       lastSearchRef.current = { filter: searchFilter, query: searchQuery };
 
@@ -198,6 +187,7 @@ export function SearchPage() {
             api.search("movie", searchQuery),
             api.search("series", searchQuery),
           ]);
+          if (requestIdRef.current !== requestId) return;
           const merged: SearchResult[] = [];
           const maxLen = Math.max(movies.length, series.length);
           for (let i = 0; i < maxLen; i++) {
@@ -207,13 +197,17 @@ export function SearchPage() {
           setRawResults(merged);
         } else {
           const response = await api.search(searchFilter, searchQuery);
+          if (requestIdRef.current !== requestId) return;
           setRawResults(response);
         }
       } catch (err) {
+        if (requestIdRef.current !== requestId) return;
         setRawResults([]);
         showToast(err instanceof Error ? err.message : "Search failed", "error");
       } finally {
-        setIsSearching(false);
+        if (requestIdRef.current === requestId) {
+          setIsSearching(false);
+        }
       }
     },
     [showToast]
@@ -229,10 +223,9 @@ export function SearchPage() {
       filters.yearMax,
       filters.ratingMin,
       filters.runtime,
-      filters.provider,
       filters.sort,
     );
-  }, [rawResults, filters.genre, filters.yearMin, filters.yearMax, filters.ratingMin, filters.runtime, filters.provider, filters.sort]);
+  }, [rawResults, filters.genre, filters.yearMin, filters.yearMax, filters.ratingMin, filters.runtime, filters.sort]);
 
   // Debounced auto-search on query/filter change
   useEffect(() => {
@@ -251,7 +244,7 @@ export function SearchPage() {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [filters.query, filters.filter, doSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filters.query, filters.filter, doSearch]);
 
   const submitSearch = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -416,6 +409,7 @@ export function SearchPage() {
                 <input
                   type="number"
                   placeholder="From"
+                  aria-label="Minimum year"
                   min="1900"
                   max="2030"
                   value={filters.yearMin}
@@ -425,6 +419,7 @@ export function SearchPage() {
                 <input
                   type="number"
                   placeholder="To"
+                  aria-label="Maximum year"
                   min="1900"
                   max="2030"
                   value={filters.yearMax}
@@ -449,12 +444,13 @@ export function SearchPage() {
               ]}
             />
 
-            {/* Provider */}
+            {/* Provider — not yet available in search results */}
             <FilterSelect
               label="Provider"
-              value={filters.provider}
-              onChange={(v) => setFilters({ provider: v })}
-              options={[{ value: "", label: "Any provider" }, ...providers.map((p) => ({ value: p.key, label: p.name }))]}
+              value=""
+              onChange={() => {}}
+              disabled
+              options={[{ value: "", label: "Coming soon" }]}
             />
 
             {/* Runtime */}
@@ -586,19 +582,24 @@ function FilterSelect({
   value,
   onChange,
   options,
+  disabled,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
+  disabled?: boolean;
 }) {
+  const id = useId();
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-2xs font-medium uppercase tracking-wider text-slate-400">{label}</label>
+      <label htmlFor={id} className="text-2xs font-medium uppercase tracking-wider text-slate-400">{label}</label>
       <select
+        id={id}
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-slate-700/60 bg-slate-900 px-2.5 py-2 text-sm text-slate-200 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500/30 appearance-none cursor-pointer"
+        className="rounded-lg border border-slate-700/60 bg-slate-900 px-2.5 py-2 text-sm text-slate-200 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500/30 appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
           backgroundRepeat: "no-repeat",

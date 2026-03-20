@@ -113,10 +113,9 @@ export function useSearchFilters() {
   const clearFilters = useCallback(() => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      // Keep only query
-      const q = next.get("q");
+      // Keep query and media type filter
       for (const key of [...next.keys()]) {
-        if (key !== "q") next.delete(key);
+        if (key !== "q" && key !== "filter") next.delete(key);
       }
       return next;
     }, { replace: true });
@@ -128,7 +127,6 @@ export function useSearchFilters() {
       filters.yearMin !== DEFAULTS.yearMin ||
       filters.yearMax !== DEFAULTS.yearMax ||
       filters.ratingMin !== DEFAULTS.ratingMin ||
-      filters.provider !== DEFAULTS.provider ||
       filters.runtime !== DEFAULTS.runtime ||
       filters.sort !== DEFAULTS.sort
     );
@@ -139,7 +137,6 @@ export function useSearchFilters() {
     if (filters.genre) count++;
     if (filters.yearMin || filters.yearMax) count++;
     if (filters.ratingMin) count++;
-    if (filters.provider) count++;
     if (filters.runtime) count++;
     if (filters.sort !== "relevance") count++;
     return count;
