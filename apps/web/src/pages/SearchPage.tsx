@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, Film, Plus, Search, Star, Tv, X, Heart } from "lucide-react";
 import { api, CatalogList, MediaType, SearchResult } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";

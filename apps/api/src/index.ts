@@ -2601,7 +2601,17 @@ const getAddonConfig = async (): Promise<AddonConfig> => {
     if (parsed.enabledCatalogs.length === 0) return { enabledCatalogs: [] };
     // Migrate legacy IDs on read
     const migrated = migrateLegacyCatalogs(parsed.enabledCatalogs);
-    const valid = migrated.filter((c) => ALL_ADDON_CATALOGS.includes(c));
+    // Validate list-backed entries against the DB
+    const listEntries = migrated.filter((c) => c.startsWith("list:"));
+    let validListIds = new Set<string>();
+    if (listEntries.length > 0) {
+      const customLists = await prisma.list.findMany({ where: { kind: ListKind.custom }, select: { id: true } });
+      validListIds = new Set(customLists.map((l) => l.id));
+    }
+    const valid = migrated.filter((c) =>
+      ALL_ADDON_CATALOGS.includes(c) ||
+      (c.startsWith("list:") && validListIds.has(c.slice(5)))
+    );
     return { enabledCatalogs: valid.length > 0 ? valid : DEFAULT_ADDON_CATALOGS };
   } catch {
     return { enabledCatalogs: DEFAULT_ADDON_CATALOGS };
@@ -2611,6 +2621,7 @@ const getAddonConfig = async (): Promise<AddonConfig> => {
 app.get("/addon/config", async () => {
   const config = await getAddonConfig();
   const userLists = await prisma.list.findMany({
+    where: { kind: ListKind.custom },
     select: { id: true, name: true },
     orderBy: { createdAt: "asc" }
   });
@@ -2623,8 +2634,8 @@ app.post<{ Body: unknown }>("/addon/config", async (request, reply) => {
     return reply.code(400).send({ error: "enabledCatalogs must be an array of strings" });
   }
 
-  // Fetch current user list IDs to validate list-based catalog entries
-  const userLists = await prisma.list.findMany({ select: { id: true } });
+  // Fetch custom list IDs to validate list-based catalog entries
+  const userLists = await prisma.list.findMany({ where: { kind: ListKind.custom }, select: { id: true } });
   const validListIds = new Set(userLists.map((l) => l.id));
 
   const enabled = (body.enabledCatalogs as unknown[]).filter(

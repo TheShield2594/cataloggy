@@ -100,6 +100,7 @@ export type SeriesProgress = {
 export type WatchEvent = {
   id: string;
   imdbId: string;
+  seriesImdbId?: string;
   type: "movie" | "episode";
   name: string;
   poster?: string;
@@ -370,6 +371,9 @@ export const api = {
   // Anime
   getAnimeCatalog(type: MediaType) {
     return request<{ metas: TrendingMeta[] }>(`/anime?type=${type}`);
+  },
+  getItemMeta(type: MediaType, imdbId: string) {
+    return request<{ imdbId: string; type: string; name: string; year: number | null; poster: string | null; description: string | null; genres: string[]; rating: number | null }>(`/meta/${type}/${encodeURIComponent(imdbId)}`);
   },
   // Preferences (language, region, spoiler protection)
   getPreferences() {

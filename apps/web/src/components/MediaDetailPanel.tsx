@@ -322,17 +322,48 @@ export function useDetailPanel() {
 
   useEffect(() => {
     if (!selectedItem) return;
+    let cancelled = false;
+    const active = selectedItem;
+
+    // Enrich with metadata if fields are missing
+    if (!active.description && active.genres.length === 0 && active.rating == null) {
+      void (async () => {
+        try {
+          const meta = await api.getItemMeta(active.type, active.imdbId);
+          if (!cancelled) {
+            setSelectedItem((prev) => {
+              if (!prev || prev.imdbId !== active.imdbId) return prev;
+              return {
+                ...prev,
+                description: meta.description ?? prev.description,
+                genres: meta.genres.length > 0 ? meta.genres : prev.genres,
+                rating: meta.rating ?? prev.rating,
+                poster: meta.poster ?? prev.poster,
+              };
+            });
+          }
+        } catch { /* best-effort */ }
+      })();
+    }
+
     setPanelHistoryLoading(true);
     void (async () => {
       try {
         const history = await api.getWatchHistory(50);
-        setPanelHistory(history.filter((e) => e.imdbId === selectedItem.imdbId));
+        if (!cancelled) {
+          setPanelHistory(
+            history.filter(
+              (e) => (e.seriesImdbId ?? e.imdbId) === active.imdbId || e.imdbId === active.imdbId
+            )
+          );
+        }
       } catch {
-        setPanelHistory([]);
+        if (!cancelled) setPanelHistory([]);
       } finally {
-        setPanelHistoryLoading(false);
+        if (!cancelled) setPanelHistoryLoading(false);
       }
     })();
+    return () => { cancelled = true; };
   }, [selectedItem]);
 
   return { selectedItem, setSelectedItem, panelHistory, panelHistoryLoading };

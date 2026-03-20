@@ -269,7 +269,7 @@ export function ListsPage() {
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide lg:flex-col lg:overflow-x-visible lg:pb-0">
           {lists.map((list) => (
             <div key={list.id} className="relative flex-none lg:w-full">
-              {confirmDeleteId === list.id ? (
+              {confirmDeleteId === list.id && list.kind === "custom" ? (
                 <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertTriangle className="h-4 w-4 flex-none text-rose-400" />
@@ -312,14 +312,16 @@ export function ListsPage() {
                       {list.itemCount} {list.itemCount === 1 ? "item" : "items"}
                     </p>
                   </button>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(list.id); }}
-                    className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg text-slate-600 opacity-0 group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-400 transition-all focus:opacity-100"
-                    aria-label={`Delete list ${list.name}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  {list.kind === "custom" && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(list.id); }}
+                      className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg text-slate-600 opacity-0 group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-400 transition-all focus:opacity-100"
+                      aria-label={`Delete list ${list.name}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               )}
             </div>
