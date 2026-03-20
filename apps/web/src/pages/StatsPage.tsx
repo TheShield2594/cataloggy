@@ -84,7 +84,7 @@ export function StatsPage() {
               const label = new Date(m.month + "-15").toLocaleDateString(undefined, { month: "short" });
               return (
                 <div key={m.month} className="flex flex-1 flex-col items-center gap-1">
-                  <span className="text-2xs text-slate-500 tabular-nums">{total || ""}</span>
+                  <span className="text-2xs text-slate-400 tabular-nums">{total || ""}</span>
                   <div className="flex w-full flex-col justify-end" style={{ height: "140px" }}>
                     {episodeHeight > 0 && (
                       <div
@@ -104,12 +104,12 @@ export function StatsPage() {
                       <div className="w-full rounded bg-slate-800/60" style={{ height: "2%" }} />
                     )}
                   </div>
-                  <span className="text-2xs text-slate-500">{label}</span>
+                  <span className="text-2xs text-slate-400">{label}</span>
                 </div>
               );
             })}
           </div>
-          <div className="mt-3 flex items-center gap-4 text-xs text-slate-500">
+          <div className="mt-3 flex items-center gap-4 text-xs text-slate-400">
             <span className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-sm bg-red-500/70" /> Movies
             </span>
@@ -134,7 +134,7 @@ export function StatsPage() {
                     style={{ width: `${(g.count / maxGenreCount) * 100}%` }}
                   />
                 </div>
-                <span className="w-8 text-right text-sm tabular-nums text-slate-500">{g.count}</span>
+                <span className="w-8 text-right text-sm tabular-nums text-slate-400">{g.count}</span>
               </div>
             ))}
           </div>
@@ -166,7 +166,7 @@ export function StatsPage() {
                   )}
                 </div>
                 <p className="mt-1.5 truncate text-sm font-medium text-slate-200">{item.name}</p>
-                <p className="text-2xs text-slate-500 capitalize">{item.type}</p>
+                <p className="text-2xs text-slate-400 capitalize">{item.type}</p>
               </div>
             ))}
           </div>
