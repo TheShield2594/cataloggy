@@ -2404,6 +2404,51 @@ app.get("/series/progress", async () => {
     watchedBySeriesId.set(row.seriesImdbId, (watchedBySeriesId.get(row.seriesImdbId) ?? 0) + 1);
   }
 
+  // Fetch TMDB metadata for any series without cached metadata.
+  // Sync up to 10 at once (covers most dashboards); fire the rest in the background.
+  const SYNC_INLINE_LIMIT = 10;
+  const missingMetaIds = imdbIds.filter((id) => !metaByImdbId.has(id));
+  if (missingMetaIds.length > 0) {
+    const inlineBatch = missingMetaIds.slice(0, SYNC_INLINE_LIMIT);
+    const backgroundBatch = missingMetaIds.slice(SYNC_INLINE_LIMIT);
+
+    try {
+      const tmdb = await getTmdb();
+      const freshMeta = await Promise.allSettled(
+        inlineBatch.map(async (id) => {
+          const payload = await tmdb.findByImdbId(MetadataType.series, id);
+          if (payload) {
+            await upsertMetadata(payload);
+            return payload;
+          }
+          return null;
+        })
+      );
+      for (const result of freshMeta) {
+        if (result.status === "fulfilled" && result.value) {
+          metaByImdbId.set(result.value.imdbId, {
+            imdbId: result.value.imdbId,
+            name: result.value.name,
+            poster: result.value.poster,
+            totalSeasons: result.value.totalSeasons,
+            totalEpisodes: result.value.totalEpisodes,
+          });
+        }
+      }
+
+      if (backgroundBatch.length > 0) {
+        void (async () => {
+          for (const id of backgroundBatch) {
+            try {
+              const payload = await tmdb.findByImdbId(MetadataType.series, id);
+              if (payload) await upsertMetadata(payload);
+            } catch { /* skip */ }
+          }
+        })();
+      }
+    } catch { /* TMDB unavailable – return what we have */ }
+  }
+
   const progress = progressRows.map((row) => {
     const meta = metaByImdbId.get(row.seriesImdbId);
     return {
@@ -2411,6 +2456,10 @@ app.get("/series/progress", async () => {
       seriesImdbId: row.seriesImdbId,
       lastSeason: row.lastSeason,
       lastEpisode: row.lastEpisode,
+      // nextEpisode is an approximation — we don't store per-season episode counts,
+      // so we always advance within the same season. The watch-next endpoint mirrors this.
+      nextSeason: row.lastSeason,
+      nextEpisode: row.lastEpisode + 1,
       lastWatchedAt: row.lastWatchedAt,
       updatedAt: row.updatedAt,
       name: meta?.name ?? row.seriesImdbId,
@@ -2422,6 +2471,39 @@ app.get("/series/progress", async () => {
   });
 
   return { progress };
+});
+
+app.post<{ Params: { imdbId: string } }>("/series/:imdbId/watch-next", async (request, reply) => {
+  const { imdbId } = request.params;
+
+  const row = await prisma.seriesProgress.findUnique({ where: { seriesImdbId: imdbId } });
+  if (!row) {
+    return reply.code(404).send({ error: "No progress found for this series" });
+  }
+
+  const nextEpisode = row.lastEpisode + 1;
+  const nextSeason = row.lastSeason;
+  const watchedAt = new Date();
+
+  await prisma.watchEvent.create({
+    data: {
+      type: "episode",
+      imdbId,
+      seriesImdbId: imdbId,
+      season: nextSeason,
+      episode: nextEpisode,
+      watchedAt,
+      plays: 1,
+    },
+  });
+
+  await upsertSeriesProgressIfNewer(imdbId, {
+    lastSeason: nextSeason,
+    lastEpisode: nextEpisode,
+    lastWatchedAt: watchedAt,
+  });
+
+  return reply.code(204).send();
 });
 
 app.get<{ Params: { imdbId: string } }>("/series/progress/:imdbId", async (request, reply) => {
@@ -2645,12 +2727,61 @@ app.post("/trakt/import", async (request, reply) => {
     return reply.code(500).send({ error: "Trakt integration is not configured" });
   }
 
-  const [watchedMovies, watchedShows] = await Promise.all([
+  const [watchedMovies, watchedShows, watchlistMovies, watchlistShows] = await Promise.all([
     client.fetchWatchedMovies(request.log),
-    client.fetchWatchedShows(request.log)
+    client.fetchWatchedShows(request.log),
+    client.fetchWatchlistMovies(request.log),
+    client.fetchWatchlistShows(request.log),
   ]);
 
-  const imported = { movies: 0, episodes: 0 };
+  const imported = { movies: 0, episodes: 0, watchlistMovies: 0, watchlistShows: 0 };
+
+  // ── Import Trakt watchlist into the default watchlist ──
+  const watchlist = await getDefaultWatchlist();
+
+  for (const entry of watchlistMovies) {
+    const imdbId = entry.movie?.ids?.imdb;
+    const title = entry.movie?.title?.trim();
+    if (!imdbId) continue;
+
+    await prisma.item.upsert({
+      where: { type_imdbId: { type: ItemType.movie, imdbId } },
+      create: { type: ItemType.movie, imdbId, title: title || undefined },
+      update: title ? { title } : {}
+    });
+
+    try {
+      await prisma.listItem.create({
+        data: { listId: watchlist.id, type: ListItemType.movie, imdbId }
+      });
+      imported.watchlistMovies += 1;
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
+      // already in watchlist – skip
+    }
+  }
+
+  for (const entry of watchlistShows) {
+    const imdbId = entry.show?.ids?.imdb;
+    const title = entry.show?.title?.trim();
+    if (!imdbId) continue;
+
+    await prisma.item.upsert({
+      where: { type_imdbId: { type: ItemType.series, imdbId } },
+      create: { type: ItemType.series, imdbId, title: title || undefined },
+      update: title ? { title } : {}
+    });
+
+    try {
+      await prisma.listItem.create({
+        data: { listId: watchlist.id, type: ListItemType.series, imdbId }
+      });
+      imported.watchlistShows += 1;
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
+      // already in watchlist – skip
+    }
+  }
   const seriesProgressByImdb = new Map<string, SeriesProgressCandidate>();
 
   for (const entry of watchedMovies) {
@@ -2762,6 +2893,42 @@ app.post("/trakt/import", async (request, reply) => {
   for (const [seriesImdbId, progress] of seriesProgressByImdb.entries()) {
     await upsertSeriesProgressIfNewer(seriesImdbId, progress);
   }
+
+  // ── Background metadata fetch for all imported series & movies ──
+  // Collect all IMDb IDs that were just imported and kick off TMDB syncs
+  // in the background so posters are available on the next dashboard load.
+  const movieImdbIds = watchedMovies
+    .map((e) => e.movie?.ids?.imdb)
+    .filter((id): id is string => !!id);
+  const seriesImdbIds = [
+    ...new Set([
+      ...watchedShows.map((e) => e.show?.ids?.imdb).filter((id): id is string => !!id),
+      ...watchlistShows.map((e) => e.show?.ids?.imdb).filter((id): id is string => !!id),
+    ]),
+  ];
+  const watchlistMovieImdbIds = watchlistMovies
+    .map((e) => e.movie?.ids?.imdb)
+    .filter((id): id is string => !!id);
+
+  const allMovieIds = [...new Set([...movieImdbIds, ...watchlistMovieImdbIds])];
+
+  void (async () => {
+    try {
+      const tmdb = await getTmdb();
+      for (const id of allMovieIds) {
+        try {
+          const payload = await tmdb.findByImdbId(MetadataType.movie, id);
+          if (payload) await upsertMetadata(payload);
+        } catch { /* skip individual failures */ }
+      }
+      for (const id of seriesImdbIds) {
+        try {
+          const payload = await tmdb.findByImdbId(MetadataType.series, id);
+          if (payload) await upsertMetadata(payload);
+        } catch { /* skip individual failures */ }
+      }
+    } catch { /* TMDB unavailable */ }
+  })();
 
   return reply.code(200).send({ imported });
 });
@@ -3167,6 +3334,198 @@ app.post("/trakt/poll", async (request, reply) => {
     return reply.code(500).send({ error: "Trakt poll failed" });
   }
 });
+
+// ─── Stremio Addon ───
+// These routes are public (no auth) – see the auth bypass hook above.
+
+const STREMIO_ADDON_ID = "com.cataloggy.addon";
+const STREMIO_ADDON_VERSION = "1.0.0";
+
+// The static catalog IDs that are always available (watchlist / history)
+const CORE_STREMIO_CATALOGS = [
+  { id: "my_watchlist_movies", type: "movie" as const, name: "My Watchlist – Movies" },
+  { id: "my_watchlist_series", type: "series" as const, name: "My Watchlist – Series" },
+  { id: "my_recent_movies", type: "movie" as const, name: "Recently Watched Movies" },
+  { id: "my_continue_series", type: "series" as const, name: "Continue Watching" },
+];
+
+// Map from addon catalog ID to discovery catalog ID used by the discovery endpoints
+const DISCOVERY_CATALOG_MAP: Record<string, { endpoint: string; type: StremioMetaType }> = {
+  "cataloggy-trending-movie":     { endpoint: "trending:movie:week",     type: "movie" },
+  "cataloggy-trending-series":    { endpoint: "trending:series:week",    type: "series" },
+  "cataloggy-popular-movie":      { endpoint: "popular:movie",           type: "movie" },
+  "cataloggy-popular-series":     { endpoint: "popular:series",          type: "series" },
+  "cataloggy-recommended-movie":  { endpoint: "recommended:movie",       type: "movie" },
+  "cataloggy-recommended-series": { endpoint: "recommended:series",      type: "series" },
+  "cataloggy-anime-series":       { endpoint: "anime:series",            type: "series" },
+  "cataloggy-anime-movie":        { endpoint: "anime:movie",             type: "movie" },
+  "cataloggy-netflix-movie":      { endpoint: "streaming:netflix:movie", type: "movie" },
+  "cataloggy-netflix-series":     { endpoint: "streaming:netflix:series",type: "series" },
+  "cataloggy-disney-movie":       { endpoint: "streaming:disney:movie",  type: "movie" },
+  "cataloggy-disney-series":      { endpoint: "streaming:disney:series", type: "series" },
+  "cataloggy-amazon-movie":       { endpoint: "streaming:amazon:movie",  type: "movie" },
+  "cataloggy-amazon-series":      { endpoint: "streaming:amazon:series", type: "series" },
+  "cataloggy-apple-movie":        { endpoint: "streaming:apple:movie",   type: "movie" },
+  "cataloggy-apple-series":       { endpoint: "streaming:apple:series",  type: "series" },
+  "cataloggy-max-movie":          { endpoint: "streaming:max:movie",     type: "movie" },
+  "cataloggy-max-series":         { endpoint: "streaming:max:series",    type: "series" },
+};
+
+const DISCOVERY_CATALOG_LABELS: Record<string, string> = {
+  "cataloggy-trending-movie":     "Trending Movies",
+  "cataloggy-trending-series":    "Trending Series",
+  "cataloggy-popular-movie":      "Popular Movies",
+  "cataloggy-popular-series":     "Popular Series",
+  "cataloggy-recommended-movie":  "Recommended Movies",
+  "cataloggy-recommended-series": "Recommended Series",
+  "cataloggy-anime-series":       "Anime",
+  "cataloggy-anime-movie":        "Anime Movies",
+  "cataloggy-netflix-movie":      "Netflix Movies",
+  "cataloggy-netflix-series":     "Netflix Series",
+  "cataloggy-disney-movie":       "Disney+ Movies",
+  "cataloggy-disney-series":      "Disney+ Series",
+  "cataloggy-amazon-movie":       "Prime Video Movies",
+  "cataloggy-amazon-series":      "Prime Video Series",
+  "cataloggy-apple-movie":        "Apple TV+ Movies",
+  "cataloggy-apple-series":       "Apple TV+ Series",
+  "cataloggy-max-movie":          "Max Movies",
+  "cataloggy-max-series":         "Max Series",
+};
+
+app.get("/addon/stremio/manifest.json", async () => {
+  const config = await getAddonConfig();
+
+  const catalogs: { id: string; type: string; name: string }[] = [
+    ...CORE_STREMIO_CATALOGS.map((c) => ({ id: c.id, type: c.type, name: c.name })),
+    ...config.enabledCatalogs
+      .filter((id) => DISCOVERY_CATALOG_MAP[id])
+      .map((id) => ({
+        id,
+        type: DISCOVERY_CATALOG_MAP[id].type,
+        name: DISCOVERY_CATALOG_LABELS[id] ?? id,
+      })),
+  ];
+
+  return {
+    id: STREMIO_ADDON_ID,
+    version: STREMIO_ADDON_VERSION,
+    name: "Cataloggy",
+    description: "Your personal media tracker – watchlists, history, and discovery catalogs.",
+    logo: "",
+    background: "",
+    resources: ["catalog"],
+    types: ["movie", "series"],
+    catalogs,
+    behaviorHints: { configurable: false, configurationRequired: false },
+  };
+});
+
+// Stremio-compatible catalog handler: /addon/stremio/:type/catalog/:id.json
+app.get<{ Params: { type: string; id: string }; Querystring: { skip?: string } }>(
+  "/addon/stremio/:type/catalog/:id.json",
+  async (request, reply) => {
+    const { type: rawType, id: catalogId } = request.params;
+    const type = parseMetaType(rawType);
+    if (!type) return reply.code(400).send({ metas: [] });
+
+    const limit = parseCatalogLimit(undefined);
+
+    // Core / personal catalogs — validate URL type matches the catalog's expected type
+    if (catalogId === "my_watchlist_movies") {
+      if (type !== "movie") return reply.code(400).send({ metas: [] });
+      const metas = await getWatchlistMetas("movie", limit);
+      return { metas };
+    }
+    if (catalogId === "my_watchlist_series") {
+      if (type !== "series") return reply.code(400).send({ metas: [] });
+      const metas = await getWatchlistMetas("series", limit);
+      return { metas };
+    }
+    if (catalogId === "my_recent_movies") {
+      if (type !== "movie") return reply.code(400).send({ metas: [] });
+      const metas = await getRecentMetas("movie", limit);
+      return { metas };
+    }
+    if (catalogId === "my_continue_series") {
+      if (type !== "series") return reply.code(400).send({ metas: [] });
+      const metas = await getContinueMetas(limit);
+      return { metas };
+    }
+
+    // Discovery catalogs
+    const discovery = DISCOVERY_CATALOG_MAP[catalogId];
+    if (!discovery) return reply.code(404).send({ metas: [] });
+
+    // Validate that the URL type matches the catalog's declared type
+    if (discovery.type !== type) return reply.code(400).send({ metas: [] });
+
+    const cacheKey = discovery.endpoint;
+    const cached = trendingCacheGet(cacheKey);
+    if (cached) return { metas: cached.data };
+
+    // Fetch from the appropriate source
+    try {
+      const tmdb = await getTmdb();
+      const metaType = discovery.type === "movie" ? MetadataType.movie : MetadataType.series;
+      let results: MetadataPayload[];
+
+      if (cacheKey.startsWith("trending:")) {
+        const window = cacheKey.endsWith(":day") ? "day" as const : "week" as const;
+        results = await tmdb.trending(metaType, window);
+      } else if (cacheKey.startsWith("popular:")) {
+        results = await tmdb.popular(metaType);
+      } else if (cacheKey.startsWith("recommended:")) {
+        const recentItems = metaType === MetadataType.movie
+          ? (await prisma.watchEvent.findMany({ where: { type: "movie" }, orderBy: { watchedAt: "desc" }, take: 3, distinct: ["imdbId"], select: { imdbId: true } })).map((r) => r.imdbId)
+          : (await prisma.seriesProgress.findMany({ orderBy: { lastWatchedAt: "desc" }, take: 3, select: { seriesImdbId: true } })).map((r) => r.seriesImdbId);
+        if (recentItems.length === 0) return { metas: [] };
+        const seedMetas = await prisma.metadata.findMany({ where: { imdbId: { in: recentItems }, type: metaType }, select: { tmdbId: true } });
+        const tmdbIds = seedMetas.filter((m) => m.tmdbId).map((m) => m.tmdbId as number);
+        if (tmdbIds.length === 0) return { metas: [] };
+        // Fetch from up to 3 seeds, merge and deduplicate by imdbId
+        const seen = new Set<string>();
+        const merged: MetadataPayload[] = [];
+        for (const seedId of tmdbIds.slice(0, 3)) {
+          const recs = await tmdb.recommendations(metaType, seedId);
+          for (const r of recs) {
+            if (!seen.has(r.imdbId)) {
+              seen.add(r.imdbId);
+              merged.push(r);
+            }
+          }
+        }
+        results = merged;
+      } else if (cacheKey.startsWith("anime:")) {
+        results = await tmdb.discoverAnime(metaType);
+      } else if (cacheKey.startsWith("streaming:")) {
+        const parts = cacheKey.split(":");
+        const providerKey = parts[1];
+        const provider = STREAMING_PROVIDERS[providerKey];
+        if (!provider) return { metas: [] };
+        const region = await getRegionSetting();
+        results = await tmdb.discoverByProvider(metaType, provider.id, region);
+      } else {
+        return { metas: [] };
+      }
+
+      await Promise.all(results.map((r) => upsertMetadata(r)));
+      const metas: StremioMetaPreview[] = results.map((r) => ({
+        id: r.imdbId,
+        type: discovery.type,
+        name: r.name,
+        poster: r.poster ?? undefined,
+        year: r.year ?? undefined,
+        description: r.description ?? undefined,
+        genres: r.genres,
+        rating: r.rating ?? undefined,
+      }));
+      trendingCacheSet(cacheKey, { data: metas, expiry: Date.now() + TRENDING_CACHE_TTL_MS });
+      return { metas };
+    } catch {
+      return { metas: [] };
+    }
+  }
+);
 
 const start = async () => {
   const port = Number(process.env.PORT ?? 7000);

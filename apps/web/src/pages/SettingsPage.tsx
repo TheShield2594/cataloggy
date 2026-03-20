@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { api, runtimeConfig } from "../api";
-import { ChevronDown, Key, Link, Database, Info, Eye, EyeOff, Loader2, Check, AlertCircle, Unplug, Clapperboard, Image, Globe, Shield } from "lucide-react";
+import { ChevronDown, Key, Link, Database, Info, Eye, EyeOff, Loader2, Check, AlertCircle, Unplug, Clapperboard, Image, Globe, Shield, Copy, ExternalLink } from "lucide-react";
 
 declare const __APP_VERSION__: string;
 const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "unknown";
@@ -388,6 +388,62 @@ const CATALOG_LABELS: Record<string, string> = {
   "cataloggy-max-series": "Max Series",
 };
 
+function AddonManifestUrl() {
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
+  const manifestUrl = `${runtimeConfig.getApiBase()}/addon/stremio/manifest.json`;
+
+  const copy = () => {
+    navigator.clipboard.writeText(manifestUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      setCopyError(true);
+      setTimeout(() => setCopyError(false), 3000);
+    });
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-700/60 bg-slate-950/60 p-4 space-y-3">
+      <p className="text-sm font-medium text-slate-300">Manifest URL</p>
+      <p className="text-xs text-slate-400 leading-relaxed">
+        Copy this URL and paste it into Stremio under <strong className="text-slate-300">Add-ons &rarr; Install from URL</strong>.
+      </p>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 overflow-x-auto rounded-lg bg-slate-900 px-3 py-2 text-xs text-red-400 select-all whitespace-nowrap scrollbar-hide">
+          {manifestUrl}
+        </code>
+        <button
+          type="button"
+          onClick={copy}
+          className={`flex-none inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
+            copied
+              ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
+              : copyError
+                ? "bg-red-500/15 text-red-400 ring-1 ring-red-500/20"
+                : "bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700/60"
+          }`}
+          aria-label="Copy manifest URL"
+        >
+          {copied ? <><Check size={13} /> Copied</> : copyError ? <>Failed</> : <><Copy size={13} /> Copy</>}
+        </button>
+        <a
+          href={manifestUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-none inline-flex items-center gap-1.5 rounded-lg bg-slate-800 border border-slate-700/60 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition-colors"
+          aria-label="Open manifest URL"
+        >
+          <ExternalLink size={13} />
+        </a>
+      </div>
+      <p className="text-xs text-slate-500">
+        The URL points to your local API server. Stremio must be able to reach it on your network.
+      </p>
+    </div>
+  );
+}
+
 function AddonConfigSection() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -437,6 +493,7 @@ function AddonConfigSection() {
 
   return (
     <div className="space-y-4">
+      <AddonManifestUrl />
       <p className="text-sm text-slate-400 leading-relaxed">
         Choose which catalogs appear in Stremio. Changes take effect after the manifest cache refreshes (~60s).
       </p>

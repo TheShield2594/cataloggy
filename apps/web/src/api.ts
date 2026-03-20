@@ -100,7 +100,7 @@ export type SeriesProgress = {
 export type WatchEvent = {
   id: string;
   imdbId: string;
-  type: MediaType;
+  type: "movie" | "episode";
   name: string;
   poster?: string;
   season?: number;
