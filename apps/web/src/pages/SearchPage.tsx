@@ -194,12 +194,12 @@ export function SearchPage() {
         className="sticky top-[76px] z-40 rounded-2xl border border-slate-800/60 bg-slate-900/90 p-4 backdrop-blur-xl shadow-lg"
       >
         <div className="relative">
-          <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
+          <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search movies & TV shows..."
-            className="w-full rounded-full border border-slate-700/60 bg-slate-950 py-3.5 pl-14 pr-12 text-base placeholder:text-slate-500 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15 transition-all"
+            className="w-full rounded-full border border-slate-700/60 bg-slate-950 py-3.5 pl-14 pr-12 text-base placeholder:text-slate-400 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15 transition-all"
             autoFocus
           />
           {query && (
@@ -252,7 +252,7 @@ export function SearchPage() {
             <Search className="h-14 w-14 text-slate-700" />
           </div>
           <p className="mt-6 text-2xl font-bold text-slate-100">Discover your next favorite</p>
-          <p className="mt-2 max-w-sm text-slate-500">
+          <p className="mt-2 max-w-sm text-slate-400">
             Search for movies and series to add them to your lists and track what you watch.
           </p>
         </div>
@@ -265,7 +265,7 @@ export function SearchPage() {
             <Search className="h-12 w-12 text-slate-700" />
           </div>
           <p className="mt-5 text-lg font-semibold text-slate-300">No results found</p>
-          <p className="mt-1 text-sm text-slate-500">Try a different search term or filter.</p>
+          <p className="mt-1 text-sm text-slate-400">Try a different search term or filter.</p>
         </div>
       )}
 
@@ -273,7 +273,7 @@ export function SearchPage() {
       {hasSearched && results.length > 0 && (
         <>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-500">{results.length} results</p>
+            <p className="text-sm text-slate-400">{results.length} results</p>
           </div>
           <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {results.map((result) => (
@@ -411,7 +411,7 @@ function ResultCard({
       {isOpen && (
         <div ref={dropdownRef} className="relative z-30 mt-1">
           <div className="absolute left-0 right-0 overflow-hidden rounded-xl border border-slate-700/60 bg-slate-900 shadow-2xl">
-            <p className="border-b border-slate-800 px-3 py-2.5 text-2xs font-semibold uppercase tracking-wider text-slate-500">
+            <p className="border-b border-slate-800 px-3 py-2.5 text-2xs font-semibold uppercase tracking-wider text-slate-400">
               Add to list
             </p>
             {lists.map((list) => {
@@ -435,7 +435,7 @@ function ResultCard({
                     <Plus className="h-3.5 w-3.5 text-slate-400" />
                   )}
                   <span className={already ? "text-slate-400" : "text-slate-200"}>{list.name}</span>
-                  {already && <span className="ml-auto text-2xs text-slate-500">Added</span>}
+                  {already && <span className="ml-auto text-2xs text-slate-400">Added</span>}
                   {pending && (
                     <span className="ml-auto inline-block h-3 w-3 animate-spin rounded-full border border-red-500 border-t-transparent" />
                   )}
@@ -450,7 +450,7 @@ function ResultCard({
       <div className="mt-3">
         <p className="truncate text-sm font-semibold text-slate-100">{result.name}</p>
         <div className="mt-0.5 flex items-center gap-2">
-          <span className="text-xs text-slate-500">{result.year ?? "Unknown year"}</span>
+          <span className="text-xs text-slate-400">{result.year ?? "Unknown year"}</span>
           {result.rating != null && result.rating > 0 && (
             <span className="flex items-center gap-0.5 text-xs text-amber-400">
               <Star className="h-3 w-3 fill-amber-400" />

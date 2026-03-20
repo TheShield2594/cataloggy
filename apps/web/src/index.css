@@ -31,17 +31,17 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgb(51 65 85 / 0.6);
+  background: rgb(71 85 105 / 0.7);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgb(100 116 139 / 0.8);
+  background: rgb(100 116 139 / 0.9);
 }
 
 /* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgb(51 65 85 / 0.6) transparent;
+  scrollbar-color: rgb(71 85 105 / 0.7) transparent;
 }
 
 /* Hide scrollbar for carousels */
