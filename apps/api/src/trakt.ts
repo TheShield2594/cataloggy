@@ -179,7 +179,12 @@ export class TraktClient {
         logger
       });
 
-      const pageItems = (await response.json()) as T[];
+      let pageItems: T[];
+      try {
+        pageItems = (await response.json()) as T[];
+      } catch {
+        throw new Error(`Trakt API returned non-JSON response for ${path} (page ${page}, status ${response.status})`);
+      }
       items.push(...pageItems);
 
       const totalPagesHeader = response.headers.get("x-pagination-page-count");
