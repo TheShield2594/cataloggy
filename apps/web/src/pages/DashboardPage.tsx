@@ -138,7 +138,13 @@ type DiscoveryItem = {
 
 function DiscoveryCard({ item, badge }: { item: DiscoveryItem; badge?: React.ReactNode }) {
   return (
-    <div className="flex-none group" style={{ width: "11rem" }}>
+    <a
+      href={`https://www.imdb.com/title/${item.id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex-none group"
+      style={{ width: "11rem" }}
+    >
       <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
         <Poster src={item.poster} alt={item.name} className="h-full w-full" />
         {item.rating != null && item.rating > 0 && (
@@ -164,7 +170,7 @@ function DiscoveryCard({ item, badge }: { item: DiscoveryItem; badge?: React.Rea
       <p className="text-2xs text-slate-500">
         {item.year ?? ""}{item.type ? ` ${item.type === "movie" ? "Movie" : "Series"}` : ""}
       </p>
-    </div>
+    </a>
   );
 }
 
@@ -441,6 +447,7 @@ export function DashboardPage() {
                   : null;
               return (
                 <div key={s.imdbId} className="flex-none group" style={{ width: "11rem" }}>
+                  {/* IMDb link wraps the poster only so the mark-next button stays functional */}
                   <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
                     <Poster
                       src={s.poster}
@@ -491,9 +498,14 @@ export function DashboardPage() {
                       </button>
                     </div>
                   </div>
-                  <p className="mt-2.5 truncate text-sm font-semibold text-slate-200">
+                  <a
+                    href={`https://www.imdb.com/title/${s.imdbId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2.5 block truncate text-sm font-semibold text-slate-200 hover:text-white transition-colors"
+                  >
                     {s.name}
-                  </p>
+                  </a>
                   {progressPct !== null && (
                     <p className="text-2xs text-slate-500">
                       {s.watchedEpisodes} of {s.totalEpisodes} episodes
@@ -530,7 +542,14 @@ export function DashboardPage() {
             className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
           >
             {history.map((event) => (
-              <div key={event.id} className="flex-none group" style={{ width: "11rem" }}>
+              <a
+                key={event.id}
+                href={`https://www.imdb.com/title/${event.imdbId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-none group"
+                style={{ width: "11rem" }}
+              >
                 <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
                   <Poster
                     src={event.poster}
@@ -539,7 +558,7 @@ export function DashboardPage() {
                   />
                   {/* Bottom gradient with metadata */}
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent px-3 pb-3 pt-12">
-                    {event.type === "series" &&
+                    {event.type === "episode" &&
                     event.season != null &&
                     event.episode != null ? (
                       <span className="inline-block rounded bg-white/10 px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm">
@@ -562,7 +581,7 @@ export function DashboardPage() {
                   {event.name}
                 </p>
                 <p className="text-2xs text-slate-500">
-                  {event.type === "series" &&
+                  {event.type === "episode" &&
                   event.season != null &&
                   event.episode != null
                     ? `Season ${event.season}, Episode ${event.episode}`
@@ -570,7 +589,7 @@ export function DashboardPage() {
                       ? "Movie"
                       : ""}
                 </p>
-              </div>
+              </a>
             ))}
           </div>
         )}
