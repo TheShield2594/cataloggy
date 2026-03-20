@@ -7,13 +7,16 @@ import {
   ChevronRight,
   ChevronLeft,
   Check,
+  Radio,
   Star,
   TrendingUp,
   Sparkles,
+  X,
 } from "lucide-react";
 import {
   api,
   CalendarEntry,
+  CheckIn,
   runtimeConfig,
   SearchResult,
   SeriesProgress,
@@ -255,18 +258,23 @@ export function DashboardPage() {
   const [trendingLoading, setTrendingLoading] = useState(true);
   const [recommendations, setRecommendations] = useState<TrendingMeta[]>([]);
   const [recsLoading, setRecsLoading] = useState(true);
+  const [seriesRecs, setSeriesRecs] = useState<TrendingMeta[]>([]);
+  const [seriesRecsLoading, setSeriesRecsLoading] = useState(true);
   const [calendarEntries, setCalendarEntries] = useState<CalendarEntry[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(true);
 
   const [markingNext, setMarkingNext] = useState<Set<string>>(new Set());
   const [markedDone, setMarkedDone] = useState<Set<string>>(new Set());
 
+  const [activeCheckin, setActiveCheckin] = useState<CheckIn | null>(null);
+
   const continueScroll = useHorizontalScroll();
   const recentScroll = useHorizontalScroll();
   const trendingScroll = useHorizontalScroll();
   const recsScroll = useHorizontalScroll();
+  const seriesRecsScroll = useHorizontalScroll();
 
-  const { selectedItem, setSelectedItem, panelHistory, panelHistoryLoading } = useDetailPanel();
+  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
 
   const toSearchResult = useCallback((imdbId: string, type: "movie" | "series", name: string, opts?: {
     poster?: string; year?: number | null; description?: string | null; genres?: string[]; rating?: number | null;
@@ -285,14 +293,16 @@ export function DashboardPage() {
 
   const load = useCallback(async () => {
     try {
-      const [progressRes, historyRes, statsRes] = await Promise.all([
+      const [progressRes, historyRes, statsRes, checkinRes] = await Promise.all([
         api.getSeriesProgress(),
         api.getWatchHistory(20),
         api.getWatchStats(),
+        api.getCheckin().catch(() => ({ checkin: null })),
       ]);
       setProgress(progressRes ?? []);
       setHistory(historyRes ?? []);
       setStats(statsRes);
+      setActiveCheckin(checkinRes.checkin);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to load dashboard",
@@ -323,6 +333,14 @@ export function DashboardPage() {
     })();
     void (async () => {
       try {
+        const res = await api.getPersonalRecommendations("series", 20);
+        if (mounted) setSeriesRecs(res.metas ?? []);
+      } catch { /* optional */ } finally {
+        if (mounted) setSeriesRecsLoading(false);
+      }
+    })();
+    void (async () => {
+      try {
         const res = await api.getCalendar(14);
         if (mounted) setCalendarEntries(res.calendar ?? []);
       } catch { /* optional */ } finally {
@@ -344,9 +362,10 @@ export function DashboardPage() {
       recentScroll.checkScroll();
       trendingScroll.checkScroll();
       recsScroll.checkScroll();
+      seriesRecsScroll.checkScroll();
     }, 50);
     return () => clearTimeout(timer);
-  }, [loading, trendingLoading, recsLoading, progress.length, history.length, continueScroll.checkScroll, recentScroll.checkScroll, trendingScroll.checkScroll, recsScroll.checkScroll]);
+  }, [loading, trendingLoading, recsLoading, seriesRecsLoading, progress.length, history.length, continueScroll.checkScroll, recentScroll.checkScroll, trendingScroll.checkScroll, recsScroll.checkScroll, seriesRecsScroll.checkScroll]);
 
   const handleMarkNext = async (imdbId: string) => {
     setMarkingNext((prev) => new Set(prev).add(imdbId));
@@ -406,8 +425,57 @@ export function DashboardPage() {
     );
   }
 
+  const handleCheckout = async (logWatch: boolean) => {
+    await api.endCheckin(logWatch);
+    setActiveCheckin(null);
+    if (logWatch) void load();
+  };
+
   return (
     <div className="space-y-10">
+      {/* ── Now Watching Banner ── */}
+      {activeCheckin && (
+        <div className="flex items-center gap-4 rounded-2xl border border-red-500/30 bg-red-500/5 px-5 py-4">
+          {activeCheckin.poster && (
+            <div className="h-14 w-10 flex-none overflow-hidden rounded-lg ring-1 ring-white/10">
+              <img src={activeCheckin.poster} alt="" className="h-full w-full object-cover" loading="lazy" />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+              </span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-red-400">Now Watching</span>
+            </div>
+            <p className="mt-0.5 truncate text-sm font-semibold text-white">{activeCheckin.name}</p>
+            {activeCheckin.season != null && activeCheckin.episode != null && (
+              <p className="text-xs text-slate-400">
+                S{String(activeCheckin.season).padStart(2, "0")}:E{String(activeCheckin.episode).padStart(2, "0")}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-none">
+            <button
+              type="button"
+              onClick={() => void handleCheckout(true)}
+              className="flex items-center gap-1.5 rounded-xl bg-red-500 px-3 py-2 text-xs font-semibold text-white hover:bg-red-600 transition-colors"
+            >
+              <Check className="h-3.5 w-3.5" /> Finished
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleCheckout(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-700/60 bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+              aria-label="Check out without logging"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Inline stats bar ── */}
       <section>
         {loading ? (
@@ -709,6 +777,42 @@ export function DashboardPage() {
         </section>
       )}
 
+      {/* ── Recommended Series For You ── */}
+      {(seriesRecsLoading || seriesRecs.length > 0) && (
+        <section>
+          <SectionHeader title="Recommended Series For You">
+            {!seriesRecsLoading && seriesRecs.length > 0 && (
+              <ScrollArrows
+                canScrollLeft={seriesRecsScroll.canScrollLeft}
+                canScrollRight={seriesRecsScroll.canScrollRight}
+                onScroll={seriesRecsScroll.scroll}
+              />
+            )}
+          </SectionHeader>
+          {seriesRecsLoading ? (
+            <ContinueWatchingSkeleton />
+          ) : (
+            <div
+              ref={seriesRecsScroll.ref}
+              className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
+            >
+              {seriesRecs.map((item) => (
+                <DiscoveryCard
+                  key={item.id}
+                  item={item}
+                  onSelect={(i) => setSelectedItem(toSearchResult(i.id, "series", i.name, { poster: i.poster, year: i.year, description: item.description, genres: i.genres, rating: i.rating }))}
+                  badge={
+                    <span className="inline-flex items-center gap-1 rounded-md bg-violet-600/80 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
+                      <Sparkles className="h-2.5 w-2.5" />
+                    </span>
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* ── Detail Panel ── */}
       {selectedItem && (
         <DetailPanel
@@ -718,6 +822,7 @@ export function DashboardPage() {
           listMap={emptyListMap}
           onClose={() => setSelectedItem(null)}
           onShowToast={() => {}}
+          onHistoryChange={(events) => setPanelHistory(events)}
         />
       )}
 

@@ -48,7 +48,7 @@ export function SearchPage() {
   const [pendingAdds, setPendingAdds] = useState<Record<string, boolean>>({});
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
-  const { selectedItem, setSelectedItem, panelHistory, panelHistoryLoading } = useDetailPanel();
+  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -303,6 +303,7 @@ export function SearchPage() {
           listMap={listMap}
           onClose={() => setSelectedItem(null)}
           onShowToast={showToast}
+          onHistoryChange={(events) => setPanelHistory(events)}
         />
       )}
 
