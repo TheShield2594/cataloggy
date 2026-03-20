@@ -55,6 +55,16 @@ export type SearchResult = {
   rating: number | null;
   inWatchlist: boolean;
   lists: string[];
+  // OMDB ratings — undefined = not yet fetched, null = fetched but unavailable
+  imdbRating?: number | null;
+  rtScore?: number | null;
+  mcScore?: number | null;
+  // Detail fields — undefined = not yet fetched
+  runtime?: number | null;
+  certification?: string | null;
+  status?: string | null;
+  network?: string | null;
+  releaseDate?: string | null;
 };
 
 export type ListItem = {
@@ -149,6 +159,18 @@ export type UserPreferences = {
   language: string;
   region: string;
   spoilerProtection: boolean;
+};
+
+export type CheckIn = {
+  type: "movie" | "episode";
+  imdbId: string;
+  seriesImdbId?: string;
+  name: string;
+  poster?: string;
+  season?: number;
+  episode?: number;
+  startedAt: string;
+  expiresAt?: string;
 };
 
 export type CalendarEntry = {
@@ -309,6 +331,18 @@ export const api = {
   removeRpdbKey() {
     return request<{ configured: boolean }>("/rpdb/key", { method: "DELETE" });
   },
+  getOmdbStatus() {
+    return request<{ configured: boolean }>("/omdb/status");
+  },
+  setOmdbKey(apiKey: string) {
+    return request<{ configured: boolean }>("/omdb/key", {
+      method: "POST",
+      body: JSON.stringify({ apiKey })
+    });
+  },
+  removeOmdbKey() {
+    return request<{ configured: boolean }>("/omdb/key", { method: "DELETE" });
+  },
   getDetailedStats() {
     return request<DetailedWatchStats>("/watch/stats/detailed");
   },
@@ -373,7 +407,51 @@ export const api = {
     return request<{ metas: TrendingMeta[] }>(`/anime?type=${type}`);
   },
   getItemMeta(type: MediaType, imdbId: string) {
-    return request<{ imdbId: string; type: string; name: string; year: number | null; poster: string | null; description: string | null; genres: string[]; rating: number | null }>(`/meta/${type}/${encodeURIComponent(imdbId)}`);
+    return request<{
+      imdbId: string; type: string; name: string; year: number | null; poster: string | null;
+      description: string | null; genres: string[]; rating: number | null;
+      imdbRating: number | null; rtScore: number | null; mcScore: number | null;
+      runtime: number | null; certification: string | null;
+      status: string | null; network: string | null; releaseDate: string | null;
+    }>(`/meta/${type}/${encodeURIComponent(imdbId)}`);
+  },
+  getCast(type: MediaType, imdbId: string) {
+    return request<{ cast: Array<{ name: string; character: string; photo: string | null; order: number }> }>(
+      `/meta/${type}/${encodeURIComponent(imdbId)}/cast`
+    );
+  },
+  getSeasons(imdbId: string) {
+    return request<{ seasons: Array<{ seasonNumber: number; name: string; episodeCount: number; airYear: number | null; poster: string | null }> }>(
+      `/meta/series/${encodeURIComponent(imdbId)}/seasons`
+    );
+  },
+  getDropped(imdbId: string) {
+    return request<{ dropped: boolean }>(`/show/${encodeURIComponent(imdbId)}/dropped`);
+  },
+  dropShow(imdbId: string) {
+    return request<{ dropped: boolean }>(`/show/${encodeURIComponent(imdbId)}/drop`, { method: "POST" });
+  },
+  undropShow(imdbId: string) {
+    return request<{ dropped: boolean }>(`/show/${encodeURIComponent(imdbId)}/drop`, { method: "DELETE" });
+  },
+  deleteWatchEvent(eventId: string) {
+    return request<void>(`/watch/${encodeURIComponent(eventId)}`, { method: "DELETE" });
+  },
+  logWatch(payload: { type: "movie" | "episode"; imdbId: string; seriesImdbId?: string; season?: number; episode?: number; watchedAt: string }) {
+    return request<{ watchEvent: { id: string } }>("/watch", { method: "POST", body: JSON.stringify(payload) });
+  },
+  // Check-in
+  getCheckin() {
+    return request<{ checkin: CheckIn | null }>("/checkin");
+  },
+  startCheckin(payload: { type: "movie" | "episode"; imdbId: string; seriesImdbId?: string; name: string; poster?: string; season?: number; episode?: number; runtime?: number | null }) {
+    return request<{ checkin: CheckIn }>("/checkin", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  endCheckin(logWatch = false) {
+    return request<void>(`/checkin?log=${logWatch}`, { method: "DELETE" });
   },
   // Preferences (language, region, spoiler protection)
   getPreferences() {

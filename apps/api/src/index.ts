@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 import { ItemType, ListItemType, ListKind, MetadataType, Prisma, PrismaClient, ScrobbleStatus, WatchEventType } from "@prisma/client";
 import { TraktClient, computeTokenExpiresAt } from "./trakt.js";
-import { MetadataPayload, STREAMING_PROVIDERS, TmdbClient } from "./tmdb.js";
+import { CastMember, MetadataPayload, SeasonInfo, STREAMING_PROVIDERS, TmdbClient } from "./tmdb.js";
 
 const prisma = new PrismaClient();
 
@@ -233,7 +233,9 @@ const getMetadataType = (rawType: string): MetadataType | null => {
 };
 
 const upsertMetadata = async (metadata: MetadataPayload) => {
-  const isDetailedPayload = metadata.totalSeasons !== null || metadata.totalEpisodes !== null;
+  const isDetailedPayload = metadata.totalSeasons !== null || metadata.totalEpisodes !== null
+    || metadata.runtime !== null || metadata.certification !== null
+    || metadata.status !== null || metadata.network !== null;
 
   const update: Record<string, unknown> = {
     tmdbId: metadata.tmdbId,
@@ -254,6 +256,11 @@ const upsertMetadata = async (metadata: MetadataPayload) => {
     update.updatedAt = new Date();
     update.totalSeasons = metadata.totalSeasons;
     update.totalEpisodes = metadata.totalEpisodes;
+    update.runtime = metadata.runtime;
+    update.certification = metadata.certification;
+    update.status = metadata.status;
+    update.network = metadata.network;
+    update.releaseDate = metadata.releaseDate;
   }
 
   return prisma.metadata.upsert({
@@ -277,6 +284,16 @@ const fetchMetadata = async (type: MetadataType, imdbId: string): Promise<Metada
   }
 
   await upsertMetadata(metadata);
+
+  // Best-effort OMDB enrichment
+  try {
+    const omdbKey = await getOmdbApiKey();
+    if (omdbKey) {
+      const omdb = await fetchOmdbRatings(imdbId, omdbKey);
+      await upsertOmdbRatings(imdbId, type, omdb);
+    }
+  } catch { /* ignore */ }
+
   return metadata;
 };
 
@@ -288,6 +305,16 @@ const syncMetadata = async (imdbId: string, type: MetadataType) => {
   });
 
   if (existing && Date.now() - existing.updatedAt.getTime() < METADATA_FRESHNESS_MS) {
+    // Still refresh OMDB if not yet populated
+    if (existing.imdbRating === null && existing.rtScore === null && existing.mcScore === null) {
+      try {
+        const omdbKey = await getOmdbApiKey();
+        if (omdbKey) {
+          const omdb = await fetchOmdbRatings(imdbId, omdbKey);
+          return upsertOmdbRatings(imdbId, type, omdb);
+        }
+      } catch { /* ignore */ }
+    }
     return existing;
   }
 
@@ -298,7 +325,17 @@ const syncMetadata = async (imdbId: string, type: MetadataType) => {
     return existing ?? null;
   }
 
-  return upsertMetadata(payload);
+  const row = await upsertMetadata(payload);
+
+  try {
+    const omdbKey = await getOmdbApiKey();
+    if (omdbKey) {
+      const omdb = await fetchOmdbRatings(imdbId, omdbKey);
+      return upsertOmdbRatings(imdbId, type, omdb);
+    }
+  } catch { /* ignore */ }
+
+  return row;
 };
 
 const parseCatalogLimit = (rawLimit: unknown) => {
@@ -386,31 +423,17 @@ const buildMetasFromIds = async (ids: string[], type: StremioMetaType): Promise<
 
   const itemType = type === "movie" ? ItemType.movie : ItemType.series;
   const metadataType = type === "movie" ? MetadataType.movie : MetadataType.series;
-  const items = await prisma.item.findMany({
-    where: {
-      type: itemType,
-      imdbId: { in: ids }
-    },
-    select: {
-      imdbId: true,
-      title: true
-    }
-  });
-  const metadata = await prisma.metadata.findMany({
-    where: {
-      imdbId: { in: ids },
-      type: metadataType
-    },
-    select: {
-      imdbId: true,
-      name: true,
-      poster: true,
-      year: true,
-      description: true,
-      genres: true,
-      rating: true,
-    }
-  });
+  const [items, metadata, rpdbKey] = await Promise.all([
+    prisma.item.findMany({
+      where: { type: itemType, imdbId: { in: ids } },
+      select: { imdbId: true, title: true }
+    }),
+    prisma.metadata.findMany({
+      where: { imdbId: { in: ids }, type: metadataType },
+      select: { imdbId: true, name: true, poster: true, year: true, description: true, genres: true, rating: true }
+    }),
+    getRpdbApiKey(),
+  ]);
 
   const titleByImdbId = new Map(items.map((item) => [item.imdbId, item.title?.trim() ?? ""]));
   const metadataByImdbId = new Map(metadata.map((entry) => [entry.imdbId, entry]));
@@ -422,7 +445,7 @@ const buildMetasFromIds = async (ids: string[], type: StremioMetaType): Promise<
       id,
       type,
       name: titleByImdbId.get(id) || meta?.name || id,
-      poster: meta?.poster ?? undefined,
+      poster: withRpdbPoster(id, meta?.poster, rpdbKey) ?? undefined,
       year: meta?.year ?? undefined,
       description: meta?.description ?? undefined,
       genres: meta?.genres ?? [],
@@ -774,10 +797,13 @@ app.get<{ Querystring: { type?: string; query?: string; q?: string } }>("/search
   const imdbIds = results.map((r) => r.imdbId);
   const resultTypes = [...new Set(results.map((r) => r.type as ListItemType))];
 
-  const listItems = await prisma.listItem.findMany({
-    where: { imdbId: { in: imdbIds }, type: { in: resultTypes } },
-    include: { list: { select: { id: true, name: true, kind: true } } }
-  });
+  const [listItems, rpdbKey] = await Promise.all([
+    prisma.listItem.findMany({
+      where: { imdbId: { in: imdbIds }, type: { in: resultTypes } },
+      include: { list: { select: { id: true, name: true, kind: true } } }
+    }),
+    getRpdbApiKey(),
+  ]);
 
   const listInfoKey = (imdbId: string, mediaType: string) => `${mediaType}:${imdbId}`;
   const listInfoByKey = new Map<string, { inWatchlist: boolean; lists: string[] }>();
@@ -801,7 +827,7 @@ app.get<{ Querystring: { type?: string; query?: string; q?: string } }>("/search
       type: result.type,
       name: result.name,
       year: result.year,
-      poster: result.poster,
+      poster: withRpdbPoster(result.imdbId, result.poster, rpdbKey),
       description: result.description,
       genres: result.genres,
       rating: result.rating,
@@ -822,17 +848,13 @@ app.get<{ Params: { type: string; imdbId: string } }>("/meta/:type/:imdbId", asy
     return reply.code(400).send({ error: "imdbId is required" });
   }
 
-  const existing = await prisma.metadata.findUnique({
-    where: {
-      imdbId_type: {
-        imdbId,
-        type
-      }
-    }
-  });
+  const [existing, rpdbKey] = await Promise.all([
+    prisma.metadata.findUnique({ where: { imdbId_type: { imdbId, type } } }),
+    getRpdbApiKey(),
+  ]);
 
   if (existing) {
-    return existing;
+    return { ...existing, poster: withRpdbPoster(imdbId, existing.poster, rpdbKey) };
   }
 
   try {
@@ -840,8 +862,11 @@ app.get<{ Params: { type: string; imdbId: string } }>("/meta/:type/:imdbId", asy
     if (!metadata) {
       return reply.code(404).send({ error: "Metadata not found" });
     }
-
-    return metadata;
+    // After fetch, return the enriched DB row (includes OMDB ratings)
+    const fresh = await prisma.metadata.findUnique({ where: { imdbId_type: { imdbId, type } } });
+    return fresh
+      ? { ...fresh, poster: withRpdbPoster(imdbId, fresh.poster, rpdbKey) }
+      : { ...metadata, poster: withRpdbPoster(imdbId, metadata.poster, rpdbKey) };
   } catch (error) {
     request.log.error(error, "Metadata fetch failed");
     return reply.code(500).send({ error: "Metadata fetch failed" });
@@ -871,6 +896,167 @@ app.post<{ Body: unknown }>("/metadata/sync", async (request, reply) => {
     request.log.error(error, "Metadata sync failed");
     return reply.code(500).send({ error: "Metadata sync failed" });
   }
+});
+
+// ─── Cast & Seasons (on-demand, in-memory cached) ───
+
+const CAST_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+type CastCacheEntry = { data: CastMember[]; expiry: number };
+const castCache = new Map<string, CastCacheEntry>();
+
+type SeasonsCacheEntry = { data: SeasonInfo[]; expiry: number };
+const seasonsCache = new Map<string, SeasonsCacheEntry>();
+
+app.get<{ Params: { type: string; imdbId: string } }>("/meta/:type/:imdbId/cast", async (request, reply) => {
+  const type = getMetadataType(request.params.type);
+  if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
+
+  const imdbId = request.params.imdbId.trim();
+  const cacheKey = `cast:${type}:${imdbId}`;
+  const now = Date.now();
+  const cached = castCache.get(cacheKey);
+  if (cached && now < cached.expiry) return { cast: cached.data };
+
+  const meta = await prisma.metadata.findUnique({
+    where: { imdbId_type: { imdbId, type } },
+    select: { tmdbId: true },
+  });
+
+  if (!meta?.tmdbId) return { cast: [] };
+
+  try {
+    const tmdb = await getTmdb();
+    const cast = await tmdb.getCast(type, meta.tmdbId);
+    castCache.set(cacheKey, { data: cast, expiry: now + CAST_CACHE_TTL_MS });
+    return { cast };
+  } catch {
+    return { cast: [] };
+  }
+});
+
+app.get<{ Params: { imdbId: string } }>("/meta/series/:imdbId/seasons", async (request, reply) => {
+  const imdbId = request.params.imdbId.trim();
+  const cacheKey = `seasons:${imdbId}`;
+  const now = Date.now();
+  const cached = seasonsCache.get(cacheKey);
+  if (cached && now < cached.expiry) return { seasons: cached.data };
+
+  const meta = await prisma.metadata.findUnique({
+    where: { imdbId_type: { imdbId, type: "series" } },
+    select: { tmdbId: true },
+  });
+
+  if (!meta?.tmdbId) return { seasons: [] };
+
+  try {
+    const tmdb = await getTmdb();
+    const seasons = await tmdb.getSeasons(meta.tmdbId);
+    seasonsCache.set(cacheKey, { data: seasons, expiry: now + CAST_CACHE_TTL_MS });
+    return { seasons };
+  } catch {
+    return { seasons: [] };
+  }
+});
+
+// ─── Drop Show ───
+
+const DROPPED_KEY = (imdbId: string) => `dropped:series:${imdbId}`;
+
+app.get<{ Params: { imdbId: string } }>("/show/:imdbId/dropped", async (request) => {
+  const row = await prisma.kV.findUnique({ where: { key: DROPPED_KEY(request.params.imdbId) } });
+  return { dropped: !!row };
+});
+
+app.post<{ Params: { imdbId: string } }>("/show/:imdbId/drop", async (request) => {
+  await prisma.kV.upsert({
+    where: { key: DROPPED_KEY(request.params.imdbId) },
+    create: { key: DROPPED_KEY(request.params.imdbId), value: "true", updatedAt: new Date() },
+    update: { value: "true", updatedAt: new Date() },
+  });
+  return { dropped: true };
+});
+
+app.delete<{ Params: { imdbId: string } }>("/show/:imdbId/drop", async (request) => {
+  await prisma.kV.deleteMany({ where: { key: DROPPED_KEY(request.params.imdbId) } });
+  return { dropped: false };
+});
+
+// ─── Delete Watch Event ───
+
+app.delete<{ Params: { eventId: string } }>("/watch/:eventId", async (request, reply) => {
+  const { eventId } = request.params;
+  try {
+    await prisma.watchEvent.delete({ where: { id: eventId } });
+    return reply.code(204).send();
+  } catch {
+    return reply.code(404).send({ error: "Watch event not found" });
+  }
+});
+
+// ─── Check-in ───
+
+const CHECKIN_KV_KEY = "checkin:active";
+
+type CheckInData = {
+  type: "movie" | "episode";
+  imdbId: string;
+  seriesImdbId?: string;
+  name: string;
+  poster?: string;
+  season?: number;
+  episode?: number;
+  startedAt: string;
+  expiresAt?: string;
+};
+
+app.get("/checkin", async () => {
+  const row = await prisma.kV.findUnique({ where: { key: CHECKIN_KV_KEY } });
+  if (!row) return { checkin: null };
+  try {
+    return { checkin: JSON.parse(row.value) as CheckInData };
+  } catch {
+    return { checkin: null };
+  }
+});
+
+app.post<{ Body: { type: "movie" | "episode"; imdbId: string; seriesImdbId?: string; name: string; poster?: string; season?: number; episode?: number; runtime?: number } }>(
+  "/checkin",
+  async (request) => {
+    const { type, imdbId, seriesImdbId, name, poster, season, episode, runtime } = request.body;
+    const startedAt = new Date().toISOString();
+    const expiresAt = runtime ? new Date(Date.now() + runtime * 60 * 1000).toISOString() : undefined;
+    const checkin: CheckInData = { type, imdbId, seriesImdbId, name, poster, season, episode, startedAt, expiresAt };
+    await prisma.kV.upsert({
+      where: { key: CHECKIN_KV_KEY },
+      create: { key: CHECKIN_KV_KEY, value: JSON.stringify(checkin), updatedAt: new Date() },
+      update: { value: JSON.stringify(checkin), updatedAt: new Date() },
+    });
+    return { checkin };
+  }
+);
+
+app.delete<{ Querystring: { log?: string } }>("/checkin", async (request, reply) => {
+  const row = await prisma.kV.findUnique({ where: { key: CHECKIN_KV_KEY } });
+  if (row && request.query.log === "true") {
+    try {
+      const checkin = JSON.parse(row.value) as CheckInData;
+      await prisma.watchEvent.create({
+        data: {
+          type: checkin.type,
+          imdbId: checkin.type === "movie" ? checkin.imdbId : (checkin.seriesImdbId ?? checkin.imdbId),
+          ...(checkin.type === "episode" && {
+            seriesImdbId: checkin.seriesImdbId ?? checkin.imdbId,
+            season: checkin.season ?? null,
+            episode: checkin.episode ?? null,
+          }),
+          watchedAt: new Date(),
+          plays: 1,
+        },
+      });
+    } catch { /* best-effort */ }
+  }
+  await prisma.kV.deleteMany({ where: { key: CHECKIN_KV_KEY } });
+  return reply.code(204).send();
 });
 
 // ─── Trending / Popular (TMDB) ───
@@ -908,8 +1094,8 @@ app.get<{ Querystring: { type?: string; window?: string } }>("/trending", async 
   const timeWindow = request.query.window === "day" ? "day" as const : "week" as const;
   const cacheKey = `trending:${rawType}:${timeWindow}`;
   const now = Date.now();
-  const cached = trendingCacheGet(cacheKey);
-  if (cached && now < cached.expiry) return { metas: cached.data };
+  const [cached, rpdbKey] = await Promise.all([Promise.resolve(trendingCacheGet(cacheKey)), getRpdbApiKey()]);
+  if (cached && now < cached.expiry) return { metas: applyRpdbToMetaList(cached.data, rpdbKey) };
 
   try {
     const tmdb = await getTmdb();
@@ -927,7 +1113,7 @@ app.get<{ Querystring: { type?: string; window?: string } }>("/trending", async 
       rating: r.rating ?? undefined,
     }));
     trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
-    return { metas };
+    return { metas: applyRpdbToMetaList(metas, rpdbKey) };
   } catch (error) {
     request.log.error(error, "Trending fetch failed");
     return reply.code(500).send({ error: "Failed to fetch trending content" });
@@ -941,8 +1127,8 @@ app.get<{ Querystring: { type?: string } }>("/popular", async (request, reply) =
 
   const cacheKey = `popular:${rawType}`;
   const now = Date.now();
-  const cached = trendingCacheGet(cacheKey);
-  if (cached && now < cached.expiry) return { metas: cached.data };
+  const [cached, rpdbKey] = await Promise.all([Promise.resolve(trendingCacheGet(cacheKey)), getRpdbApiKey()]);
+  if (cached && now < cached.expiry) return { metas: applyRpdbToMetaList(cached.data, rpdbKey) };
 
   try {
     const tmdb = await getTmdb();
@@ -959,7 +1145,7 @@ app.get<{ Querystring: { type?: string } }>("/popular", async (request, reply) =
       rating: r.rating ?? undefined,
     }));
     trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
-    return { metas };
+    return { metas: applyRpdbToMetaList(metas, rpdbKey) };
   } catch (error) {
     request.log.error(error, "Popular fetch failed");
     return reply.code(500).send({ error: "Failed to fetch popular content" });
@@ -1056,8 +1242,8 @@ app.get<{ Querystring: { imdbId?: string; type?: string } }>("/recommendations",
 
   const cacheKey = `recs:${rawType}:${imdbId}`;
   const now = Date.now();
-  const cached = trendingCacheGet(cacheKey);
-  if (cached && now < cached.expiry) return { metas: cached.data };
+  const [cached, rpdbKeyRec] = await Promise.all([Promise.resolve(trendingCacheGet(cacheKey)), getRpdbApiKey()]);
+  if (cached && now < cached.expiry) return { metas: applyRpdbToMetaList(cached.data, rpdbKeyRec) };
 
   // Look up tmdbId from metadata
   const meta = await prisma.metadata.findUnique({
@@ -1095,7 +1281,8 @@ async function getRecommendations(rawType: string, type: MetadataType, tmdbId: n
       rating: r.rating ?? undefined,
     }));
     trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
-    return { metas };
+    const rpdbKey = await getRpdbApiKey();
+    return { metas: applyRpdbToMetaList(metas, rpdbKey) };
   } catch {
     return { metas: [] };
   }
@@ -1208,7 +1395,8 @@ app.get<{ Querystring: { type?: string; limit?: string } }>("/recommendations/pe
     }
   }
 
-  return { metas: allRecs.slice(0, limit) };
+  const rpdbKeyPersonal = await getRpdbApiKey();
+  return { metas: applyRpdbToMetaList(allRecs.slice(0, limit), rpdbKeyPersonal) };
 });
 
 // ─── Plex / Jellyfin Webhooks ───
@@ -1571,8 +1759,8 @@ app.get<{ Querystring: { type?: string; provider?: string; region?: string } }>(
   const provider = STREAMING_PROVIDERS[providerKey];
   const cacheKey = `streaming:${providerKey}:${rawType}:${region}`;
   const now = Date.now();
-  const cached = trendingCacheGet(cacheKey);
-  if (cached && now < cached.expiry) return { metas: cached.data, provider: provider.name };
+  const [cached, rpdbKeyStream] = await Promise.all([Promise.resolve(trendingCacheGet(cacheKey)), getRpdbApiKey()]);
+  if (cached && now < cached.expiry) return { metas: applyRpdbToMetaList(cached.data, rpdbKeyStream), provider: provider.name };
 
   try {
     const tmdb = await getTmdb();
@@ -1589,7 +1777,7 @@ app.get<{ Querystring: { type?: string; provider?: string; region?: string } }>(
       rating: r.rating ?? undefined,
     }));
     trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
-    return { metas, provider: provider.name };
+    return { metas: applyRpdbToMetaList(metas, rpdbKeyStream), provider: provider.name };
   } catch (error) {
     request.log.error(error, "Streaming catalog fetch failed");
     return reply.code(500).send({ error: "Failed to fetch streaming catalog" });
@@ -1611,8 +1799,8 @@ app.get<{ Querystring: { type?: string } }>("/anime", async (request, reply) => 
 
   const cacheKey = `anime:${rawType}`;
   const now = Date.now();
-  const cached = trendingCacheGet(cacheKey);
-  if (cached && now < cached.expiry) return { metas: cached.data };
+  const [cached, rpdbKeyAnime] = await Promise.all([Promise.resolve(trendingCacheGet(cacheKey)), getRpdbApiKey()]);
+  if (cached && now < cached.expiry) return { metas: applyRpdbToMetaList(cached.data, rpdbKeyAnime) };
 
   try {
     const tmdb = await getTmdb();
@@ -1629,7 +1817,7 @@ app.get<{ Querystring: { type?: string } }>("/anime", async (request, reply) => 
       rating: r.rating ?? undefined,
     }));
     trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
-    return { metas };
+    return { metas: applyRpdbToMetaList(metas, rpdbKeyAnime) };
   } catch (error) {
     request.log.error(error, "Anime catalog fetch failed");
     return reply.code(500).send({ error: "Failed to fetch anime catalog" });
@@ -2659,6 +2847,89 @@ app.post<{ Body: unknown }>("/addon/config", async (request, reply) => {
   return { config };
 });
 
+// ─── OMDB (Open Movie Database) ───
+
+const OMDB_API_KEY_KV = "omdb:apiKey";
+
+const getOmdbApiKey = async (): Promise<string | null> => {
+  const row = await prisma.kV.findUnique({ where: { key: OMDB_API_KEY_KV } });
+  return row?.value?.trim() || null;
+};
+
+type OmdbRatings = {
+  imdbRating: number | null;
+  rtScore: number | null;
+  mcScore: number | null;
+};
+
+const fetchOmdbRatings = async (imdbId: string, apiKey: string): Promise<OmdbRatings> => {
+  const url = `https://www.omdbapi.com/?i=${encodeURIComponent(imdbId)}&apikey=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) return { imdbRating: null, rtScore: null, mcScore: null };
+  const data = await res.json() as {
+    Response?: string;
+    imdbRating?: string;
+    Ratings?: Array<{ Source: string; Value: string }>;
+  };
+  if (data.Response !== "True") return { imdbRating: null, rtScore: null, mcScore: null };
+
+  const rawImdb = data.imdbRating && data.imdbRating !== "N/A" ? parseFloat(data.imdbRating) : NaN;
+  const imdbRating = isNaN(rawImdb) ? null : rawImdb;
+
+  const rtValue = data.Ratings?.find((r) => r.Source === "Rotten Tomatoes")?.Value;
+  const rawRt = rtValue ? parseInt(rtValue.replace("%", ""), 10) : NaN;
+  const rtScore = isNaN(rawRt) ? null : rawRt;
+
+  const mcValue = data.Ratings?.find((r) => r.Source === "Metacritic")?.Value;
+  const rawMc = mcValue ? parseInt(mcValue.split("/")[0], 10) : NaN;
+  const mcScore = isNaN(rawMc) ? null : rawMc;
+
+  return { imdbRating, rtScore, mcScore };
+};
+
+const upsertOmdbRatings = async (imdbId: string, type: MetadataType, ratings: OmdbRatings) => {
+  return prisma.metadata.update({
+    where: { imdbId_type: { imdbId, type } },
+    data: { imdbRating: ratings.imdbRating, rtScore: ratings.rtScore, mcScore: ratings.mcScore },
+  });
+};
+
+app.get("/omdb/status", async () => {
+  const apiKey = await getOmdbApiKey();
+  return { configured: !!apiKey };
+});
+
+app.post<{ Body: unknown }>("/omdb/key", async (request, reply) => {
+  const body = request.body as { apiKey?: unknown } | null;
+  const apiKey = typeof body?.apiKey === "string" ? body.apiKey.trim() : "";
+  if (!apiKey) {
+    await prisma.kV.deleteMany({ where: { key: OMDB_API_KEY_KV } });
+    return { configured: false };
+  }
+  // Validate key against OMDB
+  try {
+    const testUrl = `https://www.omdbapi.com/?i=tt0111161&apikey=${encodeURIComponent(apiKey)}`;
+    const testRes = await fetch(testUrl, { signal: AbortSignal.timeout(8000) });
+    const testData = await testRes.json() as { Response?: string; Error?: string };
+    if (testData.Response === "False") {
+      return reply.code(400).send({ error: testData.Error ?? "Invalid OMDB API key" });
+    }
+  } catch {
+    return reply.code(400).send({ error: "Could not reach OMDB API to validate key" });
+  }
+  await prisma.kV.upsert({
+    where: { key: OMDB_API_KEY_KV },
+    create: { key: OMDB_API_KEY_KV, value: apiKey, updatedAt: new Date() },
+    update: { value: apiKey, updatedAt: new Date() },
+  });
+  return { configured: true };
+});
+
+app.delete("/omdb/key", async () => {
+  await prisma.kV.deleteMany({ where: { key: OMDB_API_KEY_KV } });
+  return { configured: false };
+});
+
 // ─── RPDB (Rating Poster Database) ───
 
 const RPDB_API_KEY_KV = "rpdb:apiKey";
@@ -2671,6 +2942,15 @@ const getRpdbApiKey = async (): Promise<string | null> => {
 
 const buildRpdbPosterUrl = (rpdbKey: string, imdbId: string): string =>
   `${RPDB_BASE_URL}/${rpdbKey}/imdb/poster-default/${imdbId}.jpg`;
+
+// Apply RPDB poster if key is configured, otherwise fall back to existing poster
+const withRpdbPoster = (imdbId: string, fallback: string | null | undefined, rpdbKey: string | null): string | null =>
+  rpdbKey ? buildRpdbPosterUrl(rpdbKey, imdbId) : (fallback ?? null);
+
+const applyRpdbToMetaList = (metas: StremioMetaPreview[], rpdbKey: string | null): StremioMetaPreview[] => {
+  if (!rpdbKey) return metas;
+  return metas.map((m) => ({ ...m, poster: buildRpdbPosterUrl(rpdbKey, m.id) }));
+};
 
 app.get("/rpdb/status", async () => {
   const apiKey = await getRpdbApiKey();
@@ -3087,6 +3367,7 @@ app.post("/metadata/refresh-all", async (request, reply) => {
     request.log.error(error, "TMDB initialization failed for metadata refresh");
     return reply.code(500).send({ error: "TMDB initialization failed" });
   }
+  const omdbKey = await getOmdbApiKey();
   let refreshed = 0;
 
   for (let i = 0; i < allMetadata.length; i += BATCH_SIZE) {
@@ -3096,6 +3377,12 @@ app.post("/metadata/refresh-all", async (request, reply) => {
         const payload = await tmdb.findByImdbId(item.type, item.imdbId);
         if (payload) {
           await upsertMetadata(payload);
+          if (omdbKey) {
+            try {
+              const omdb = await fetchOmdbRatings(item.imdbId, omdbKey);
+              await upsertOmdbRatings(item.imdbId, item.type, omdb);
+            } catch { /* best-effort */ }
+          }
           return true;
         }
         return false;
