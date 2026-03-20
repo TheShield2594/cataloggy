@@ -236,6 +236,9 @@ export const api = {
       body: JSON.stringify({ name, kind: "custom" })
     });
   },
+  deleteList(listId: string) {
+    return request<void>(`/lists/${encodeURIComponent(listId)}`, { method: "DELETE" });
+  },
   addToList(listId: string, payload: { type: MediaType; imdbId: string; title: string }) {
     const encodedListId = encodeURIComponent(listId);
 
@@ -309,7 +312,7 @@ export const api = {
     return request<DetailedWatchStats>("/watch/stats/detailed");
   },
   getAddonConfig() {
-    return request<{ config: AddonConfig; availableCatalogs: string[] }>("/addon/config");
+    return request<{ config: AddonConfig; availableCatalogs: string[]; availableLists: { id: string; name: string }[] }>("/addon/config");
   },
   updateAddonConfig(enabledCatalogs: string[]) {
     return request<{ config: AddonConfig }>("/addon/config", {

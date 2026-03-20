@@ -451,6 +451,7 @@ function AddonConfigSection() {
   const [error, setError] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<string[]>([]);
   const [available, setAvailable] = useState<string[]>([]);
+  const [availableLists, setAvailableLists] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     void (async () => {
@@ -458,6 +459,7 @@ function AddonConfigSection() {
         const res = await api.getAddonConfig();
         setEnabled(res.config.enabledCatalogs);
         setAvailable(res.availableCatalogs);
+        setAvailableLists(res.availableLists ?? []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load config");
       } finally {
@@ -497,6 +499,8 @@ function AddonConfigSection() {
       <p className="text-sm text-slate-400 leading-relaxed">
         Choose which catalogs appear in Stremio. Changes take effect after the manifest cache refreshes (~60s).
       </p>
+
+      {/* Discovery catalogs */}
       <div className="space-y-2">
         {available.map((catalog) => (
           <label
@@ -513,6 +517,32 @@ function AddonConfigSection() {
           </label>
         ))}
       </div>
+
+      {/* User lists */}
+      {availableLists.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 pt-1">My Lists</p>
+          <p className="text-xs text-slate-500">Each list adds separate Movies and Series catalogs to Stremio.</p>
+          {availableLists.map((list) => {
+            const catalogId = `list:${list.id}`;
+            return (
+              <label
+                key={list.id}
+                className="flex items-center gap-3 rounded-xl border border-slate-800/40 bg-slate-900/30 px-4 py-3 cursor-pointer transition-colors hover:bg-slate-900/60"
+              >
+                <input
+                  type="checkbox"
+                  checked={enabled.includes(catalogId)}
+                  onChange={() => toggle(catalogId)}
+                  className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-red-500 focus:ring-red-500/30"
+                />
+                <span className="text-sm font-medium text-slate-200">{list.name}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+
       <button
         type="button"
         onClick={save}

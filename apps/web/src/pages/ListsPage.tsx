@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Film, FolderOpen, Plus, Search, Trash2, Tv, X } from "lucide-react";
+import { AlertTriangle, Film, FolderOpen, Plus, Search, Trash2, Tv, X } from "lucide-react";
 import { api, CatalogList, ListItemWithMeta, MediaType, SearchResult } from "../api";
 
 function AddItemModal({
@@ -177,6 +177,8 @@ export function ListsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newListName, setNewListName] = useState("");
   const [removingIds, setRemovingIds] = useState<Record<string, boolean>>({});
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingListId, setDeletingListId] = useState<string | null>(null);
 
   const loadLists = useCallback(async () => {
     try {
@@ -232,6 +234,20 @@ export function ListsPage() {
     }
   };
 
+  const handleDeleteList = async (listId: string) => {
+    setDeletingListId(listId);
+    try {
+      await api.deleteList(listId);
+      setConfirmDeleteId(null);
+      if (selectedListId === listId) setSelectedListId(null);
+      await loadLists();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete list");
+    } finally {
+      setDeletingListId(null);
+    }
+  };
+
   const handleRemove = async (item: ListItemWithMeta) => {
     if (!selectedListId || removingIds[item.imdbId]) return;
     setRemovingIds((prev) => ({ ...prev, [item.imdbId]: true }));
@@ -252,21 +268,61 @@ export function ListsPage() {
         {/* Mobile: horizontal scrollable tabs */}
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide lg:flex-col lg:overflow-x-visible lg:pb-0">
           {lists.map((list) => (
-            <button
-              key={list.id}
-              type="button"
-              onClick={() => setSelectedListId(list.id)}
-              className={`flex-none rounded-xl border px-4 py-3.5 text-left text-sm font-medium transition-all lg:w-full ${
-                selectedListId === list.id
-                  ? "border-red-500/40 bg-red-500/10 text-red-300 shadow-lg shadow-red-500/5"
-                  : "border-slate-800/60 bg-slate-900/40 text-slate-300 hover:border-slate-700 hover:bg-slate-900/70"
-              }`}
-            >
-              <p className="truncate font-semibold">{list.name}</p>
-              <p className="mt-0.5 text-xs text-slate-500">
-                {list.itemCount} {list.itemCount === 1 ? "item" : "items"}
-              </p>
-            </button>
+            <div key={list.id} className="relative flex-none lg:w-full">
+              {confirmDeleteId === list.id ? (
+                <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertTriangle className="h-4 w-4 flex-none text-rose-400" />
+                    <p className="text-xs font-semibold text-rose-300">Delete "{list.name}"?</p>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-3">This will remove the list and all its items.</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={deletingListId === list.id}
+                      onClick={() => void handleDeleteList(list.id)}
+                      className="flex-1 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-60 transition-colors"
+                    >
+                      {deletingListId === list.id ? "Deleting…" : "Delete"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="flex-1 rounded-lg border border-slate-700/60 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className={`group flex items-center rounded-xl border transition-all lg:w-full ${
+                  selectedListId === list.id
+                    ? "border-red-500/40 bg-red-500/10 shadow-lg shadow-red-500/5"
+                    : "border-slate-800/60 bg-slate-900/40 hover:border-slate-700 hover:bg-slate-900/70"
+                }`}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedListId(list.id)}
+                    className={`min-w-0 flex-1 px-4 py-3.5 text-left text-sm font-medium ${
+                      selectedListId === list.id ? "text-red-300" : "text-slate-300"
+                    }`}
+                  >
+                    <p className="truncate font-semibold">{list.name}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {list.itemCount} {list.itemCount === 1 ? "item" : "items"}
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(list.id); }}
+                    className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg text-slate-600 opacity-0 group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-400 transition-all focus:opacity-100"
+                    aria-label={`Delete list ${list.name}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
           ))}
         </div>
         {/* Create new list */}
