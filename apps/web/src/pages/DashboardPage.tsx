@@ -7,7 +7,6 @@ import {
   ChevronRight,
   ChevronLeft,
   Check,
-  Radio,
   Star,
   TrendingUp,
   Sparkles,

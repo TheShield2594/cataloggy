@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Calendar, Check, ChevronRight, Clock, Film, Radio, Star, Trash2, Tv, TvMinimalPlay, User, X,
 } from "lucide-react";
@@ -80,7 +80,7 @@ function WatchDateModal({
   onClose,
 }: {
   target: WatchLogTarget;
-  onLog: (date: string) => Promise<void>;
+  onLog: (date: string, episode?: { season: number; episode: number }) => Promise<void>;
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<"quick" | "custom">("quick");
@@ -96,7 +96,8 @@ function WatchDateModal({
     setSaving(true);
     setError(null);
     try {
-      await onLog(dateIso);
+      const episodeInfo = target.kind === "episode" ? { season, episode } : undefined;
+      await onLog(dateIso, episodeInfo);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to log watch");
@@ -162,7 +163,10 @@ function WatchDateModal({
               <button
                 type="button"
                 disabled={saving}
-                onClick={() => void submit(new Date(releaseDate).toISOString())}
+                onClick={() => {
+                  const [y, m, d] = releaseDate.split("-").map(Number);
+                  void submit(new Date(Date.UTC(y, m - 1, d, 12)).toISOString());
+                }}
                 className="rounded-xl bg-slate-800 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50 transition-colors"
               >
                 Release date
@@ -204,7 +208,10 @@ function WatchDateModal({
               <button
                 type="button"
                 disabled={saving || !customDate}
-                onClick={() => void submit(new Date(customDate).toISOString())}
+                onClick={() => {
+                  const [y, m, d] = customDate.split("-").map(Number);
+                  void submit(new Date(Date.UTC(y, m - 1, d, 12)).toISOString());
+                }}
                 className="flex-1 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50 transition-colors"
               >
                 {saving ? "Saving…" : "Log Watch"}
@@ -222,19 +229,13 @@ function WatchDateModal({
 /* ─── Check-in Modal (series episode picker) ─────────────── */
 
 function CheckInModal({
-  seriesImdbId,
   seriesName,
-  poster,
-  runtime,
   defaultSeason,
   defaultEpisode,
   onCheckIn,
   onClose,
 }: {
-  seriesImdbId: string;
   seriesName: string;
-  poster?: string;
-  runtime?: number | null;
   defaultSeason: number;
   defaultEpisode: number;
   onCheckIn: (season: number, episode: number) => Promise<void>;
@@ -586,7 +587,7 @@ export function DetailPanel({
     }
   };
 
-  const handleLog = async (dateIso: string) => {
+  const handleLog = async (dateIso: string, episodeInfo?: { season: number; episode: number }) => {
     if (!watchTarget) return;
     if (watchTarget.kind === "movie") {
       await api.logWatch({ type: "movie", imdbId: watchTarget.imdbId, watchedAt: dateIso });
@@ -595,8 +596,8 @@ export function DetailPanel({
         type: "episode",
         imdbId: watchTarget.seriesImdbId,
         seriesImdbId: watchTarget.seriesImdbId,
-        season: watchTarget.season,
-        episode: watchTarget.episode,
+        season: episodeInfo?.season ?? watchTarget.season,
+        episode: episodeInfo?.episode ?? watchTarget.episode,
         watchedAt: dateIso,
       });
     }
@@ -923,10 +924,7 @@ export function DetailPanel({
       {/* Check-in Modal (series only) */}
       {showCheckinModal && item.type === "series" && (
         <CheckInModal
-          seriesImdbId={item.imdbId}
           seriesName={item.name}
-          poster={item.poster ?? undefined}
-          runtime={item.runtime}
           defaultSeason={history.find((e) => e.season != null)?.season ?? 1}
           defaultEpisode={(history.find((e) => e.episode != null)?.episode ?? 0) + 1}
           onCheckIn={async (season, episode) => { await handleCheckin(season, episode); }}
