@@ -100,6 +100,7 @@ export type SeriesProgress = {
 export type WatchEvent = {
   id: string;
   imdbId: string;
+  seriesImdbId?: string;
   type: "movie" | "episode";
   name: string;
   poster?: string;
@@ -236,6 +237,9 @@ export const api = {
       body: JSON.stringify({ name, kind: "custom" })
     });
   },
+  deleteList(listId: string) {
+    return request<void>(`/lists/${encodeURIComponent(listId)}`, { method: "DELETE" });
+  },
   addToList(listId: string, payload: { type: MediaType; imdbId: string; title: string }) {
     const encodedListId = encodeURIComponent(listId);
 
@@ -309,7 +313,7 @@ export const api = {
     return request<DetailedWatchStats>("/watch/stats/detailed");
   },
   getAddonConfig() {
-    return request<{ config: AddonConfig; availableCatalogs: string[] }>("/addon/config");
+    return request<{ config: AddonConfig; availableCatalogs: string[]; availableLists: { id: string; name: string }[] }>("/addon/config");
   },
   updateAddonConfig(enabledCatalogs: string[]) {
     return request<{ config: AddonConfig }>("/addon/config", {
@@ -367,6 +371,9 @@ export const api = {
   // Anime
   getAnimeCatalog(type: MediaType) {
     return request<{ metas: TrendingMeta[] }>(`/anime?type=${type}`);
+  },
+  getItemMeta(type: MediaType, imdbId: string) {
+    return request<{ imdbId: string; type: string; name: string; year: number | null; poster: string | null; description: string | null; genres: string[]; rating: number | null }>(`/meta/${type}/${encodeURIComponent(imdbId)}`);
   },
   // Preferences (language, region, spoiler protection)
   getPreferences() {
