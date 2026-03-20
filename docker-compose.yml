@@ -30,11 +30,11 @@ services:
       # Optional integrations — set these in a .env file or export them.
       # Leaving them unset is safe; the API validates at startup/request time
       # and returns clear error messages if they are missing when needed.
-      TRAKT_CLIENT_ID: ${TRAKT_CLIENT_ID:-6dfb7aff9fcb7d4cfdcbc3395216eb7ba184909cf27f1e286d3c106acd6a7074}
-      TRAKT_CLIENT_SECRET: ${TRAKT_CLIENT_SECRET:-01e2a98cb7b90ca5b88179a65e8900cc8b2f0e4fcf24de47190c3c5be99a37a0}
+      TRAKT_CLIENT_ID: ${TRAKT_CLIENT_ID}
+      TRAKT_CLIENT_SECRET: ${TRAKT_CLIENT_SECRET}
       TRAKT_REDIRECT_URI: ${TRAKT_REDIRECT_URI:-http://192.168.1.20:7000/trakt/oauth/callback}
       TRAKT_POLL_INTERVAL_SEC: ${TRAKT_POLL_INTERVAL_SEC:-300}
-      TMDB_API_KEY: ${TMDB_API_KEY:-e8b4fa576a0bb32a503915f57cf9b462}
+      TMDB_API_KEY: ${TMDB_API_KEY}
     ports:
       - "7000:7000"
     depends_on:

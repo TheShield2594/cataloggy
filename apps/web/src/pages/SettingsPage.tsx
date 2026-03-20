@@ -390,12 +390,16 @@ const CATALOG_LABELS: Record<string, string> = {
 
 function AddonManifestUrl() {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
   const manifestUrl = `${runtimeConfig.getApiBase()}/addon/stremio/manifest.json`;
 
   const copy = () => {
-    void navigator.clipboard.writeText(manifestUrl).then(() => {
+    navigator.clipboard.writeText(manifestUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      setCopyError(true);
+      setTimeout(() => setCopyError(false), 3000);
     });
   };
 
@@ -415,11 +419,13 @@ function AddonManifestUrl() {
           className={`flex-none inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
             copied
               ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
-              : "bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700/60"
+              : copyError
+                ? "bg-red-500/15 text-red-400 ring-1 ring-red-500/20"
+                : "bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700/60"
           }`}
           aria-label="Copy manifest URL"
         >
-          {copied ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy</>}
+          {copied ? <><Check size={13} /> Copied</> : copyError ? <>Failed</> : <><Copy size={13} /> Copy</>}
         </button>
         <a
           href={manifestUrl}

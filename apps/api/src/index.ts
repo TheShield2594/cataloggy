@@ -2456,6 +2456,8 @@ app.get("/series/progress", async () => {
       seriesImdbId: row.seriesImdbId,
       lastSeason: row.lastSeason,
       lastEpisode: row.lastEpisode,
+      // nextEpisode is an approximation — we don't store per-season episode counts,
+      // so we always advance within the same season. The watch-next endpoint mirrors this.
       nextSeason: row.lastSeason,
       nextEpisode: row.lastEpisode + 1,
       lastWatchedAt: row.lastWatchedAt,
@@ -3428,20 +3430,24 @@ app.get<{ Params: { type: string; id: string }; Querystring: { skip?: string } }
 
     const limit = parseCatalogLimit(undefined);
 
-    // Core / personal catalogs
+    // Core / personal catalogs — validate URL type matches the catalog's expected type
     if (catalogId === "my_watchlist_movies") {
+      if (type !== "movie") return reply.code(400).send({ metas: [] });
       const metas = await getWatchlistMetas("movie", limit);
       return { metas };
     }
     if (catalogId === "my_watchlist_series") {
+      if (type !== "series") return reply.code(400).send({ metas: [] });
       const metas = await getWatchlistMetas("series", limit);
       return { metas };
     }
     if (catalogId === "my_recent_movies") {
+      if (type !== "movie") return reply.code(400).send({ metas: [] });
       const metas = await getRecentMetas("movie", limit);
       return { metas };
     }
     if (catalogId === "my_continue_series") {
+      if (type !== "series") return reply.code(400).send({ metas: [] });
       const metas = await getContinueMetas(limit);
       return { metas };
     }
@@ -3449,6 +3455,9 @@ app.get<{ Params: { type: string; id: string }; Querystring: { skip?: string } }
     // Discovery catalogs
     const discovery = DISCOVERY_CATALOG_MAP[catalogId];
     if (!discovery) return reply.code(404).send({ metas: [] });
+
+    // Validate that the URL type matches the catalog's declared type
+    if (discovery.type !== type) return reply.code(400).send({ metas: [] });
 
     const cacheKey = discovery.endpoint;
     const cached = trendingCacheGet(cacheKey);
@@ -3473,8 +3482,19 @@ app.get<{ Params: { type: string; id: string }; Querystring: { skip?: string } }
         const seedMetas = await prisma.metadata.findMany({ where: { imdbId: { in: recentItems }, type: metaType }, select: { tmdbId: true } });
         const tmdbIds = seedMetas.filter((m) => m.tmdbId).map((m) => m.tmdbId as number);
         if (tmdbIds.length === 0) return { metas: [] };
-        const recs = await tmdb.recommendations(metaType, tmdbIds[0]);
-        results = recs;
+        // Fetch from up to 3 seeds, merge and deduplicate by imdbId
+        const seen = new Set<string>();
+        const merged: MetadataPayload[] = [];
+        for (const seedId of tmdbIds.slice(0, 3)) {
+          const recs = await tmdb.recommendations(metaType, seedId);
+          for (const r of recs) {
+            if (!seen.has(r.imdbId)) {
+              seen.add(r.imdbId);
+              merged.push(r);
+            }
+          }
+        }
+        results = merged;
       } else if (cacheKey.startsWith("anime:")) {
         results = await tmdb.discoverAnime(metaType);
       } else if (cacheKey.startsWith("streaming:")) {
