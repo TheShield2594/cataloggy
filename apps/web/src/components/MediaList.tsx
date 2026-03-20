@@ -70,7 +70,7 @@ export function MediaList({ title, items, count, onSeeAll, onAddItem }: Props) {
       {items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-800 py-12 text-center">
           <Film className="mx-auto h-10 w-10 text-slate-700" />
-          <p className="mt-3 text-sm text-slate-500">No items yet.</p>
+          <p className="mt-3 text-sm text-slate-400">No items yet.</p>
         </div>
       ) : (
         <div
@@ -102,7 +102,7 @@ export function MediaList({ title, items, count, onSeeAll, onAddItem }: Props) {
                   />
                 ) : (
                   <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${getGradient(item.name)}`}>
-                    <span className="text-2xl font-bold text-white/40 select-none">
+                    <span className="text-2xl font-bold text-white/60 select-none">
                       {getInitials(item.name)}
                     </span>
                   </div>
@@ -123,7 +123,7 @@ export function MediaList({ title, items, count, onSeeAll, onAddItem }: Props) {
                 )}
               </div>
               <p className="mt-2.5 truncate text-sm font-semibold text-slate-200">{item.name}</p>
-              {item.year ? <p className="text-2xs text-slate-500">{item.year}</p> : null}
+              {item.year ? <p className="text-2xs text-slate-400">{item.year}</p> : null}
             </div>
           ))}
         </div>

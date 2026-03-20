@@ -40,7 +40,7 @@ function Section({ title, icon, defaultOpen, children }: { title: string; icon: 
         <span className="flex-1 text-base font-semibold">{title}</span>
         <ChevronDown
           size={18}
-          className={`text-slate-500 transition-transform duration-300 ${open ? "rotate-180" : ""}`}
+          className={`text-slate-400 transition-transform duration-300 ${open ? "rotate-180" : ""}`}
         />
       </button>
       <div
@@ -104,7 +104,7 @@ function ApiTokenSection() {
           {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
       </div>
-      <p className="text-xs text-amber-400/80">Only use this on trusted devices.</p>
+      <p className="text-xs text-amber-400">Only use this on trusted devices.</p>
       <button
         type="submit"
         className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
@@ -193,7 +193,7 @@ function TraktSection() {
             Your Trakt app's <strong className="text-slate-300">Redirect URI</strong> must be set to:
           </p>
           <code className="block text-sm text-red-400 break-all select-all">{status.redirectUri}</code>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-400">
             Set this at trakt.tv under Settings &gt; Your API Apps &gt; Edit. A mismatch causes an OAuth error.
           </p>
         </div>
@@ -554,7 +554,7 @@ function AddonManifestUrl() {
           <ExternalLink size={13} />
         </a>
       </div>
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-slate-400">
         The URL points to your local API server. Stremio must be able to reach it on your network.
       </p>
     </div>
@@ -650,14 +650,14 @@ function AddonConfigSection() {
         })}
       </div>
       {available.some((c) => c === "cataloggy-ai-movie" || c === "cataloggy-ai-series") && !aiConfigured && (
-        <p className="text-xs text-slate-500 italic">Configure AI Recommendations to enable the AI Picks catalogs.</p>
+        <p className="text-xs text-slate-400 italic">Configure AI Recommendations to enable the AI Picks catalogs.</p>
       )}
 
       {/* User lists */}
       {availableLists.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 pt-1">My Lists</p>
-          <p className="text-xs text-slate-500">Each list adds separate Movies and Series catalogs to Stremio.</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 pt-1">My Lists</p>
+          <p className="text-xs text-slate-400">Each list adds separate Movies and Series catalogs to Stremio.</p>
           {availableLists.map((list) => {
             const catalogId = `list:${list.id}`;
             return (
@@ -822,7 +822,7 @@ function AiRecommendationsSection() {
       <div className="flex items-center gap-3">
         <StatusBadge ok={configured} label={configured ? "Configured" : "Not configured"} />
         {lastGeneratedAt && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+          <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
             <Clock size={12} /> Last generated {timeAgo(lastGeneratedAt)}
           </span>
         )}
@@ -1021,7 +1021,7 @@ function PreferencesSection() {
             <option key={l.code} value={l.code}>{l.label} ({l.code})</option>
           ))}
         </select>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-slate-400">
           Titles, descriptions, and metadata will be fetched in this language from TMDB.
         </p>
       </div>
@@ -1042,7 +1042,7 @@ function PreferencesSection() {
             <option key={r} value={r}>{r}</option>
           ))}
         </select>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-slate-400">
           Streaming service catalogs (Netflix, Disney+, etc.) show content available in this region.
         </p>
       </div>
@@ -1061,7 +1061,7 @@ function PreferencesSection() {
             <Shield size={14} className="text-violet-400" />
             Spoiler Protection
           </span>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <p className="mt-0.5 text-xs text-slate-400">
             Hides series descriptions in Stremio for shows you haven't finished watching yet.
           </p>
         </div>

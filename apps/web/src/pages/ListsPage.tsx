@@ -102,7 +102,7 @@ function AddItemModal({
         {/* Search input */}
         <div className="flex gap-2 border-b border-slate-800/60 px-5 py-3">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               ref={inputRef}
               value={query}
@@ -134,9 +134,9 @@ function AddItemModal({
         {/* Results */}
         <div className="max-h-[50vh] overflow-y-auto px-5 py-3">
           {error && <p className="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-300">{error}</p>}
-          {searching && <p className="py-6 text-center text-sm text-slate-500">Searching...</p>}
+          {searching && <p className="py-6 text-center text-sm text-slate-400">Searching...</p>}
           {!searching && query.trim() && results.length === 0 && (
-            <p className="py-6 text-center text-sm text-slate-500">No results found.</p>
+            <p className="py-6 text-center text-sm text-slate-400">No results found.</p>
           )}
           <div className="space-y-1">
             {results.map((r) => (
@@ -151,12 +151,12 @@ function AddItemModal({
                   {r.poster ? (
                     <img src={r.poster} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center"><Film className="h-4 w-4 text-slate-600" /></div>
+                    <div className="flex h-full w-full items-center justify-center"><Film className="h-4 w-4 text-slate-500" /></div>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-slate-200">{r.name}</p>
-                  <p className="text-xs text-slate-500">{r.year ?? "Unknown"} &middot; {r.type}</p>
+                  <p className="text-xs text-slate-400">{r.year ?? "Unknown"} &middot; {r.type}</p>
                 </div>
                 <Plus className="h-4 w-4 flex-none text-red-400" />
               </button>
@@ -275,7 +275,7 @@ export function ListsPage() {
                     <AlertTriangle className="h-4 w-4 flex-none text-rose-400" />
                     <p className="text-xs font-semibold text-rose-300">Delete "{list.name}"?</p>
                   </div>
-                  <p className="text-xs text-slate-500 mb-3">This will remove the list and all its items.</p>
+                  <p className="text-xs text-slate-400 mb-3">This will remove the list and all its items.</p>
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -308,7 +308,7 @@ export function ListsPage() {
                     }`}
                   >
                     <p className="truncate font-semibold">{list.name}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">
+                    <p className="mt-0.5 text-xs text-slate-400">
                       {list.itemCount} {list.itemCount === 1 ? "item" : "items"}
                     </p>
                   </button>
@@ -316,7 +316,7 @@ export function ListsPage() {
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(list.id); }}
-                      className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg text-slate-600 opacity-0 group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-400 transition-all focus:opacity-100"
+                      className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg text-slate-500 opacity-0 group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-400 transition-all focus:opacity-100"
                       aria-label={`Delete list ${list.name}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -356,7 +356,7 @@ export function ListsPage() {
               <FolderOpen className="h-10 w-10 text-slate-700" />
             </div>
             <p className="mt-4 text-lg font-semibold text-slate-400">No list selected</p>
-            <p className="mt-1 text-sm text-slate-500">Select a list from the sidebar or create a new one.</p>
+            <p className="mt-1 text-sm text-slate-400">Select a list from the sidebar or create a new one.</p>
           </div>
         ) : (
           <>
@@ -364,7 +364,7 @@ export function ListsPage() {
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-white">{selectedList.name}</h2>
-                <p className="mt-0.5 text-sm text-slate-500">
+                <p className="mt-0.5 text-sm text-slate-400">
                   {items.length} {items.length === 1 ? "item" : "items"}
                 </p>
               </div>
@@ -395,7 +395,7 @@ export function ListsPage() {
                   <FolderOpen className="h-10 w-10 text-slate-700" />
                 </div>
                 <p className="mt-4 text-lg font-semibold text-slate-400">This list is empty</p>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm text-slate-400">
                   Click <span className="font-semibold text-red-400">+ Add</span> to search and add titles.
                 </p>
               </div>
@@ -413,7 +413,7 @@ export function ListsPage() {
                           <img src={poster} alt={name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900">
-                            <Film className="h-10 w-10 text-slate-600" />
+                            <Film className="h-10 w-10 text-slate-500" />
                           </div>
                         )}
                         {/* Type badge */}
@@ -439,7 +439,7 @@ export function ListsPage() {
                       </div>
                       {/* Title & year */}
                       <p className="mt-2.5 truncate text-sm font-semibold text-slate-100">{name}</p>
-                      <p className="text-xs text-slate-500">{year ?? "Unknown year"}</p>
+                      <p className="text-xs text-slate-400">{year ?? "Unknown year"}</p>
                     </div>
                   );
                 })}

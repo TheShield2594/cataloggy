@@ -127,7 +127,7 @@ function WatchDateModal({
         {target.kind === "episode" && (
           <div className="mb-4 flex gap-3">
             <div className="flex-1">
-              <label className="mb-1 block text-xs text-slate-500">Season</label>
+              <label className="mb-1 block text-xs text-slate-400">Season</label>
               <input
                 type="number"
                 min={1}
@@ -137,7 +137,7 @@ function WatchDateModal({
               />
             </div>
             <div className="flex-1">
-              <label className="mb-1 block text-xs text-slate-500">Episode</label>
+              <label className="mb-1 block text-xs text-slate-400">Episode</label>
               <input
                 type="number"
                 min={1}
@@ -289,7 +289,7 @@ function CheckInModal({
           <p className="text-sm text-slate-400">Which episode of <span className="font-semibold text-slate-200">{seriesName}</span> are you watching?</p>
           <div className="flex gap-3">
             <div className="flex-1">
-              <label className="mb-1.5 block text-xs font-medium text-slate-500">Season</label>
+              <label className="mb-1.5 block text-xs font-medium text-slate-400">Season</label>
               <input
                 type="number" min="1" value={season}
                 onChange={(e) => setSeason(e.target.value)}
@@ -297,7 +297,7 @@ function CheckInModal({
               />
             </div>
             <div className="flex-1">
-              <label className="mb-1.5 block text-xs font-medium text-slate-500">Episode</label>
+              <label className="mb-1.5 block text-xs font-medium text-slate-400">Episode</label>
               <input
                 type="number" min="1" value={episode}
                 onChange={(e) => setEpisode(e.target.value)}
@@ -339,13 +339,13 @@ function ExternalRatings({
   if (imdbRating == null && rtScore == null && mcScore == null) return null;
   return (
     <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Ratings</h3>
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Ratings</h3>
       <div className="flex flex-wrap items-center gap-4">
         {imdbRating != null && (
           <div className="flex items-center gap-1.5">
             <ImdbLogo />
             <span className="text-sm font-semibold text-slate-200">{imdbRating.toFixed(1)}</span>
-            <span className="text-xs text-slate-500">/10</span>
+            <span className="text-xs text-slate-400">/10</span>
           </div>
         )}
         {rtScore != null && (
@@ -358,7 +358,7 @@ function ExternalRatings({
           <div className="flex items-center gap-1.5">
             <McIcon score={mcScore} />
             <span className="text-sm font-semibold text-slate-200">{mcScore}</span>
-            <span className="text-xs text-slate-500">/100</span>
+            <span className="text-xs text-slate-400">/100</span>
           </div>
         )}
       </div>
@@ -433,7 +433,7 @@ export function StarRating({
   const displayRating = hoverRating ?? userRating ?? 0;
   return (
     <div>
-      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
         <Star className="h-3.5 w-3.5" /> Your Rating
       </h3>
       <div className="flex items-center gap-1">
@@ -446,7 +446,7 @@ export function StarRating({
             className="p-0.5 transition-transform hover:scale-125 disabled:opacity-50"
             aria-label={`Rate ${star} out of 10`}
           >
-            <Star className={`h-5 w-5 transition-colors ${star <= displayRating ? "fill-amber-400 text-amber-400" : "text-slate-600 hover:text-slate-500"}`} />
+            <Star className={`h-5 w-5 transition-colors ${star <= displayRating ? "fill-amber-400 text-amber-400" : "text-slate-500 hover:text-slate-400"}`} />
           </button>
         ))}
         {userRating !== null && <span className="ml-2 text-sm font-semibold text-amber-400">{userRating}/10</span>}
@@ -762,7 +762,7 @@ export function DetailPanel({
           {/* Description */}
           {item.description && (
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Overview</h3>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Overview</h3>
               <p className="text-sm leading-relaxed text-slate-300">{item.description}</p>
             </div>
           )}
@@ -770,7 +770,7 @@ export function DetailPanel({
           {/* Cast */}
           {castLoading ? (
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Cast</h3>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Cast</h3>
               <div className="flex gap-3 overflow-hidden">
                 {[1, 2, 3, 4].map((i) => (
                   <div key={i} className="flex-none w-16 space-y-1">
@@ -782,7 +782,7 @@ export function DetailPanel({
             </div>
           ) : cast.length > 0 && (
             <div>
-              <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                 <User className="h-3.5 w-3.5" /> Cast
               </h3>
               <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
@@ -797,11 +797,11 @@ export function DetailPanel({
                       />
                     ) : (
                       <div className="h-16 w-16 rounded-full bg-slate-800 flex items-center justify-center mx-auto ring-1 ring-white/10">
-                        <User className="h-6 w-6 text-slate-600" />
+                        <User className="h-6 w-6 text-slate-500" />
                       </div>
                     )}
                     <p className="mt-1.5 text-2xs font-medium text-slate-300 leading-tight truncate">{member.name}</p>
-                    <p className="text-2xs text-slate-600 truncate">{member.character}</p>
+                    <p className="text-2xs text-slate-500 truncate">{member.character}</p>
                   </div>
                 ))}
               </div>
@@ -812,14 +812,14 @@ export function DetailPanel({
           {item.type === "series" && (
             seasonsLoading ? (
               <div>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Seasons</h3>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Seasons</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {[1, 2, 3, 4].map((i) => <div key={i} className="skeleton h-10 rounded-xl" />)}
                 </div>
               </div>
             ) : seasons.length > 0 && (
               <div>
-                <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                   <Tv className="h-3.5 w-3.5" /> Seasons
                 </h3>
                 <div className="grid grid-cols-2 gap-2">
@@ -830,7 +830,7 @@ export function DetailPanel({
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-medium text-slate-200 truncate">{s.name}</p>
-                        <p className="text-2xs text-slate-500">{s.episodeCount} eps{s.airYear ? ` · ${s.airYear}` : ""}</p>
+                        <p className="text-2xs text-slate-400">{s.episodeCount} eps{s.airYear ? ` · ${s.airYear}` : ""}</p>
                       </div>
                     </div>
                   ))}
@@ -842,7 +842,7 @@ export function DetailPanel({
           {/* Watch History */}
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                 <Clock className="h-3.5 w-3.5" /> Watch History
               </h3>
               <button
@@ -857,14 +857,14 @@ export function DetailPanel({
             {historyLoading ? (
               <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="skeleton h-11 rounded-lg" />)}</div>
             ) : history.length === 0 ? (
-              <p className="rounded-xl bg-slate-900/60 border border-slate-800/40 py-5 text-center text-sm text-slate-500">
+              <p className="rounded-xl bg-slate-900/60 border border-slate-800/40 py-5 text-center text-sm text-slate-400">
                 No watch history yet
               </p>
             ) : (
               <div className="space-y-1.5">
                 {history.map((event) => (
                   <div key={event.id} className="group flex items-center gap-3 rounded-lg bg-slate-900/60 border border-slate-800/30 px-3 py-2.5">
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-600" />
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" />
                     <div className="min-w-0 flex-1">
                       {event.season != null && event.episode != null ? (
                         <span className="text-sm text-slate-200">
@@ -874,7 +874,7 @@ export function DetailPanel({
                         <span className="text-sm text-slate-200">Watched</span>
                       )}
                     </div>
-                    <time className="shrink-0 text-2xs text-slate-500">
+                    <time className="shrink-0 text-2xs text-slate-400">
                       {new Date(event.watchedAt).getFullYear() === 2000 && new Date(event.watchedAt).getMonth() === 0
                         ? "Unknown date"
                         : new Date(event.watchedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
