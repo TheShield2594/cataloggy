@@ -143,6 +143,14 @@ model Metadata {
   voteCount     Int?
   totalSeasons  Int?
   totalEpisodes Int?
+  imdbRating    Float?
+  rtScore       Int?
+  mcScore       Int?
+  runtime       Int?
+  certification String?
+  status        String?
+  network       String?
+  releaseDate   String?
   updatedAt     DateTime     @updatedAt @db.Timestamptz(6)
 
   @@unique([imdbId, type])

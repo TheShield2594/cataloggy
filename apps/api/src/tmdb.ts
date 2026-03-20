@@ -21,6 +21,30 @@ type TmdbDetailsResult = TmdbSearchResult & {
   genres?: { id: number; name: string }[];
   number_of_seasons?: number;
   number_of_episodes?: number;
+  runtime?: number | null;
+  episode_run_time?: number[];
+  status?: string;
+  networks?: { id: number; name: string; origin_country: string }[];
+  production_companies?: { id: number; name: string }[];
+  seasons?: {
+    id: number;
+    name: string;
+    season_number: number;
+    episode_count: number;
+    air_date?: string | null;
+    poster_path?: string | null;
+  }[];
+  // append_to_response: release_dates (movie)
+  release_dates?: {
+    results: {
+      iso_3166_1: string;
+      release_dates: { certification: string; type: number }[];
+    }[];
+  };
+  // append_to_response: content_ratings (tv)
+  content_ratings?: {
+    results: { iso_3166_1: string; rating: string }[];
+  };
 };
 
 type TmdbExternalIds = {
@@ -38,6 +62,31 @@ type TmdbFindResponse = {
   tv_results?: TmdbSearchResult[];
 };
 
+type TmdbCreditsResponse = {
+  cast?: {
+    id: number;
+    name: string;
+    character: string;
+    profile_path?: string | null;
+    order: number;
+  }[];
+};
+
+export type CastMember = {
+  name: string;
+  character: string;
+  photo: string | null;
+  order: number;
+};
+
+export type SeasonInfo = {
+  seasonNumber: number;
+  name: string;
+  episodeCount: number;
+  airYear: number | null;
+  poster: string | null;
+};
+
 export type MetadataPayload = {
   imdbId: string;
   type: MetadataType;
@@ -52,6 +101,11 @@ export type MetadataPayload = {
   voteCount: number | null;
   totalSeasons: number | null;
   totalEpisodes: number | null;
+  runtime: number | null;
+  certification: string | null;
+  status: string | null;
+  network: string | null;
+  releaseDate: string | null;
 };
 
 // Standard TMDB genre IDs (movie + TV combined)
@@ -80,6 +134,7 @@ export const STREAMING_PROVIDERS: Record<string, { id: number; name: string }> =
 export class TmdbClient {
   private static readonly baseUrl = "https://api.themoviedb.org/3";
   private static readonly imageBaseUrl = "https://image.tmdb.org/t/p/w500";
+  private static readonly profileBaseUrl = "https://image.tmdb.org/t/p/w185";
 
   private readonly language: string;
 
@@ -286,13 +341,68 @@ export class TmdbClient {
     }
 
     const mediaType = this.toMediaType(type);
-    const details = await this.request<TmdbDetailsResponse>(`/${mediaType}/${result.id}`);
+    const appendFields = mediaType === "movie" ? "release_dates" : "content_ratings";
+    const details = await this.request<TmdbDetailsResponse>(`/${mediaType}/${result.id}`, {
+      append_to_response: appendFields,
+    });
 
     return this.toMetadataPayloadFromDetails(type, details, imdbId);
   }
 
+  async getCast(type: MetadataType, tmdbId: number): Promise<CastMember[]> {
+    const mediaType = this.toMediaType(type);
+    try {
+      const data = await this.request<TmdbCreditsResponse>(`/${mediaType}/${tmdbId}/credits`);
+      return (data.cast ?? [])
+        .sort((a, b) => a.order - b.order)
+        .slice(0, 20)
+        .map((c) => ({
+          name: c.name,
+          character: c.character,
+          photo: c.profile_path ? `${TmdbClient.profileBaseUrl}${c.profile_path}` : null,
+          order: c.order,
+        }));
+    } catch {
+      return [];
+    }
+  }
+
+  async getSeasons(tmdbId: number): Promise<SeasonInfo[]> {
+    try {
+      const data = await this.request<{ seasons?: TmdbDetailsResult["seasons"] }>(`/tv/${tmdbId}`);
+      return (data.seasons ?? [])
+        .filter((s) => s.season_number > 0) // skip "Specials" season 0
+        .map((s) => ({
+          seasonNumber: s.season_number,
+          name: s.name,
+          episodeCount: s.episode_count,
+          airYear: s.air_date ? new Date(s.air_date).getUTCFullYear() : null,
+          poster: s.poster_path ? `${TmdbClient.imageBaseUrl}${s.poster_path}` : null,
+        }));
+    } catch {
+      return [];
+    }
+  }
+
   private async getExternalIds(mediaType: TmdbMediaType, tmdbId: number) {
     return this.request<TmdbExternalIds>(`/${mediaType}/${tmdbId}/external_ids`);
+  }
+
+  private parseCertification(type: MetadataType, details: TmdbDetailsResult): string | null {
+    if (type === MetadataType.movie) {
+      const usEntry = details.release_dates?.results?.find((r) => r.iso_3166_1 === "US");
+      if (usEntry) {
+        // Type 3 = Theatrical, 4 = Digital, 5 = Physical — prefer theatrical
+        const theatrical = usEntry.release_dates.find((d) => d.type === 3 && d.certification);
+        if (theatrical?.certification) return theatrical.certification;
+        const any = usEntry.release_dates.find((d) => d.certification);
+        if (any?.certification) return any.certification;
+      }
+      return null;
+    }
+    // TV
+    const usEntry = details.content_ratings?.results?.find((r) => r.iso_3166_1 === "US");
+    return usEntry?.rating ?? null;
   }
 
   private toMetadataPayload(type: MetadataType, result: TmdbSearchResult, imdbId: string): MetadataPayload {
@@ -316,13 +426,26 @@ export class TmdbClient {
       voteCount: typeof result.vote_count === "number" ? result.vote_count : null,
       totalSeasons: null,
       totalEpisodes: null,
+      runtime: null,
+      certification: null,
+      status: null,
+      network: null,
+      releaseDate: dateValue ?? null,
     };
   }
 
-  private toMetadataPayloadFromDetails(type: MetadataType, result: TmdbDetailsResponse, imdbId: string): MetadataPayload {
+  private toMetadataPayloadFromDetails(type: MetadataType, result: TmdbDetailsResult, imdbId: string): MetadataPayload {
     const name = (type === MetadataType.movie ? result.title : result.name)?.trim() || imdbId;
     const dateValue = type === MetadataType.movie ? result.release_date : result.first_air_date;
     const genres = (result.genres ?? []).map((g) => g.name).filter(Boolean);
+
+    const runtime = type === MetadataType.movie
+      ? (typeof result.runtime === "number" && result.runtime > 0 ? result.runtime : null)
+      : (result.episode_run_time?.[0] ?? null);
+
+    const network = type === MetadataType.series
+      ? (result.networks?.[0]?.name ?? null)
+      : null;
 
     return {
       imdbId,
@@ -338,6 +461,11 @@ export class TmdbClient {
       voteCount: typeof result.vote_count === "number" ? result.vote_count : null,
       totalSeasons: type === MetadataType.series && typeof result.number_of_seasons === "number" ? result.number_of_seasons : null,
       totalEpisodes: type === MetadataType.series && typeof result.number_of_episodes === "number" ? result.number_of_episodes : null,
+      runtime,
+      certification: this.parseCertification(type, result),
+      status: result.status ?? null,
+      network,
+      releaseDate: dateValue ?? null,
     };
   }
 
