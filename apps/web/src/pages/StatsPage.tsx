@@ -51,7 +51,7 @@ export function StatsPage() {
     );
   }
 
-  const maxMonthlyTotal = detailed?.monthly?.length
+  const maxMonthlyTotal = detailed?.monthly.length
     ? Math.max(...detailed.monthly.map((m) => m.movies + m.episodes), 1)
     : 1;
 
