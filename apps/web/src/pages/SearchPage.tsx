@@ -487,7 +487,7 @@ function ResultCard({
             </span>
           )}
         </div>
-        {result.genres.length > 0 && (
+        {result.genres?.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {result.genres.slice(0, 3).map((g) => (
               <span key={g} className="rounded bg-slate-800/80 px-1.5 py-0.5 text-2xs text-slate-400">{g}</span>
@@ -711,7 +711,7 @@ function DetailPanel({
               {item.year && <span className="text-sm text-slate-400">{item.year}</span>}
             </div>
             <h2 className="mt-3 text-2xl font-bold text-white">{item.name}</h2>
-            {(item.rating != null && item.rating > 0 || item.genres.length > 0) && (
+            {(item.rating != null && item.rating > 0 || item.genres?.length > 0) && (
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {item.rating != null && item.rating > 0 && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-400 ring-1 ring-amber-500/20">

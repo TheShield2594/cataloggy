@@ -55,7 +55,7 @@ export function StatsPage() {
     ? Math.max(...detailed.monthly.map((m) => m.movies + m.episodes), 1)
     : 1;
 
-  const maxGenreCount = detailed?.genreDistribution[0]?.count ?? 1;
+  const maxGenreCount = detailed?.genreDistribution?.[0]?.count ?? 1;
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
@@ -72,7 +72,7 @@ export function StatsPage() {
       )}
 
       {/* Monthly activity chart */}
-      {detailed && detailed.monthly.length > 0 && (
+      {detailed && detailed.monthly?.length > 0 && (
         <section className="rounded-2xl border border-slate-800/60 bg-slate-900/40 p-5">
           <h3 className="mb-4 text-lg font-semibold">Monthly Activity</h3>
           <div className="flex items-end gap-1.5 sm:gap-2" style={{ height: "180px" }}>
@@ -121,7 +121,7 @@ export function StatsPage() {
       )}
 
       {/* Genre distribution */}
-      {detailed && detailed.genreDistribution.length > 0 && (
+      {detailed && detailed.genreDistribution?.length > 0 && (
         <section className="rounded-2xl border border-slate-800/60 bg-slate-900/40 p-5">
           <h3 className="mb-4 text-lg font-semibold">Top Genres</h3>
           <div className="space-y-2.5">
@@ -142,7 +142,7 @@ export function StatsPage() {
       )}
 
       {/* Top rated watched content */}
-      {detailed && detailed.topRated.length > 0 && (
+      {detailed && detailed.topRated?.length > 0 && (
         <section className="rounded-2xl border border-slate-800/60 bg-slate-900/40 p-5">
           <h3 className="mb-4 text-lg font-semibold flex items-center gap-2">
             <Star className="h-5 w-5 text-amber-400" /> Top Rated Watched
