@@ -52,7 +52,7 @@ export const SORT_LABELS: Record<SortOption, string> = {
 export const GENRE_OPTIONS = [
   "Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary",
   "Drama", "Family", "Fantasy", "History", "Horror", "Music",
-  "Mystery", "Romance", "Science Fiction", "Sci-Fi", "Thriller", "War", "Western",
+  "Mystery", "Romance", "Sci-Fi", "Thriller", "War", "Western",
 ];
 
 export function useSearchFilters() {
