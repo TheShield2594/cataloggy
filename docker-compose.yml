@@ -25,7 +25,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-cataloggy}
       PORT: "7000"
       API_TOKEN: ${API_TOKEN:-dev-token}
-      CATALOGGY_ALLOWED_ORIGINS: ${CATALOGGY_ALLOWED_ORIGINS:-http://192.168.1.20:7002}
+      CATALOGGY_ALLOWED_ORIGINS: ${CATALOGGY_ALLOWED_ORIGINS:-http://192.168.1.20:7002,http://localhost:7002,http://127.0.0.1:7002}
       CATALOGGY_API_PUBLIC: ${CATALOGGY_API_PUBLIC:-http://192.168.1.20:7000}
       # Optional integrations — set these in a .env file or export them.
       # Leaving them unset is safe; the API validates at startup/request time
