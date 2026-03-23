@@ -1,9 +1,14 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Film, Plus, Search, Star, Tv, X, Heart } from "lucide-react";
-import { api, CatalogList, MediaType, SearchResult } from "../api";
+import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Check, ChevronDown, ChevronUp, Film, Filter, Plus, Search, SlidersHorizontal, Star, Tv, X, Heart } from "lucide-react";
+import { api, CatalogList, SearchResult } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
-
-type FilterType = "all" | MediaType;
+import {
+  useSearchFilters,
+  FilterType,
+  SortOption,
+  GENRE_OPTIONS,
+  SORT_LABELS,
+} from "../hooks/useSearchFilters";
 
 /* ─── Toast System ─── */
 
@@ -39,18 +44,78 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
 type Toast = { id: number; message: string; type: "success" | "error" | "info" };
 let toastId = 0;
 
+/* ─── Helpers ─── */
+
+function applyFiltersAndSort(
+  results: SearchResult[],
+  genre: string,
+  yearMin: string,
+  yearMax: string,
+  ratingMin: string,
+  sort: SortOption,
+): SearchResult[] {
+  let filtered = results;
+
+  if (genre) {
+    const g = genre.toLowerCase();
+    filtered = filtered.filter((r) =>
+      r.genres.some((rg) => rg.toLowerCase() === g)
+    );
+  }
+
+  if (yearMin) {
+    const min = parseInt(yearMin, 10);
+    if (!isNaN(min)) filtered = filtered.filter((r) => r.year != null && r.year >= min);
+  }
+
+  if (yearMax) {
+    const max = parseInt(yearMax, 10);
+    if (!isNaN(max)) filtered = filtered.filter((r) => r.year != null && r.year <= max);
+  }
+
+  if (ratingMin) {
+    const min = parseFloat(ratingMin);
+    if (!isNaN(min)) filtered = filtered.filter((r) => r.rating != null && r.rating >= min);
+  }
+
+  // Sort
+  switch (sort) {
+    case "rating":
+      filtered = [...filtered].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+      break;
+    case "year_desc":
+      filtered = [...filtered].sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
+      break;
+    case "year_asc":
+      filtered = [...filtered].sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
+      break;
+    case "title":
+      filtered = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+      break;
+    case "relevance":
+    default:
+      break;
+  }
+
+  return filtered;
+}
+
+/* ─── Main Component ─── */
+
 export function SearchPage() {
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<FilterType>("all");
-  const [results, setResults] = useState<SearchResult[] | null>(null);
+  const { filters, setFilters, clearFilters, hasActiveFilters, activeFilterCount } = useSearchFilters();
+  const [rawResults, setRawResults] = useState<SearchResult[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [lists, setLists] = useState<CatalogList[]>([]);
   const [pendingAdds, setPendingAdds] = useState<Record<string, boolean>>({});
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const lastSearchRef = useRef<{ filter: FilterType; query: string }>({ filter: "all", query: "" });
+  const requestIdRef = useRef(0);
 
   const showToast = useCallback((message: string, type: Toast["type"] = "success") => {
     const id = ++toastId;
@@ -60,7 +125,7 @@ export function SearchPage() {
     }, 3000);
   }, []);
 
-  // Load lists on mount
+  // Load lists + providers on mount
   useEffect(() => {
     void (async () => {
       try {
@@ -84,7 +149,6 @@ export function SearchPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-
   const listMap = useMemo(() => {
     const map = new Map<string, CatalogList>();
     for (const l of lists) map.set(l.id, l);
@@ -94,7 +158,9 @@ export function SearchPage() {
   const doSearch = useCallback(
     async (searchFilter: FilterType, searchQuery: string) => {
       if (!searchQuery.trim()) return;
+      const requestId = ++requestIdRef.current;
       setIsSearching(true);
+      lastSearchRef.current = { filter: searchFilter, query: searchQuery };
 
       try {
         if (searchFilter === "all") {
@@ -102,47 +168,72 @@ export function SearchPage() {
             api.search("movie", searchQuery),
             api.search("series", searchQuery),
           ]);
-          // Interleave: movie, series, movie, series...
+          if (requestIdRef.current !== requestId) return;
           const merged: SearchResult[] = [];
           const maxLen = Math.max(movies.length, series.length);
           for (let i = 0; i < maxLen; i++) {
             if (i < movies.length) merged.push(movies[i]);
             if (i < series.length) merged.push(series[i]);
           }
-          setResults(merged);
+          setRawResults(merged);
         } else {
           const response = await api.search(searchFilter, searchQuery);
-          setResults(response);
+          if (requestIdRef.current !== requestId) return;
+          setRawResults(response);
         }
       } catch (err) {
-        setResults([]);
+        if (requestIdRef.current !== requestId) return;
+        setRawResults([]);
         showToast(err instanceof Error ? err.message : "Search failed", "error");
       } finally {
-        setIsSearching(false);
+        if (requestIdRef.current === requestId) {
+          setIsSearching(false);
+        }
       }
     },
     [showToast]
   );
 
-  // Debounced auto-search (300ms)
+  // Filtered + sorted results
+  const results = useMemo(() => {
+    if (!rawResults) return null;
+    return applyFiltersAndSort(
+      rawResults,
+      filters.genre,
+      filters.yearMin,
+      filters.yearMax,
+      filters.ratingMin,
+      filters.sort,
+    );
+  }, [rawResults, filters.genre, filters.yearMin, filters.yearMax, filters.ratingMin, filters.sort]);
+
+  // Debounced auto-search on query/filter change
   useEffect(() => {
-    if (!query.trim()) {
-      setResults(null);
+    // Invalidate any in-flight request so its response is discarded
+    ++requestIdRef.current;
+
+    if (!filters.query.trim()) {
+      setRawResults(null);
+      setIsSearching(false);
       return;
     }
+    // Only re-search if query or media type filter changed
+    const last = lastSearchRef.current;
+    if (last.query === filters.query && last.filter === filters.filter && rawResults !== null) return;
+
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      void doSearch(filter, query);
+      void doSearch(filters.filter, filters.query);
     }, 300);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, filter, doSearch]);
+  }, [filters.query, filters.filter, doSearch]);
 
   const submitSearch = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    await doSearch(filter, query);
+    await doSearch(filters.filter, filters.query);
   };
 
   const handleAdd = async (listId: string, result: SearchResult) => {
@@ -155,16 +246,12 @@ export function SearchPage() {
       await api.addToList(listId, { type: result.type, imdbId: result.imdbId, title: result.name });
       const listName = listMap.get(listId)?.name ?? "list";
       showToast(`Added "${result.name}" to ${listName}`, "success");
-      // Update local lists state to reflect the addition
       setLists((prev) =>
         prev.map((l) =>
-          l.id === listId
-            ? { ...l, itemCount: l.itemCount + 1 }
-            : l
+          l.id === listId ? { ...l, itemCount: l.itemCount + 1 } : l
         )
       );
-      // Update search results to include the new list
-      setResults((prev) =>
+      setRawResults((prev) =>
         prev?.map((r) =>
           r.imdbId === result.imdbId ? { ...r, lists: [...r.lists, listId] } : r
         ) ?? null
@@ -183,7 +270,19 @@ export function SearchPage() {
     { value: "series", label: "Series", icon: Tv },
   ];
 
-  const hasSearched = results !== null;
+  // Collect genres from current results for smart suggestions
+  const availableGenres = useMemo(() => {
+    if (!rawResults) return GENRE_OPTIONS;
+    const found = new Set<string>();
+    for (const r of rawResults) {
+      for (const g of r.genres) found.add(g);
+    }
+    // Merge with common genres, prioritizing found ones
+    const all = [...found, ...GENRE_OPTIONS.filter((g) => !found.has(g))];
+    return all;
+  }, [rawResults]);
+
+  const hasSearched = rawResults !== null;
   const noResults = hasSearched && (results?.length ?? 0) === 0;
 
   return (
@@ -196,16 +295,16 @@ export function SearchPage() {
         <div className="relative">
           <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
           <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={filters.query}
+            onChange={(e) => setFilters({ query: e.target.value })}
             placeholder="Search movies & TV shows..."
             className="w-full rounded-full border border-slate-700/60 bg-slate-950 py-3.5 pl-14 pr-12 text-base placeholder:text-slate-400 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15 transition-all"
             autoFocus
           />
-          {query && (
+          {filters.query && (
             <button
               type="button"
-              onClick={() => { setQuery(""); setResults(null); }}
+              onClick={() => { setFilters({ query: "" }); setRawResults(null); }}
               className="absolute right-4 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full bg-slate-600 text-xs font-bold text-slate-950 hover:bg-slate-400 transition-colors"
             >
               <X className="h-3.5 w-3.5" />
@@ -213,17 +312,17 @@ export function SearchPage() {
           )}
         </div>
 
-        {/* Filter pills */}
-        <div className="mt-3 flex items-center gap-2">
+        {/* Filter pills + advanced toggle */}
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
           <div className="flex rounded-full border border-slate-700/60 bg-slate-800/60 p-1">
             {filterOptions.map((opt) => {
               const Icon = opt.icon;
-              const active = filter === opt.value;
+              const active = filters.filter === opt.value;
               return (
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setFilter(opt.value)}
+                  onClick={() => setFilters({ filter: opt.value })}
                   className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
                     active
                       ? "bg-red-500 text-white shadow-lg shadow-red-500/25"
@@ -236,6 +335,38 @@ export function SearchPage() {
               );
             })}
           </div>
+
+          {/* Advanced filters toggle */}
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((v) => !v)}
+            className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all ${
+              hasActiveFilters
+                ? "border-red-500/50 bg-red-500/10 text-red-400"
+                : "border-slate-700/60 bg-slate-800/60 text-slate-400 hover:text-white"
+            }`}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Filters</span>
+            {activeFilterCount > 0 && (
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-2xs font-bold text-white">
+                {activeFilterCount}
+              </span>
+            )}
+            {filtersOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="h-3 w-3" />
+              Clear
+            </button>
+          )}
+
           {isSearching && (
             <span className="ml-auto flex items-center gap-2 text-sm text-slate-400">
               <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-red-500 border-t-transparent" />
@@ -243,6 +374,87 @@ export function SearchPage() {
             </span>
           )}
         </div>
+
+        {/* Advanced filters panel */}
+        {filtersOpen && (
+          <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl border border-slate-700/40 bg-slate-800/40 p-3 sm:grid-cols-3 lg:grid-cols-6">
+            {/* Genre */}
+            <FilterSelect
+              label="Genre"
+              value={filters.genre}
+              onChange={(v) => setFilters({ genre: v })}
+              options={[{ value: "", label: "Any genre" }, ...availableGenres.map((g) => ({ value: g, label: g }))]}
+            />
+
+            {/* Year range */}
+            <div className="flex flex-col gap-1">
+              <label className="text-2xs font-medium uppercase tracking-wider text-slate-400">Year</label>
+              <div className="flex gap-1.5">
+                <input
+                  type="number"
+                  placeholder="From"
+                  aria-label="Minimum year"
+                  min="1900"
+                  max="2030"
+                  value={filters.yearMin}
+                  onChange={(e) => setFilters({ yearMin: e.target.value })}
+                  className="w-full rounded-lg border border-slate-700/60 bg-slate-900 px-2.5 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500/30"
+                />
+                <input
+                  type="number"
+                  placeholder="To"
+                  aria-label="Maximum year"
+                  min="1900"
+                  max="2030"
+                  value={filters.yearMax}
+                  onChange={(e) => setFilters({ yearMax: e.target.value })}
+                  className="w-full rounded-lg border border-slate-700/60 bg-slate-900 px-2.5 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500/30"
+                />
+              </div>
+            </div>
+
+            {/* Min rating */}
+            <FilterSelect
+              label="Min Rating"
+              value={filters.ratingMin}
+              onChange={(v) => setFilters({ ratingMin: v })}
+              options={[
+                { value: "", label: "Any rating" },
+                { value: "9", label: "9+ Exceptional" },
+                { value: "8", label: "8+ Great" },
+                { value: "7", label: "7+ Good" },
+                { value: "6", label: "6+ Decent" },
+                { value: "5", label: "5+ Average" },
+              ]}
+            />
+
+            {/* Provider — not yet available in search results */}
+            <FilterSelect
+              label="Provider"
+              value=""
+              onChange={() => {}}
+              disabled
+              options={[{ value: "", label: "Coming soon" }]}
+            />
+
+            {/* Runtime — not available in search results */}
+            <FilterSelect
+              label="Runtime"
+              value=""
+              onChange={() => {}}
+              disabled
+              options={[{ value: "", label: "Coming soon" }]}
+            />
+
+            {/* Sort */}
+            <FilterSelect
+              label="Sort by"
+              value={filters.sort}
+              onChange={(v) => setFilters({ sort: v as SortOption })}
+              options={Object.entries(SORT_LABELS).map(([value, label]) => ({ value, label }))}
+            />
+          </div>
+        )}
       </form>
 
       {/* Empty state – no search yet */}
@@ -262,18 +474,53 @@ export function SearchPage() {
       {noResults && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="flex h-24 w-24 items-center justify-center rounded-full bg-slate-900 ring-1 ring-slate-800">
-            <Search className="h-12 w-12 text-slate-700" />
+            <Filter className="h-12 w-12 text-slate-700" />
           </div>
           <p className="mt-5 text-lg font-semibold text-slate-300">No results found</p>
-          <p className="mt-1 text-sm text-slate-400">Try a different search term or filter.</p>
+          <p className="mt-1 text-sm text-slate-400">
+            {hasActiveFilters
+              ? "Try adjusting your filters or search term."
+              : "Try a different search term or filter."}
+          </p>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="mt-3 rounded-full border border-slate-700/60 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 transition-colors"
+            >
+              Clear all filters
+            </button>
+          )}
         </div>
       )}
 
       {/* Results grid */}
-      {hasSearched && results.length > 0 && (
+      {hasSearched && results !== null && results.length > 0 && (
         <>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-400">{results.length} results</p>
+            <p className="text-sm text-slate-400">
+              {results.length} result{results.length !== 1 ? "s" : ""}
+              {rawResults && results.length !== rawResults.length && (
+                <span className="text-slate-500"> (filtered from {rawResults.length})</span>
+              )}
+            </p>
+            {/* Inline sort shortcut on desktop */}
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="text-2xs text-slate-500">Sort:</span>
+              {(["relevance", "rating", "year_desc", "title"] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setFilters({ sort: s })}
+                  className={`rounded-full px-2.5 py-1 text-2xs font-medium transition-all ${
+                    filters.sort === s
+                      ? "bg-slate-700 text-white"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {SORT_LABELS[s]}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {results.map((result) => (
@@ -309,6 +556,46 @@ export function SearchPage() {
 
       {/* Toast notifications */}
       <ToastContainer toasts={toasts} onRemove={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))} />
+    </div>
+  );
+}
+
+/* ─── Filter Select ─── */
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  disabled?: boolean;
+}) {
+  const id = useId();
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-2xs font-medium uppercase tracking-wider text-slate-400">{label}</label>
+      <select
+        id={id}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-lg border border-slate-700/60 bg-slate-900 px-2.5 py-2 text-sm text-slate-200 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500/30 appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: "right 10px center",
+          paddingRight: "2rem",
+        }}
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -474,4 +761,3 @@ function ResultCard({
     </div>
   );
 }
-
