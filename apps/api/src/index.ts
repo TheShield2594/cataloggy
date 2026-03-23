@@ -208,17 +208,24 @@ const isAllowedOrigin = (origin: string | undefined) => {
 const applyCorsHeaders = (request: FastifyRequest, reply: FastifyReply) => {
   const origin = request.headers.origin;
 
-  if (!isAllowedOrigin(origin)) {
+  // Always allow CORS for local/private-network origins, and in dev mode.
+  // For self-hosted setups where NODE_ENV may not be set, this ensures
+  // the web UI can always reach the API on the same LAN.
+  if (IS_DEVELOPMENT || (origin && isLocalOrigin(origin))) {
+    reply.header("Access-Control-Allow-Origin", origin ?? "*");
+    reply.header("Access-Control-Allow-Methods", CORS_METHODS);
+    reply.header("Access-Control-Allow-Headers", CORS_HEADERS);
     return;
   }
 
-  reply.header("Access-Control-Allow-Origin", IS_DEVELOPMENT ? "*" : origin!);
+  if (!origin || !ALLOWED_ORIGINS.includes(origin)) {
+    return;
+  }
+
+  reply.header("Access-Control-Allow-Origin", origin);
   reply.header("Access-Control-Allow-Methods", CORS_METHODS);
   reply.header("Access-Control-Allow-Headers", CORS_HEADERS);
-
-  if (!IS_DEVELOPMENT) {
-    reply.header("Vary", "Origin");
-  }
+  reply.header("Vary", "Origin");
 };
 
 const toSha256Digest = (value: string) => createHash("sha256").update(value).digest();
