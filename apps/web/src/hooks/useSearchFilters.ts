@@ -55,46 +55,58 @@ export const GENRE_OPTIONS = [
   "Mystery", "Romance", "Sci-Fi", "Thriller", "War", "Western",
 ];
 
+const PARAM_MAP: Record<keyof SearchFilters, string> = {
+  query: "q",
+  filter: "filter",
+  genre: "genre",
+  yearMin: "yearMin",
+  yearMax: "yearMax",
+  ratingMin: "ratingMin",
+  provider: "provider",
+  runtime: "runtime",
+  sort: "sort",
+};
+
+function parseParams(params: URLSearchParams): SearchFilters {
+  const f = params.get("filter") as FilterType;
+  const s = params.get("sort") as SortOption;
+  const r = params.get("runtime") as RuntimeBucket;
+  return {
+    query: params.get("q") ?? DEFAULTS.query,
+    filter: VALID_FILTERS.includes(f) ? f : DEFAULTS.filter,
+    genre: params.get("genre") ?? DEFAULTS.genre,
+    yearMin: numericParam(params.get("yearMin"), DEFAULTS.yearMin),
+    yearMax: numericParam(params.get("yearMax"), DEFAULTS.yearMax),
+    ratingMin: numericParam(params.get("ratingMin"), DEFAULTS.ratingMin),
+    provider: params.get("provider") ?? DEFAULTS.provider,
+    runtime: VALID_RUNTIMES.includes(r) ? r : DEFAULTS.runtime,
+    sort: VALID_SORTS.includes(s) ? s : DEFAULTS.sort,
+  };
+}
+
+/** Return the string if it parses as a finite number, otherwise fallback. */
+function numericParam(raw: string | null, fallback: string): string {
+  if (raw == null) return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) ? raw : fallback;
+}
+
 export function useSearchFilters() {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const filters: SearchFilters = useMemo(() => {
-    const f = searchParams.get("filter") as FilterType;
-    const s = searchParams.get("sort") as SortOption;
-    const r = searchParams.get("runtime") as RuntimeBucket;
-    return {
-      query: searchParams.get("q") ?? DEFAULTS.query,
-      filter: VALID_FILTERS.includes(f) ? f : DEFAULTS.filter,
-      genre: searchParams.get("genre") ?? DEFAULTS.genre,
-      yearMin: searchParams.get("yearMin") ?? DEFAULTS.yearMin,
-      yearMax: searchParams.get("yearMax") ?? DEFAULTS.yearMax,
-      ratingMin: searchParams.get("ratingMin") ?? DEFAULTS.ratingMin,
-      provider: searchParams.get("provider") ?? DEFAULTS.provider,
-      runtime: VALID_RUNTIMES.includes(r) ? r : DEFAULTS.runtime,
-      sort: VALID_SORTS.includes(s) ? s : DEFAULTS.sort,
-    };
-  }, [searchParams]);
+  const filters: SearchFilters = useMemo(() => parseParams(searchParams), [searchParams]);
 
   const setFilters = useCallback(
     (updates: Partial<SearchFilters>) => {
       setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        const merged = { ...filters, ...updates };
+        // Derive base state from prev (not the captured filters closure)
+        // so back-to-back calls within the same render cycle don't lose updates.
+        const base = parseParams(prev);
+        const merged = { ...base, ...updates };
 
-        // Map state keys to URL param keys
-        const paramMap: Record<keyof SearchFilters, string> = {
-          query: "q",
-          filter: "filter",
-          genre: "genre",
-          yearMin: "yearMin",
-          yearMax: "yearMax",
-          ratingMin: "ratingMin",
-          provider: "provider",
-          runtime: "runtime",
-          sort: "sort",
-        };
+        const next = new URLSearchParams();
 
-        for (const [key, paramName] of Object.entries(paramMap)) {
+        for (const [key, paramName] of Object.entries(PARAM_MAP)) {
           const val = merged[key as keyof SearchFilters];
           const def = DEFAULTS[key as keyof SearchFilters];
           if (val && val !== def) {
@@ -107,7 +119,7 @@ export function useSearchFilters() {
         return next;
       }, { replace: true });
     },
-    [filters, setSearchParams]
+    [setSearchParams]
   );
 
   const clearFilters = useCallback(() => {
