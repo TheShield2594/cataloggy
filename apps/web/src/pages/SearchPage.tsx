@@ -1,14 +1,12 @@
 import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronUp, Film, Filter, Plus, Search, SlidersHorizontal, Star, Tv, X, Heart } from "lucide-react";
-import { api, CatalogList, MediaType, SearchResult } from "../api";
+import { api, CatalogList, SearchResult } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import {
   useSearchFilters,
   FilterType,
-  RuntimeBucket,
   SortOption,
   GENRE_OPTIONS,
-  RUNTIME_LABELS,
   SORT_LABELS,
 } from "../hooks/useSearchFilters";
 
@@ -48,25 +46,12 @@ let toastId = 0;
 
 /* ─── Helpers ─── */
 
-function matchesRuntime(runtime: number | null | undefined, bucket: RuntimeBucket): boolean {
-  if (!bucket) return true;
-  if (runtime == null) return true; // Don't exclude items without runtime data
-  switch (bucket) {
-    case "short": return runtime < 60;
-    case "medium": return runtime >= 60 && runtime <= 120;
-    case "long": return runtime > 120 && runtime <= 180;
-    case "epic": return runtime > 180;
-    default: return true;
-  }
-}
-
 function applyFiltersAndSort(
   results: SearchResult[],
   genre: string,
   yearMin: string,
   yearMax: string,
   ratingMin: string,
-  runtime: RuntimeBucket,
   sort: SortOption,
 ): SearchResult[] {
   let filtered = results;
@@ -91,10 +76,6 @@ function applyFiltersAndSort(
   if (ratingMin) {
     const min = parseFloat(ratingMin);
     if (!isNaN(min)) filtered = filtered.filter((r) => r.rating != null && r.rating >= min);
-  }
-
-  if (runtime) {
-    filtered = filtered.filter((r) => matchesRuntime(r.runtime, runtime));
   }
 
   // Sort
@@ -222,15 +203,18 @@ export function SearchPage() {
       filters.yearMin,
       filters.yearMax,
       filters.ratingMin,
-      filters.runtime,
       filters.sort,
     );
-  }, [rawResults, filters.genre, filters.yearMin, filters.yearMax, filters.ratingMin, filters.runtime, filters.sort]);
+  }, [rawResults, filters.genre, filters.yearMin, filters.yearMax, filters.ratingMin, filters.sort]);
 
   // Debounced auto-search on query/filter change
   useEffect(() => {
+    // Invalidate any in-flight request so its response is discarded
+    ++requestIdRef.current;
+
     if (!filters.query.trim()) {
       setRawResults(null);
+      setIsSearching(false);
       return;
     }
     // Only re-search if query or media type filter changed
@@ -453,12 +437,13 @@ export function SearchPage() {
               options={[{ value: "", label: "Coming soon" }]}
             />
 
-            {/* Runtime */}
+            {/* Runtime — not available in search results */}
             <FilterSelect
               label="Runtime"
-              value={filters.runtime}
-              onChange={(v) => setFilters({ runtime: v as RuntimeBucket })}
-              options={Object.entries(RUNTIME_LABELS).map(([value, label]) => ({ value, label }))}
+              value=""
+              onChange={() => {}}
+              disabled
+              options={[{ value: "", label: "Coming soon" }]}
             />
 
             {/* Sort */}

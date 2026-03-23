@@ -127,7 +127,6 @@ export function useSearchFilters() {
       filters.yearMin !== DEFAULTS.yearMin ||
       filters.yearMax !== DEFAULTS.yearMax ||
       filters.ratingMin !== DEFAULTS.ratingMin ||
-      filters.runtime !== DEFAULTS.runtime ||
       filters.sort !== DEFAULTS.sort
     );
   }, [filters]);
@@ -137,7 +136,6 @@ export function useSearchFilters() {
     if (filters.genre) count++;
     if (filters.yearMin || filters.yearMax) count++;
     if (filters.ratingMin) count++;
-    if (filters.runtime) count++;
     if (filters.sort !== "relevance") count++;
     return count;
   }, [filters]);
