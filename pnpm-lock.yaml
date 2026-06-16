@@ -45,6 +45,9 @@ importers:
       fastify:
         specifier: ^5.1.0
         version: 5.8.2
+      lru-cache:
+        specifier: ^11.5.1
+        version: 11.5.1
       zod:
         specifier: ^3.24.0
         version: 3.25.76
@@ -2140,6 +2143,10 @@ packages:
 
   lru-cache@11.2.7:
     resolution: {integrity: sha512-aY/R+aEsRelme17KGQa/1ZSIpLpNYYrhcrepKTZgE+W3WM16YMCaPwOHLHsmopZHELU0Ojin1lPVxKR0MihncA==}
+    engines: {node: 20 || >=22}
+
+  lru-cache@11.5.1:
+    resolution: {integrity: sha512-RPimw/7aMdv2oqRrxKwvZXcPfwBrn/JZ2xYcY9Hus/6LaS3VOAKVWKWgNLCFSiOm1ESXinjsDlidVU7JlnCN2A==}
     engines: {node: 20 || >=22}
 
   lru-cache@5.1.1:
@@ -5086,6 +5093,8 @@ snapshots:
       js-tokens: 4.0.0
 
   lru-cache@11.2.7: {}
+
+  lru-cache@11.5.1: {}
 
   lru-cache@5.1.1:
     dependencies:
