@@ -3851,8 +3851,7 @@ app.post("/trakt/disconnect", async (_request, reply) => {
 app.post<{ Querystring: { limit?: string } }>("/metadata/refresh-all", async (request, reply) => {
   const rawLimit = parseInt(request.query.limit ?? "50", 10);
   const limit = isNaN(rawLimit) || rawLimit < 1 ? 50 : Math.min(rawLimit, 500);
-  const allRows = await prisma.metadata.findMany({ select: { imdbId: true, type: true } });
-  const allMetadata = allRows.slice(0, limit);
+  const allMetadata = await prisma.metadata.findMany({ select: { imdbId: true, type: true }, take: limit });
   if (allMetadata.length === 0) {
     return reply.send({ refreshed: 0, total: 0, limit });
   }
