@@ -21,10 +21,13 @@ export function App() {
   return (
     <div className="min-h-screen w-full">
       {/* Fixed header */}
-      <header className="fixed top-0 left-0 right-0 z-30 border-b border-slate-800/60 bg-slate-950/85 backdrop-blur-xl">
+      <header
+        className="fixed top-0 left-0 right-0 z-30 backdrop-blur-xl"
+        style={{ borderBottom: "1px solid var(--border)", backgroundColor: "rgba(13,11,10,0.88)" }}
+      >
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-6 px-6 py-3.5">
-          <Link to="/" className="flex items-center gap-2.5 text-xl font-bold text-white">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-500">
+          <Link to="/" className="flex items-center gap-2.5 text-xl font-bold" style={{ color: "var(--text)" }}>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-claw-500">
               <Clapperboard className="h-5 w-5 text-white" />
             </div>
             <span className="hidden sm:inline">Cataloggy</span>
@@ -34,7 +37,10 @@ export function App() {
             <InstallButton />
 
             {/* Desktop pill nav */}
-            <nav className="hidden sm:flex rounded-full border border-slate-700/60 bg-slate-900/80 p-1">
+            <nav
+              className="hidden sm:flex rounded-full p-1"
+              style={{ border: "1px solid var(--border-strong)", backgroundColor: "rgba(20,18,16,0.85)" }}
+            >
               {navItems.map((item) => (
                 <NavLink
                   key={item.to}
@@ -43,10 +49,11 @@ export function App() {
                   className={({ isActive }) =>
                     `flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
                       isActive
-                        ? "bg-red-500 text-white shadow-lg shadow-red-500/25"
-                        : "text-slate-400 hover:text-white"
+                        ? "bg-claw-500 text-white shadow-lg shadow-claw-500/20"
+                        : "hover:text-cream-100"
                     }`
                   }
+                  style={({ isActive }) => isActive ? {} : { color: "var(--text-dim)" }}
                 >
                   {({ isActive }) => (
                     <>
@@ -73,7 +80,10 @@ export function App() {
       </main>
 
       {/* Mobile bottom tab bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 flex sm:hidden border-t border-slate-800/60 bg-slate-950/95 backdrop-blur-xl">
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-40 flex sm:hidden backdrop-blur-xl"
+        style={{ borderTop: "1px solid var(--border)", backgroundColor: "rgba(13,11,10,0.96)" }}
+      >
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = item.end
@@ -83,9 +93,8 @@ export function App() {
             <Link
               key={item.to}
               to={item.to}
-              className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-2xs font-medium transition-colors ${
-                isActive ? "text-red-400" : "text-slate-400"
-              }`}
+              className="flex flex-1 flex-col items-center gap-0.5 py-2.5 text-2xs font-medium transition-colors"
+              style={{ color: isActive ? "#e89163" : "var(--text-dim)" }}
             >
               <Icon className="h-5 w-5" />
               <span>{item.label}</span>
@@ -95,7 +104,10 @@ export function App() {
       </nav>
 
       {/* Footer */}
-      <footer className="border-t border-slate-800/40 py-8 text-center text-sm text-slate-400">
+      <footer
+        className="py-8 text-center text-sm"
+        style={{ borderTop: "1px solid var(--border)", color: "var(--text-mute)" }}
+      >
         Cataloggy &middot; Personal Media Tracker
       </footer>
     </div>

@@ -5,10 +5,27 @@
 :root {
   color-scheme: dark;
   --poster-ratio: 2 / 3;
+
+  /* Clawdia core */
+  --bg-0: #0d0b0a;
+  --bg-1: #141210;
+  --bg-2: #1c1916;
+  --surface: rgba(255,215,180,0.04);
+  --surface-strong: rgba(255,215,180,0.07);
+  --border: rgba(255,215,180,0.09);
+  --border-strong: rgba(255,215,180,0.16);
+  --text: #faf5f0;
+  --text-dim: #a49b92;
+  --text-mute: #6b6258;
+  --accent: #f97316;
+  --accent-2: #f59e0b;
+  --accent-3: #10b981;
 }
 
 body {
-  @apply m-0 min-h-screen bg-slate-950 text-slate-100;
+  @apply m-0 min-h-screen;
+  background-color: var(--bg-0);
+  color: var(--text);
   font-family: 'Outfit', Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   line-height: 1.5;
 }
@@ -31,17 +48,17 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgb(71 85 105 / 0.7);
+  background: rgba(143, 132, 117, 0.35);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgb(100 116 139 / 0.9);
+  background: rgba(181, 171, 154, 0.5);
 }
 
 /* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgb(71 85 105 / 0.7) transparent;
+  scrollbar-color: rgba(143, 132, 117, 0.35) transparent;
 }
 
 /* Hide scrollbar for carousels */
@@ -64,7 +81,7 @@ body {
 }
 
 .skeleton {
-  background: linear-gradient(90deg, rgb(30 41 59 / 0.6) 25%, rgb(51 65 85 / 0.6) 50%, rgb(30 41 59 / 0.6) 75%);
+  background: linear-gradient(90deg, rgba(42,36,30,0.7) 25%, rgba(58,50,42,0.7) 50%, rgba(42,36,30,0.7) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
@@ -106,5 +123,5 @@ body {
 }
 .card-lift:hover {
   transform: translateY(-8px) scale(1.02);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
 }
