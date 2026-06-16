@@ -8,3 +8,5 @@ coverage
 apps/api/prisma/*.db*
 
 *.tsbuildinfo
+package-lock.json
+.claude/
