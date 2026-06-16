@@ -85,7 +85,6 @@ function Poster({
 }) {
   const [loadFailed, setLoadFailed] = useState(false);
 
-  // Reset failure state when src changes
   useEffect(() => { setLoadFailed(false); }, [src]);
 
   if (!src || loadFailed) {
@@ -134,7 +133,11 @@ function DiscoveryCard({ item, badge, reason, onSelect }: { item: DiscoveryItem;
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect?.(item); } }}
       aria-label={`View details for ${item.name}`}
     >
-      <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
+      <div
+        className="relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
+        style={{ aspectRatio: "2 / 3", ring: "1px solid var(--border)" }}
+      >
+        <div className="absolute inset-0 rounded-xl" style={{ boxShadow: "inset 0 0 0 1px var(--border)" }} />
         <Poster src={item.poster} alt={item.name} className="h-full w-full" />
         {item.rating != null && item.rating > 0 && (
           <div className="absolute top-2.5 left-2.5">
@@ -150,18 +153,18 @@ function DiscoveryCard({ item, badge, reason, onSelect }: { item: DiscoveryItem;
           {item.genres && item.genres.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {item.genres.slice(0, 2).map((g) => (
-                <span key={g} className="rounded bg-white/10 px-1.5 py-0.5 text-2xs text-slate-300 backdrop-blur-sm">{g}</span>
+                <span key={g} className="rounded px-1.5 py-0.5 text-2xs backdrop-blur-sm" style={{ background: "rgba(255,215,180,0.12)", color: "var(--text-dim)" }}>{g}</span>
               ))}
             </div>
           )}
         </div>
       </div>
-      <p className="mt-2.5 truncate text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">{item.name}</p>
-      <p className="text-2xs text-slate-400">
+      <p className="mt-2.5 truncate text-sm font-semibold transition-colors group-hover:text-cream-100" style={{ color: "var(--text)" }}>{item.name}</p>
+      <p className="text-2xs" style={{ color: "var(--text-dim)" }}>
         {item.year ?? ""}{item.type ? ` ${item.type === "movie" ? "Movie" : "Series"}` : ""}
       </p>
       {reason && (
-        <p className="mt-0.5 truncate text-2xs italic text-slate-400" title={reason}>{reason}</p>
+        <p className="mt-0.5 truncate text-2xs italic" style={{ color: "var(--text-dim)" }} title={reason}>{reason}</p>
       )}
     </div>
   );
@@ -185,7 +188,8 @@ function ScrollArrows({
         type="button"
         onClick={() => onScroll("left")}
         disabled={!canScrollLeft}
-        className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/60 bg-slate-900/80 text-slate-400 transition-all hover:border-slate-600 hover:bg-slate-800 hover:text-white disabled:opacity-30 disabled:cursor-default disabled:hover:border-slate-700/60 disabled:hover:bg-slate-900/80 disabled:hover:text-slate-400"
+        className="flex h-8 w-8 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default"
+        style={{ border: "1px solid var(--border-strong)", background: "var(--bg-2)", color: "var(--text-dim)" }}
         aria-label="Scroll left"
       >
         <ChevronLeft className="h-4 w-4" />
@@ -194,7 +198,8 @@ function ScrollArrows({
         type="button"
         onClick={() => onScroll("right")}
         disabled={!canScrollRight}
-        className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/60 bg-slate-900/80 text-slate-400 transition-all hover:border-slate-600 hover:bg-slate-800 hover:text-white disabled:opacity-30 disabled:cursor-default disabled:hover:border-slate-700/60 disabled:hover:bg-slate-900/80 disabled:hover:text-slate-400"
+        className="flex h-8 w-8 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default"
+        style={{ border: "1px solid var(--border-strong)", background: "var(--bg-2)", color: "var(--text-dim)" }}
         aria-label="Scroll right"
       >
         <ChevronRight className="h-4 w-4" />
@@ -217,9 +222,9 @@ function SectionHeader({
   return (
     <div className="mb-4 flex items-center justify-between">
       <div className="flex items-center gap-3">
-        <h2 className="text-lg font-bold text-white">{title}</h2>
+        <h2 className="text-lg font-bold" style={{ color: "var(--text)" }}>{title}</h2>
         {count !== undefined && count > 0 && (
-          <span className="rounded-full bg-slate-800/80 px-2.5 py-0.5 text-xs font-medium text-slate-400 tabular-nums">
+          <span className="rounded-full px-2.5 py-0.5 text-xs font-medium tabular-nums" style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}>
             {count}
           </span>
         )}
@@ -300,7 +305,6 @@ export function DashboardPage() {
     }
   }, []);
 
-  // Load discovery data separately (non-blocking)
   useEffect(() => {
     let mounted = true;
     void (async () => {
@@ -354,7 +358,6 @@ export function DashboardPage() {
     void load();
   }, [load]);
 
-  // Re-check scroll arrows after data loads
   useEffect(() => {
     if (loading) return;
     const timer = setTimeout(() => {
@@ -381,7 +384,7 @@ export function DashboardPage() {
         void load();
       }, 1200);
     } catch {
-      // silently fail — button returns to normal
+      // silently fail
     } finally {
       setMarkingNext((prev) => {
         const next = new Set(prev);
@@ -394,15 +397,15 @@ export function DashboardPage() {
   /* ─── Error state ─── */
   if (error) {
     return (
-      <div className="mx-auto max-w-lg space-y-4 rounded-2xl border border-rose-500/20 bg-rose-500/5 p-8 text-center">
-        <AlertCircle className="mx-auto h-12 w-12 text-rose-400" />
-        <p className="text-xl font-semibold text-rose-300">
+      <div className="mx-auto max-w-lg space-y-4 rounded-2xl p-8 text-center" style={{ border: "1px solid rgba(217,119,66,0.2)", background: "rgba(217,119,66,0.05)" }}>
+        <AlertCircle className="mx-auto h-12 w-12 text-claw-400" />
+        <p className="text-xl font-semibold text-claw-300">
           Unable to connect to the API
         </p>
-        <p className="text-sm text-slate-400">{error}</p>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm" style={{ color: "var(--text-dim)" }}>{error}</p>
+        <p className="text-sm" style={{ color: "var(--text-dim)" }}>
           Current API base:{" "}
-          <span className="font-mono text-red-300">
+          <span className="font-mono text-claw-400">
             {runtimeConfig.getApiBase()}
           </span>
         </p>
@@ -410,13 +413,14 @@ export function DashboardPage() {
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="rounded-lg bg-red-500 px-5 py-2.5 text-sm font-semibold hover:bg-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-red-300 focus-visible:ring-offset-slate-900"
+            className="rounded-lg bg-claw-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-claw-400"
           >
             Reload
           </button>
           <Link
             to="/settings"
-            className="rounded-lg border border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-500 focus-visible:ring-offset-slate-900"
+            className="rounded-lg px-5 py-2.5 text-sm font-medium transition-colors focus:outline-none"
+            style={{ border: "1px solid var(--border-strong)", color: "var(--text-dim)" }}
           >
             Settings
           </Link>
@@ -435,23 +439,23 @@ export function DashboardPage() {
     <div className="space-y-10">
       {/* ── Now Watching Banner ── */}
       {activeCheckin && (
-        <div className="flex items-center gap-4 rounded-2xl border border-red-500/30 bg-red-500/5 px-5 py-4">
+        <div className="flex items-center gap-4 rounded-2xl px-5 py-4" style={{ border: "1px solid rgba(217,119,66,0.25)", background: "rgba(217,119,66,0.06)" }}>
           {activeCheckin.poster && (
-            <div className="h-14 w-10 flex-none overflow-hidden rounded-lg ring-1 ring-white/10">
+            <div className="h-14 w-10 flex-none overflow-hidden rounded-lg" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
               <img src={activeCheckin.poster} alt="" className="h-full w-full object-cover" loading="lazy" />
             </div>
           )}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-claw-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-claw-500" />
               </span>
-              <span className="text-xs font-semibold uppercase tracking-wider text-red-400">Now Watching</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-claw-400">Now Watching</span>
             </div>
-            <p className="mt-0.5 truncate text-sm font-semibold text-white">{activeCheckin.name}</p>
+            <p className="mt-0.5 truncate text-sm font-semibold" style={{ color: "var(--text)" }}>{activeCheckin.name}</p>
             {activeCheckin.season != null && activeCheckin.episode != null && (
-              <p className="text-xs text-slate-400">
+              <p className="text-xs" style={{ color: "var(--text-dim)" }}>
                 S{String(activeCheckin.season).padStart(2, "0")}:E{String(activeCheckin.episode).padStart(2, "0")}
               </p>
             )}
@@ -460,14 +464,15 @@ export function DashboardPage() {
             <button
               type="button"
               onClick={() => void handleCheckout(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-red-500 px-3 py-2 text-xs font-semibold text-white hover:bg-red-600 transition-colors"
+              className="flex items-center gap-1.5 rounded-xl bg-claw-500 px-3 py-2 text-xs font-semibold text-white hover:bg-claw-600 transition-colors"
             >
               <Check className="h-3.5 w-3.5" /> Finished
             </button>
             <button
               type="button"
               onClick={() => void handleCheckout(false)}
-              className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-700/60 bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-xl transition-colors"
+              style={{ border: "1px solid var(--border-strong)", background: "var(--bg-2)", color: "var(--text-dim)" }}
               aria-label="Check out without logging"
             >
               <X className="h-4 w-4" />
@@ -483,21 +488,21 @@ export function DashboardPage() {
         ) : stats ? (
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <div className="flex items-center gap-2">
-              <Film className="h-4 w-4 text-red-400" />
-              <span className="text-lg font-bold text-white tabular-nums">{stats.totalMovies.toLocaleString()}</span>
-              <span className="text-sm text-slate-400">movies</span>
+              <Film className="h-4 w-4 text-claw-400" />
+              <span className="text-lg font-bold tabular-nums" style={{ color: "var(--text)" }}>{stats.totalMovies.toLocaleString()}</span>
+              <span className="text-sm" style={{ color: "var(--text-dim)" }}>movies</span>
             </div>
-            <div className="h-4 w-px bg-slate-800" />
+            <div className="h-4 w-px" style={{ background: "var(--border-strong)" }} />
             <div className="flex items-center gap-2">
-              <Tv className="h-4 w-4 text-violet-400" />
-              <span className="text-lg font-bold text-white tabular-nums">{stats.totalEpisodes.toLocaleString()}</span>
-              <span className="text-sm text-slate-400">episodes</span>
+              <Tv className="h-4 w-4 text-plum-500" />
+              <span className="text-lg font-bold tabular-nums" style={{ color: "var(--text)" }}>{stats.totalEpisodes.toLocaleString()}</span>
+              <span className="text-sm" style={{ color: "var(--text-dim)" }}>episodes</span>
             </div>
-            <div className="h-4 w-px bg-slate-800" />
+            <div className="h-4 w-px" style={{ background: "var(--border-strong)" }} />
             <div className="flex items-center gap-2">
               <Play className="h-4 w-4 text-amber-400" />
-              <span className="text-lg font-bold text-white tabular-nums">{stats.totalPlays.toLocaleString()}</span>
-              <span className="text-sm text-slate-400">total plays</span>
+              <span className="text-lg font-bold tabular-nums" style={{ color: "var(--text)" }}>{stats.totalPlays.toLocaleString()}</span>
+              <span className="text-sm" style={{ color: "var(--text-dim)" }}>total plays</span>
             </div>
           </div>
         ) : null}
@@ -517,9 +522,9 @@ export function DashboardPage() {
         {loading ? (
           <ContinueWatchingSkeleton />
         ) : progress.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-800 py-12 text-center">
-            <Tv className="mx-auto h-10 w-10 text-slate-700" />
-            <p className="mt-3 text-sm text-slate-400">
+          <div className="rounded-2xl border-dashed py-12 text-center" style={{ border: "1px dashed var(--border-strong)" }}>
+            <Tv className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
+            <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
               No series in progress. Start watching something!
             </p>
           </div>
@@ -537,35 +542,31 @@ export function DashboardPage() {
                   : null;
               return (
                 <div key={s.imdbId} className="flex-none group" style={{ width: "11rem" }}>
-                  <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
+                  <div className="relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover" style={{ aspectRatio: "2 / 3", boxShadow: "inset 0 0 0 1px var(--border)" }}>
                     <Poster
                       src={s.poster}
                       alt={s.name}
                       className="h-full w-full"
                     />
-                    {/* Clickable overlay to open detail panel */}
                     <button
                       type="button"
                       className="absolute inset-0 cursor-pointer"
                       aria-label={`View details for ${s.name}`}
                       onClick={() => setSelectedItem(toSearchResult(s.imdbId, "series", s.name, { poster: s.poster }))}
                     />
-                    {/* Bottom gradient overlay with episode info + mark button */}
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/80 to-transparent px-3 pb-3 pt-16">
-                      {/* Progress bar */}
                       {progressPct !== null && (
-                        <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-white/15">
+                        <div className="mb-2 h-1 w-full overflow-hidden rounded-full" style={{ background: "rgba(255,215,180,0.15)" }}>
                           <div
-                            className="h-full rounded-full bg-red-500 transition-all duration-500"
+                            className="h-full rounded-full bg-claw-500 transition-all duration-500"
                             style={{ width: `${progressPct}%` }}
                           />
                         </div>
                       )}
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs" style={{ color: "var(--text-dim)" }}>
                         S{s.lastSeason}:E{s.lastEpisode}
                         {s.totalSeasons ? ` · ${s.totalSeasons} seasons` : ""}
                       </p>
-                      {/* Mark next button */}
                       <button
                         type="button"
                         disabled={isMarking || isDone}
@@ -575,16 +576,17 @@ export function DashboardPage() {
                           isDone
                             ? "bg-emerald-500/20 text-emerald-400"
                             : isMarking
-                              ? "bg-slate-800/80 text-slate-400"
-                              : "bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm"
+                              ? "text-ink-400"
+                              : "text-white hover:bg-white/20 backdrop-blur-sm"
                         }`}
+                        style={isMarking ? { background: "rgba(42,36,30,0.8)" } : isDone ? {} : { background: "rgba(255,215,180,0.1)" }}
                       >
                         {isDone ? (
                           <>
                             <Check className="h-3.5 w-3.5" /> Marked
                           </>
                         ) : isMarking ? (
-                          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+                          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-ink-400 border-t-transparent" />
                         ) : (
                           <>
                             <ChevronRight className="h-3.5 w-3.5" />
@@ -596,13 +598,14 @@ export function DashboardPage() {
                   </div>
                   <button
                     type="button"
-                    className="mt-2.5 block truncate text-sm font-semibold text-slate-200 hover:text-white transition-colors text-left w-full"
+                    className="mt-2.5 block truncate text-sm font-semibold transition-colors text-left w-full hover:text-cream-100"
+                    style={{ color: "var(--text)" }}
                     onClick={() => setSelectedItem(toSearchResult(s.imdbId, "series", s.name, { poster: s.poster }))}
                   >
                     {s.name}
                   </button>
                   {progressPct !== null && (
-                    <p className="text-2xs text-slate-400">
+                    <p className="text-2xs" style={{ color: "var(--text-dim)" }}>
                       {s.watchedEpisodes} of {s.totalEpisodes} episodes
                     </p>
                   )}
@@ -627,9 +630,9 @@ export function DashboardPage() {
         {loading ? (
           <RecentlyWatchedSkeleton />
         ) : history.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-800 py-12 text-center">
-            <Film className="mx-auto h-10 w-10 text-slate-700" />
-            <p className="mt-3 text-sm text-slate-400">No watch history yet.</p>
+          <div className="rounded-2xl py-12 text-center" style={{ border: "1px dashed var(--border-strong)" }}>
+            <Film className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
+            <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>No watch history yet.</p>
           </div>
         ) : (
           <div
@@ -652,37 +655,35 @@ export function DashboardPage() {
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedItem(toSearchResult(event.imdbId, event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster })); } }}
                 aria-label={`View details for ${event.name}`}
               >
-                <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 transition-all duration-300 group-hover:shadow-card-hover group-hover:ring-white/20" style={{ aspectRatio: "2 / 3" }}>
+                <div className="relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover" style={{ aspectRatio: "2 / 3", boxShadow: "inset 0 0 0 1px var(--border)" }}>
                   <Poster
                     src={event.poster}
                     alt={event.name}
                     className="h-full w-full"
                   />
-                  {/* Bottom gradient with metadata */}
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent px-3 pb-3 pt-12">
                     {event.type === "episode" &&
                     event.season != null &&
                     event.episode != null ? (
-                      <span className="inline-block rounded bg-white/10 px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm">
+                      <span className="inline-block rounded px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm" style={{ background: "rgba(255,215,180,0.12)" }}>
                         S{event.season}:E{event.episode}
                       </span>
                     ) : event.type === "movie" ? (
-                      <span className="inline-flex items-center gap-1 rounded bg-red-500/20 px-2 py-0.5 text-xs font-semibold text-red-300 backdrop-blur-sm">
+                      <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold text-claw-300 backdrop-blur-sm" style={{ background: "rgba(217,119,66,0.18)" }}>
                         <Film className="h-3 w-3" /> Movie
                       </span>
                     ) : null}
                   </div>
-                  {/* Time ago badge */}
                   <div className="absolute top-2.5 right-2.5">
-                    <span className="rounded-md bg-black/70 px-2 py-0.5 text-2xs font-medium text-slate-300 backdrop-blur-sm">
+                    <span className="rounded-md bg-black/70 px-2 py-0.5 text-2xs font-medium backdrop-blur-sm" style={{ color: "var(--text-dim)" }}>
                       {timeAgo(event.watchedAt)}
                     </span>
                   </div>
                 </div>
-                <p className="mt-2.5 truncate text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">
+                <p className="mt-2.5 truncate text-sm font-semibold transition-colors group-hover:text-cream-100" style={{ color: "var(--text)" }}>
                   {event.name}
                 </p>
-                <p className="text-2xs text-slate-400">
+                <p className="text-2xs" style={{ color: "var(--text-dim)" }}>
                   {event.type === "episode" &&
                   event.season != null &&
                   event.episode != null
@@ -710,7 +711,7 @@ export function DashboardPage() {
             )}
             <Link
               to="/search"
-              className="text-sm font-medium text-red-400 hover:text-red-300 transition-colors"
+              className="text-sm font-medium text-claw-400 hover:text-claw-300 transition-colors"
             >
               Search &rarr;
             </Link>
@@ -719,9 +720,9 @@ export function DashboardPage() {
         {trendingLoading ? (
           <ContinueWatchingSkeleton />
         ) : trendingMovies.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-800 py-12 text-center">
-            <TrendingUp className="mx-auto h-10 w-10 text-slate-700" />
-            <p className="mt-3 text-sm text-slate-400">
+          <div className="rounded-2xl py-12 text-center" style={{ border: "1px dashed var(--border-strong)" }}>
+            <TrendingUp className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
+            <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
               Unable to load trending content. Please try again or check your network connection.
             </p>
           </div>
@@ -755,7 +756,7 @@ export function DashboardPage() {
           </SectionHeader>
           {recsLoading ? (
             aiActive ? (
-              <p className="text-sm text-slate-400 italic">Generating AI recommendations…</p>
+              <p className="text-sm italic" style={{ color: "var(--text-dim)" }}>Generating AI recommendations…</p>
             ) : (
               <ContinueWatchingSkeleton />
             )
@@ -771,7 +772,7 @@ export function DashboardPage() {
                   reason={movieReasons[item.id]}
                   onSelect={(i) => setSelectedItem(toSearchResult(i.id, (i.type ?? "movie") as "movie" | "series", i.name, { poster: i.poster, year: i.year, description: item.description, genres: i.genres, rating: i.rating }))}
                   badge={
-                    <span className="inline-flex items-center gap-1 rounded-md bg-violet-600/80 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
+                    <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm bg-plum-500/80">
                       <Sparkles className="h-2.5 w-2.5" />
                       {aiActive && <span>AI</span>}
                     </span>
@@ -797,7 +798,7 @@ export function DashboardPage() {
           </SectionHeader>
           {seriesRecsLoading ? (
             aiActive ? (
-              <p className="text-sm text-slate-400 italic">Generating AI recommendations…</p>
+              <p className="text-sm italic" style={{ color: "var(--text-dim)" }}>Generating AI recommendations…</p>
             ) : (
               <ContinueWatchingSkeleton />
             )
@@ -813,7 +814,7 @@ export function DashboardPage() {
                   reason={seriesReasons[item.id]}
                   onSelect={(i) => setSelectedItem(toSearchResult(i.id, "series", i.name, { poster: i.poster, year: i.year, description: item.description, genres: i.genres, rating: i.rating }))}
                   badge={
-                    <span className="inline-flex items-center gap-1 rounded-md bg-violet-600/80 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
+                    <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm bg-plum-500/80">
                       <Sparkles className="h-2.5 w-2.5" />
                       {aiActive && <span>AI</span>}
                     </span>
@@ -851,7 +852,6 @@ export function DashboardPage() {
           ) : (
             <div className="space-y-2">
               {calendarEntries.map((entry) => {
-                // Parse YYYY-MM-DD as local date (not UTC)
                 const [y, m, d] = entry.airDate.split("-").map(Number);
                 const airDate = new Date(y, m - 1, d);
                 const isToday = airDate.toDateString() === new Date().toDateString();
@@ -867,9 +867,15 @@ export function DashboardPage() {
                 return (
                   <div
                     key={`${entry.seriesImdbId}-s${entry.season}e${entry.episode}`}
-                    className="flex items-center gap-4 rounded-xl border border-slate-800/40 bg-slate-900/30 p-3 transition-all hover:bg-slate-900/60 hover:border-slate-700/60"
+                    className="flex items-center gap-4 rounded-xl p-3 transition-all"
+                    style={{
+                      border: "1px solid var(--border)",
+                      background: "var(--surface)",
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--surface-strong)"; (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border-strong)"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--surface)"; (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)"; }}
                   >
-                    <div className="h-16 w-11 flex-none overflow-hidden rounded-lg ring-1 ring-white/5">
+                    <div className="h-16 w-11 flex-none overflow-hidden rounded-lg" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
                       <Poster
                         src={entry.poster ?? undefined}
                         alt={entry.seriesName}
@@ -877,24 +883,26 @@ export function DashboardPage() {
                       />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-slate-100">
+                      <p className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>
                         {entry.seriesName}
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-400">
+                      <p className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
                         S{entry.season}:E{entry.episode} — {entry.episodeName}
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-none">
                       <span className={`rounded-full px-2.5 py-0.5 text-2xs font-semibold ${
                         isToday
-                          ? "bg-red-500/15 text-red-400"
+                          ? "bg-claw-500/15 text-claw-400"
                           : isTomorrow
                             ? "bg-amber-500/15 text-amber-400"
-                            : "bg-slate-800/60 text-slate-400"
-                      }`}>
+                            : "text-ink-400"
+                      }`}
+                      style={!isToday && !isTomorrow ? { background: "var(--surface-strong)" } : {}}
+                      >
                         {dateLabel}
                       </span>
-                      <span className="text-2xs text-slate-500">
+                      <span className="text-2xs" style={{ color: "var(--text-mute)" }}>
                         {airDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                       </span>
                     </div>
