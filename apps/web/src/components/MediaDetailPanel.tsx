@@ -65,7 +65,7 @@ function statusColor(status: string): string {
   if (s.includes("return") || s.includes("ongoing")) return "text-green-400 bg-green-500/10 ring-green-500/20";
   if (s.includes("ended") || s.includes("cancel")) return "text-rose-400 bg-rose-500/10 ring-rose-500/20";
   if (s.includes("production") || s.includes("planned")) return "text-amber-400 bg-amber-500/10 ring-amber-500/20";
-  return "text-slate-400 bg-slate-800/60 ring-slate-700/40";
+  return "text-ink-400 bg-ink-800/60 ring-ink-700/40";
 }
 
 /* ─── Watch Date Modal ────────────────────────────────────── */
@@ -113,12 +113,12 @@ function WatchDateModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-2xl border border-slate-700/60 bg-slate-900 p-6 shadow-2xl"
+        className="w-full max-w-sm rounded-2xl border border-ink-700/60 bg-ink-900 p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between">
           <h3 className="text-base font-semibold text-white">When did you watch this?</h3>
-          <button type="button" onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:text-white">
+          <button type="button" onClick={onClose} className="rounded-lg p-1 text-ink-400 hover:text-white">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -127,23 +127,23 @@ function WatchDateModal({
         {target.kind === "episode" && (
           <div className="mb-4 flex gap-3">
             <div className="flex-1">
-              <label className="mb-1 block text-xs text-slate-400">Season</label>
+              <label className="mb-1 block text-xs text-ink-400">Season</label>
               <input
                 type="number"
                 min={1}
                 value={season}
                 onChange={(e) => setSeason(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-full rounded-lg border border-slate-700/60 bg-slate-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30"
+                className="w-full rounded-lg border border-ink-700/60 bg-[#0d0b0a] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-claw-500/30"
               />
             </div>
             <div className="flex-1">
-              <label className="mb-1 block text-xs text-slate-400">Episode</label>
+              <label className="mb-1 block text-xs text-ink-400">Episode</label>
               <input
                 type="number"
                 min={1}
                 value={episode}
                 onChange={(e) => setEpisode(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-full rounded-lg border border-slate-700/60 bg-slate-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30"
+                className="w-full rounded-lg border border-ink-700/60 bg-[#0d0b0a] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-claw-500/30"
               />
             </div>
           </div>
@@ -155,7 +155,7 @@ function WatchDateModal({
               type="button"
               disabled={saving}
               onClick={() => void submit(new Date().toISOString())}
-              className="rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50 transition-colors"
+              className="rounded-xl bg-plum-500 px-4 py-3 text-sm font-semibold text-white hover:bg-plum-600 disabled:opacity-50 transition-colors"
             >
               Just finished
             </button>
@@ -167,7 +167,7 @@ function WatchDateModal({
                   const [y, m, d] = releaseDate.split("-").map(Number);
                   void submit(new Date(Date.UTC(y, m - 1, d, 12)).toISOString());
                 }}
-                className="rounded-xl bg-slate-800 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                className="rounded-xl bg-ink-800 px-4 py-3 text-sm font-semibold text-white hover:bg-ink-700 disabled:opacity-50 transition-colors"
               >
                 Release date
               </button>
@@ -176,14 +176,14 @@ function WatchDateModal({
               type="button"
               disabled={saving}
               onClick={() => void submit(new Date("2000-01-01T00:00:00.000Z").toISOString())}
-              className="rounded-xl bg-slate-800 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50 transition-colors"
+              className="rounded-xl bg-ink-800 px-4 py-3 text-sm font-semibold text-white hover:bg-ink-700 disabled:opacity-50 transition-colors"
             >
               Unknown date
             </button>
             <button
               type="button"
               onClick={() => setMode("custom")}
-              className="rounded-xl bg-slate-800 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
+              className="rounded-xl bg-ink-800 px-4 py-3 text-sm font-semibold text-white hover:bg-ink-700 transition-colors"
             >
               Other date
             </button>
@@ -195,13 +195,13 @@ function WatchDateModal({
               value={customDate}
               max={new Date().toISOString().slice(0, 10)}
               onChange={(e) => setCustomDate(e.target.value)}
-              className="w-full rounded-xl border border-slate-700/60 bg-slate-950 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30"
+              className="w-full rounded-xl border border-ink-700/60 bg-[#0d0b0a] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-claw-500/30"
             />
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setMode("quick")}
-                className="flex-1 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-700 transition-colors"
+                className="flex-1 rounded-xl bg-ink-800 px-4 py-2.5 text-sm font-medium text-ink-300 hover:bg-ink-700 transition-colors"
               >
                 Back
               </button>
@@ -212,7 +212,7 @@ function WatchDateModal({
                   const [y, m, d] = customDate.split("-").map(Number);
                   void submit(new Date(Date.UTC(y, m - 1, d, 12)).toISOString());
                 }}
-                className="flex-1 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50 transition-colors"
+                className="flex-1 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 disabled:opacity-50 transition-colors"
               >
                 {saving ? "Saving…" : "Log Watch"}
               </button>
@@ -273,35 +273,35 @@ function CheckInModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="checkin-modal-title"
-        className="w-full max-w-sm rounded-2xl border border-slate-800/60 bg-slate-950 shadow-2xl"
+        className="w-full max-w-sm rounded-2xl border border-ink-800/60 bg-[#0d0b0a] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-800/60 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-ink-800/60 px-5 py-4">
           <div className="flex items-center gap-2">
-            <Radio className="h-4 w-4 text-red-400" />
+            <Radio className="h-4 w-4 text-claw-400" />
             <h3 id="checkin-modal-title" className="text-base font-bold">Check In</h3>
           </div>
-          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-ink-400 hover:bg-ink-800 hover:text-ink-200">
             <X className="h-4 w-4" />
           </button>
         </div>
         <div className="px-5 py-4 space-y-4">
-          <p className="text-sm text-slate-400">Which episode of <span className="font-semibold text-slate-200">{seriesName}</span> are you watching?</p>
+          <p className="text-sm text-ink-400">Which episode of <span className="font-semibold text-ink-200">{seriesName}</span> are you watching?</p>
           <div className="flex gap-3">
             <div className="flex-1">
-              <label className="mb-1.5 block text-xs font-medium text-slate-400">Season</label>
+              <label className="mb-1.5 block text-xs font-medium text-ink-400">Season</label>
               <input
                 type="number" min="1" value={season}
                 onChange={(e) => setSeason(e.target.value)}
-                className="w-full rounded-xl border border-slate-700/60 bg-slate-900 px-3 py-2.5 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15"
+                className="w-full rounded-xl border border-ink-700/60 bg-ink-900 px-3 py-2.5 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
               />
             </div>
             <div className="flex-1">
-              <label className="mb-1.5 block text-xs font-medium text-slate-400">Episode</label>
+              <label className="mb-1.5 block text-xs font-medium text-ink-400">Episode</label>
               <input
                 type="number" min="1" value={episode}
                 onChange={(e) => setEpisode(e.target.value)}
-                className="w-full rounded-xl border border-slate-700/60 bg-slate-900 px-3 py-2.5 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15"
+                className="w-full rounded-xl border border-ink-700/60 bg-ink-900 px-3 py-2.5 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
               />
             </div>
           </div>
@@ -309,13 +309,13 @@ function CheckInModal({
           <div className="flex gap-3 pt-1">
             <button
               type="button" onClick={onClose}
-              className="flex-1 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-700 transition-colors"
+              className="flex-1 rounded-xl bg-ink-800 px-4 py-2.5 text-sm font-medium text-ink-300 hover:bg-ink-700 transition-colors"
             >
               Cancel
             </button>
             <button
               type="button" disabled={saving} onClick={() => void submit()}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 disabled:opacity-50 transition-colors"
             >
               <Radio className="h-3.5 w-3.5" />
               {saving ? "Checking in…" : "Check In"}
@@ -339,13 +339,13 @@ function ExternalRatings({
   if (imdbRating == null && rtScore == null && mcScore == null) return null;
   return (
     <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Ratings</h3>
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-400">Ratings</h3>
       <div className="flex flex-wrap items-center gap-4">
         {imdbRating != null && (
           <div className="flex items-center gap-1.5">
             <ImdbLogo />
-            <span className="text-sm font-semibold text-slate-200">{imdbRating.toFixed(1)}</span>
-            <span className="text-xs text-slate-400">/10</span>
+            <span className="text-sm font-semibold text-ink-200">{imdbRating.toFixed(1)}</span>
+            <span className="text-xs text-ink-400">/10</span>
           </div>
         )}
         {rtScore != null && (
@@ -357,8 +357,8 @@ function ExternalRatings({
         {mcScore != null && (
           <div className="flex items-center gap-1.5">
             <McIcon score={mcScore} />
-            <span className="text-sm font-semibold text-slate-200">{mcScore}</span>
-            <span className="text-xs text-slate-400">/100</span>
+            <span className="text-sm font-semibold text-ink-200">{mcScore}</span>
+            <span className="text-xs text-ink-400">/100</span>
           </div>
         )}
       </div>
@@ -433,7 +433,7 @@ export function StarRating({
   const displayRating = hoverRating ?? userRating ?? 0;
   return (
     <div>
-      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-400">
         <Star className="h-3.5 w-3.5" /> Your Rating
       </h3>
       <div className="flex items-center gap-1">
@@ -446,7 +446,7 @@ export function StarRating({
             className="p-0.5 transition-transform hover:scale-125 disabled:opacity-50"
             aria-label={`Rate ${star} out of 10`}
           >
-            <Star className={`h-5 w-5 transition-colors ${star <= displayRating ? "fill-amber-400 text-amber-400" : "text-slate-500 hover:text-slate-400"}`} />
+            <Star className={`h-5 w-5 transition-colors ${star <= displayRating ? "fill-amber-400 text-amber-400" : "text-ink-500 hover:text-ink-400"}`} />
           </button>
         ))}
         {userRating !== null && <span className="ml-2 text-sm font-semibold text-amber-400">{userRating}/10</span>}
@@ -625,11 +625,11 @@ export function DetailPanel({
     <>
       <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
-      <aside className="fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col overflow-y-auto border-l border-slate-800/60 bg-slate-950 shadow-2xl sm:w-[28rem]">
+      <aside className="fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col overflow-y-auto border-l border-ink-800/60 bg-[#0d0b0a] shadow-2xl sm:w-[28rem]">
         {/* Close */}
         <button
           type="button" onClick={onClose}
-          className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-slate-900/80 text-slate-400 backdrop-blur hover:bg-slate-800 hover:text-white transition-colors"
+          className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-ink-900/80 text-ink-400 backdrop-blur hover:bg-ink-800 hover:text-white transition-colors"
           aria-label="Close detail panel"
         >
           <X className="h-4 w-4" />
@@ -640,11 +640,11 @@ export function DetailPanel({
           {item.poster ? (
             <img src={item.poster} alt={item.name} className="h-full w-full object-cover" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900">
-              <Film className="h-20 w-20 text-slate-700" />
+            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ink-800 to-ink-900">
+              <Film className="h-20 w-20 text-ink-700" />
             </div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0d0b0a] via-[#0d0b0a]/20 to-transparent" />
         </div>
 
         {/* Content */}
@@ -653,13 +653,13 @@ export function DetailPanel({
           {/* Title + badges */}
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide ${item.type === "movie" ? "bg-red-500/90 text-white" : "bg-violet-600/90 text-white"}`}>
+              <span className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide ${item.type === "movie" ? "bg-claw-500/90 text-white" : "bg-plum-500/90 text-white"}`}>
                 {item.type === "movie" ? <Film className="h-3 w-3" /> : <Tv className="h-3 w-3" />}
                 {item.type === "movie" ? "Movie" : "Series"}
               </span>
-              {item.year && <span className="text-sm text-slate-400">{item.year}</span>}
+              {item.year && <span className="text-sm text-ink-400">{item.year}</span>}
               {item.certification && (
-                <span className="rounded-md border border-slate-600/60 px-2 py-0.5 text-xs font-semibold text-slate-300">
+                <span className="rounded-md border border-ink-600/60 px-2 py-0.5 text-xs font-semibold text-ink-300">
                   {item.certification}
                 </span>
               )}
@@ -679,17 +679,17 @@ export function DetailPanel({
                 </span>
               )}
               {item.runtime != null && item.runtime > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-slate-800/60 px-2.5 py-1 text-xs text-slate-400">
+                <span className="inline-flex items-center gap-1 rounded-full bg-ink-800/60 px-2.5 py-1 text-xs text-ink-400">
                   <Clock className="h-3 w-3" />{formatRuntime(item.runtime)}
                 </span>
               )}
               {item.network && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-slate-800/60 px-2.5 py-1 text-xs text-slate-400">
+                <span className="inline-flex items-center gap-1 rounded-full bg-ink-800/60 px-2.5 py-1 text-xs text-ink-400">
                   <TvMinimalPlay className="h-3 w-3" />{item.network}
                 </span>
               )}
               {item.genres.slice(0, 3).map((g) => (
-                <span key={g} className="rounded-full bg-slate-800/80 px-2.5 py-1 text-xs text-slate-400">{g}</span>
+                <span key={g} className="rounded-full bg-ink-800/80 px-2.5 py-1 text-xs text-ink-400">{g}</span>
               ))}
             </div>
           </div>
@@ -714,29 +714,29 @@ export function DetailPanel({
           {/* Check-in / Now Watching */}
           {!checkinLoading && (
             activeCheckin ? (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 space-y-3">
+              <div className="rounded-xl border border-claw-500/30 bg-claw-500/5 p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-claw-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-claw-500" />
                   </span>
-                  <span className="text-sm font-semibold text-red-400">Now Watching</span>
+                  <span className="text-sm font-semibold text-claw-400">Now Watching</span>
                   {activeCheckin.season != null && activeCheckin.episode != null && (
-                    <span className="text-xs text-slate-400">S{String(activeCheckin.season).padStart(2,"0")}:E{String(activeCheckin.episode).padStart(2,"0")}</span>
+                    <span className="text-xs text-ink-400">S{String(activeCheckin.season).padStart(2,"0")}:E{String(activeCheckin.episode).padStart(2,"0")}</span>
                   )}
                 </div>
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => void handleCheckout(false)}
-                    className="flex-1 rounded-xl border border-slate-700/60 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition-colors"
+                    className="flex-1 rounded-xl border border-ink-700/60 bg-ink-800 px-3 py-2 text-xs font-semibold text-ink-300 hover:bg-ink-700 transition-colors"
                   >
                     Check Out
                   </button>
                   <button
                     type="button"
                     onClick={() => void handleCheckout(true)}
-                    className="flex-1 rounded-xl bg-red-500 px-3 py-2 text-xs font-semibold text-white hover:bg-red-600 transition-colors"
+                    className="flex-1 rounded-xl bg-claw-500 px-3 py-2 text-xs font-semibold text-white hover:bg-claw-600 transition-colors"
                   >
                     Finished &amp; Log
                   </button>
@@ -752,7 +752,7 @@ export function DetailPanel({
                     void handleCheckin();
                   }
                 }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/60 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:border-red-500/40 hover:bg-red-500/5 hover:text-red-400 transition-colors"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-ink-700/60 bg-ink-900/60 px-4 py-2.5 text-sm font-semibold text-ink-300 hover:border-claw-500/40 hover:bg-claw-500/5 hover:text-claw-400 transition-colors"
               >
                 <Radio className="h-4 w-4" /> Check In
               </button>
@@ -762,15 +762,15 @@ export function DetailPanel({
           {/* Description */}
           {item.description && (
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Overview</h3>
-              <p className="text-sm leading-relaxed text-slate-300">{item.description}</p>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-400">Overview</h3>
+              <p className="text-sm leading-relaxed text-ink-300">{item.description}</p>
             </div>
           )}
 
           {/* Cast */}
           {castLoading ? (
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Cast</h3>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-400">Cast</h3>
               <div className="flex gap-3 overflow-hidden">
                 {[1, 2, 3, 4].map((i) => (
                   <div key={i} className="flex-none w-16 space-y-1">
@@ -782,7 +782,7 @@ export function DetailPanel({
             </div>
           ) : cast.length > 0 && (
             <div>
-              <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-400">
                 <User className="h-3.5 w-3.5" /> Cast
               </h3>
               <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
@@ -796,12 +796,12 @@ export function DetailPanel({
                         loading="lazy"
                       />
                     ) : (
-                      <div className="h-16 w-16 rounded-full bg-slate-800 flex items-center justify-center mx-auto ring-1 ring-white/10">
-                        <User className="h-6 w-6 text-slate-500" />
+                      <div className="h-16 w-16 rounded-full bg-ink-800 flex items-center justify-center mx-auto ring-1 ring-white/10">
+                        <User className="h-6 w-6 text-ink-500" />
                       </div>
                     )}
-                    <p className="mt-1.5 text-2xs font-medium text-slate-300 leading-tight truncate">{member.name}</p>
-                    <p className="text-2xs text-slate-500 truncate">{member.character}</p>
+                    <p className="mt-1.5 text-2xs font-medium text-ink-300 leading-tight truncate">{member.name}</p>
+                    <p className="text-2xs text-ink-500 truncate">{member.character}</p>
                   </div>
                 ))}
               </div>
@@ -812,25 +812,25 @@ export function DetailPanel({
           {item.type === "series" && (
             seasonsLoading ? (
               <div>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Seasons</h3>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-400">Seasons</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {[1, 2, 3, 4].map((i) => <div key={i} className="skeleton h-10 rounded-xl" />)}
                 </div>
               </div>
             ) : seasons.length > 0 && (
               <div>
-                <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-400">
                   <Tv className="h-3.5 w-3.5" /> Seasons
                 </h3>
                 <div className="grid grid-cols-2 gap-2">
                   {seasons.map((s) => (
-                    <div key={s.seasonNumber} className="flex items-center gap-2.5 rounded-xl bg-slate-900/60 border border-slate-800/40 px-3 py-2.5">
-                      <div className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-slate-800 text-xs font-bold text-slate-300">
+                    <div key={s.seasonNumber} className="flex items-center gap-2.5 rounded-xl bg-ink-900/60 border border-ink-800/40 px-3 py-2.5">
+                      <div className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-ink-800 text-xs font-bold text-ink-300">
                         {s.seasonNumber}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs font-medium text-slate-200 truncate">{s.name}</p>
-                        <p className="text-2xs text-slate-400">{s.episodeCount} eps{s.airYear ? ` · ${s.airYear}` : ""}</p>
+                        <p className="text-xs font-medium text-ink-200 truncate">{s.name}</p>
+                        <p className="text-2xs text-ink-400">{s.episodeCount} eps{s.airYear ? ` · ${s.airYear}` : ""}</p>
                       </div>
                     </div>
                   ))}
@@ -842,13 +842,13 @@ export function DetailPanel({
           {/* Watch History */}
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-400">
                 <Clock className="h-3.5 w-3.5" /> Watch History
               </h3>
               <button
                 type="button"
                 onClick={openWatchModal}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-red-500/10 px-2.5 py-1 text-xs font-semibold text-red-400 ring-1 ring-red-500/20 hover:bg-red-500/20 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-claw-500/10 px-2.5 py-1 text-xs font-semibold text-claw-400 ring-1 ring-claw-500/20 hover:bg-claw-500/20 transition-colors"
               >
                 <Calendar className="h-3 w-3" /> Log a Watch
               </button>
@@ -857,24 +857,24 @@ export function DetailPanel({
             {historyLoading ? (
               <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="skeleton h-11 rounded-lg" />)}</div>
             ) : history.length === 0 ? (
-              <p className="rounded-xl bg-slate-900/60 border border-slate-800/40 py-5 text-center text-sm text-slate-400">
+              <p className="rounded-xl bg-ink-900/60 border border-ink-800/40 py-5 text-center text-sm text-ink-400">
                 No watch history yet
               </p>
             ) : (
               <div className="space-y-1.5">
                 {history.map((event) => (
-                  <div key={event.id} className="group flex items-center gap-3 rounded-lg bg-slate-900/60 border border-slate-800/30 px-3 py-2.5">
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                  <div key={event.id} className="group flex items-center gap-3 rounded-lg bg-ink-900/60 border border-ink-800/30 px-3 py-2.5">
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-ink-500" />
                     <div className="min-w-0 flex-1">
                       {event.season != null && event.episode != null ? (
-                        <span className="text-sm text-slate-200">
+                        <span className="text-sm text-ink-200">
                           S{String(event.season).padStart(2, "0")}:E{String(event.episode).padStart(2, "0")}
                         </span>
                       ) : (
-                        <span className="text-sm text-slate-200">Watched</span>
+                        <span className="text-sm text-ink-200">Watched</span>
                       )}
                     </div>
-                    <time className="shrink-0 text-2xs text-slate-400">
+                    <time className="shrink-0 text-2xs text-ink-400">
                       {new Date(event.watchedAt).getFullYear() === 2000 && new Date(event.watchedAt).getMonth() === 0
                         ? "Unknown date"
                         : new Date(event.watchedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
@@ -882,7 +882,7 @@ export function DetailPanel({
                     <button
                       type="button"
                       onClick={() => void handleDeleteEvent(event.id)}
-                      className="shrink-0 rounded p-1 text-slate-700 opacity-0 group-hover:opacity-100 hover:bg-rose-500/10 hover:text-rose-400 transition-all"
+                      className="shrink-0 rounded p-1 text-ink-700 opacity-0 group-hover:opacity-100 hover:bg-rose-500/10 hover:text-rose-400 transition-all"
                       aria-label="Remove watch event"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -895,13 +895,13 @@ export function DetailPanel({
 
           {/* Drop Show (series only) */}
           {item.type === "series" && !droppedLoading && (
-            <div className="pt-2 border-t border-slate-800/40">
+            <div className="pt-2 border-t border-ink-800/40">
               <button
                 type="button"
                 onClick={() => void handleToggleDrop()}
                 className={`w-full rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
                   isDropped
-                    ? "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    ? "bg-ink-800 text-ink-300 hover:bg-ink-700"
                     : "bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/20 hover:bg-rose-500/20"
                 }`}
               >
