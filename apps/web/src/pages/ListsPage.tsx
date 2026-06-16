@@ -88,33 +88,33 @@ function AddItemModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-item-modal-title"
-        className="w-full max-w-lg rounded-2xl border border-slate-800/60 bg-slate-950 shadow-2xl"
+        className="w-full max-w-lg rounded-2xl border border-ink-800/60 bg-[#0d0b0a] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-800/60 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-ink-800/60 px-5 py-4">
           <h3 id="add-item-modal-title" className="text-lg font-bold">Add to {listName}</h3>
-          <button onClick={onClose} aria-label="Close dialog" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+          <button onClick={onClose} aria-label="Close dialog" className="rounded-lg p-1.5 text-ink-400 hover:bg-ink-800 hover:text-ink-200">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Search input */}
-        <div className="flex gap-2 border-b border-slate-800/60 px-5 py-3">
+        <div className="flex gap-2 border-b border-ink-800/60 px-5 py-3">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
             <input
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search movies & series..."
               aria-label="Search movies and series"
-              className="w-full rounded-full border border-slate-700/60 bg-slate-900 py-2.5 pl-9 pr-3 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15"
+              className="w-full rounded-full border border-ink-700/60 bg-ink-900 py-2.5 pl-9 pr-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
             />
           </div>
-          <div className="relative inline-flex rounded-full bg-slate-800 p-0.5 border border-slate-700/40">
+          <div className="relative inline-flex rounded-full bg-ink-800 p-0.5 border border-ink-700/40">
             <div
-              className="absolute top-0.5 h-[calc(100%-0.25rem)] w-[calc(50%-0.125rem)] rounded-full bg-red-500 transition-transform duration-200"
+              className="absolute top-0.5 h-[calc(100%-0.25rem)] w-[calc(50%-0.125rem)] rounded-full bg-claw-500 transition-transform duration-200"
               style={{ transform: type === "series" ? "translateX(100%)" : "translateX(0)" }}
             />
             {(["movie", "series"] as const).map((opt) => (
@@ -122,7 +122,7 @@ function AddItemModal({
                 key={opt}
                 type="button"
                 onClick={() => setType(opt)}
-                className={`relative z-10 flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium ${type === opt ? "text-white" : "text-slate-400"}`}
+                className={`relative z-10 flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium ${type === opt ? "text-white" : "text-ink-400"}`}
               >
                 {opt === "movie" ? <Film className="h-3 w-3" /> : <Tv className="h-3 w-3" />}
                 {opt === "movie" ? "Movie" : "Series"}
@@ -134,9 +134,9 @@ function AddItemModal({
         {/* Results */}
         <div className="max-h-[50vh] overflow-y-auto px-5 py-3">
           {error && <p className="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-300">{error}</p>}
-          {searching && <p className="py-6 text-center text-sm text-slate-400">Searching...</p>}
+          {searching && <p className="py-6 text-center text-sm text-ink-400">Searching...</p>}
           {!searching && query.trim() && results.length === 0 && (
-            <p className="py-6 text-center text-sm text-slate-400">No results found.</p>
+            <p className="py-6 text-center text-sm text-ink-400">No results found.</p>
           )}
           <div className="space-y-1">
             {results.map((r) => (
@@ -145,20 +145,20 @@ function AddItemModal({
                 type="button"
                 disabled={adding[r.imdbId]}
                 onClick={() => handleAdd(r)}
-                className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-slate-900/80 disabled:opacity-50 transition-colors"
+                className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-ink-900/80 disabled:opacity-50 transition-colors"
               >
-                <div className="h-14 w-10 flex-none overflow-hidden rounded-lg bg-slate-800 ring-1 ring-white/5">
+                <div className="h-14 w-10 flex-none overflow-hidden rounded-lg bg-ink-800 ring-1 ring-white/5">
                   {r.poster ? (
                     <img src={r.poster} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center"><Film className="h-4 w-4 text-slate-500" /></div>
+                    <div className="flex h-full w-full items-center justify-center"><Film className="h-4 w-4 text-ink-500" /></div>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-200">{r.name}</p>
-                  <p className="text-xs text-slate-400">{r.year ?? "Unknown"} &middot; {r.type}</p>
+                  <p className="truncate text-sm font-semibold text-ink-200">{r.name}</p>
+                  <p className="text-xs text-ink-400">{r.year ?? "Unknown"} &middot; {r.type}</p>
                 </div>
-                <Plus className="h-4 w-4 flex-none text-red-400" />
+                <Plus className="h-4 w-4 flex-none text-claw-400" />
               </button>
             ))}
           </div>
@@ -275,7 +275,7 @@ export function ListsPage() {
                     <AlertTriangle className="h-4 w-4 flex-none text-rose-400" />
                     <p className="text-xs font-semibold text-rose-300">Delete "{list.name}"?</p>
                   </div>
-                  <p className="text-xs text-slate-400 mb-3">This will remove the list and all its items.</p>
+                  <p className="text-xs text-ink-400 mb-3">This will remove the list and all its items.</p>
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -288,7 +288,7 @@ export function ListsPage() {
                     <button
                       type="button"
                       onClick={() => setConfirmDeleteId(null)}
-                      className="flex-1 rounded-lg border border-slate-700/60 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition-colors"
+                      className="flex-1 rounded-lg border border-ink-700/60 bg-ink-800 px-3 py-1.5 text-xs font-semibold text-ink-300 hover:bg-ink-700 transition-colors"
                     >
                       Cancel
                     </button>
@@ -297,18 +297,18 @@ export function ListsPage() {
               ) : (
                 <div className={`group flex items-center rounded-xl border transition-all lg:w-full ${
                   selectedListId === list.id
-                    ? "border-red-500/40 bg-red-500/10 shadow-lg shadow-red-500/5"
-                    : "border-slate-800/60 bg-slate-900/40 hover:border-slate-700 hover:bg-slate-900/70"
+                    ? "border-claw-500/40 bg-claw-500/10 shadow-lg shadow-claw-500/5"
+                    : "border-ink-800/60 bg-ink-900/40 hover:border-ink-700 hover:bg-ink-900/70"
                 }`}>
                   <button
                     type="button"
                     onClick={() => setSelectedListId(list.id)}
                     className={`min-w-0 flex-1 px-4 py-3.5 text-left text-sm font-medium ${
-                      selectedListId === list.id ? "text-red-300" : "text-slate-300"
+                      selectedListId === list.id ? "text-claw-300" : "text-ink-300"
                     }`}
                   >
                     <p className="truncate font-semibold">{list.name}</p>
-                    <p className="mt-0.5 text-xs text-slate-400">
+                    <p className="mt-0.5 text-xs text-ink-400">
                       {list.itemCount} {list.itemCount === 1 ? "item" : "items"}
                     </p>
                   </button>
@@ -316,7 +316,7 @@ export function ListsPage() {
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(list.id); }}
-                      className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg text-slate-500 opacity-0 group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-400 transition-all focus:opacity-100"
+                      className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg text-ink-500 opacity-0 group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-400 transition-all focus:opacity-100"
                       aria-label={`Delete list ${list.name}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -333,7 +333,7 @@ export function ListsPage() {
             value={newListName}
             onChange={(e) => setNewListName(e.target.value)}
             placeholder="New list name..."
-            className="min-w-0 flex-1 rounded-xl border border-slate-700/60 bg-slate-900 px-3.5 py-2.5 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/15"
+            className="min-w-0 flex-1 rounded-xl border border-ink-700/60 bg-ink-900 px-3.5 py-2.5 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
           />
           <button
             type="submit"
@@ -352,11 +352,11 @@ export function ListsPage() {
 
         {!selectedList ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-900 ring-1 ring-slate-800">
-              <FolderOpen className="h-10 w-10 text-slate-700" />
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-ink-900 ring-1 ring-ink-800">
+              <FolderOpen className="h-10 w-10 text-ink-700" />
             </div>
-            <p className="mt-4 text-lg font-semibold text-slate-400">No list selected</p>
-            <p className="mt-1 text-sm text-slate-400">Select a list from the sidebar or create a new one.</p>
+            <p className="mt-4 text-lg font-semibold text-ink-400">No list selected</p>
+            <p className="mt-1 text-sm text-ink-400">Select a list from the sidebar or create a new one.</p>
           </div>
         ) : (
           <>
@@ -364,14 +364,14 @@ export function ListsPage() {
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-white">{selectedList.name}</h2>
-                <p className="mt-0.5 text-sm text-slate-400">
+                <p className="mt-0.5 text-sm text-ink-400">
                   {items.length} {items.length === 1 ? "item" : "items"}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-semibold hover:bg-red-600 transition-colors shadow-lg shadow-red-500/20"
+                className="flex items-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold hover:bg-claw-600 transition-colors shadow-lg shadow-claw-500/20"
               >
                 <Plus className="h-4 w-4" />
                 Add
@@ -391,12 +391,12 @@ export function ListsPage() {
               </div>
             ) : items.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-900 ring-1 ring-slate-800">
-                  <FolderOpen className="h-10 w-10 text-slate-700" />
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-ink-900 ring-1 ring-ink-800">
+                  <FolderOpen className="h-10 w-10 text-ink-700" />
                 </div>
-                <p className="mt-4 text-lg font-semibold text-slate-400">This list is empty</p>
-                <p className="mt-1 text-sm text-slate-400">
-                  Click <span className="font-semibold text-red-400">+ Add</span> to search and add titles.
+                <p className="mt-4 text-lg font-semibold text-ink-400">This list is empty</p>
+                <p className="mt-1 text-sm text-ink-400">
+                  Click <span className="font-semibold text-claw-400">+ Add</span> to search and add titles.
                 </p>
               </div>
             ) : (
@@ -408,19 +408,19 @@ export function ListsPage() {
                   return (
                     <div key={`${item.type}:${item.imdbId}`} className="group">
                       {/* Poster */}
-                      <div className="card-lift relative overflow-hidden rounded-xl bg-slate-800 ring-1 ring-white/10" style={{ aspectRatio: "2/3" }}>
+                      <div className="card-lift relative overflow-hidden rounded-xl bg-ink-800 ring-1 ring-white/10" style={{ aspectRatio: "2/3" }}>
                         {poster ? (
                           <img src={poster} alt={name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900">
-                            <Film className="h-10 w-10 text-slate-500" />
+                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ink-800 to-ink-900">
+                            <Film className="h-10 w-10 text-ink-500" />
                           </div>
                         )}
                         {/* Type badge */}
                         <span className={`absolute top-2.5 left-2.5 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-lg ${
                           item.type === "movie"
-                            ? "bg-red-500/90 text-white"
-                            : "bg-violet-600/90 text-white"
+                            ? "bg-claw-500/90 text-white"
+                            : "bg-plum-500/90 text-white"
                         }`}>
                           {item.type === "movie" ? "Movie" : "Series"}
                         </span>
@@ -431,15 +431,15 @@ export function ListsPage() {
                           type="button"
                           disabled={removingIds[item.imdbId]}
                           onClick={() => handleRemove(item)}
-                          className="absolute top-2.5 right-2.5 rounded-full bg-black/60 p-2 text-slate-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-all duration-200 hover:bg-rose-500 hover:text-white disabled:opacity-50 backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                          className="absolute top-2.5 right-2.5 rounded-full bg-black/60 p-2 text-ink-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-all duration-200 hover:bg-rose-500 hover:text-white disabled:opacity-50 backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0d0b0a]"
                           aria-label="Remove from list"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                       {/* Title & year */}
-                      <p className="mt-2.5 truncate text-sm font-semibold text-slate-100">{name}</p>
-                      <p className="text-xs text-slate-400">{year ?? "Unknown year"}</p>
+                      <p className="mt-2.5 truncate text-sm font-semibold text-ink-100">{name}</p>
+                      <p className="text-xs text-ink-400">{year ?? "Unknown year"}</p>
                     </div>
                   );
                 })}
