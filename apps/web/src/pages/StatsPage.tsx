@@ -40,7 +40,7 @@ export function StatsPage() {
         <h2 className="text-2xl font-bold">Watch Statistics</h2>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="rounded-2xl border border-slate-800/60 bg-slate-900/40 p-5">
+            <div key={i} className="rounded-2xl border border-ink-800/60 bg-ink-900/40 p-5">
               <div className="skeleton h-8 w-16 rounded-lg mb-2" />
               <div className="skeleton h-4 w-24 rounded" />
             </div>
@@ -73,7 +73,7 @@ export function StatsPage() {
 
       {/* Monthly activity chart */}
       {detailed && detailed.monthly.length > 0 && (
-        <section className="rounded-2xl border border-slate-800/60 bg-slate-900/40 p-5">
+        <section className="rounded-2xl border border-ink-800/60 bg-ink-900/40 p-5">
           <h3 className="mb-4 text-lg font-semibold">Monthly Activity</h3>
           <div className="flex items-end gap-1.5 sm:gap-2" style={{ height: "180px" }}>
             {detailed.monthly.map((m) => {
@@ -84,37 +84,37 @@ export function StatsPage() {
               const label = new Date(m.month + "-15").toLocaleDateString(undefined, { month: "short" });
               return (
                 <div key={m.month} className="flex flex-1 flex-col items-center gap-1">
-                  <span className="text-2xs text-slate-400 tabular-nums">{total || ""}</span>
+                  <span className="text-2xs text-ink-400 tabular-nums">{total || ""}</span>
                   <div className="flex w-full flex-col justify-end" style={{ height: "140px" }}>
                     {episodeHeight > 0 && (
                       <div
-                        className="w-full rounded-t bg-violet-500/70 transition-all duration-500"
+                        className="w-full rounded-t bg-plum-500/70 transition-all duration-500"
                         style={{ height: `${episodeHeight}%` }}
                         title={`${m.episodes} episodes`}
                       />
                     )}
                     {movieHeight > 0 && (
                       <div
-                        className={`w-full bg-red-500/70 transition-all duration-500 ${episodeHeight === 0 ? "rounded-t" : ""} rounded-b`}
+                        className={`w-full bg-claw-500/70 transition-all duration-500 ${episodeHeight === 0 ? "rounded-t" : ""} rounded-b`}
                         style={{ height: `${movieHeight}%` }}
                         title={`${m.movies} movies`}
                       />
                     )}
                     {total === 0 && (
-                      <div className="w-full rounded bg-slate-800/60" style={{ height: "2%" }} />
+                      <div className="w-full rounded bg-ink-800/60" style={{ height: "2%" }} />
                     )}
                   </div>
-                  <span className="text-2xs text-slate-400">{label}</span>
+                  <span className="text-2xs text-ink-400">{label}</span>
                 </div>
               );
             })}
           </div>
-          <div className="mt-3 flex items-center gap-4 text-xs text-slate-400">
+          <div className="mt-3 flex items-center gap-4 text-xs text-ink-400">
             <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm bg-red-500/70" /> Movies
+              <span className="h-2.5 w-2.5 rounded-sm bg-claw-500/70" /> Movies
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm bg-violet-500/70" /> Episodes
+              <span className="h-2.5 w-2.5 rounded-sm bg-plum-500/70" /> Episodes
             </span>
           </div>
         </section>
@@ -122,19 +122,19 @@ export function StatsPage() {
 
       {/* Genre distribution */}
       {detailed && detailed.genreDistribution.length > 0 && (
-        <section className="rounded-2xl border border-slate-800/60 bg-slate-900/40 p-5">
+        <section className="rounded-2xl border border-ink-800/60 bg-ink-900/40 p-5">
           <h3 className="mb-4 text-lg font-semibold">Top Genres</h3>
           <div className="space-y-2.5">
             {detailed.genreDistribution.map((g) => (
               <div key={g.genre} className="flex items-center gap-3">
-                <span className="w-28 shrink-0 truncate text-sm text-slate-300">{g.genre}</span>
-                <div className="flex-1 h-5 rounded-full bg-slate-800/60 overflow-hidden">
+                <span className="w-28 shrink-0 truncate text-sm text-ink-300">{g.genre}</span>
+                <div className="flex-1 h-5 rounded-full bg-ink-800/60 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-red-500/80 to-red-400/60 transition-all duration-500"
+                    className="h-full rounded-full bg-claw-500/80 transition-all duration-500"
                     style={{ width: `${(g.count / maxGenreCount) * 100}%` }}
                   />
                 </div>
-                <span className="w-8 text-right text-sm tabular-nums text-slate-400">{g.count}</span>
+                <span className="w-8 text-right text-sm tabular-nums text-ink-400">{g.count}</span>
               </div>
             ))}
           </div>
@@ -143,7 +143,7 @@ export function StatsPage() {
 
       {/* Top rated watched content */}
       {detailed && detailed.topRated.length > 0 && (
-        <section className="rounded-2xl border border-slate-800/60 bg-slate-900/40 p-5">
+        <section className="rounded-2xl border border-ink-800/60 bg-ink-900/40 p-5">
           <h3 className="mb-4 text-lg font-semibold flex items-center gap-2">
             <Star className="h-5 w-5 text-amber-400" /> Top Rated Watched
           </h3>
@@ -154,8 +154,8 @@ export function StatsPage() {
                   {item.poster ? (
                     <img src={item.poster} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900">
-                      <Film className="h-8 w-8 text-slate-600" />
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ink-800 to-ink-900">
+                      <Film className="h-8 w-8 text-ink-600" />
                     </div>
                   )}
                   {item.rating != null && (
@@ -165,8 +165,8 @@ export function StatsPage() {
                     </div>
                   )}
                 </div>
-                <p className="mt-1.5 truncate text-sm font-medium text-slate-200">{item.name}</p>
-                <p className="text-2xs text-slate-400 capitalize">{item.type}</p>
+                <p className="mt-1.5 truncate text-sm font-medium text-ink-200">{item.name}</p>
+                <p className="text-2xs text-ink-400 capitalize">{item.type}</p>
               </div>
             ))}
           </div>
@@ -190,24 +190,24 @@ function StatCard({
   suffix?: string;
 }) {
   const colorMap = {
-    red: { bg: "from-red-500/10", border: "border-red-500/20", icon: "text-red-400" },
-    violet: { bg: "from-violet-500/10", border: "border-violet-500/20", icon: "text-violet-400" },
+    red: { bg: "from-claw-500/10", border: "border-claw-500/20", icon: "text-claw-500" },
+    violet: { bg: "from-plum-500/10", border: "border-plum-500/20", icon: "text-plum-500" },
     amber: { bg: "from-amber-500/10", border: "border-amber-500/20", icon: "text-amber-400" },
     emerald: { bg: "from-emerald-500/10", border: "border-emerald-500/20", icon: "text-emerald-400" },
   };
   const c = colorMap[color];
 
   return (
-    <div className={`rounded-2xl border ${c.border} bg-gradient-to-br ${c.bg} bg-slate-900/40 p-5`}>
+    <div className={`rounded-2xl border ${c.border} bg-gradient-to-br ${c.bg} bg-ink-900/40 p-5`}>
       <div className="flex items-center gap-3">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800/80 ${c.icon}`}>
+        <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-ink-800/80 ${c.icon}`}>
           <Icon className="h-5 w-5" />
         </div>
         <div>
           <span className="text-2xl font-bold text-white tabular-nums">
             {value.toLocaleString()}{suffix}
           </span>
-          <p className="text-xs text-slate-400 font-medium">{label}</p>
+          <p className="text-xs text-ink-400 font-medium">{label}</p>
         </div>
       </div>
     </div>
