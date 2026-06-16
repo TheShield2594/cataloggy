@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import { LRUCache } from "lru-cache";
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 import { ItemType, ListItemType, ListKind, MetadataType, Prisma, PrismaClient, ScrobbleStatus, WatchEventType } from "@prisma/client";
 import { TraktClient, computeTokenExpiresAt } from "./trakt.js";
@@ -302,7 +303,6 @@ const upsertMetadata = async (metadata: MetadataPayload) => {
   // findByImdbId), so partial search results don't prevent a later detail
   // fetch via syncMetadata's METADATA_FRESHNESS_MS check
   if (isDetailedPayload) {
-    update.updatedAt = new Date();
     update.totalSeasons = metadata.totalSeasons;
     update.totalEpisodes = metadata.totalEpisodes;
     update.runtime = metadata.runtime;
@@ -959,11 +959,8 @@ app.post<{ Body: unknown }>("/metadata/sync", async (request, reply) => {
 // ─── Cast & Seasons (on-demand, in-memory cached) ───
 
 const CAST_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
-type CastCacheEntry = { data: CastMember[]; expiry: number };
-const castCache = new Map<string, CastCacheEntry>();
-
-type SeasonsCacheEntry = { data: SeasonInfo[]; expiry: number };
-const seasonsCache = new Map<string, SeasonsCacheEntry>();
+const castCache = new LRUCache<string, CastMember[]>({ max: 500, ttl: CAST_CACHE_TTL_MS });
+const seasonsCache = new LRUCache<string, SeasonInfo[]>({ max: 500, ttl: CAST_CACHE_TTL_MS });
 
 app.get<{ Params: { type: string; imdbId: string } }>("/meta/:type/:imdbId/cast", async (request, reply) => {
   const type = getMetadataType(request.params.type);
@@ -971,9 +968,8 @@ app.get<{ Params: { type: string; imdbId: string } }>("/meta/:type/:imdbId/cast"
 
   const imdbId = request.params.imdbId.trim();
   const cacheKey = `cast:${type}:${imdbId}`;
-  const now = Date.now();
   const cached = castCache.get(cacheKey);
-  if (cached && now < cached.expiry) return { cast: cached.data };
+  if (cached) return { cast: cached };
 
   let meta = await prisma.metadata.findUnique({
     where: { imdbId_type: { imdbId, type } },
@@ -981,7 +977,7 @@ app.get<{ Params: { type: string; imdbId: string } }>("/meta/:type/:imdbId/cast"
   });
 
   if (!meta?.tmdbId) {
-    await fetchMetadata(type, imdbId).catch(() => {});
+    await fetchMetadata(type, imdbId).catch((err) => request.log.warn({ imdbId, type, err }, "Background metadata fetch failed"));
     meta = await prisma.metadata.findUnique({ where: { imdbId_type: { imdbId, type } }, select: { tmdbId: true } });
   }
 
@@ -990,7 +986,7 @@ app.get<{ Params: { type: string; imdbId: string } }>("/meta/:type/:imdbId/cast"
   try {
     const tmdb = await getTmdb();
     const cast = await tmdb.getCast(type, meta.tmdbId);
-    castCache.set(cacheKey, { data: cast, expiry: now + CAST_CACHE_TTL_MS });
+    castCache.set(cacheKey, cast);
     return { cast };
   } catch {
     return { cast: [] };
@@ -1000,9 +996,8 @@ app.get<{ Params: { type: string; imdbId: string } }>("/meta/:type/:imdbId/cast"
 app.get<{ Params: { imdbId: string } }>("/meta/series/:imdbId/seasons", async (request) => {
   const imdbId = request.params.imdbId.trim();
   const cacheKey = `seasons:${imdbId}`;
-  const now = Date.now();
   const cached = seasonsCache.get(cacheKey);
-  if (cached && now < cached.expiry) return { seasons: cached.data };
+  if (cached) return { seasons: cached };
 
   let meta = await prisma.metadata.findUnique({
     where: { imdbId_type: { imdbId, type: "series" } },
@@ -1010,7 +1005,7 @@ app.get<{ Params: { imdbId: string } }>("/meta/series/:imdbId/seasons", async (r
   });
 
   if (!meta?.tmdbId) {
-    await fetchMetadata("series", imdbId).catch(() => {});
+    await fetchMetadata("series", imdbId).catch((err) => request.log.warn({ imdbId, err }, "Background metadata fetch failed"));
     meta = await prisma.metadata.findUnique({ where: { imdbId_type: { imdbId, type: "series" } }, select: { tmdbId: true } });
   }
 
@@ -1019,7 +1014,7 @@ app.get<{ Params: { imdbId: string } }>("/meta/series/:imdbId/seasons", async (r
   try {
     const tmdb = await getTmdb();
     const seasons = await tmdb.getSeasons(meta.tmdbId);
-    seasonsCache.set(cacheKey, { data: seasons, expiry: now + CAST_CACHE_TTL_MS });
+    seasonsCache.set(cacheKey, seasons);
     return { seasons };
   } catch {
     return { seasons: [] };
@@ -1152,29 +1147,13 @@ app.delete<{ Querystring: { log?: string } }>("/checkin", async (request, reply)
 
 // ─── Trending / Popular (TMDB) ───
 
-type TrendingCacheEntry = { data: StremioMetaPreview[]; expiry: number; reasons?: Record<string, string> };
-const trendingCache = new Map<string, TrendingCacheEntry>();
+type TrendingCacheEntry = { data: StremioMetaPreview[]; reasons?: Record<string, string> };
 const TRENDING_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-const MAX_TRENDING_CACHE_SIZE = 100;
+const trendingCache = new LRUCache<string, TrendingCacheEntry>({ max: 100, ttl: TRENDING_CACHE_TTL_MS });
 
-// TTL-aware cache helpers
-const trendingCacheGet = (key: string): TrendingCacheEntry | undefined => {
-  const entry = trendingCache.get(key);
-  if (!entry) return undefined;
-  if (Date.now() >= entry.expiry) {
-    trendingCache.delete(key);
-    return undefined;
-  }
-  return entry;
-};
-
-const trendingCacheSet = (key: string, entry: TrendingCacheEntry) => {
-  // Evict oldest entries if at capacity
-  if (trendingCache.size >= MAX_TRENDING_CACHE_SIZE && !trendingCache.has(key)) {
-    const oldest = trendingCache.keys().next().value;
-    if (oldest !== undefined) trendingCache.delete(oldest);
-  }
-  trendingCache.set(key, entry);
+const trendingCacheGet = (key: string): TrendingCacheEntry | undefined => trendingCache.get(key);
+const trendingCacheSet = (key: string, entry: TrendingCacheEntry, ttl?: number) => {
+  trendingCache.set(key, entry, ttl !== undefined ? { ttl } : undefined);
 };
 
 app.get<{ Querystring: { type?: string; window?: string } }>("/trending", async (request, reply) => {
@@ -1186,7 +1165,7 @@ app.get<{ Querystring: { type?: string; window?: string } }>("/trending", async 
   const cacheKey = `trending:${rawType}:${timeWindow}`;
   const now = Date.now();
   const [cached, rpdbKey] = await Promise.all([Promise.resolve(trendingCacheGet(cacheKey)), getRpdbApiKey()]);
-  if (cached && now < cached.expiry) return { metas: applyRpdbToMetaList(cached.data, rpdbKey) };
+  if (cached) return { metas: applyRpdbToMetaList(cached.data, rpdbKey) };
 
   try {
     const tmdb = await getTmdb();
@@ -1203,7 +1182,7 @@ app.get<{ Querystring: { type?: string; window?: string } }>("/trending", async 
       genres: r.genres,
       rating: r.rating ?? undefined,
     }));
-    trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    trendingCacheSet(cacheKey, { data: metas });
     return { metas: applyRpdbToMetaList(metas, rpdbKey) };
   } catch (error) {
     request.log.error(error, "Trending fetch failed");
@@ -1219,7 +1198,7 @@ app.get<{ Querystring: { type?: string } }>("/popular", async (request, reply) =
   const cacheKey = `popular:${rawType}`;
   const now = Date.now();
   const [cached, rpdbKey] = await Promise.all([Promise.resolve(trendingCacheGet(cacheKey)), getRpdbApiKey()]);
-  if (cached && now < cached.expiry) return { metas: applyRpdbToMetaList(cached.data, rpdbKey) };
+  if (cached) return { metas: applyRpdbToMetaList(cached.data, rpdbKey) };
 
   try {
     const tmdb = await getTmdb();
@@ -1235,7 +1214,7 @@ app.get<{ Querystring: { type?: string } }>("/popular", async (request, reply) =
       genres: r.genres,
       rating: r.rating ?? undefined,
     }));
-    trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    trendingCacheSet(cacheKey, { data: metas });
     return { metas: applyRpdbToMetaList(metas, rpdbKey) };
   } catch (error) {
     request.log.error(error, "Popular fetch failed");
@@ -1334,7 +1313,7 @@ app.get<{ Querystring: { imdbId?: string; type?: string } }>("/recommendations",
   const cacheKey = `recs:${rawType}:${imdbId}`;
   const now = Date.now();
   const [cached, rpdbKeyRec] = await Promise.all([Promise.resolve(trendingCacheGet(cacheKey)), getRpdbApiKey()]);
-  if (cached && now < cached.expiry) return { metas: applyRpdbToMetaList(cached.data, rpdbKeyRec) };
+  if (cached) return { metas: applyRpdbToMetaList(cached.data, rpdbKeyRec) };
 
   // Look up tmdbId from metadata
   const meta = await prisma.metadata.findUnique({
@@ -1371,7 +1350,7 @@ async function getRecommendations(rawType: string, type: MetadataType, tmdbId: n
       genres: r.genres,
       rating: r.rating ?? undefined,
     }));
-    trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    trendingCacheSet(cacheKey, { data: metas });
     const rpdbKey = await getRpdbApiKey();
     return { metas: applyRpdbToMetaList(metas, rpdbKey) };
   } catch {
@@ -1440,7 +1419,7 @@ app.get<{ Querystring: { type?: string; limit?: string } }>("/recommendations/pe
       const seedCacheKey = `recs:seed:${rawType}:${tmdbId}`;
       const cachedSeed = trendingCacheGet(seedCacheKey);
       let recs: MetadataPayload[];
-      if (cachedSeed && Date.now() < cachedSeed.expiry) {
+      if (cachedSeed) {
         // Reconstruct payloads from cached metas
         recs = (cachedSeed.data as StremioMetaPreview[]).map((m) => ({
           imdbId: m.id,
@@ -1475,7 +1454,7 @@ app.get<{ Querystring: { type?: string; limit?: string } }>("/recommendations/pe
           genres: r.genres,
           rating: r.rating ?? undefined,
         }));
-        trendingCacheSet(seedCacheKey, { data: seedMetas, expiry: Date.now() + TRENDING_CACHE_TTL_MS });
+        trendingCacheSet(seedCacheKey, { data: seedMetas });
       }
       for (const r of recs) {
         if (allRecs.length >= limit) break;
@@ -1762,7 +1741,7 @@ Return ONLY a JSON array, no other text, no markdown:
       } catch { /* skip failed lookups */ }
     }
 
-    trendingCacheSet(cacheKey, { data: metas, expiry: Date.now() + AI_RECS_TTL_MS, reasons });
+    trendingCacheSet(cacheKey, { data: metas, reasons }, AI_RECS_TTL_MS);
 
     const now = new Date();
     await prisma.kV.upsert({
@@ -2168,7 +2147,7 @@ app.get<{ Querystring: { type?: string; provider?: string; region?: string } }>(
   const cacheKey = `streaming:${providerKey}:${rawType}:${region}`;
   const now = Date.now();
   const [cached, rpdbKeyStream] = await Promise.all([Promise.resolve(trendingCacheGet(cacheKey)), getRpdbApiKey()]);
-  if (cached && now < cached.expiry) return { metas: applyRpdbToMetaList(cached.data, rpdbKeyStream), provider: provider.name };
+  if (cached) return { metas: applyRpdbToMetaList(cached.data, rpdbKeyStream), provider: provider.name };
 
   try {
     const tmdb = await getTmdb();
@@ -2184,7 +2163,7 @@ app.get<{ Querystring: { type?: string; provider?: string; region?: string } }>(
       genres: r.genres,
       rating: r.rating ?? undefined,
     }));
-    trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    trendingCacheSet(cacheKey, { data: metas });
     return { metas: applyRpdbToMetaList(metas, rpdbKeyStream), provider: provider.name };
   } catch (error) {
     request.log.error(error, "Streaming catalog fetch failed");
@@ -2208,7 +2187,7 @@ app.get<{ Querystring: { type?: string } }>("/anime", async (request, reply) => 
   const cacheKey = `anime:${rawType}`;
   const now = Date.now();
   const [cached, rpdbKeyAnime] = await Promise.all([Promise.resolve(trendingCacheGet(cacheKey)), getRpdbApiKey()]);
-  if (cached && now < cached.expiry) return { metas: applyRpdbToMetaList(cached.data, rpdbKeyAnime) };
+  if (cached) return { metas: applyRpdbToMetaList(cached.data, rpdbKeyAnime) };
 
   try {
     const tmdb = await getTmdb();
@@ -2224,7 +2203,7 @@ app.get<{ Querystring: { type?: string } }>("/anime", async (request, reply) => 
       genres: r.genres,
       rating: r.rating ?? undefined,
     }));
-    trendingCacheSet(cacheKey, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
+    trendingCacheSet(cacheKey, { data: metas });
     return { metas: applyRpdbToMetaList(metas, rpdbKeyAnime) };
   } catch (error) {
     request.log.error(error, "Anime catalog fetch failed");
@@ -2577,7 +2556,7 @@ app.post<{ Params: { listId: string }; Body: unknown }>("/lists/:listId/items", 
 
     // Trigger background metadata sync so posters/descriptions are available
     const metadataTypeForSync = itemType === ItemType.movie ? MetadataType.movie : MetadataType.series;
-    void syncMetadata(imdbId, metadataTypeForSync).catch(() => {});
+    void syncMetadata(imdbId, metadataTypeForSync).catch((err) => app.log.warn({ imdbId, type: metadataTypeForSync, err }, "Background metadata sync failed"));
 
     return reply.code(201).send({ listItem });
   } catch (error) {
@@ -3869,10 +3848,13 @@ app.post("/trakt/disconnect", async (_request, reply) => {
   return reply.send({ disconnected: true });
 });
 
-app.post("/metadata/refresh-all", async (request, reply) => {
-  const allMetadata = await prisma.metadata.findMany({ select: { imdbId: true, type: true } });
+app.post<{ Querystring: { limit?: string } }>("/metadata/refresh-all", async (request, reply) => {
+  const rawLimit = parseInt(request.query.limit ?? "50", 10);
+  const limit = isNaN(rawLimit) || rawLimit < 1 ? 50 : Math.min(rawLimit, 500);
+  const allRows = await prisma.metadata.findMany({ select: { imdbId: true, type: true } });
+  const allMetadata = allRows.slice(0, limit);
   if (allMetadata.length === 0) {
-    return reply.send({ refreshed: 0, total: 0 });
+    return reply.send({ refreshed: 0, total: 0, limit });
   }
 
   const BATCH_SIZE = 5;
@@ -3921,7 +3903,7 @@ app.post("/metadata/refresh-all", async (request, reply) => {
     }
   }
 
-  return reply.send({ refreshed, total: allMetadata.length });
+  return reply.send({ refreshed, total: allMetadata.length, limit });
 });
 
 // ─── Scrobbling ───
@@ -4358,7 +4340,7 @@ app.get<{ Params: { type: string; id: string }; Querystring: { skip?: string } }
         if (await isAiConfigured()) {
           const aiResult = await getAiRecommendations(discovery.type, 20);
           if (aiResult) {
-            trendingCacheSet(cacheKey, { data: aiResult.metas, expiry: Date.now() + TRENDING_CACHE_TTL_MS });
+            trendingCacheSet(cacheKey, { data: aiResult.metas });
             return { metas: aiResult.metas };
           }
           // Fall through to TMDB if AI fails
@@ -4407,7 +4389,7 @@ app.get<{ Params: { type: string; id: string }; Querystring: { skip?: string } }
         genres: r.genres,
         rating: r.rating ?? undefined,
       }));
-      trendingCacheSet(cacheKey, { data: metas, expiry: Date.now() + TRENDING_CACHE_TTL_MS });
+      trendingCacheSet(cacheKey, { data: metas });
       return { metas };
     } catch {
       return { metas: [] };
