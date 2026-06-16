@@ -1,0 +1,257 @@
+import { MetadataType } from "@prisma/client";
+import { prisma } from "./prisma.js";
+import { trendingCache, trendingCacheGet, trendingCacheSet } from "./cache.js";
+import { getTmdb } from "./tmdb-client.js";
+import { getRpdbApiKey, withRpdbPoster } from "./rpdb.js";
+import { upsertMetadata } from "./metadata.js";
+import type { AiProviderConfig, StremioMetaPreview } from "./types.js";
+
+export const AI_CONFIG_KEY = "ai:config";
+export const AI_LAST_RECS_GENERATED_AT_KEY = "ai:lastRecsGeneratedAt";
+export const AI_RECS_TTL_MS = 6 * 60 * 60 * 1000;
+
+export const getAiConfig = async (): Promise<AiProviderConfig | null> => {
+  const row = await prisma.kV.findUnique({ where: { key: AI_CONFIG_KEY } });
+  if (!row) return null;
+  try {
+    return JSON.parse(row.value) as AiProviderConfig;
+  } catch {
+    return null;
+  }
+};
+
+export const isAiConfigured = async (): Promise<boolean> => {
+  const config = await getAiConfig();
+  return !!(config?.url && config?.headers && config?.payload?.model);
+};
+
+export const redactAiConfig = (config: AiProviderConfig): AiProviderConfig => ({
+  ...config,
+  headers: Object.fromEntries(
+    Object.entries(config.headers).map(([k, v]) => [
+      k,
+      k.toLowerCase() === "authorization" ? "Bearer ****" : v,
+    ])
+  ),
+});
+
+export const shouldRefreshAiRecs = async (): Promise<boolean> => {
+  if (!(await isAiConfigured())) return false;
+
+  const lastGenRow = await prisma.kV.findUnique({ where: { key: AI_LAST_RECS_GENERATED_AT_KEY } });
+  if (!lastGenRow) return true;
+
+  const lastGen = new Date(lastGenRow.value);
+  const hoursSinceLastGen = (Date.now() - lastGen.getTime()) / (1000 * 60 * 60);
+  return hoursSinceLastGen >= 6;
+};
+
+export const buildTasteProfile = async () => {
+  const recentEvents = await prisma.watchEvent.findMany({
+    orderBy: { watchedAt: "desc" },
+    take: 50,
+    distinct: ["imdbId"],
+    select: { imdbId: true, type: true, seriesImdbId: true },
+  });
+
+  const movieIds = recentEvents.filter((e) => e.type === "movie").map((e) => e.imdbId);
+  const seriesIds = recentEvents
+    .filter((e) => e.type === "episode" && e.seriesImdbId)
+    .map((e) => e.seriesImdbId!)
+    .filter(Boolean);
+  const allIds = [...new Set([...movieIds, ...seriesIds])];
+
+  const allMetadata =
+    allIds.length > 0
+      ? await prisma.metadata.findMany({
+          where: { imdbId: { in: allIds } },
+          select: { imdbId: true, name: true, genres: true },
+        })
+      : [];
+
+  const metaByImdbId = new Map(allMetadata.map((m) => [m.imdbId, m]));
+
+  const ratingRows = await prisma.kV.findMany({
+    where: { key: { startsWith: "rating:" } },
+    orderBy: { updatedAt: "desc" },
+    take: 50,
+  });
+
+  const ratings: Array<{ imdbId: string; rating: number }> = [];
+  for (const row of ratingRows) {
+    try {
+      const parsed = JSON.parse(row.value) as { imdbId?: string; rating?: number };
+      if (parsed.imdbId && typeof parsed.rating === "number") {
+        ratings.push({ imdbId: parsed.imdbId, rating: parsed.rating });
+      }
+    } catch { /* skip */ }
+  }
+
+  const genreFreq = new Map<string, number>();
+  for (const id of allIds) {
+    const meta = metaByImdbId.get(id);
+    if (meta) {
+      for (const g of meta.genres) {
+        genreFreq.set(g, (genreFreq.get(g) ?? 0) + 1);
+      }
+    }
+  }
+  const topGenres = [...genreFreq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([g]) => g);
+
+  const topRated = ratings
+    .filter((r) => r.rating >= 8)
+    .map((r) => {
+      const meta = metaByImdbId.get(r.imdbId);
+      return meta ? `${meta.name} (${r.rating}/10)` : null;
+    })
+    .filter((s): s is string => s !== null)
+    .slice(0, 15);
+
+  const recentTitles = recentEvents
+    .slice(0, 20)
+    .map((e) => {
+      const id = e.type === "episode" && e.seriesImdbId ? e.seriesImdbId : e.imdbId;
+      return metaByImdbId.get(id)?.name;
+    })
+    .filter((n): n is string => !!n);
+
+  const watchedImdbIds = new Set(allIds);
+
+  const avgRating =
+    ratings.length > 0
+      ? Math.round((ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length) * 10) / 10
+      : null;
+
+  return { topGenres, topRated, recentTitles, watchedImdbIds, avgRating };
+};
+
+const callAiProvider = async (config: AiProviderConfig, prompt: string): Promise<string> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60_000);
+
+  const payload = {
+    ...config.payload,
+    messages: [{ role: "user", content: prompt }],
+    stream: false,
+    max_tokens: (config.payload.max_tokens as number | undefined) ?? 4096,
+  };
+
+  let response: Response;
+  try {
+    response = await fetch(config.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...config.headers },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`AI provider error (${response.status}): ${body.slice(0, 200)}`);
+  }
+
+  const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+  let content = data.choices?.[0]?.message?.content ?? "";
+
+  content = content.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  content = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+
+  return content;
+};
+
+type AiRecItem = { title: string; year?: number; type: "movie" | "series"; reason: string };
+
+const parseRecsFromContent = (content: string): AiRecItem[] => {
+  const match = content.match(/\[[\s\S]*\]/);
+  if (!match) throw new Error("No JSON array in AI response");
+  return JSON.parse(match[0]) as AiRecItem[];
+};
+
+export const getAiRecommendations = async (
+  type: "movie" | "series",
+  limit = 10
+): Promise<{ metas: StremioMetaPreview[]; reasons: Record<string, string> } | null> => {
+  const cacheKey = `ai-recs:${type}`;
+  const cached = trendingCacheGet(cacheKey);
+  if (cached) return { metas: cached.data, reasons: cached.reasons ?? {} };
+
+  const config = await getAiConfig();
+  if (!config) return null;
+
+  try {
+    const profile = await buildTasteProfile();
+    const avgRatingStr = profile.avgRating !== null ? `${profile.avgRating}/10` : "unrated";
+    const typeLabel = type === "movie" ? "movies" : "TV series";
+
+    const prompt = `You are a ${type} recommendation engine with deep knowledge of film and television.
+
+User taste profile:
+- Top genres: ${profile.topGenres.join(", ") || "unknown"}
+- Highly rated: ${profile.topRated.join(", ") || "none yet"}
+- Recently watched: ${profile.recentTitles.join(", ") || "nothing yet"}
+- Average rating they give: ${avgRatingStr}
+
+Recommend exactly ${limit} ${typeLabel} this user has NOT already watched. Be specific and varied.
+
+Return ONLY a JSON array, no other text, no markdown:
+[
+  {
+    "title": "exact title",
+    "year": release year as number,
+    "type": "${type}",
+    "reason": "one sentence why based on their taste"
+  }
+]`;
+
+    const content = await callAiProvider(config, prompt);
+    const recs = parseRecsFromContent(content);
+
+    const tmdb = await getTmdb();
+    const metaType = type === "movie" ? MetadataType.movie : MetadataType.series;
+    const rpdbKey = await getRpdbApiKey();
+    const metas: StremioMetaPreview[] = [];
+    const reasons: Record<string, string> = {};
+
+    for (const rec of recs) {
+      if (metas.length >= limit) break;
+      try {
+        const results = await tmdb.search(metaType, rec.title);
+        if (!results || results.length === 0) continue;
+        const first = results[0];
+        if (profile.watchedImdbIds.has(first.imdbId)) continue;
+        await upsertMetadata(first);
+        metas.push({
+          id: first.imdbId,
+          type,
+          name: first.name,
+          poster: withRpdbPoster(first.imdbId, first.poster, rpdbKey) ?? undefined,
+          year: first.year ?? undefined,
+          description: first.description ?? undefined,
+          genres: first.genres,
+          rating: first.rating ?? undefined,
+        });
+        reasons[first.imdbId] = rec.reason;
+      } catch { /* skip failed lookups */ }
+    }
+
+    trendingCacheSet(cacheKey, { data: metas, reasons }, AI_RECS_TTL_MS);
+
+    const now = new Date();
+    await prisma.kV.upsert({
+      where: { key: AI_LAST_RECS_GENERATED_AT_KEY },
+      create: { key: AI_LAST_RECS_GENERATED_AT_KEY, value: now.toISOString(), updatedAt: now },
+      update: { value: now.toISOString(), updatedAt: now },
+    });
+
+    return { metas, reasons };
+  } catch (err) {
+    console.error("AI recommendations generation failed", err);
+    return null;
+  }
+};
