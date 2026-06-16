@@ -93,8 +93,7 @@ export function App() {
             <Link
               key={item.to}
               to={item.to}
-              className="flex flex-1 flex-col items-center gap-0.5 py-2.5 text-2xs font-medium transition-colors"
-              style={{ color: isActive ? "#e89163" : "var(--text-dim)" }}
+              className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-2xs font-medium transition-colors ${isActive ? "text-claw-400" : "text-ink-400"}`}
             >
               <Icon className="h-5 w-5" />
               <span>{item.label}</span>

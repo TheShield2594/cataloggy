@@ -54,7 +54,7 @@ function MiniBarChart({ data, active = true }: { data: number[]; active?: boolea
             width={barW}
             height={barH}
             rx={3}
-            fill={isLatest && active ? "#d97742" : "rgba(255,215,180,0.18)"}
+            fill={isLatest && active ? "var(--accent)" : "var(--surface-strong)"}
           />
         );
       })}
@@ -277,7 +277,7 @@ function ThisMonthCard({
               {movieDelta !== null && (
                 <span
                   className="text-xs font-medium tabular-nums"
-                  style={{ color: movieDelta >= 0 ? "#22c55e" : "#ef4444" }}
+                  className={movieDelta >= 0 ? "text-emerald-500" : "text-rose-500"}
                 >
                   {movieDelta >= 0 ? "+" : ""}{movieDelta}
                 </span>
@@ -294,7 +294,7 @@ function ThisMonthCard({
               {epDelta !== null && (
                 <span
                   className="text-xs font-medium tabular-nums"
-                  style={{ color: epDelta >= 0 ? "#22c55e" : "#ef4444" }}
+                  className={epDelta >= 0 ? "text-emerald-500" : "text-rose-500"}
                 >
                   {epDelta >= 0 ? "+" : ""}{epDelta}
                 </span>
@@ -353,13 +353,13 @@ function TopGenresCard({
                 </span>
                 <div
                   className="flex-1 h-1.5 rounded-full overflow-hidden"
-                  style={{ background: "rgba(255,215,180,0.1)" }}
+                  style={{ background: "var(--surface)" }}
                 >
                   <div
                     className="h-full rounded-full transition-all duration-500"
                     style={{
                       width: `${pct}%`,
-                      background: i === 0 ? "#d97742" : "rgba(255,215,180,0.3)",
+                      background: i === 0 ? "var(--accent)" : "var(--border-strong)",
                     }}
                   />
                 </div>
@@ -491,7 +491,7 @@ function DiscoveryCard({ item, badge, reason, onSelect }: {
                 <span
                   key={g}
                   className="rounded px-1.5 py-0.5 text-2xs backdrop-blur-sm"
-                  style={{ background: "rgba(255,215,180,0.12)", color: "var(--text-dim)" }}
+                  style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
                 >
                   {g}
                 </span>
@@ -661,7 +661,7 @@ export function DashboardPage() {
       try {
         const res = await api.getDetailedStats();
         if (mounted) setDetailedStats(res);
-      } catch { } finally {
+      } catch (err) { console.error("Failed to fetch detailed stats:", err); } finally {
         if (mounted) setDetailedLoading(false);
       }
     })();
@@ -669,7 +669,7 @@ export function DashboardPage() {
       try {
         const res = await api.getTrending("movie", "week");
         if (mounted) setTrendingMovies(res.metas ?? []);
-      } catch { } finally {
+      } catch (err) { console.error("Failed to fetch trending:", err); } finally {
         if (mounted) setTrendingLoading(false);
       }
     })();
@@ -677,7 +677,7 @@ export function DashboardPage() {
       try {
         const configRes = await api.getAiConfig();
         if (mounted) setAiActive(configRes.configured);
-      } catch { }
+      } catch (err) { console.error("Failed to fetch AI config:", err); }
     })();
     void (async () => {
       try {
@@ -686,7 +686,7 @@ export function DashboardPage() {
           setRecommendations(res.metas ?? []);
           setMovieReasons(res.reasons ?? {});
         }
-      } catch { } finally {
+      } catch (err) { console.error("Failed to fetch movie recommendations:", err); } finally {
         if (mounted) setRecsLoading(false);
       }
     })();
@@ -697,7 +697,7 @@ export function DashboardPage() {
           setSeriesRecs(res.metas ?? []);
           setSeriesReasons(res.reasons ?? {});
         }
-      } catch { } finally {
+      } catch (err) { console.error("Failed to fetch series recommendations:", err); } finally {
         if (mounted) setSeriesRecsLoading(false);
       }
     })();
@@ -705,7 +705,7 @@ export function DashboardPage() {
       try {
         const res = await api.getCalendar(14);
         if (mounted) setCalendarEntries(res.calendar ?? []);
-      } catch { } finally {
+      } catch (err) { console.error("Failed to fetch calendar:", err); } finally {
         if (mounted) setCalendarLoading(false);
       }
     })();
@@ -745,8 +745,7 @@ export function DashboardPage() {
   if (error) {
     return (
       <div
-        className="mx-auto max-w-lg space-y-4 rounded-2xl p-8 text-center"
-        style={{ border: "1px solid rgba(217,119,66,0.2)", background: "rgba(217,119,66,0.05)" }}
+        className="mx-auto max-w-lg space-y-4 rounded-2xl border border-claw-400/20 bg-claw-400/5 p-8 text-center"
       >
         <AlertCircle className="mx-auto h-12 w-12 text-claw-400" />
         <p className="text-xl font-semibold text-claw-300">Unable to connect to the API</p>
@@ -787,8 +786,7 @@ export function DashboardPage() {
       {/* ── Now Watching Banner ── */}
       {activeCheckin && (
         <div
-          className="flex items-center gap-4 rounded-2xl px-5 py-4"
-          style={{ border: "1px solid rgba(217,119,66,0.25)", background: "rgba(217,119,66,0.06)" }}
+          className="flex items-center gap-4 rounded-2xl border border-claw-400/25 bg-claw-400/6 px-5 py-4"
         >
           {activeCheckin.poster && (
             <div className="h-14 w-10 flex-none overflow-hidden rounded-lg" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
@@ -898,7 +896,7 @@ export function DashboardPage() {
                     />
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/80 to-transparent px-3 pb-3 pt-16">
                       {progressPct !== null && (
-                        <div className="mb-2 h-1 w-full overflow-hidden rounded-full" style={{ background: "rgba(255,215,180,0.15)" }}>
+                        <div className="mb-2 h-1 w-full overflow-hidden rounded-full" style={{ background: "var(--surface-strong)" }}>
                           <div className="h-full rounded-full bg-claw-500 transition-all duration-500" style={{ width: `${progressPct}%` }} />
                         </div>
                       )}
@@ -914,7 +912,7 @@ export function DashboardPage() {
                         className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all active:scale-[0.98] ${
                           isDone ? "bg-emerald-500/20 text-emerald-400" : "text-white backdrop-blur-sm"
                         }`}
-                        style={isMarking ? { background: "rgba(42,36,30,0.8)", color: "var(--text-mute)" } : isDone ? {} : { background: "rgba(255,215,180,0.1)" }}
+                        style={isMarking ? { background: "var(--bg-2)", color: "var(--text-mute)" } : isDone ? {} : { background: "var(--surface)" }}
                       >
                         {isDone ? (
                           <><Check className="h-3.5 w-3.5" /> Marked</>
@@ -984,11 +982,11 @@ export function DashboardPage() {
                   <Poster src={event.poster} alt={event.name} className="h-full w-full" />
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent px-3 pb-3 pt-12">
                     {event.type === "episode" && event.season != null && event.episode != null ? (
-                      <span className="inline-block rounded px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm" style={{ background: "rgba(255,215,180,0.12)" }}>
+                      <span className="inline-block rounded px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm" style={{ background: "var(--surface-strong)" }}>
                         S{event.season}:E{event.episode}
                       </span>
                     ) : event.type === "movie" ? (
-                      <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold text-claw-300 backdrop-blur-sm" style={{ background: "rgba(217,119,66,0.18)" }}>
+                      <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold text-claw-300 backdrop-blur-sm bg-claw-500/20">
                         <Film className="h-3 w-3" /> Movie
                       </span>
                     ) : null}
@@ -1164,16 +1162,7 @@ export function DashboardPage() {
                 return (
                   <div
                     key={`${entry.seriesImdbId}-s${entry.season}e${entry.episode}`}
-                    className="flex items-center gap-4 rounded-xl p-3 transition-all"
-                    style={{ border: "1px solid var(--border)", background: "var(--surface)" }}
-                    onMouseEnter={e => {
-                      (e.currentTarget as HTMLDivElement).style.background = "var(--surface-strong)";
-                      (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border-strong)";
-                    }}
-                    onMouseLeave={e => {
-                      (e.currentTarget as HTMLDivElement).style.background = "var(--surface)";
-                      (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)";
-                    }}
+                    className="flex items-center gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 transition-all hover:border-[var(--border-strong)] hover:bg-[var(--surface-strong)]"
                   >
                     <div className="h-16 w-11 flex-none overflow-hidden rounded-lg" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
                       <Poster src={entry.poster ?? undefined} alt={entry.seriesName} className="h-full w-full" />
@@ -1188,14 +1177,14 @@ export function DashboardPage() {
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-none">
                       <span
-                        className="rounded-full px-2.5 py-0.5 text-2xs font-semibold"
-                        style={
+                        className={`rounded-full px-2.5 py-0.5 text-2xs font-semibold ${
                           isToday
-                            ? { background: "rgba(217,119,66,0.15)", color: "#e89163" }
+                            ? "bg-claw-500/15 text-claw-400"
                             : isTomorrow
-                              ? { background: "rgba(245,158,11,0.15)", color: "#fbbf24" }
-                              : { background: "var(--surface-strong)", color: "var(--text-mute)" }
-                        }
+                              ? "bg-amber-500/15 text-amber-400"
+                              : "text-ink-400"
+                        }`}
+                        style={!isToday && !isTomorrow ? { background: "var(--surface-strong)" } : undefined}
                       >
                         {dateLabel}
                       </span>
