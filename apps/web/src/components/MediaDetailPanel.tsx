@@ -155,7 +155,7 @@ function WatchDateModal({
               type="button"
               disabled={saving}
               onClick={() => void submit(new Date().toISOString())}
-              className="rounded-xl bg-plum-500 px-4 py-3 text-sm font-semibold text-white hover:bg-plum-500 disabled:opacity-50 transition-colors"
+              className="rounded-xl bg-plum-500 px-4 py-3 text-sm font-semibold text-white hover:bg-plum-600 disabled:opacity-50 transition-colors"
             >
               Just finished
             </button>

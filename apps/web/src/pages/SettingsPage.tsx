@@ -205,7 +205,7 @@ function TraktSection() {
             type="button"
             onClick={connect}
             disabled={!status?.configured}
-            className="inline-flex items-center gap-2 rounded-xl bg-plum-500 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-plum-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 rounded-xl bg-plum-500 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-plum-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Link size={16} /> Connect Trakt
           </button>
