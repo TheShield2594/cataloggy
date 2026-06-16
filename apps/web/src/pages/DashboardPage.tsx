@@ -11,11 +11,14 @@ import {
   TrendingUp,
   Sparkles,
   X,
+  Flame,
+  Trophy,
 } from "lucide-react";
 import {
   api,
   CalendarEntry,
   CheckIn,
+  DetailedWatchStats,
   runtimeConfig,
   SearchResult,
   SeriesProgress,
@@ -28,21 +31,351 @@ import { useHorizontalScroll, getInitials, getGradient } from "../components/car
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { timeAgo } from "../utils/timeAgo";
 
-/* ─── Skeleton placeholders ─── */
+/* ─── Mini SVG bar chart ─── */
 
-function StatsSkeleton() {
+function MiniBarChart({ data, active = true }: { data: number[]; active?: boolean }) {
+  const max = Math.max(...data, 1);
+  const barW = 10;
+  const gap = 4;
+  const chartH = 40;
+  const totalW = data.length * barW + (data.length - 1) * gap;
+
   return (
-    <div className="flex items-center gap-6">
-      {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-2">
-          <div className="skeleton h-5 w-5 rounded" />
-          <div className="skeleton h-5 w-12 rounded" />
-          <div className="skeleton h-4 w-20 rounded" />
-        </div>
-      ))}
+    <svg width={totalW} height={chartH} aria-hidden="true">
+      {data.map((v, i) => {
+        const barH = Math.max((v / max) * chartH, 2);
+        const x = i * (barW + gap);
+        const isLatest = i === data.length - 1;
+        return (
+          <rect
+            key={i}
+            x={x}
+            y={chartH - barH}
+            width={barW}
+            height={barH}
+            rx={3}
+            fill={isLatest && active ? "#d97742" : "rgba(255,215,180,0.18)"}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+/* ─── Stats overview card (3 sub-cols inside one card) ─── */
+
+function StatColumn({
+  label,
+  value,
+  sub,
+  bars,
+  icon: Icon,
+}: {
+  label: string;
+  value: string | number;
+  sub: string;
+  bars: number[];
+  icon: React.ElementType;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5 text-claw-400" />
+        <span className="text-xs font-medium tracking-wide" style={{ color: "var(--text-mute)" }}>
+          {label}
+        </span>
+      </div>
+      <MiniBarChart data={bars} />
+      <div>
+        <p className="text-3xl font-bold tabular-nums leading-none" style={{ color: "var(--text)" }}>
+          {typeof value === "number" ? value.toLocaleString() : value}
+        </p>
+        <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>{sub}</p>
+      </div>
     </div>
   );
 }
+
+function StatsOverviewCard({
+  stats,
+  monthly,
+  loading,
+}: {
+  stats: WatchStats | null;
+  monthly: DetailedWatchStats["monthly"];
+  loading: boolean;
+}) {
+  const last6 = monthly.slice(-6);
+  const movieBars = last6.length ? last6.map((m) => m.movies) : [0, 0, 0, 0, 0, 0];
+  const epBars = last6.length ? last6.map((m) => m.episodes) : [0, 0, 0, 0, 0, 0];
+  const playBars = last6.map((m, i) => movieBars[i] + epBars[i]);
+
+  return (
+    <div
+      className="rounded-2xl p-5 col-span-2 h-full"
+      style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
+    >
+      <div className="flex items-center justify-between mb-5">
+        <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>Watch Activity</p>
+        <Link
+          to="/stats"
+          className="text-xs font-medium text-claw-400 hover:text-claw-300 transition-colors"
+        >
+          Full stats
+        </Link>
+      </div>
+
+      {loading || !stats ? (
+        <div className="grid grid-cols-3 gap-5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="flex flex-col gap-3">
+              <div className="skeleton h-3 w-16 rounded" />
+              <div className="skeleton h-10 w-full rounded" />
+              <div className="skeleton h-6 w-12 rounded" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-5">
+          <StatColumn
+            label="Movies"
+            value={stats.totalMovies}
+            sub="total watched"
+            bars={movieBars}
+            icon={Film}
+          />
+          <div
+            className="col-start-2"
+            style={{ borderLeft: "1px solid var(--border)", paddingLeft: "1.25rem" }}
+          >
+            <StatColumn
+              label="Episodes"
+              value={stats.totalEpisodes}
+              sub="total watched"
+              bars={epBars}
+              icon={Tv}
+            />
+          </div>
+          <div style={{ borderLeft: "1px solid var(--border)", paddingLeft: "1.25rem" }}>
+            <StatColumn
+              label="Total plays"
+              value={stats.totalPlays}
+              sub="all time"
+              bars={playBars}
+              icon={Play}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Streak card ─── */
+
+function StreakCard({
+  current,
+  longest,
+  loading,
+}: {
+  current: number;
+  longest: number;
+  loading: boolean;
+}) {
+  return (
+    <div
+      className="rounded-2xl p-5 flex flex-col justify-between row-span-2"
+      style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
+    >
+      <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>Streaks</p>
+
+      {loading ? (
+        <div className="flex-1 flex flex-col gap-4 mt-5">
+          <div className="skeleton h-12 w-20 rounded" />
+          <div className="skeleton h-3 w-24 rounded" />
+          <div className="skeleton h-8 w-16 rounded mt-4" />
+          <div className="skeleton h-3 w-20 rounded" />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-5 mt-3">
+          <div>
+            <div className="flex items-end gap-2">
+              <Flame className="h-5 w-5 text-claw-400 mb-0.5" />
+              <span className="text-4xl font-bold tabular-nums leading-none" style={{ color: "var(--text)" }}>
+                {current}
+              </span>
+            </div>
+            <p className="mt-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
+              day streak
+            </p>
+          </div>
+
+          <div
+            className="pt-5"
+            style={{ borderTop: "1px solid var(--border)" }}
+          >
+            <div className="flex items-end gap-2">
+              <Trophy className="h-4 w-4 text-ink-400 mb-0.5" />
+              <span className="text-2xl font-bold tabular-nums leading-none" style={{ color: "var(--text-dim)" }}>
+                {longest}
+              </span>
+            </div>
+            <p className="mt-1.5 text-xs" style={{ color: "var(--text-mute)" }}>
+              longest streak
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── This month card ─── */
+
+function ThisMonthCard({
+  monthly,
+  loading,
+}: {
+  monthly: DetailedWatchStats["monthly"];
+  loading: boolean;
+}) {
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const current = monthly.find((m) => m.month === monthKey);
+  const prevIdx = monthly.findIndex((m) => m.month === monthKey) - 1;
+  const prev = prevIdx >= 0 ? monthly[prevIdx] : null;
+
+  const monthName = now.toLocaleDateString(undefined, { month: "long" });
+
+  const movieDelta = current && prev ? current.movies - prev.movies : null;
+  const epDelta = current && prev ? current.episodes - prev.episodes : null;
+
+  return (
+    <div
+      className="rounded-2xl p-5"
+      style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>This Month</p>
+        <span className="text-xs" style={{ color: "var(--text-mute)" }}>{monthName}</span>
+      </div>
+
+      {loading ? (
+        <div className="flex flex-col gap-3">
+          <div className="skeleton h-8 w-16 rounded" />
+          <div className="skeleton h-3 w-24 rounded" />
+          <div className="skeleton h-8 w-16 rounded" />
+          <div className="skeleton h-3 w-24 rounded" />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold tabular-nums leading-none" style={{ color: "var(--text)" }}>
+                {current?.movies ?? 0}
+              </span>
+              {movieDelta !== null && (
+                <span
+                  className="text-xs font-medium tabular-nums"
+                  style={{ color: movieDelta >= 0 ? "#22c55e" : "#ef4444" }}
+                >
+                  {movieDelta >= 0 ? "+" : ""}{movieDelta}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>movies</p>
+          </div>
+
+          <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold tabular-nums leading-none" style={{ color: "var(--text)" }}>
+                {current?.episodes ?? 0}
+              </span>
+              {epDelta !== null && (
+                <span
+                  className="text-xs font-medium tabular-nums"
+                  style={{ color: epDelta >= 0 ? "#22c55e" : "#ef4444" }}
+                >
+                  {epDelta >= 0 ? "+" : ""}{epDelta}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>episodes</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Top genres card ─── */
+
+function TopGenresCard({
+  genres,
+  loading,
+}: {
+  genres: DetailedWatchStats["genreDistribution"];
+  loading: boolean;
+}) {
+  const top = genres.slice(0, 5);
+  const max = top[0]?.count ?? 1;
+
+  return (
+    <div
+      className="rounded-2xl p-5"
+      style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
+    >
+      <p className="text-sm font-semibold mb-4" style={{ color: "var(--text)" }}>Top Genres</p>
+
+      {loading ? (
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <div className="skeleton h-3 w-20 rounded" />
+              <div className="skeleton h-2 rounded flex-1" />
+              <div className="skeleton h-3 w-8 rounded" />
+            </div>
+          ))}
+        </div>
+      ) : top.length === 0 ? (
+        <p className="text-xs" style={{ color: "var(--text-mute)" }}>No genre data yet.</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {top.map((g, i) => {
+            const pct = (g.count / max) * 100;
+            return (
+              <div key={g.genre} className="flex items-center gap-3">
+                <span
+                  className="w-20 truncate text-xs text-right"
+                  style={{ color: i === 0 ? "var(--text)" : "var(--text-dim)" }}
+                >
+                  {g.genre}
+                </span>
+                <div
+                  className="flex-1 h-1.5 rounded-full overflow-hidden"
+                  style={{ background: "rgba(255,215,180,0.1)" }}
+                >
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${pct}%`,
+                      background: i === 0 ? "#d97742" : "rgba(255,215,180,0.3)",
+                    }}
+                  />
+                </div>
+                <span className="w-8 text-right text-xs tabular-nums" style={{ color: "var(--text-mute)" }}>
+                  {g.count}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Skeleton placeholders ─── */
 
 function ContinueWatchingSkeleton() {
   return (
@@ -89,9 +422,7 @@ function Poster({
 
   if (!src || loadFailed) {
     return (
-      <div
-        className={`flex items-center justify-center bg-gradient-to-br ${getGradient(alt)} ${className}`}
-      >
+      <div className={`flex items-center justify-center bg-gradient-to-br ${getGradient(alt)} ${className}`}>
         <span className="text-xl font-bold text-white/60 select-none">
           {getInitials(alt)}
         </span>
@@ -110,7 +441,7 @@ function Poster({
   );
 }
 
-/* ─── Discovery Card (shared by trending + recommendations) ─── */
+/* ─── Discovery Card ─── */
 
 type DiscoveryItem = {
   id: string;
@@ -122,7 +453,12 @@ type DiscoveryItem = {
   type?: string;
 };
 
-function DiscoveryCard({ item, badge, reason, onSelect }: { item: DiscoveryItem; badge?: React.ReactNode; reason?: string; onSelect?: (item: DiscoveryItem) => void }) {
+function DiscoveryCard({ item, badge, reason, onSelect }: {
+  item: DiscoveryItem;
+  badge?: React.ReactNode;
+  reason?: string;
+  onSelect?: (item: DiscoveryItem) => void;
+}) {
   return (
     <div
       role="button"
@@ -135,9 +471,8 @@ function DiscoveryCard({ item, badge, reason, onSelect }: { item: DiscoveryItem;
     >
       <div
         className="relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
-        style={{ aspectRatio: "2 / 3", ring: "1px solid var(--border)" }}
+        style={{ aspectRatio: "2 / 3", boxShadow: "inset 0 0 0 1px var(--border)" }}
       >
-        <div className="absolute inset-0 rounded-xl" style={{ boxShadow: "inset 0 0 0 1px var(--border)" }} />
         <Poster src={item.poster} alt={item.name} className="h-full w-full" />
         {item.rating != null && item.rating > 0 && (
           <div className="absolute top-2.5 left-2.5">
@@ -153,24 +488,37 @@ function DiscoveryCard({ item, badge, reason, onSelect }: { item: DiscoveryItem;
           {item.genres && item.genres.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {item.genres.slice(0, 2).map((g) => (
-                <span key={g} className="rounded px-1.5 py-0.5 text-2xs backdrop-blur-sm" style={{ background: "rgba(255,215,180,0.12)", color: "var(--text-dim)" }}>{g}</span>
+                <span
+                  key={g}
+                  className="rounded px-1.5 py-0.5 text-2xs backdrop-blur-sm"
+                  style={{ background: "rgba(255,215,180,0.12)", color: "var(--text-dim)" }}
+                >
+                  {g}
+                </span>
               ))}
             </div>
           )}
         </div>
       </div>
-      <p className="mt-2.5 truncate text-sm font-semibold transition-colors group-hover:text-cream-100" style={{ color: "var(--text)" }}>{item.name}</p>
+      <p
+        className="mt-2.5 truncate text-sm font-semibold transition-colors group-hover:text-cream-100"
+        style={{ color: "var(--text)" }}
+      >
+        {item.name}
+      </p>
       <p className="text-2xs" style={{ color: "var(--text-dim)" }}>
         {item.year ?? ""}{item.type ? ` ${item.type === "movie" ? "Movie" : "Series"}` : ""}
       </p>
       {reason && (
-        <p className="mt-0.5 truncate text-2xs italic" style={{ color: "var(--text-dim)" }} title={reason}>{reason}</p>
+        <p className="mt-0.5 truncate text-2xs italic" style={{ color: "var(--text-dim)" }} title={reason}>
+          {reason}
+        </p>
       )}
     </div>
   );
 }
 
-/* ─── Scroll Arrow Buttons ─── */
+/* ─── Scroll arrows ─── */
 
 function ScrollArrows({
   canScrollLeft,
@@ -188,7 +536,7 @@ function ScrollArrows({
         type="button"
         onClick={() => onScroll("left")}
         disabled={!canScrollLeft}
-        className="flex h-8 w-8 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default"
+        className="flex h-8 w-8 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95"
         style={{ border: "1px solid var(--border-strong)", background: "var(--bg-2)", color: "var(--text-dim)" }}
         aria-label="Scroll left"
       >
@@ -198,7 +546,7 @@ function ScrollArrows({
         type="button"
         onClick={() => onScroll("right")}
         disabled={!canScrollRight}
-        className="flex h-8 w-8 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default"
+        className="flex h-8 w-8 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95"
         style={{ border: "1px solid var(--border-strong)", background: "var(--bg-2)", color: "var(--text-dim)" }}
         aria-label="Scroll right"
       >
@@ -224,7 +572,10 @@ function SectionHeader({
       <div className="flex items-center gap-3">
         <h2 className="text-lg font-bold" style={{ color: "var(--text)" }}>{title}</h2>
         {count !== undefined && count > 0 && (
-          <span className="rounded-full px-2.5 py-0.5 text-xs font-medium tabular-nums" style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}>
+          <span
+            className="rounded-full px-2.5 py-0.5 text-xs font-medium tabular-nums"
+            style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
+          >
             {count}
           </span>
         )}
@@ -243,6 +594,8 @@ export function DashboardPage() {
   const [progress, setProgress] = useState<SeriesProgress[]>([]);
   const [history, setHistory] = useState<WatchEvent[]>([]);
   const [stats, setStats] = useState<WatchStats | null>(null);
+  const [detailedStats, setDetailedStats] = useState<DetailedWatchStats | null>(null);
+  const [detailedLoading, setDetailedLoading] = useState(true);
 
   const [trendingMovies, setTrendingMovies] = useState<TrendingMeta[]>([]);
   const [trendingLoading, setTrendingLoading] = useState(true);
@@ -258,7 +611,6 @@ export function DashboardPage() {
 
   const [markingNext, setMarkingNext] = useState<Set<string>>(new Set());
   const [markedDone, setMarkedDone] = useState<Set<string>>(new Set());
-
   const [activeCheckin, setActiveCheckin] = useState<CheckIn | null>(null);
 
   const continueScroll = useHorizontalScroll();
@@ -297,9 +649,7 @@ export function DashboardPage() {
       setStats(statsRes);
       setActiveCheckin(checkinRes.checkin);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load dashboard",
-      );
+      setError(err instanceof Error ? err.message : "Failed to load dashboard");
     } finally {
       setLoading(false);
     }
@@ -309,9 +659,17 @@ export function DashboardPage() {
     let mounted = true;
     void (async () => {
       try {
+        const res = await api.getDetailedStats();
+        if (mounted) setDetailedStats(res);
+      } catch { } finally {
+        if (mounted) setDetailedLoading(false);
+      }
+    })();
+    void (async () => {
+      try {
         const res = await api.getTrending("movie", "week");
         if (mounted) setTrendingMovies(res.metas ?? []);
-      } catch { /* optional */ } finally {
+      } catch { } finally {
         if (mounted) setTrendingLoading(false);
       }
     })();
@@ -319,7 +677,7 @@ export function DashboardPage() {
       try {
         const configRes = await api.getAiConfig();
         if (mounted) setAiActive(configRes.configured);
-      } catch { /* optional */ }
+      } catch { }
     })();
     void (async () => {
       try {
@@ -328,7 +686,7 @@ export function DashboardPage() {
           setRecommendations(res.metas ?? []);
           setMovieReasons(res.reasons ?? {});
         }
-      } catch { /* optional */ } finally {
+      } catch { } finally {
         if (mounted) setRecsLoading(false);
       }
     })();
@@ -339,7 +697,7 @@ export function DashboardPage() {
           setSeriesRecs(res.metas ?? []);
           setSeriesReasons(res.reasons ?? {});
         }
-      } catch { /* optional */ } finally {
+      } catch { } finally {
         if (mounted) setSeriesRecsLoading(false);
       }
     })();
@@ -347,16 +705,14 @@ export function DashboardPage() {
       try {
         const res = await api.getCalendar(14);
         if (mounted) setCalendarEntries(res.calendar ?? []);
-      } catch { /* optional */ } finally {
+      } catch { } finally {
         if (mounted) setCalendarLoading(false);
       }
     })();
     return () => { mounted = false; };
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
     if (loading) return;
@@ -368,7 +724,9 @@ export function DashboardPage() {
       seriesRecsScroll.checkScroll();
     }, 50);
     return () => clearTimeout(timer);
-  }, [loading, trendingLoading, recsLoading, seriesRecsLoading, progress.length, history.length, continueScroll.checkScroll, recentScroll.checkScroll, trendingScroll.checkScroll, recsScroll.checkScroll, seriesRecsScroll.checkScroll]);
+  }, [loading, trendingLoading, recsLoading, seriesRecsLoading, progress.length, history.length,
+    continueScroll.checkScroll, recentScroll.checkScroll, trendingScroll.checkScroll,
+    recsScroll.checkScroll, seriesRecsScroll.checkScroll]);
 
   const handleMarkNext = async (imdbId: string) => {
     setMarkingNext((prev) => new Set(prev).add(imdbId));
@@ -376,44 +734,31 @@ export function DashboardPage() {
       await api.markNextEpisodeWatched(imdbId);
       setMarkedDone((prev) => new Set(prev).add(imdbId));
       setTimeout(() => {
-        setMarkedDone((prev) => {
-          const next = new Set(prev);
-          next.delete(imdbId);
-          return next;
-        });
+        setMarkedDone((prev) => { const next = new Set(prev); next.delete(imdbId); return next; });
         void load();
       }, 1200);
-    } catch {
-      // silently fail
-    } finally {
-      setMarkingNext((prev) => {
-        const next = new Set(prev);
-        next.delete(imdbId);
-        return next;
-      });
+    } catch { } finally {
+      setMarkingNext((prev) => { const next = new Set(prev); next.delete(imdbId); return next; });
     }
   };
 
-  /* ─── Error state ─── */
   if (error) {
     return (
-      <div className="mx-auto max-w-lg space-y-4 rounded-2xl p-8 text-center" style={{ border: "1px solid rgba(217,119,66,0.2)", background: "rgba(217,119,66,0.05)" }}>
+      <div
+        className="mx-auto max-w-lg space-y-4 rounded-2xl p-8 text-center"
+        style={{ border: "1px solid rgba(217,119,66,0.2)", background: "rgba(217,119,66,0.05)" }}
+      >
         <AlertCircle className="mx-auto h-12 w-12 text-claw-400" />
-        <p className="text-xl font-semibold text-claw-300">
-          Unable to connect to the API
-        </p>
+        <p className="text-xl font-semibold text-claw-300">Unable to connect to the API</p>
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>{error}</p>
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-          Current API base:{" "}
-          <span className="font-mono text-claw-400">
-            {runtimeConfig.getApiBase()}
-          </span>
+          API base: <span className="font-mono text-claw-400">{runtimeConfig.getApiBase()}</span>
         </p>
         <div className="flex items-center justify-center gap-3 pt-2">
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="rounded-lg bg-claw-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-claw-400"
+            className="rounded-lg bg-claw-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 transition-colors active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400"
           >
             Reload
           </button>
@@ -435,11 +780,16 @@ export function DashboardPage() {
     if (logWatch) void load();
   };
 
+  const monthly = detailedStats?.monthly ?? [];
+
   return (
     <div className="space-y-10">
       {/* ── Now Watching Banner ── */}
       {activeCheckin && (
-        <div className="flex items-center gap-4 rounded-2xl px-5 py-4" style={{ border: "1px solid rgba(217,119,66,0.25)", background: "rgba(217,119,66,0.06)" }}>
+        <div
+          className="flex items-center gap-4 rounded-2xl px-5 py-4"
+          style={{ border: "1px solid rgba(217,119,66,0.25)", background: "rgba(217,119,66,0.06)" }}
+        >
           {activeCheckin.poster && (
             <div className="h-14 w-10 flex-none overflow-hidden rounded-lg" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
               <img src={activeCheckin.poster} alt="" className="h-full w-full object-cover" loading="lazy" />
@@ -464,14 +814,14 @@ export function DashboardPage() {
             <button
               type="button"
               onClick={() => void handleCheckout(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-claw-500 px-3 py-2 text-xs font-semibold text-white hover:bg-claw-600 transition-colors"
+              className="flex items-center gap-1.5 rounded-xl bg-claw-500 px-3 py-2 text-xs font-semibold text-white hover:bg-claw-600 active:scale-[0.98] transition-all"
             >
               <Check className="h-3.5 w-3.5" /> Finished
             </button>
             <button
               type="button"
               onClick={() => void handleCheckout(false)}
-              className="flex h-8 w-8 items-center justify-center rounded-xl transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-xl transition-all active:scale-95"
               style={{ border: "1px solid var(--border-strong)", background: "var(--bg-2)", color: "var(--text-dim)" }}
               aria-label="Check out without logging"
             >
@@ -481,31 +831,27 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* ── Inline stats bar ── */}
+      {/* ── Stats bento grid ── */}
       <section>
-        {loading ? (
-          <StatsSkeleton />
-        ) : stats ? (
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <div className="flex items-center gap-2">
-              <Film className="h-4 w-4 text-claw-400" />
-              <span className="text-lg font-bold tabular-nums" style={{ color: "var(--text)" }}>{stats.totalMovies.toLocaleString()}</span>
-              <span className="text-sm" style={{ color: "var(--text-dim)" }}>movies</span>
-            </div>
-            <div className="h-4 w-px" style={{ background: "var(--border-strong)" }} />
-            <div className="flex items-center gap-2">
-              <Tv className="h-4 w-4 text-plum-500" />
-              <span className="text-lg font-bold tabular-nums" style={{ color: "var(--text)" }}>{stats.totalEpisodes.toLocaleString()}</span>
-              <span className="text-sm" style={{ color: "var(--text-dim)" }}>episodes</span>
-            </div>
-            <div className="h-4 w-px" style={{ background: "var(--border-strong)" }} />
-            <div className="flex items-center gap-2">
-              <Play className="h-4 w-4 text-amber-400" />
-              <span className="text-lg font-bold tabular-nums" style={{ color: "var(--text)" }}>{stats.totalPlays.toLocaleString()}</span>
-              <span className="text-sm" style={{ color: "var(--text-dim)" }}>total plays</span>
-            </div>
+        {/* Desktop: 3-col asymmetric bento. Mobile: 2-col stacked. */}
+        <div className="hidden lg:grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 220px", gridTemplateRows: "auto auto" }}>
+          <StatsOverviewCard stats={stats} monthly={monthly} loading={loading || detailedLoading} />
+          <StreakCard current={detailedStats?.currentStreak ?? 0} longest={detailedStats?.longestStreak ?? 0} loading={detailedLoading} />
+          <ThisMonthCard monthly={monthly} loading={detailedLoading} />
+          <TopGenresCard genres={detailedStats?.genreDistribution ?? []} loading={detailedLoading} />
+        </div>
+
+        {/* Mobile/tablet fallback: 2-col grid, no row-span */}
+        <div className="grid grid-cols-2 gap-3 lg:hidden">
+          <div className="col-span-2">
+            <StatsOverviewCard stats={stats} monthly={monthly} loading={loading || detailedLoading} />
           </div>
-        ) : null}
+          <StreakCard current={detailedStats?.currentStreak ?? 0} longest={detailedStats?.longestStreak ?? 0} loading={detailedLoading} />
+          <ThisMonthCard monthly={monthly} loading={detailedLoading} />
+          <div className="col-span-2">
+            <TopGenresCard genres={detailedStats?.genreDistribution ?? []} loading={detailedLoading} />
+          </div>
+        </div>
       </section>
 
       {/* ── Continue Watching ── */}
@@ -522,17 +868,14 @@ export function DashboardPage() {
         {loading ? (
           <ContinueWatchingSkeleton />
         ) : progress.length === 0 ? (
-          <div className="rounded-2xl border-dashed py-12 text-center" style={{ border: "1px dashed var(--border-strong)" }}>
+          <div className="rounded-2xl py-12 text-center" style={{ border: "1px dashed var(--border-strong)" }}>
             <Tv className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
             <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
               No series in progress. Start watching something!
             </p>
           </div>
         ) : (
-          <div
-            ref={continueScroll.ref}
-            className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
-          >
+          <div ref={continueScroll.ref} className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide">
             {progress.map((s) => {
               const isMarking = markingNext.has(s.imdbId);
               const isDone = markedDone.has(s.imdbId);
@@ -542,12 +885,11 @@ export function DashboardPage() {
                   : null;
               return (
                 <div key={s.imdbId} className="flex-none group" style={{ width: "11rem" }}>
-                  <div className="relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover" style={{ aspectRatio: "2 / 3", boxShadow: "inset 0 0 0 1px var(--border)" }}>
-                    <Poster
-                      src={s.poster}
-                      alt={s.name}
-                      className="h-full w-full"
-                    />
+                  <div
+                    className="relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
+                    style={{ aspectRatio: "2 / 3", boxShadow: "inset 0 0 0 1px var(--border)" }}
+                  >
+                    <Poster src={s.poster} alt={s.name} className="h-full w-full" />
                     <button
                       type="button"
                       className="absolute inset-0 cursor-pointer"
@@ -557,10 +899,7 @@ export function DashboardPage() {
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/80 to-transparent px-3 pb-3 pt-16">
                       {progressPct !== null && (
                         <div className="mb-2 h-1 w-full overflow-hidden rounded-full" style={{ background: "rgba(255,215,180,0.15)" }}>
-                          <div
-                            className="h-full rounded-full bg-claw-500 transition-all duration-500"
-                            style={{ width: `${progressPct}%` }}
-                          />
+                          <div className="h-full rounded-full bg-claw-500 transition-all duration-500" style={{ width: `${progressPct}%` }} />
                         </div>
                       )}
                       <p className="text-xs" style={{ color: "var(--text-dim)" }}>
@@ -571,27 +910,18 @@ export function DashboardPage() {
                         type="button"
                         disabled={isMarking || isDone}
                         onClick={() => void handleMarkNext(s.imdbId)}
-                        aria-label={isMarking ? "Marking next episode" : isDone ? "Episode marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
-                        className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all ${
-                          isDone
-                            ? "bg-emerald-500/20 text-emerald-400"
-                            : isMarking
-                              ? "text-ink-400"
-                              : "text-white hover:bg-white/20 backdrop-blur-sm"
+                        aria-label={isMarking ? "Marking" : isDone ? "Marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
+                        className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all active:scale-[0.98] ${
+                          isDone ? "bg-emerald-500/20 text-emerald-400" : "text-white backdrop-blur-sm"
                         }`}
-                        style={isMarking ? { background: "rgba(42,36,30,0.8)" } : isDone ? {} : { background: "rgba(255,215,180,0.1)" }}
+                        style={isMarking ? { background: "rgba(42,36,30,0.8)", color: "var(--text-mute)" } : isDone ? {} : { background: "rgba(255,215,180,0.1)" }}
                       >
                         {isDone ? (
-                          <>
-                            <Check className="h-3.5 w-3.5" /> Marked
-                          </>
+                          <><Check className="h-3.5 w-3.5" /> Marked</>
                         ) : isMarking ? (
                           <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-ink-400 border-t-transparent" />
                         ) : (
-                          <>
-                            <ChevronRight className="h-3.5 w-3.5" />
-                            Mark S{s.nextSeason}:E{s.nextEpisode}
-                          </>
+                          <><ChevronRight className="h-3.5 w-3.5" /> Mark S{s.nextSeason}:E{s.nextEpisode}</>
                         )}
                       </button>
                     </div>
@@ -635,10 +965,7 @@ export function DashboardPage() {
             <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>No watch history yet.</p>
           </div>
         ) : (
-          <div
-            ref={recentScroll.ref}
-            className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
-          >
+          <div ref={recentScroll.ref} className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide">
             {history.map((event) => (
               <div
                 key={event.id}
@@ -646,25 +973,17 @@ export function DashboardPage() {
                 tabIndex={0}
                 className="flex-none group cursor-pointer"
                 style={{ width: "11rem" }}
-                onClick={() => setSelectedItem(toSearchResult(
-                  event.imdbId,
-                  event.type === "movie" ? "movie" : "series",
-                  event.name,
-                  { poster: event.poster }
-                ))}
+                onClick={() => setSelectedItem(toSearchResult(event.imdbId, event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster }))}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedItem(toSearchResult(event.imdbId, event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster })); } }}
                 aria-label={`View details for ${event.name}`}
               >
-                <div className="relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover" style={{ aspectRatio: "2 / 3", boxShadow: "inset 0 0 0 1px var(--border)" }}>
-                  <Poster
-                    src={event.poster}
-                    alt={event.name}
-                    className="h-full w-full"
-                  />
+                <div
+                  className="relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
+                  style={{ aspectRatio: "2 / 3", boxShadow: "inset 0 0 0 1px var(--border)" }}
+                >
+                  <Poster src={event.poster} alt={event.name} className="h-full w-full" />
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent px-3 pb-3 pt-12">
-                    {event.type === "episode" &&
-                    event.season != null &&
-                    event.episode != null ? (
+                    {event.type === "episode" && event.season != null && event.episode != null ? (
                       <span className="inline-block rounded px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm" style={{ background: "rgba(255,215,180,0.12)" }}>
                         S{event.season}:E{event.episode}
                       </span>
@@ -684,13 +1003,9 @@ export function DashboardPage() {
                   {event.name}
                 </p>
                 <p className="text-2xs" style={{ color: "var(--text-dim)" }}>
-                  {event.type === "episode" &&
-                  event.season != null &&
-                  event.episode != null
+                  {event.type === "episode" && event.season != null && event.episode != null
                     ? `Season ${event.season}, Episode ${event.episode}`
-                    : event.type === "movie"
-                      ? "Movie"
-                      : ""}
+                    : event.type === "movie" ? "Movie" : ""}
                 </p>
               </div>
             ))}
@@ -709,10 +1024,7 @@ export function DashboardPage() {
                 onScroll={trendingScroll.scroll}
               />
             )}
-            <Link
-              to="/search"
-              className="text-sm font-medium text-claw-400 hover:text-claw-300 transition-colors"
-            >
+            <Link to="/search" className="text-sm font-medium text-claw-400 hover:text-claw-300 transition-colors">
               Search &rarr;
             </Link>
           </div>
@@ -723,14 +1035,11 @@ export function DashboardPage() {
           <div className="rounded-2xl py-12 text-center" style={{ border: "1px dashed var(--border-strong)" }}>
             <TrendingUp className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
             <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
-              Unable to load trending content. Please try again or check your network connection.
+              Unable to load trending content.
             </p>
           </div>
         ) : (
-          <div
-            ref={trendingScroll.ref}
-            className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
-          >
+          <div ref={trendingScroll.ref} className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide">
             {trendingMovies.map((item) => (
               <DiscoveryCard
                 key={item.id}
@@ -745,7 +1054,7 @@ export function DashboardPage() {
       {/* ── Recommended Movies ── */}
       {(recsLoading || recommendations.length > 0) && (
         <section>
-          <SectionHeader title={aiActive ? "AI Picks — Movies" : "Recommended For You"}>
+          <SectionHeader title={aiActive ? "AI Picks - Movies" : "Recommended For You"}>
             {!recsLoading && recommendations.length > 0 && (
               <ScrollArrows
                 canScrollLeft={recsScroll.canScrollLeft}
@@ -755,16 +1064,11 @@ export function DashboardPage() {
             )}
           </SectionHeader>
           {recsLoading ? (
-            aiActive ? (
-              <p className="text-sm italic" style={{ color: "var(--text-dim)" }}>Generating AI recommendations…</p>
-            ) : (
-              <ContinueWatchingSkeleton />
-            )
+            aiActive
+              ? <p className="text-sm italic" style={{ color: "var(--text-dim)" }}>Generating AI recommendations...</p>
+              : <ContinueWatchingSkeleton />
           ) : (
-            <div
-              ref={recsScroll.ref}
-              className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
-            >
+            <div ref={recsScroll.ref} className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide">
               {recommendations.map((item) => (
                 <DiscoveryCard
                   key={item.id}
@@ -772,7 +1076,7 @@ export function DashboardPage() {
                   reason={movieReasons[item.id]}
                   onSelect={(i) => setSelectedItem(toSearchResult(i.id, (i.type ?? "movie") as "movie" | "series", i.name, { poster: i.poster, year: i.year, description: item.description, genres: i.genres, rating: i.rating }))}
                   badge={
-                    <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm bg-plum-500/80">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-plum-500/80 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
                       <Sparkles className="h-2.5 w-2.5" />
                       {aiActive && <span>AI</span>}
                     </span>
@@ -787,7 +1091,7 @@ export function DashboardPage() {
       {/* ── Recommended Series ── */}
       {(seriesRecsLoading || seriesRecs.length > 0) && (
         <section>
-          <SectionHeader title={aiActive ? "AI Picks — Series" : "Recommended Series For You"}>
+          <SectionHeader title={aiActive ? "AI Picks - Series" : "Recommended Series For You"}>
             {!seriesRecsLoading && seriesRecs.length > 0 && (
               <ScrollArrows
                 canScrollLeft={seriesRecsScroll.canScrollLeft}
@@ -797,16 +1101,11 @@ export function DashboardPage() {
             )}
           </SectionHeader>
           {seriesRecsLoading ? (
-            aiActive ? (
-              <p className="text-sm italic" style={{ color: "var(--text-dim)" }}>Generating AI recommendations…</p>
-            ) : (
-              <ContinueWatchingSkeleton />
-            )
+            aiActive
+              ? <p className="text-sm italic" style={{ color: "var(--text-dim)" }}>Generating AI recommendations...</p>
+              : <ContinueWatchingSkeleton />
           ) : (
-            <div
-              ref={seriesRecsScroll.ref}
-              className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
-            >
+            <div ref={seriesRecsScroll.ref} className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide">
               {seriesRecs.map((item) => (
                 <DiscoveryCard
                   key={item.id}
@@ -814,7 +1113,7 @@ export function DashboardPage() {
                   reason={seriesReasons[item.id]}
                   onSelect={(i) => setSelectedItem(toSearchResult(i.id, "series", i.name, { poster: i.poster, year: i.year, description: item.description, genres: i.genres, rating: i.rating }))}
                   badge={
-                    <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm bg-plum-500/80">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-plum-500/80 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
                       <Sparkles className="h-2.5 w-2.5" />
                       {aiActive && <span>AI</span>}
                     </span>
@@ -858,51 +1157,49 @@ export function DashboardPage() {
                 const tomorrow = new Date();
                 tomorrow.setDate(tomorrow.getDate() + 1);
                 const isTomorrow = airDate.toDateString() === tomorrow.toDateString();
-                const dateLabel = isToday
-                  ? "Today"
-                  : isTomorrow
-                    ? "Tomorrow"
-                    : airDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+                const dateLabel = isToday ? "Today"
+                  : isTomorrow ? "Tomorrow"
+                  : airDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 
                 return (
                   <div
                     key={`${entry.seriesImdbId}-s${entry.season}e${entry.episode}`}
                     className="flex items-center gap-4 rounded-xl p-3 transition-all"
-                    style={{
-                      border: "1px solid var(--border)",
-                      background: "var(--surface)",
+                    style={{ border: "1px solid var(--border)", background: "var(--surface)" }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLDivElement).style.background = "var(--surface-strong)";
+                      (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border-strong)";
                     }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--surface-strong)"; (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border-strong)"; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--surface)"; (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)"; }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLDivElement).style.background = "var(--surface)";
+                      (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)";
+                    }}
                   >
                     <div className="h-16 w-11 flex-none overflow-hidden rounded-lg" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
-                      <Poster
-                        src={entry.poster ?? undefined}
-                        alt={entry.seriesName}
-                        className="h-full w-full"
-                      />
+                      <Poster src={entry.poster ?? undefined} alt={entry.seriesName} className="h-full w-full" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>
                         {entry.seriesName}
                       </p>
                       <p className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
-                        S{entry.season}:E{entry.episode} — {entry.episodeName}
+                        S{entry.season}:E{entry.episode} - {entry.episodeName}
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-none">
-                      <span className={`rounded-full px-2.5 py-0.5 text-2xs font-semibold ${
-                        isToday
-                          ? "bg-claw-500/15 text-claw-400"
-                          : isTomorrow
-                            ? "bg-amber-500/15 text-amber-400"
-                            : "text-ink-400"
-                      }`}
-                      style={!isToday && !isTomorrow ? { background: "var(--surface-strong)" } : {}}
+                      <span
+                        className="rounded-full px-2.5 py-0.5 text-2xs font-semibold"
+                        style={
+                          isToday
+                            ? { background: "rgba(217,119,66,0.15)", color: "#e89163" }
+                            : isTomorrow
+                              ? { background: "rgba(245,158,11,0.15)", color: "#fbbf24" }
+                              : { background: "var(--surface-strong)", color: "var(--text-mute)" }
+                        }
                       >
                         {dateLabel}
                       </span>
-                      <span className="text-2xs" style={{ color: "var(--text-mute)" }}>
+                      <span className="text-2xs tabular-nums" style={{ color: "var(--text-mute)" }}>
                         {airDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                       </span>
                     </div>
