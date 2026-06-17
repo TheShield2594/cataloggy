@@ -12,7 +12,7 @@ const parseProxyPathPrefixes = (raw: string | undefined, fallback: readonly stri
   return parsed.length > 0 ? parsed : [...fallback];
 };
 
-const CATALOGGY_API_BASE = process.env.CATALOGGY_API ?? process.env.CATALOGGY_API_BASE ?? "http://api:7000";
+const CATALOGGY_API_BASE = process.env.CATALOGGY_API_BASE ?? "http://api:7000";
 const CATALOGGY_API_TOKEN = process.env.CATALOGGY_API_TOKEN;
 const ADDON_PUBLIC_BASE = process.env.ADDON_PUBLIC_BASE;
 const WEB_PUBLIC_BASE = process.env.CATALOGGY_WEB_PUBLIC ?? process.env.WEB_PUBLIC_BASE;
