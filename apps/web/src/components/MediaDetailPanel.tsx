@@ -437,18 +437,34 @@ export function StarRating({
         <Star className="h-3.5 w-3.5" /> Your Rating
       </h3>
       <div className="flex items-center gap-1">
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
-          <button
-            key={star} type="button" disabled={saving}
-            onClick={() => void handleRate(star)}
-            onMouseEnter={() => setHoverRating(star)}
-            onMouseLeave={() => setHoverRating(null)}
-            className="p-0.5 transition-transform hover:scale-125 disabled:opacity-50"
-            aria-label={`Rate ${star} out of 10`}
-          >
-            <Star className={`h-5 w-5 transition-colors ${star <= displayRating ? "fill-amber-400 text-amber-400" : "text-ink-300 hover:text-ink-400"}`} />
-          </button>
-        ))}
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => {
+          const isFilled = userRating !== null && star <= userRating;
+          const isPreview = star <= displayRating;
+          return (
+            <button
+              key={star} type="button" disabled={saving}
+              onClick={() => void handleRate(star)}
+              onMouseEnter={() => setHoverRating(star)}
+              onMouseLeave={() => setHoverRating(null)}
+              onFocus={() => setHoverRating(star)}
+              onBlur={() => setHoverRating(null)}
+              className="flex flex-col items-center gap-0.5 p-0.5 disabled:opacity-50"
+              aria-label={`Rate ${star} out of 10`}
+            >
+              <span className="relative grid h-5 w-5 place-items-center">
+                <Star
+                  className={`absolute h-5 w-5 transition-colors duration-300 ${isPreview ? "text-amber-400" : "text-ink-300"}`}
+                />
+                <Star
+                  className={`star-shake-target absolute h-5 w-5 fill-amber-400 text-amber-400 transition-opacity duration-300 ${isFilled ? "star-pop opacity-100" : "opacity-0"}`}
+                />
+              </span>
+              <span
+                className={`h-1 w-4 rounded-full bg-amber-500/30 blur-[2px] transition-opacity duration-300 ${isPreview || isFilled ? "opacity-60" : "opacity-0"}`}
+              />
+            </button>
+          );
+        })}
         {userRating !== null && <span className="ml-2 text-sm font-semibold text-amber-500">{userRating}/10</span>}
       </div>
       {loadError && (
