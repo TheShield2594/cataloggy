@@ -47,10 +47,15 @@ export type PushPayload = {
   url?: string;
 };
 
-export const sendPushToAllSubscriptions = async (payload: PushPayload): Promise<void> => {
+export const sendPushToAllSubscriptions = async (
+  payload: PushPayload,
+  profileId?: string
+): Promise<void> => {
   await getPushPublicKey();
 
-  const subscriptions = await prisma.pushSubscription.findMany();
+  const subscriptions = await prisma.pushSubscription.findMany(
+    profileId ? { where: { profileId } } : undefined
+  );
   if (subscriptions.length === 0) return;
 
   const json = JSON.stringify(payload);

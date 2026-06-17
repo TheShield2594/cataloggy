@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 
 export type FilterType = "all" | "movie" | "series";
 export type SortOption = "relevance" | "rating" | "year_desc" | "year_asc" | "title";
-export type RuntimeBucket = "" | "short" | "medium" | "long" | "epic";
 
 export type SearchFilters = {
   query: string;
@@ -12,8 +11,6 @@ export type SearchFilters = {
   yearMin: string;
   yearMax: string;
   ratingMin: string;
-  provider: string;
-  runtime: RuntimeBucket;
   sort: SortOption;
 };
 
@@ -24,22 +21,11 @@ const DEFAULTS: SearchFilters = {
   yearMin: "",
   yearMax: "",
   ratingMin: "",
-  provider: "",
-  runtime: "",
   sort: "relevance",
 };
 
 const VALID_FILTERS: FilterType[] = ["all", "movie", "series"];
 const VALID_SORTS: SortOption[] = ["relevance", "rating", "year_desc", "year_asc", "title"];
-const VALID_RUNTIMES: RuntimeBucket[] = ["", "short", "medium", "long", "epic"];
-
-export const RUNTIME_LABELS: Record<RuntimeBucket, string> = {
-  "": "Any",
-  short: "< 60 min",
-  medium: "60–120 min",
-  long: "120–180 min",
-  epic: "180+ min",
-};
 
 export const SORT_LABELS: Record<SortOption, string> = {
   relevance: "Relevance",
@@ -62,15 +48,12 @@ const PARAM_MAP: Record<keyof SearchFilters, string> = {
   yearMin: "yearMin",
   yearMax: "yearMax",
   ratingMin: "ratingMin",
-  provider: "provider",
-  runtime: "runtime",
   sort: "sort",
 };
 
 function parseParams(params: URLSearchParams): SearchFilters {
   const f = params.get("filter") as FilterType;
   const s = params.get("sort") as SortOption;
-  const r = params.get("runtime") as RuntimeBucket;
   return {
     query: params.get("q") ?? DEFAULTS.query,
     filter: VALID_FILTERS.includes(f) ? f : DEFAULTS.filter,
@@ -78,8 +61,6 @@ function parseParams(params: URLSearchParams): SearchFilters {
     yearMin: numericParam(params.get("yearMin"), DEFAULTS.yearMin),
     yearMax: numericParam(params.get("yearMax"), DEFAULTS.yearMax),
     ratingMin: numericParam(params.get("ratingMin"), DEFAULTS.ratingMin),
-    provider: params.get("provider") ?? DEFAULTS.provider,
-    runtime: VALID_RUNTIMES.includes(r) ? r : DEFAULTS.runtime,
     sort: VALID_SORTS.includes(s) ? s : DEFAULTS.sort,
   };
 }

@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { api, runtimeConfig } from "../api";
-import { ChevronDown, Key, Link, Database, Info, Eye, EyeOff, Loader2, Check, AlertCircle, Unplug, Clapperboard, Image, Globe, Shield, Copy, ExternalLink, Star, Sparkles, Clock, Bell } from "lucide-react";
+import { ChevronDown, Key, Link, Database, Info, Eye, EyeOff, Loader2, Check, AlertCircle, Unplug, Clapperboard, Image, Globe, Shield, Copy, ExternalLink, Star, Sparkles, Clock, Bell, Users } from "lucide-react";
 import { timeAgo } from "../utils/timeAgo";
 import { isPushSupported, getExistingPushSubscription, subscribeToPush, unsubscribeFromPush } from "../utils/push";
 
@@ -1183,53 +1183,114 @@ function NotificationsSection() {
   );
 }
 
+function ProfileSection() {
+  const switchProfile = () => {
+    runtimeConfig.clearProfileId();
+    window.location.reload();
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-ink-400 leading-relaxed">
+        Switch to a different profile, or create a new one. Each profile has its own watch history,
+        lists, and stats.
+      </p>
+      <button
+        type="button"
+        onClick={switchProfile}
+        className="inline-flex items-center gap-2 rounded-xl bg-ink-800 border border-ink-700/60 px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-ink-700"
+      >
+        <Users size={16} /> Switch Profile
+      </button>
+    </div>
+  );
+}
+
+type SettingsTab = "preferences" | "integrations";
+
 export function SettingsPage() {
+  const [tab, setTab] = useState<SettingsTab>("preferences");
+
+  const tabs: { id: SettingsTab; label: string }[] = [
+    { id: "preferences", label: "Preferences" },
+    { id: "integrations", label: "Integrations & Advanced" },
+  ];
+
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <h2 className="text-2xl font-bold">Settings</h2>
 
-      <Section title="API Token" icon={<Key size={20} />} defaultOpen>
-        <ApiTokenSection />
-      </Section>
+      <div className="flex rounded-full border border-ink-700/60 bg-ink-800/60 p-1">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={`flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
+              tab === t.id
+                ? "bg-claw-500 text-white shadow-lg shadow-claw-500/25"
+                : "text-ink-400 hover:text-white"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-      <Section title="Trakt Integration" icon={<Link size={20} />}>
-        <TraktSection />
-      </Section>
+      {tab === "preferences" && (
+        <div className="space-y-4">
+          <Section title="Preferences" icon={<Globe size={20} />} defaultOpen>
+            <PreferencesSection />
+          </Section>
 
-      <Section title="Stremio Addon" icon={<Clapperboard size={20} />}>
-        <AddonConfigSection />
-      </Section>
+          <Section title="Profile" icon={<Users size={20} />}>
+            <ProfileSection />
+          </Section>
 
-      <Section title="Preferences" icon={<Globe size={20} />}>
-        <PreferencesSection />
-      </Section>
+          <Section title="Notifications" icon={<Bell size={20} />}>
+            <NotificationsSection />
+          </Section>
 
-      <Section title="OMDB Ratings" icon={<Star size={20} />}>
-        <OmdbSection />
-      </Section>
-
-      <Section title="RPDB Posters" icon={<Image size={20} />}>
-        <RpdbSection />
-      </Section>
-
-      <Section title="AI Recommendations" icon={<Sparkles size={20} />}>
-        <AiRecommendationsSection />
-      </Section>
-
-      <Section title="Notifications" icon={<Bell size={20} />}>
-        <NotificationsSection />
-      </Section>
-
-      <Section title="Data" icon={<Database size={20} />}>
-        <DataSection />
-      </Section>
-
-      <Section title="About" icon={<Info size={20} />}>
-        <div className="space-y-2 text-sm text-ink-400">
-          <p className="text-base font-semibold text-ink-200">Cataloggy <span className="font-mono text-claw-400">v{APP_VERSION}</span></p>
-          <p className="text-sm">A personal media catalog and watchlist manager.</p>
+          <Section title="About" icon={<Info size={20} />}>
+            <div className="space-y-2 text-sm text-ink-400">
+              <p className="text-base font-semibold text-ink-200">Cataloggy <span className="font-mono text-claw-400">v{APP_VERSION}</span></p>
+              <p className="text-sm">A personal media catalog and watchlist manager.</p>
+            </div>
+          </Section>
         </div>
-      </Section>
+      )}
+
+      {tab === "integrations" && (
+        <div className="space-y-4">
+          <Section title="API Token" icon={<Key size={20} />} defaultOpen>
+            <ApiTokenSection />
+          </Section>
+
+          <Section title="Trakt Integration" icon={<Link size={20} />}>
+            <TraktSection />
+          </Section>
+
+          <Section title="Stremio Addon" icon={<Clapperboard size={20} />}>
+            <AddonConfigSection />
+          </Section>
+
+          <Section title="OMDB Ratings" icon={<Star size={20} />}>
+            <OmdbSection />
+          </Section>
+
+          <Section title="RPDB Posters" icon={<Image size={20} />}>
+            <RpdbSection />
+          </Section>
+
+          <Section title="AI Recommendations" icon={<Sparkles size={20} />}>
+            <AiRecommendationsSection />
+          </Section>
+
+          <Section title="Data" icon={<Database size={20} />}>
+            <DataSection />
+          </Section>
+        </div>
+      )}
     </div>
   );
 }

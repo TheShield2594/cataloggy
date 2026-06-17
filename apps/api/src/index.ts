@@ -7,12 +7,13 @@ import { getAiRecommendations, isAiConfigured } from "./lib/ai.js";
 import { trendingCacheDeletePrefix } from "./lib/cache.js";
 import { pollTraktHistory } from "./lib/trakt-client.js";
 import { ensureDefaultWatchlist } from "./lib/watchlist.js";
+import { getDefaultProfileId } from "./lib/profile.js";
 import { checkUpcomingEpisodesAndNotify } from "./lib/notify-episodes.js";
 import { cleanupStaleSessions, SCROBBLE_CLEANUP_INTERVAL_MS } from "./routes/scrobble.js";
 
 // Route modules
 import healthRoutes from "./routes/health.js";
-import usersRoutes from "./routes/users.js";
+import profilesRoutes from "./routes/profiles.js";
 import searchRoutes from "./routes/search.js";
 import metadataRoutes from "./routes/metadata.js";
 import watchRoutes from "./routes/watch.js";
@@ -110,7 +111,7 @@ app.addHook("onRequest", async (request, reply) => {
 // ─── Route registration ───
 
 app.register(healthRoutes);
-app.register(usersRoutes);
+app.register(profilesRoutes);
 app.register(searchRoutes);
 app.register(metadataRoutes);
 app.register(watchRoutes);
@@ -141,7 +142,10 @@ const start = async () => {
 
   if (TRAKT_POLL_INTERVAL_SEC > 0) {
     setInterval(() => {
-      void pollTraktHistory(app.log).catch((error) => {
+      void (async () => {
+        const profileId = await getDefaultProfileId();
+        await pollTraktHistory(app.log, profileId);
+      })().catch((error) => {
         app.log.error(error, "Scheduled Trakt poll failed");
       });
     }, TRAKT_POLL_INTERVAL_SEC * 1000);

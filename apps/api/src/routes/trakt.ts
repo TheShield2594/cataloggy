@@ -12,6 +12,7 @@ import {
   computeTokenExpiresAt,
 } from "../lib/trakt-client.js";
 import { renderOAuthHtml } from "../lib/html.js";
+import { getDefaultProfileId } from "../lib/profile.js";
 import type { SeriesProgressCandidate } from "../lib/types.js";
 
 const traktRoutes: FastifyPluginAsync = async (app) => {
@@ -162,7 +163,8 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
     ]);
 
     const imported = { movies: 0, episodes: 0, watchlistMovies: 0, watchlistShows: 0 };
-    const watchlist = await getDefaultWatchlist();
+    const profileId = await getDefaultProfileId();
+    const watchlist = await getDefaultWatchlist(profileId);
 
     for (const entry of watchlistMovies) {
       const imdbId = entry.movie?.ids?.imdb;
@@ -209,7 +211,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
       const watchedAt = entry.last_watched_at;
       if (!imdbId || !watchedAt) continue;
 
-      const existing = await prisma.watchEvent.findFirst({ where: { type: "movie", imdbId } });
+      const existing = await prisma.watchEvent.findFirst({ where: { profileId, type: "movie", imdbId } });
       if (existing) {
         await prisma.watchEvent.update({
           where: { id: existing.id },
@@ -217,7 +219,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
         });
       } else {
         await prisma.watchEvent.create({
-          data: { type: "movie", imdbId, watchedAt: new Date(watchedAt), plays: entry.plays ?? 1 },
+          data: { type: "movie", imdbId, watchedAt: new Date(watchedAt), plays: entry.plays ?? 1, profileId },
         });
       }
       imported.movies += 1;
@@ -237,7 +239,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
           if (episodeNumber === undefined || !watchedAt) continue;
 
           const existing = await prisma.watchEvent.findFirst({
-            where: { type: "episode", seriesImdbId, season: seasonNumber, episode: episodeNumber },
+            where: { profileId, type: "episode", seriesImdbId, season: seasonNumber, episode: episodeNumber },
           });
 
           if (existing) {
@@ -255,6 +257,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
                 episode: episodeNumber,
                 watchedAt: new Date(watchedAt),
                 plays: ep.plays ?? 1,
+                profileId,
               },
             });
           }
@@ -282,7 +285,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
     }
 
     for (const [seriesImdbId, progress] of seriesProgressByImdb.entries()) {
-      await upsertSeriesProgressIfNewer(seriesImdbId, progress);
+      await upsertSeriesProgressIfNewer(profileId, seriesImdbId, progress);
     }
 
     const movieImdbIds = watchedMovies
@@ -328,7 +331,8 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/trakt/poll", async (request, reply) => {
     try {
-      const result = await pollTraktHistory(request.log);
+      const profileId = await getDefaultProfileId();
+      const result = await pollTraktHistory(request.log, profileId);
       return reply.code(200).send(result);
     } catch (error) {
       request.log.error(error, "Trakt poll failed");

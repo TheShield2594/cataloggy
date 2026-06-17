@@ -33,7 +33,7 @@ const getTraktPollStartAt = async (): Promise<Date> => {
   return parsed;
 };
 
-export const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
+export const pollTraktHistory = async (logger: FastifyRequest["log"], profileId: string) => {
   const client = await getTraktClient();
   const pollStartAt = await getTraktPollStartAt();
   const pollCompletedAt = new Date();
@@ -71,7 +71,7 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
     // duplicated.
     const existingEvent =
       (historyId ? await prisma.watchEvent.findUnique({ where: { traktHistoryId: historyId } }) : null) ??
-      (await prisma.watchEvent.findFirst({ where: { type: "movie", imdbId, watchedAt: watchedAtDate } }));
+      (await prisma.watchEvent.findFirst({ where: { profileId, type: "movie", imdbId, watchedAt: watchedAtDate } }));
 
     if (existingEvent) {
       if (historyId && existingEvent.traktHistoryId == null) {
@@ -79,7 +79,7 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
       }
     } else {
       await prisma.watchEvent.create({
-        data: { type: "movie", imdbId, watchedAt: watchedAtDate, plays: 1, traktHistoryId: historyId },
+        data: { type: "movie", imdbId, watchedAt: watchedAtDate, plays: 1, traktHistoryId: historyId, profileId },
       });
     }
 
@@ -114,7 +114,7 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
     const existingEvent =
       (historyId ? await prisma.watchEvent.findUnique({ where: { traktHistoryId: historyId } }) : null) ??
       (await prisma.watchEvent.findFirst({
-        where: { type: "episode", seriesImdbId, season, episode, watchedAt: watchedAtDate },
+        where: { profileId, type: "episode", seriesImdbId, season, episode, watchedAt: watchedAtDate },
       }));
 
     if (existingEvent) {
@@ -132,6 +132,7 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
           watchedAt: watchedAtDate,
           plays: 1,
           traktHistoryId: historyId,
+          profileId,
         },
       });
     }
@@ -155,7 +156,7 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
   }
 
   for (const [seriesImdbId, progress] of seriesProgressByImdb.entries()) {
-    await upsertSeriesProgressIfNewer(seriesImdbId, progress);
+    await upsertSeriesProgressIfNewer(profileId, seriesImdbId, progress);
   }
 
   await prisma.kV.upsert({

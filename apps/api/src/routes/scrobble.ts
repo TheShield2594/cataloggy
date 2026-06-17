@@ -2,6 +2,7 @@ import { ScrobbleStatus, WatchEventType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { recordWatchEvent } from "../lib/watch-event.js";
+import { resolveProfile } from "../lib/profile.js";
 import type { CheckInData } from "../lib/types.js";
 
 export const SCROBBLE_COMPLETE_THRESHOLD = 80;
@@ -25,6 +26,8 @@ export const cleanupStaleSessions = async () => {
 const CHECKIN_KV_KEY = "checkin:active";
 
 const scrobbleRoutes: FastifyPluginAsync = async (app) => {
+  app.addHook("preHandler", resolveProfile);
+
   // ─── Check-in ───
 
   app.get("/checkin", async () => {
@@ -113,10 +116,12 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
     const season = typeof body.season === "number" && Number.isInteger(body.season) ? body.season : null;
     const episode = typeof body.episode === "number" && Number.isInteger(body.episode) ? body.episode : null;
     const progress = typeof body.progress === "number" ? Math.max(0, Math.min(100, body.progress)) : 0;
+    const profileId = request.profileId!;
 
     const { session, created } = await prisma.$transaction(async (tx) => {
       const existing = await tx.scrobbleSession.findFirst({
         where: {
+          profileId,
           imdbId,
           season,
           episode,
@@ -133,7 +138,7 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const newSession = await tx.scrobbleSession.create({
-        data: { type, imdbId, seriesImdbId, season, episode, status: ScrobbleStatus.playing, progress },
+        data: { type, imdbId, seriesImdbId, season, episode, status: ScrobbleStatus.playing, progress, profileId },
       });
       return { session: newSession, created: true };
     });
@@ -158,7 +163,7 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
       typeof body.progress === "number" ? Math.max(0, Math.min(100, body.progress)) : undefined;
 
     const session = await prisma.scrobbleSession.findFirst({
-      where: { imdbId, season, episode, status: ScrobbleStatus.playing },
+      where: { profileId: request.profileId!, imdbId, season, episode, status: ScrobbleStatus.playing },
     });
 
     if (!session) return reply.code(404).send({ error: "No active scrobble session found" });
@@ -188,7 +193,13 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
       typeof body.progress === "number" ? Math.max(0, Math.min(100, body.progress)) : undefined;
 
     const session = await prisma.scrobbleSession.findFirst({
-      where: { imdbId, season, episode, status: { in: [ScrobbleStatus.playing, ScrobbleStatus.paused] } },
+      where: {
+        profileId: request.profileId!,
+        imdbId,
+        season,
+        episode,
+        status: { in: [ScrobbleStatus.playing, ScrobbleStatus.paused] },
+      },
     });
 
     if (!session) return reply.code(404).send({ error: "No active scrobble session found" });
@@ -224,9 +235,12 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  app.get("/scrobble/now-playing", async () => {
+  app.get("/scrobble/now-playing", async (request) => {
     const sessions = await prisma.scrobbleSession.findMany({
-      where: { status: { in: [ScrobbleStatus.playing, ScrobbleStatus.paused] } },
+      where: {
+        profileId: request.profileId!,
+        status: { in: [ScrobbleStatus.playing, ScrobbleStatus.paused] },
+      },
       orderBy: { updatedAt: "desc" },
     });
 
