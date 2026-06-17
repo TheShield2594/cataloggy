@@ -2,9 +2,12 @@ import { ItemType, ListItemType, ListKind, MetadataType, Prisma } from "@prisma/
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { syncMetadata } from "../lib/metadata.js";
+import { resolveProfile } from "../lib/profile.js";
 import { UUID_V4_PATTERN } from "../lib/types.js";
 
 const listsRoutes: FastifyPluginAsync = async (app) => {
+  app.addHook("preHandler", resolveProfile);
+
   app.post<{ Body: unknown }>("/lists", async (request, reply) => {
     if (!request.body || typeof request.body !== "object") {
       return reply.code(400).send({ error: "name and kind are required" });
@@ -20,14 +23,15 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const list = await prisma.list.create({
-      data: { name: body.name.trim(), kind: body.kind as ListKind },
+      data: { name: body.name.trim(), kind: body.kind as ListKind, profileId: request.profileId! },
     });
 
     return reply.code(201).send({ list: { ...list, itemCount: 0 } });
   });
 
-  app.get("/lists", async () => {
+  app.get("/lists", async (request) => {
     const lists = await prisma.list.findMany({
+      where: { profileId: request.profileId! },
       orderBy: [{ createdAt: "asc" }],
       include: { _count: { select: { items: true } } },
     });
@@ -48,7 +52,9 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "id must be a valid UUID" });
     }
 
-    const list = await prisma.list.findUnique({ where: { id: request.params.id } });
+    const list = await prisma.list.findFirst({
+      where: { id: request.params.id, profileId: request.profileId! },
+    });
     if (!list) return reply.code(404).send({ error: "List not found" });
 
     await prisma.list.delete({ where: { id: list.id } });
@@ -70,7 +76,9 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "name is required" });
     }
 
-    const list = await prisma.list.findUnique({ where: { id: request.params.id } });
+    const list = await prisma.list.findFirst({
+      where: { id: request.params.id, profileId: request.profileId! },
+    });
     if (!list) return reply.code(404).send({ error: "List not found" });
 
     const updated = await prisma.list.update({
@@ -105,7 +113,9 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: "listId must be a valid UUID" });
       }
 
-      const list = await prisma.list.findUnique({ where: { id: request.params.listId } });
+      const list = await prisma.list.findFirst({
+        where: { id: request.params.listId, profileId: request.profileId! },
+      });
       if (!list) return reply.code(404).send({ error: "List not found" });
 
       const imdbId = (body.imdbId as string).trim();
@@ -160,6 +170,11 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: "type must be one of: movie, series" });
       }
 
+      const list = await prisma.list.findFirst({
+        where: { id: request.params.listId, profileId: request.profileId! },
+      });
+      if (!list) return reply.code(404).send({ error: "List not found" });
+
       const removed = await prisma.listItem.deleteMany({
         where: {
           listId: request.params.listId,
@@ -180,6 +195,11 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
       if (!UUID_V4_PATTERN.test(request.params.listId)) {
         return reply.code(400).send({ error: "listId must be a valid UUID" });
       }
+
+      const list = await prisma.list.findFirst({
+        where: { id: request.params.listId, profileId: request.profileId! },
+      });
+      if (!list) return reply.code(404).send({ error: "List not found" });
 
       const where: { listId: string; imdbId: string; type?: ListItemType } = {
         listId: request.params.listId,
@@ -213,7 +233,9 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "listId must be a valid UUID" });
     }
 
-    const list = await prisma.list.findUnique({ where: { id: request.params.listId } });
+    const list = await prisma.list.findFirst({
+      where: { id: request.params.listId, profileId: request.profileId! },
+    });
     if (!list) return reply.code(404).send({ error: "List not found" });
 
     const listItems = await prisma.listItem.findMany({
@@ -262,7 +284,10 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
       const { imdbId } = request.params;
       const typeFilter = request.query.type;
 
-      const where: { imdbId: string; type?: ListItemType } = { imdbId };
+      const where: { imdbId: string; type?: ListItemType; list: { profileId: string } } = {
+        imdbId,
+        list: { profileId: request.profileId! },
+      };
       if (typeFilter && Object.values(ListItemType).includes(typeFilter as ListItemType)) {
         where.type = typeFilter as ListItemType;
       }

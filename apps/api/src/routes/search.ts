@@ -5,8 +5,11 @@ import { upsertMetadata } from "../lib/metadata.js";
 import { getRpdbApiKey, withRpdbPoster } from "../lib/rpdb.js";
 import { getMetadataType } from "../lib/types.js";
 import { getTmdb } from "../lib/tmdb-client.js";
+import { resolveProfile } from "../lib/profile.js";
 
 const searchRoutes: FastifyPluginAsync = async (app) => {
+  app.addHook("preHandler", resolveProfile);
+
   app.get<{ Querystring: { type?: string; query?: string; q?: string } }>(
     "/search",
     async (request, reply) => {
@@ -43,7 +46,11 @@ const searchRoutes: FastifyPluginAsync = async (app) => {
 
       const [listItems, rpdbKey] = await Promise.all([
         prisma.listItem.findMany({
-          where: { imdbId: { in: imdbIds }, type: { in: resultTypes } },
+          where: {
+            imdbId: { in: imdbIds },
+            type: { in: resultTypes },
+            list: { profileId: request.profileId! },
+          },
           include: { list: { select: { id: true, name: true, kind: true } } },
         }),
         getRpdbApiKey(),

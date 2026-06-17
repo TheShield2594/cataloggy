@@ -13,10 +13,12 @@ export type UpcomingEpisode = {
 };
 
 export const getUpcomingEpisodes = async (
+  profileId: string,
   daysAhead: number,
   limit: number | null = 30
 ): Promise<UpcomingEpisode[]> => {
   const progressRows = await prisma.seriesProgress.findMany({
+    where: { profileId },
     orderBy: { lastWatchedAt: "desc" },
     ...(limit != null ? { take: limit } : {}),
   });

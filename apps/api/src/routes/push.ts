@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { getPushPublicKey } from "../lib/push.js";
+import { resolveProfile } from "../lib/profile.js";
 
 type SubscribeBody = {
   endpoint?: unknown;
@@ -44,7 +45,7 @@ const pushRoutes: FastifyPluginAsync = async (app) => {
     return { publicKey };
   });
 
-  app.post<{ Body: unknown }>("/push/subscribe", async (request, reply) => {
+  app.post<{ Body: unknown }>("/push/subscribe", { preHandler: resolveProfile }, async (request, reply) => {
     const body = request.body as SubscribeBody | null;
     const endpoint = typeof body?.endpoint === "string" ? body.endpoint.trim() : "";
     const p256dh = typeof body?.keys?.p256dh === "string" ? body.keys.p256dh : "";
@@ -59,21 +60,21 @@ const pushRoutes: FastifyPluginAsync = async (app) => {
 
     await prisma.pushSubscription.upsert({
       where: { endpoint },
-      create: { endpoint, p256dh, auth },
-      update: { p256dh, auth },
+      create: { endpoint, p256dh, auth, profileId: request.profileId! },
+      update: { p256dh, auth, profileId: request.profileId! },
     });
 
     return reply.code(201).send({ subscribed: true });
   });
 
-  app.post<{ Body: unknown }>("/push/unsubscribe", async (request, reply) => {
+  app.post<{ Body: unknown }>("/push/unsubscribe", { preHandler: resolveProfile }, async (request, reply) => {
     const body = request.body as { endpoint?: unknown } | null;
     const endpoint = typeof body?.endpoint === "string" ? body.endpoint.trim() : "";
     if (!endpoint) {
       return reply.code(400).send({ error: "endpoint is required" });
     }
 
-    await prisma.pushSubscription.deleteMany({ where: { endpoint } });
+    await prisma.pushSubscription.deleteMany({ where: { endpoint, profileId: request.profileId! } });
     return { subscribed: false };
   });
 };
