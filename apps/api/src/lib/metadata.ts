@@ -44,6 +44,17 @@ export const upsertMetadata = async (metadata: MetadataPayload) => {
   });
 };
 
+const enrichWithOmdb = async (imdbId: string, type: MetadataType) => {
+  try {
+    const omdbKey = await getOmdbApiKey();
+    if (omdbKey) {
+      const omdb = await fetchOmdbRatings(imdbId, omdbKey);
+      if (omdb) return upsertOmdbRatings(imdbId, type, omdb);
+    }
+  } catch { /* best-effort enrichment, ignore failures */ }
+  return undefined;
+};
+
 export const fetchMetadata = async (
   type: MetadataType,
   imdbId: string
@@ -54,14 +65,7 @@ export const fetchMetadata = async (
   if (!metadata) return null;
 
   await upsertMetadata(metadata);
-
-  try {
-    const omdbKey = await getOmdbApiKey();
-    if (omdbKey) {
-      const omdb = await fetchOmdbRatings(imdbId, omdbKey);
-      if (omdb) await upsertOmdbRatings(imdbId, type, omdb);
-    }
-  } catch { /* ignore */ }
+  await enrichWithOmdb(imdbId, type);
 
   return metadata;
 };
@@ -77,13 +81,8 @@ export const syncMetadata = async (imdbId: string, type: MetadataType) => {
       existing.rtScore === null &&
       existing.mcScore === null
     ) {
-      try {
-        const omdbKey = await getOmdbApiKey();
-        if (omdbKey) {
-          const omdb = await fetchOmdbRatings(imdbId, omdbKey);
-          if (omdb) return upsertOmdbRatings(imdbId, type, omdb);
-        }
-      } catch { /* ignore */ }
+      const enriched = await enrichWithOmdb(imdbId, type);
+      if (enriched) return enriched;
     }
     return existing;
   }
@@ -94,14 +93,7 @@ export const syncMetadata = async (imdbId: string, type: MetadataType) => {
   if (!payload) return existing ?? null;
 
   const row = await upsertMetadata(payload);
+  const enriched = await enrichWithOmdb(imdbId, type);
 
-  try {
-    const omdbKey = await getOmdbApiKey();
-    if (omdbKey) {
-      const omdb = await fetchOmdbRatings(imdbId, omdbKey);
-      if (omdb) return upsertOmdbRatings(imdbId, type, omdb);
-    }
-  } catch { /* ignore */ }
-
-  return row;
+  return enriched ?? row;
 };
