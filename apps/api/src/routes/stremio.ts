@@ -18,7 +18,7 @@ import { parseMetaType, parseCatalogLimit, UUID_V4_PATTERN } from "../lib/types.
 import type { StremioMetaPreview, StremioMetaType } from "../lib/types.js";
 import type { MetadataPayload } from "../tmdb.js";
 
-const STREMIO_ADDON_ID = "com.cataloggy.addon";
+const STREMIO_ADDON_ID = "com.cataloggy.api";
 const STREMIO_ADDON_VERSION = "1.0.0";
 
 const CORE_STREMIO_CATALOGS = [
