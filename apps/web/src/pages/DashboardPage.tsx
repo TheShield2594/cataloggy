@@ -62,47 +62,58 @@ function MiniBarChart({ data, active = true }: { data: number[]; active?: boolea
   );
 }
 
-/* ─── Stats overview card (3 sub-cols inside one card) ─── */
+/* ─── Stat block (used inside the unified overview card) ─── */
 
-function StatColumn({
+function StatBlock({
   label,
   value,
   sub,
   bars,
+  delta,
   icon: Icon,
 }: {
   label: string;
   value: string | number;
-  sub: string;
-  bars: number[];
+  sub?: string;
+  bars?: number[];
+  delta?: number | null;
   icon: React.ElementType;
 }) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2.5">
       <div className="flex items-center gap-1.5">
         <Icon className="h-3.5 w-3.5 text-claw-400" />
-        <span className="text-xs font-medium tracking-wide" style={{ color: "var(--text-mute)" }}>
+        <span className="text-2xs font-medium uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
           {label}
         </span>
       </div>
-      <MiniBarChart data={bars} />
-      <div>
-        <p className="text-3xl font-bold tabular-nums leading-none" style={{ color: "var(--text)" }}>
+      {bars && <MiniBarChart data={bars} />}
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-2xl font-bold tabular-nums leading-none" style={{ color: "var(--text)" }}>
           {typeof value === "number" ? value.toLocaleString() : value}
-        </p>
-        <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>{sub}</p>
+        </span>
+        {delta != null && (
+          <span className={`text-xs font-medium tabular-nums ${delta >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+            {delta >= 0 ? "+" : ""}{delta}
+          </span>
+        )}
       </div>
+      {sub && <p className="text-xs" style={{ color: "var(--text-dim)" }}>{sub}</p>}
     </div>
   );
 }
 
-function StatsOverviewCard({
+/* ─── Unified overview card: lifetime stats, this month, top genres ─── */
+
+function OverviewCard({
   stats,
   monthly,
+  genres,
   loading,
 }: {
   stats: WatchStats | null;
   monthly: DetailedWatchStats["monthly"];
+  genres: DetailedWatchStats["genreDistribution"];
   loading: boolean;
 }) {
   const last6 = monthly.slice(-6);
@@ -110,13 +121,23 @@ function StatsOverviewCard({
   const epBars = last6.length ? last6.map((m) => m.episodes) : [0, 0, 0, 0, 0, 0];
   const playBars = last6.map((m, i) => movieBars[i] + epBars[i]);
 
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const current = monthly.find((m) => m.month === monthKey);
+  const prevIdx = monthly.findIndex((m) => m.month === monthKey) - 1;
+  const prev = prevIdx >= 0 ? monthly[prevIdx] : null;
+  const movieDelta = current && prev ? current.movies - prev.movies : null;
+  const epDelta = current && prev ? current.episodes - prev.episodes : null;
+
+  const topGenres = genres.slice(0, 5);
+
   return (
     <div
-      className="rounded-2xl p-5 col-span-2 h-full"
+      className="rounded-2xl p-6 h-full flex flex-col gap-6"
       style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
     >
-      <div className="flex items-center justify-between mb-5">
-        <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>Watch Activity</p>
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>Overview</p>
         <Link
           to="/stats"
           className="text-xs font-medium text-claw-400 hover:text-claw-300 transition-colors"
@@ -126,52 +147,66 @@ function StatsOverviewCard({
       </div>
 
       {loading || !stats ? (
-        <div className="grid grid-cols-3 gap-5">
-          {Array.from({ length: 3 }).map((_, i) => (
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-6">
+          {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="flex flex-col gap-3">
               <div className="skeleton h-3 w-16 rounded" />
-              <div className="skeleton h-10 w-full rounded" />
-              <div className="skeleton h-6 w-12 rounded" />
+              <div className="skeleton h-8 w-full rounded" />
+              <div className="skeleton h-5 w-12 rounded" />
             </div>
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-5">
-          <StatColumn
-            label="Movies"
-            value={stats.totalMovies}
-            sub="total watched"
-            bars={movieBars}
-            icon={Film}
-          />
-          <div
-            className="col-start-2"
-            style={{ borderLeft: "1px solid var(--border)", paddingLeft: "1.25rem" }}
-          >
-            <StatColumn
-              label="Episodes"
-              value={stats.totalEpisodes}
-              sub="total watched"
-              bars={epBars}
-              icon={Tv}
-            />
-          </div>
-          <div style={{ borderLeft: "1px solid var(--border)", paddingLeft: "1.25rem" }}>
-            <StatColumn
-              label="Total plays"
-              value={stats.totalPlays}
-              sub="all time"
-              bars={playBars}
-              icon={Play}
-            />
-          </div>
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-x-6 gap-y-6">
+          <StatBlock label="Movies" value={stats.totalMovies} bars={movieBars} icon={Film} />
+          <StatBlock label="Episodes" value={stats.totalEpisodes} bars={epBars} icon={Tv} />
+          <StatBlock label="Total plays" value={stats.totalPlays} bars={playBars} icon={Play} />
+          <StatBlock label="This month" value={current?.movies ?? 0} sub="movies" delta={movieDelta} icon={TrendingUp} />
+          <StatBlock label="This month" value={current?.episodes ?? 0} sub="episodes" delta={epDelta} icon={TrendingUp} />
         </div>
       )}
+
+      <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1.5rem" }}>
+        <p className="mb-3 text-2xs font-medium uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+          Top genres
+        </p>
+        {loading ? (
+          <div className="flex flex-wrap gap-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="skeleton h-7 w-20 rounded-full" />
+            ))}
+          </div>
+        ) : topGenres.length === 0 ? (
+          <p className="text-xs" style={{ color: "var(--text-mute)" }}>No genre data yet.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {topGenres.map((g, i) => (
+              <span
+                key={g.genre}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
+                style={
+                  i === 0
+                    ? { background: "var(--accent)", color: "white" }
+                    : { background: "var(--surface-strong)", color: "var(--text-dim)" }
+                }
+              >
+                {g.genre}
+                <span
+                  className="text-2xs tabular-nums"
+                  style={{ opacity: i === 0 ? 0.85 : 0.7 }}
+                >
+                  {g.count}
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-/* ─── Streak card ─── */
+/* ─── Streak card (accent dark card) ─── */
 
 function StreakCard({
   current,
@@ -183,7 +218,7 @@ function StreakCard({
   loading: boolean;
 }) {
   return (
-    <div className="rounded-2xl p-5 flex flex-col justify-between row-span-2 bg-ink-900 text-cream-50">
+    <div className="rounded-2xl p-6 flex flex-col justify-between h-full bg-ink-900 text-cream-50">
       <p className="text-sm font-semibold text-cream-50">Streaks</p>
 
       {loading ? (
@@ -218,149 +253,6 @@ function StreakCard({
               longest streak
             </p>
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ─── This month card ─── */
-
-function ThisMonthCard({
-  monthly,
-  loading,
-}: {
-  monthly: DetailedWatchStats["monthly"];
-  loading: boolean;
-}) {
-  const now = new Date();
-  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const current = monthly.find((m) => m.month === monthKey);
-  const prevIdx = monthly.findIndex((m) => m.month === monthKey) - 1;
-  const prev = prevIdx >= 0 ? monthly[prevIdx] : null;
-
-  const monthName = now.toLocaleDateString(undefined, { month: "long" });
-
-  const movieDelta = current && prev ? current.movies - prev.movies : null;
-  const epDelta = current && prev ? current.episodes - prev.episodes : null;
-
-  return (
-    <div
-      className="rounded-2xl p-5"
-      style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
-    >
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>This Month</p>
-        <span className="text-xs" style={{ color: "var(--text-mute)" }}>{monthName}</span>
-      </div>
-
-      {loading ? (
-        <div className="flex flex-col gap-3">
-          <div className="skeleton h-8 w-16 rounded" />
-          <div className="skeleton h-3 w-24 rounded" />
-          <div className="skeleton h-8 w-16 rounded" />
-          <div className="skeleton h-3 w-24 rounded" />
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4">
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold tabular-nums leading-none" style={{ color: "var(--text)" }}>
-                {current?.movies ?? 0}
-              </span>
-              {movieDelta !== null && (
-                <span
-                  className={`text-xs font-medium tabular-nums ${movieDelta >= 0 ? "text-emerald-500" : "text-rose-500"}`}
-                >
-                  {movieDelta >= 0 ? "+" : ""}{movieDelta}
-                </span>
-              )}
-            </div>
-            <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>movies</p>
-          </div>
-
-          <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold tabular-nums leading-none" style={{ color: "var(--text)" }}>
-                {current?.episodes ?? 0}
-              </span>
-              {epDelta !== null && (
-                <span
-                  className={`text-xs font-medium tabular-nums ${epDelta >= 0 ? "text-emerald-500" : "text-rose-500"}`}
-                >
-                  {epDelta >= 0 ? "+" : ""}{epDelta}
-                </span>
-              )}
-            </div>
-            <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>episodes</p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ─── Top genres card ─── */
-
-function TopGenresCard({
-  genres,
-  loading,
-}: {
-  genres: DetailedWatchStats["genreDistribution"];
-  loading: boolean;
-}) {
-  const top = genres.slice(0, 5);
-  const max = top[0]?.count ?? 1;
-
-  return (
-    <div
-      className="rounded-2xl p-5"
-      style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
-    >
-      <p className="text-sm font-semibold mb-4" style={{ color: "var(--text)" }}>Top Genres</p>
-
-      {loading ? (
-        <div className="flex flex-col gap-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <div className="skeleton h-3 w-20 rounded" />
-              <div className="skeleton h-2 rounded flex-1" />
-              <div className="skeleton h-3 w-8 rounded" />
-            </div>
-          ))}
-        </div>
-      ) : top.length === 0 ? (
-        <p className="text-xs" style={{ color: "var(--text-mute)" }}>No genre data yet.</p>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {top.map((g, i) => {
-            const pct = (g.count / max) * 100;
-            return (
-              <div key={g.genre} className="flex items-center gap-3">
-                <span
-                  className="w-20 truncate text-xs text-right"
-                  style={{ color: i === 0 ? "var(--text)" : "var(--text-dim)" }}
-                >
-                  {g.genre}
-                </span>
-                <div
-                  className="flex-1 h-1.5 rounded-full overflow-hidden"
-                  style={{ background: "var(--surface)" }}
-                >
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${pct}%`,
-                      background: i === 0 ? "var(--accent)" : "var(--border-strong)",
-                    }}
-                  />
-                </div>
-                <span className="w-8 text-right text-xs tabular-nums" style={{ color: "var(--text-mute)" }}>
-                  {g.count}
-                </span>
-              </div>
-            );
-          })}
         </div>
       )}
     </div>
@@ -821,26 +713,20 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* ── Stats bento grid ── */}
+      {/* ── Overview ── */}
       <section>
-        {/* Desktop: 3-col asymmetric bento. Mobile: 2-col stacked. */}
-        <div className="hidden lg:grid gap-3" style={{ gridTemplateColumns: "1fr 1fr 220px", gridTemplateRows: "auto auto" }}>
-          <StatsOverviewCard stats={stats} monthly={monthly} loading={loading || detailedLoading} />
-          <StreakCard current={detailedStats?.currentStreak ?? 0} longest={detailedStats?.longestStreak ?? 0} loading={detailedLoading} />
-          <ThisMonthCard monthly={monthly} loading={detailedLoading} />
-          <TopGenresCard genres={detailedStats?.genreDistribution ?? []} loading={detailedLoading} />
-        </div>
-
-        {/* Mobile/tablet fallback: 2-col grid, no row-span */}
-        <div className="grid grid-cols-2 gap-3 lg:hidden">
-          <div className="col-span-2">
-            <StatsOverviewCard stats={stats} monthly={monthly} loading={loading || detailedLoading} />
-          </div>
-          <StreakCard current={detailedStats?.currentStreak ?? 0} longest={detailedStats?.longestStreak ?? 0} loading={detailedLoading} />
-          <ThisMonthCard monthly={monthly} loading={detailedLoading} />
-          <div className="col-span-2">
-            <TopGenresCard genres={detailedStats?.genreDistribution ?? []} loading={detailedLoading} />
-          </div>
+        <div className="grid gap-3 lg:grid-cols-[1fr_220px]">
+          <OverviewCard
+            stats={stats}
+            monthly={monthly}
+            genres={detailedStats?.genreDistribution ?? []}
+            loading={loading || detailedLoading}
+          />
+          <StreakCard
+            current={detailedStats?.currentStreak ?? 0}
+            longest={detailedStats?.longestStreak ?? 0}
+            loading={detailedLoading}
+          />
         </div>
       </section>
 
@@ -874,9 +760,9 @@ export function DashboardPage() {
                   ? Math.min(Math.max((s.watchedEpisodes / s.totalEpisodes) * 100, 0), 100)
                   : null;
               return (
-                <div key={s.imdbId} className="flex-none group" style={{ width: "11rem" }}>
+                <div key={s.imdbId} className="flex-none group" style={{ width: "13rem" }}>
                   <div
-                    className="relative aspect-poster overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
+                    className="relative aspect-poster overflow-hidden rounded-2xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
                     style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
                   >
                     <Poster src={s.poster} alt={s.name} className="h-full w-full" />
