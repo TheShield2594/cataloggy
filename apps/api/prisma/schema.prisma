@@ -111,6 +111,24 @@ model KV {
   updatedAt DateTime @db.Timestamp(6)
 }
 
+model PushSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model NotifiedEpisode {
+  id           String   @id @default(uuid()) @db.Uuid
+  seriesImdbId String
+  season       Int
+  episode      Int
+  notifiedAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([seriesImdbId, season, episode])
+}
+
 model TraktToken {
   id           String   @id @default("default")
   accessToken  String
