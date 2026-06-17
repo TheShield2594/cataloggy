@@ -38,6 +38,10 @@ export const resolveProfile = async (request: FastifyRequest, reply: FastifyRepl
     if (!UUID_V4_PATTERN.test(rawProfileId)) {
       return reply.code(400).send({ error: "x-profile-id must be a valid UUID" });
     }
+    const profile = await prisma.profile.findUnique({ where: { id: rawProfileId } });
+    if (!profile) {
+      return reply.code(404).send({ error: "Profile not found" });
+    }
     request.profileId = rawProfileId;
     return;
   }

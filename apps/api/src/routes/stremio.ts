@@ -85,7 +85,8 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
   // unchanged.
   const resolveStremioProfileId = async (queryProfileId: unknown): Promise<string> => {
     if (typeof queryProfileId === "string" && UUID_V4_PATTERN.test(queryProfileId)) {
-      return queryProfileId;
+      const profile = await prisma.profile.findUnique({ where: { id: queryProfileId } });
+      if (profile) return profile.id;
     }
     return getDefaultProfileId();
   };

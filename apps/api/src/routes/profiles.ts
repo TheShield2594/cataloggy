@@ -78,6 +78,11 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
     const profile = await prisma.profile.findUnique({ where: { id: request.params.id } });
     if (!profile) return reply.code(404).send({ error: "Profile not found" });
 
+    const profileCount = await prisma.profile.count();
+    if (profileCount === 1) {
+      return reply.code(400).send({ error: "Cannot delete the last profile" });
+    }
+
     await prisma.profile.delete({ where: { id: profile.id } });
 
     return reply.code(204).send();

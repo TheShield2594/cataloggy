@@ -6,27 +6,28 @@ import { upsertMetadata } from "../lib/metadata.js";
 import { upsertSeriesProgressIfNewer } from "../lib/series-progress.js";
 import { resolveProfile } from "../lib/profile.js";
 
-const DROPPED_KEY = (imdbId: string) => `dropped:series:${imdbId}`;
+const DROPPED_KEY = (profileId: string, imdbId: string) => `dropped:series:${profileId}:${imdbId}`;
 
 const seriesRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", resolveProfile);
 
   app.get<{ Params: { imdbId: string } }>("/show/:imdbId/dropped", async (request) => {
-    const row = await prisma.kV.findUnique({ where: { key: DROPPED_KEY(request.params.imdbId) } });
+    const row = await prisma.kV.findUnique({ where: { key: DROPPED_KEY(request.profileId!, request.params.imdbId) } });
     return { dropped: !!row };
   });
 
   app.post<{ Params: { imdbId: string } }>("/show/:imdbId/drop", async (request) => {
+    const key = DROPPED_KEY(request.profileId!, request.params.imdbId);
     await prisma.kV.upsert({
-      where: { key: DROPPED_KEY(request.params.imdbId) },
-      create: { key: DROPPED_KEY(request.params.imdbId), value: "true", updatedAt: new Date() },
+      where: { key },
+      create: { key, value: "true", updatedAt: new Date() },
       update: { value: "true", updatedAt: new Date() },
     });
     return { dropped: true };
   });
 
   app.delete<{ Params: { imdbId: string } }>("/show/:imdbId/drop", async (request) => {
-    await prisma.kV.deleteMany({ where: { key: DROPPED_KEY(request.params.imdbId) } });
+    await prisma.kV.deleteMany({ where: { key: DROPPED_KEY(request.profileId!, request.params.imdbId) } });
     return { dropped: false };
   });
 
