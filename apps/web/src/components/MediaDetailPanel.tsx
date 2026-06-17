@@ -654,32 +654,40 @@ export function DetailPanel({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-
-      <aside className="fixed right-0 top-0 z-50 flex h-full w-full flex-col overflow-y-auto border-l border-ink-100 bg-cream-50 shadow-feature sm:w-[90vw] sm:max-w-3xl md:max-w-4xl lg:max-w-5xl">
-        {/* Close */}
-        <button
-          type="button" onClick={onClose}
-          className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-ink-900/80 text-cream-50 backdrop-blur hover:bg-ink-900 hover:text-white transition-colors"
-          aria-label="Close detail panel"
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm sm:p-6"
+        onClick={onClose}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={item.name}
+          onClick={(e) => e.stopPropagation()}
+          className="relative flex h-full w-full max-h-screen flex-col overflow-hidden bg-cream-50 shadow-feature sm:h-auto sm:max-h-[85vh] sm:max-w-4xl sm:flex-row sm:rounded-3xl sm:border sm:border-ink-100 lg:max-w-5xl"
         >
-          <X className="h-4 w-4" />
-        </button>
+          {/* Close */}
+          <button
+            type="button" onClick={onClose}
+            className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-ink-900/80 text-cream-50 backdrop-blur hover:bg-ink-900 hover:text-white transition-colors"
+            aria-label="Close detail panel"
+          >
+            <X className="h-4 w-4" />
+          </button>
 
-        {/* Poster */}
-        <div className="relative z-0 w-full" style={{ aspectRatio: "2 / 3", maxHeight: "50vh" }}>
-          {item.poster ? (
-            <img src={item.poster} alt={item.name} className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ink-800 to-ink-900">
-              <Film className="h-20 w-20 text-ink-600" />
-            </div>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-ink-900 via-ink-900/20 to-transparent" />
-        </div>
+          {/* Poster */}
+          <div className="relative z-0 w-full flex-none overflow-hidden aspect-[2/3] max-h-[38vh] sm:aspect-auto sm:h-full sm:max-h-none sm:w-[38%]">
+            {item.poster ? (
+              <img src={item.poster} alt={item.name} className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ink-800 to-ink-900">
+                <Film className="h-20 w-20 text-ink-600" />
+              </div>
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-ink-900 via-ink-900/20 to-transparent sm:hidden" />
+          </div>
 
-        {/* Content */}
-        <div className="-mt-16 relative z-20 flex-1 space-y-6 px-6 pb-16">
+          {/* Content */}
+          <div className="-mt-10 relative z-20 min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-10 sm:mt-0 sm:p-8">
 
           {/* Title + badges */}
           <div>
@@ -967,8 +975,9 @@ export function DetailPanel({
               </button>
             </div>
           )}
+          </div>
         </div>
-      </aside>
+      </div>
 
       {/* Watch Date Modal */}
       {watchTarget && (
