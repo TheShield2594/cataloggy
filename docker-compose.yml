@@ -18,21 +18,19 @@ services:
       - cataloggy
 
   api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    image: ghcr.io/theshield2594/cataloggy-api:latest
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-cataloggy}
       PORT: "7000"
       API_TOKEN: ${API_TOKEN:-dev-token}
-      CATALOGGY_ALLOWED_ORIGINS: ${CATALOGGY_ALLOWED_ORIGINS:-http://192.168.1.20:7002}
-      CATALOGGY_API_PUBLIC: ${CATALOGGY_API_PUBLIC:-http://192.168.1.20:7000}
+      CATALOGGY_ALLOWED_ORIGINS: ${CATALOGGY_ALLOWED_ORIGINS:-http://192.168.1.25:7002}
+      CATALOGGY_API_PUBLIC: ${CATALOGGY_API_PUBLIC:-http://192.168.1.25:7000}
       # Optional integrations — set these in a .env file or export them.
       # Leaving them unset is safe; the API validates at startup/request time
       # and returns clear error messages if they are missing when needed.
       TRAKT_CLIENT_ID: ${TRAKT_CLIENT_ID}
       TRAKT_CLIENT_SECRET: ${TRAKT_CLIENT_SECRET}
-      TRAKT_REDIRECT_URI: ${TRAKT_REDIRECT_URI:-http://192.168.1.20:7000/trakt/oauth/callback}
+      TRAKT_REDIRECT_URI: ${TRAKT_REDIRECT_URI:-http://192.168.1.25:7000/trakt/oauth/callback}
       TRAKT_POLL_INTERVAL_SEC: ${TRAKT_POLL_INTERVAL_SEC:-300}
       TRAKT_POLL_MAX_PAGES: ${TRAKT_POLL_MAX_PAGES:-20}
       TMDB_API_KEY: ${TMDB_API_KEY}
@@ -52,14 +50,12 @@ services:
       - cataloggy
 
   addon:
-    build:
-      context: .
-      dockerfile: apps/addon/Dockerfile
+    image: ghcr.io/theshield2594/cataloggy-addon:latest
     environment:
       PORT: "7001"
       CATALOGGY_API_BASE: http://api:7000
       CATALOGGY_API_TOKEN: ${API_TOKEN:-dev-token}
-      ADDON_PUBLIC_BASE: ${ADDON_PUBLIC_BASE:-http://192.168.1.20:7001}
+      ADDON_PUBLIC_BASE: ${ADDON_PUBLIC_BASE:-http://192.168.1.25:7001}
     ports:
       - "7001:7001"
     depends_on:
@@ -75,11 +71,9 @@ services:
       - cataloggy
 
   web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
+    image: ghcr.io/theshield2594/cataloggy-web:latest
     environment:
-      VITE_API_BASE: ${VITE_API_BASE:-http://192.168.1.20:7000}
+      VITE_API_BASE: ${VITE_API_BASE:-http://192.168.1.25:7000}
     ports:
       - "7002:7002"
     depends_on:
