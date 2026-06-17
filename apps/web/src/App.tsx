@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
-import { BarChart3, Clapperboard, LayoutDashboard, Search, List, Settings, Sun, Moon } from "lucide-react";
+import { Link, Route, Routes, useLocation } from "react-router-dom";
+import { BarChart3, Clapperboard, Search, List, Settings, Sun, Moon } from "lucide-react";
 import { runtimeConfig } from "./api";
+import { CommandPalette, useCommandPalette } from "./components/CommandPalette";
 import { InstallButton } from "./components/InstallButton";
+import { Sidebar } from "./components/Sidebar";
 import { useTheme } from "./hooks/useTheme";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ListsPage } from "./pages/ListsPage";
@@ -12,8 +14,8 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { SetupWizard } from "./pages/SetupWizard";
 import { StatsPage } from "./pages/StatsPage";
 
-const navItems = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+const mobileNavItems = [
+  { to: "/", label: "Dashboard", icon: Clapperboard, end: true },
   { to: "/search", label: "Search", icon: Search, end: false },
   { to: "/lists", label: "Lists", icon: List, end: false },
   { to: "/stats", label: "Stats", icon: BarChart3, end: false },
@@ -25,6 +27,7 @@ export function App() {
   const [needsSetup, setNeedsSetup] = useState(() => !runtimeConfig.getToken());
   const [needsProfile, setNeedsProfile] = useState(() => !runtimeConfig.getProfileId());
   const { theme, toggleTheme } = useTheme();
+  const { open: paletteOpen, setOpen: setPaletteOpen } = useCommandPalette();
 
   if (needsSetup) {
     return (
@@ -43,20 +46,40 @@ export function App() {
 
   return (
     <div className="min-h-screen w-full">
-      {/* Fixed header */}
+      <Sidebar />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+
+      {/* Slim top bar */}
       <header
-        className="fixed top-0 left-0 right-0 z-30 backdrop-blur-xl"
+        className="fixed top-0 left-0 right-0 z-30 backdrop-blur-xl sm:pl-16"
         style={{ borderBottom: "1px solid var(--border)", backgroundColor: "color-mix(in srgb, var(--bg-0) 90%, transparent)" }}
       >
-        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-6 px-6 py-3.5">
-          <Link to="/" className="flex items-center gap-2.5 text-xl font-bold" style={{ color: "var(--text)" }}>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-claw-500">
-              <Clapperboard className="h-5 w-5 text-white" />
+        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-6 py-3">
+          <Link to="/" className="flex items-center gap-2.5 text-lg font-bold sm:hidden" style={{ color: "var(--text)" }}>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-claw-500">
+              <Clapperboard className="h-4 w-4 text-white" />
             </div>
-            <span className="hidden sm:inline">Cataloggy</span>
+            <span>Cataloggy</span>
           </Link>
 
-          <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            className="flex flex-1 max-w-sm items-center gap-2.5 rounded-full px-4 py-2 text-sm transition-colors hover:bg-[var(--surface-strong)]"
+            style={{ border: "1px solid var(--border-strong)", color: "var(--text-mute)", background: "var(--surface)" }}
+          >
+            <Search className="h-4 w-4" />
+            <span className="hidden sm:inline">Search everything...</span>
+            <span className="sm:hidden">Search</span>
+            <kbd
+              className="ml-auto hidden rounded px-1.5 py-0.5 text-2xs font-medium sm:inline"
+              style={{ background: "var(--surface-strong)", color: "var(--text-mute)" }}
+            >
+              ⌘K
+            </kbd>
+          </button>
+
+          <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={toggleTheme}
@@ -66,43 +89,13 @@ export function App() {
             >
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
-
             <InstallButton />
-
-            {/* Desktop pill nav */}
-            <nav
-              className="hidden sm:flex rounded-full p-1"
-              style={{ border: "1px solid var(--border-strong)", backgroundColor: "var(--surface-strong)" }}
-            >
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end ?? false}
-                  className={({ isActive }) =>
-                    `flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                      isActive ? "bg-claw-500 text-white shadow-lg shadow-claw-500/20" : "hover:opacity-80"
-                    }`
-                  }
-                  style={({ isActive }: { isActive: boolean }) =>
-                    isActive ? {} : { color: "var(--text-dim)" }
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.label}</span>
-                    </>
-                  )}
-                </NavLink>
-              ))}
-            </nav>
           </div>
         </div>
       </header>
 
       {/* Main content */}
-      <main className="mx-auto max-w-[1400px] px-6 pb-24 pt-[88px] sm:pb-8">
+      <main className="mx-auto max-w-[1400px] px-6 pb-24 pt-[76px] sm:pb-10 sm:pl-[5rem]">
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/search" element={<SearchPage />} />
@@ -117,7 +110,7 @@ export function App() {
         className="fixed bottom-0 left-0 right-0 z-40 flex sm:hidden backdrop-blur-xl"
         style={{ borderTop: "1px solid var(--border)", backgroundColor: "color-mix(in srgb, var(--bg-0) 96%, transparent)" }}
       >
-        {navItems.map((item) => {
+        {mobileNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = item.end
             ? location.pathname === item.to
@@ -138,7 +131,7 @@ export function App() {
 
       {/* Footer */}
       <footer
-        className="py-8 text-center text-sm"
+        className="py-8 text-center text-sm sm:pl-16"
         style={{ borderTop: "1px solid var(--border)", color: "var(--text-mute)" }}
       >
         Cataloggy &middot; Personal Media Tracker
