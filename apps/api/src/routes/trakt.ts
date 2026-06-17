@@ -11,7 +11,7 @@ import {
   pollTraktHistory,
   computeTokenExpiresAt,
 } from "../lib/trakt-client.js";
-import { escapeHtml, renderOAuthHtml } from "../lib/html.js";
+import { renderOAuthHtml } from "../lib/html.js";
 import type { SeriesProgressCandidate } from "../lib/types.js";
 
 const traktRoutes: FastifyPluginAsync = async (app) => {
@@ -47,8 +47,10 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
 
     if (oauthError) {
       request.log.warn({ error: oauthError, error_description: oauthErrorDescription }, "Trakt OAuth denied");
-      const safeMessage = escapeHtml(oauthErrorDescription ?? oauthError);
-      return reply.code(403).type("text/html").send(renderOAuthHtml(safeMessage, "Trakt Authorization Failed"));
+      return reply
+        .code(403)
+        .type("text/html")
+        .send(renderOAuthHtml(oauthErrorDescription ?? oauthError, "Trakt Authorization Failed"));
     }
 
     if (!code) {
@@ -300,15 +302,21 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
           try {
             const payload = await tmdb.findByImdbId(MetadataType.movie, id);
             if (payload) await upsertMetadata(payload);
-          } catch { /* skip */ }
+          } catch (error) {
+            request.log.warn({ imdbId: id, error }, "Trakt import: movie metadata backfill failed");
+          }
         }
         for (const id of seriesImdbIds) {
           try {
             const payload = await tmdb.findByImdbId(MetadataType.series, id);
             if (payload) await upsertMetadata(payload);
-          } catch { /* skip */ }
+          } catch (error) {
+            request.log.warn({ imdbId: id, error }, "Trakt import: series metadata backfill failed");
+          }
         }
-      } catch { /* TMDB unavailable */ }
+      } catch (error) {
+        request.log.warn(error, "Trakt import: TMDB unavailable for metadata backfill");
+      }
     })();
 
     return reply.code(200).send({ imported });

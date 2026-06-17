@@ -69,8 +69,11 @@ const ratingsRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
-  app.get<{ Querystring: { type?: string; limit?: string } }>("/ratings", async (request) => {
+  app.get<{ Querystring: { type?: string; limit?: string } }>("/ratings", async (request, reply) => {
     const typeFilter = request.query.type;
+    if (typeFilter && typeFilter !== "movie" && typeFilter !== "series") {
+      return reply.code(400).send({ error: "type must be one of: movie, series" });
+    }
     const limit = Math.min(Math.max(Number(request.query.limit) || 50, 1), 200);
 
     const prefix = typeFilter ? `rating:${typeFilter}:` : "rating:";
@@ -80,7 +83,13 @@ const ratingsRoutes: FastifyPluginAsync = async (app) => {
       take: limit,
     });
 
-    const ratings = rows.map((r) => JSON.parse(r.value));
+    const ratings = rows.flatMap((r) => {
+      try {
+        return [JSON.parse(r.value)];
+      } catch {
+        return [];
+      }
+    });
     return { ratings };
   });
 };

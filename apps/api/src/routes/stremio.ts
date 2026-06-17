@@ -8,7 +8,6 @@ import { isAiConfigured, getAiRecommendations } from "../lib/ai.js";
 import { getAddonConfig, ALL_ADDON_CATALOGS, ADDON_CONFIG_KEY } from "../lib/addon.js";
 import { trendingCacheGet, trendingCacheSet } from "../lib/cache.js";
 import {
-  buildMetasFromIds,
   getWatchlistMetas,
   getRecentMetas,
   getContinueMetas,
@@ -291,7 +290,11 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
       if (!discovery) return reply.code(404).send({ metas: [] });
       if (discovery.type !== type) return reply.code(400).send({ metas: [] });
 
-      const cacheKey = discovery.endpoint;
+      let cacheKey = discovery.endpoint;
+      if (cacheKey.startsWith("streaming:")) {
+        const region = await getRegionSetting();
+        cacheKey = `${cacheKey}:${region}`;
+      }
       const cached = trendingCacheGet(cacheKey);
       if (cached) return { metas: cached.data };
 
@@ -364,7 +367,7 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
           const providerKey = parts[1];
           const provider = STREAMING_PROVIDERS[providerKey];
           if (!provider) return { metas: [] };
-          const region = await getRegionSetting();
+          const region = parts[parts.length - 1];
           results = await tmdb.discoverByProvider(metaType, provider.id, region);
         } else {
           return { metas: [] };

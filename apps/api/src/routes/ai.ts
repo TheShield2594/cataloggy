@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { getTmdb } from "../lib/tmdb-client.js";
 import { upsertMetadata } from "../lib/metadata.js";
 import { getRpdbApiKey, applyRpdbToMetaList } from "../lib/rpdb.js";
-import { trendingCache, trendingCacheGet, trendingCacheSet } from "../lib/cache.js";
+import { trendingCacheDeletePrefix, trendingCacheGet, trendingCacheSet } from "../lib/cache.js";
 import {
   AI_CONFIG_KEY,
   AI_LAST_RECS_GENERATED_AT_KEY,
@@ -249,9 +249,7 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.post("/recommendations/ai/refresh", async () => {
-    for (const key of ["ai-recs:movie", "ai-recs:series"]) {
-      trendingCache.delete(key);
-    }
+    trendingCacheDeletePrefix("ai-recs:");
     return { refreshed: true };
   });
 
@@ -380,18 +378,14 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       update: { value: JSON.stringify(validConfig), updatedAt: new Date() },
     });
 
-    for (const key of ["ai-recs:movie", "ai-recs:series"]) {
-      trendingCache.delete(key);
-    }
+    trendingCacheDeletePrefix("ai-recs:");
 
     return { configured: true };
   });
 
   app.delete("/ai/config", async () => {
-    await prisma.kV.deleteMany({ where: { key: AI_CONFIG_KEY } });
-    for (const key of ["ai-recs:movie", "ai-recs:series"]) {
-      trendingCache.delete(key);
-    }
+    await prisma.kV.deleteMany({ where: { key: { in: [AI_CONFIG_KEY, AI_LAST_RECS_GENERATED_AT_KEY] } } });
+    trendingCacheDeletePrefix("ai-recs:");
     return { configured: false };
   });
 

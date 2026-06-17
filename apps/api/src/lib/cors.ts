@@ -13,32 +13,16 @@ export const ALLOWED_ORIGINS = IS_DEVELOPMENT
 const CORS_METHODS = "GET,POST,DELETE,PATCH,OPTIONS";
 const CORS_HEADERS = "Authorization,Content-Type";
 
-const isLocalOrigin = (origin: string): boolean => {
-  try {
-    const { hostname } = new URL(origin);
-    return (
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname === "::1" ||
-      hostname.startsWith("192.168.") ||
-      hostname.startsWith("10.") ||
-      /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)
-    );
-  } catch {
-    return false;
-  }
-};
-
 export const isAllowedOrigin = (origin: string | undefined): boolean => {
   if (IS_DEVELOPMENT) return true;
   if (!origin) return false;
-  return ALLOWED_ORIGINS.includes(origin) || isLocalOrigin(origin);
+  return ALLOWED_ORIGINS.includes(origin);
 };
 
 export const applyCorsHeaders = (request: FastifyRequest, reply: FastifyReply) => {
   const origin = request.headers.origin;
 
-  if (IS_DEVELOPMENT || (origin && isLocalOrigin(origin))) {
+  if (IS_DEVELOPMENT) {
     reply.header("Access-Control-Allow-Origin", origin ?? "*");
     reply.header("Access-Control-Allow-Methods", CORS_METHODS);
     reply.header("Access-Control-Allow-Headers", CORS_HEADERS);

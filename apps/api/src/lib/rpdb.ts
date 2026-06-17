@@ -10,7 +10,7 @@ export const getRpdbApiKey = async (): Promise<string | null> => {
 };
 
 export const buildRpdbPosterUrl = (rpdbKey: string, imdbId: string): string =>
-  `${RPDB_BASE_URL}/${rpdbKey}/imdb/poster-default/${imdbId}.jpg`;
+  `${RPDB_BASE_URL}/${encodeURIComponent(rpdbKey)}/imdb/poster-default/${encodeURIComponent(imdbId)}.jpg`;
 
 export const withRpdbPoster = (
   imdbId: string,

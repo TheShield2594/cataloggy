@@ -16,3 +16,9 @@ export const trendingCacheGet = (key: string): TrendingCacheEntry | undefined =>
 export const trendingCacheSet = (key: string, entry: TrendingCacheEntry, ttl?: number) => {
   trendingCache.set(key, entry, ttl !== undefined ? { ttl } : undefined);
 };
+
+export const trendingCacheDeletePrefix = (prefix: string) => {
+  for (const key of [...trendingCache.keys()]) {
+    if (key.startsWith(prefix)) trendingCache.delete(key);
+  }
+};

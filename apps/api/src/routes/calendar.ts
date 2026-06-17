@@ -42,7 +42,7 @@ const calendarRoutes: FastifyPluginAsync = async (app) => {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
     const futureDate = new Date(today);
-    futureDate.setDate(futureDate.getDate() + daysAhead);
+    futureDate.setUTCDate(futureDate.getUTCDate() + daysAhead);
 
     const calendar: CalendarEntry[] = [];
     const batchSize = 5;

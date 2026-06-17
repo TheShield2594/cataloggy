@@ -36,7 +36,7 @@ const searchRoutes: FastifyPluginAsync = async (app) => {
 
       const results = allResults.slice(0, 20);
 
-      await Promise.all(results.map((result) => upsertMetadata(result)));
+      await Promise.allSettled(results.map((result) => upsertMetadata(result)));
 
       const imdbIds = results.map((r) => r.imdbId);
       const resultTypes = [...new Set(results.map((r) => r.type as ListItemType))];

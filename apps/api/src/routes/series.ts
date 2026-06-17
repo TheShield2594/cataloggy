@@ -48,11 +48,11 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
     ]);
 
     const metaByImdbId = new Map(metadata.map((m) => [m.imdbId, m]));
-    const watchedBySeriesId = new Map<string | null, number>();
+    const watchedBySeriesId = new Map<string, number>();
     for (const row of episodeCounts) {
       watchedBySeriesId.set(
-        row.seriesImdbId,
-        (watchedBySeriesId.get(row.seriesImdbId) ?? 0) + 1
+        row.seriesImdbId!,
+        (watchedBySeriesId.get(row.seriesImdbId!) ?? 0) + 1
       );
     }
 

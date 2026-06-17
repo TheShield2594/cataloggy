@@ -59,7 +59,7 @@ export const fetchMetadata = async (
     const omdbKey = await getOmdbApiKey();
     if (omdbKey) {
       const omdb = await fetchOmdbRatings(imdbId, omdbKey);
-      await upsertOmdbRatings(imdbId, type, omdb);
+      if (omdb) await upsertOmdbRatings(imdbId, type, omdb);
     }
   } catch { /* ignore */ }
 
@@ -81,7 +81,7 @@ export const syncMetadata = async (imdbId: string, type: MetadataType) => {
         const omdbKey = await getOmdbApiKey();
         if (omdbKey) {
           const omdb = await fetchOmdbRatings(imdbId, omdbKey);
-          return upsertOmdbRatings(imdbId, type, omdb);
+          if (omdb) return upsertOmdbRatings(imdbId, type, omdb);
         }
       } catch { /* ignore */ }
     }
@@ -99,7 +99,7 @@ export const syncMetadata = async (imdbId: string, type: MetadataType) => {
     const omdbKey = await getOmdbApiKey();
     if (omdbKey) {
       const omdb = await fetchOmdbRatings(imdbId, omdbKey);
-      return upsertOmdbRatings(imdbId, type, omdb);
+      if (omdb) return upsertOmdbRatings(imdbId, type, omdb);
     }
   } catch { /* ignore */ }
 

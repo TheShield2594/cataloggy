@@ -9,8 +9,8 @@ import {
   getRegionSetting,
   getSpoilerProtection,
 } from "../lib/settings.js";
-import { OMDB_API_KEY_KV, getOmdbApiKey, fetchOmdbRatings } from "../lib/omdb.js";
-import { RPDB_API_KEY_KV, RPDB_BASE_URL, getRpdbApiKey, buildRpdbPosterUrl } from "../lib/rpdb.js";
+import { OMDB_API_KEY_KV, getOmdbApiKey } from "../lib/omdb.js";
+import { RPDB_API_KEY_KV, getRpdbApiKey, buildRpdbPosterUrl } from "../lib/rpdb.js";
 import { trendingCache } from "../lib/cache.js";
 
 const settingsRoutes: FastifyPluginAsync = async (app) => {
