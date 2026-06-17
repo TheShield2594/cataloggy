@@ -67,7 +67,7 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
     });
 
     if (existingEvent) {
-      await prisma.watchEvent.update({ where: { id: existingEvent.id }, data: { plays: 1 } });
+      await prisma.watchEvent.update({ where: { id: existingEvent.id }, data: { plays: { increment: 1 } } });
     } else {
       await prisma.watchEvent.create({
         data: { type: "movie", imdbId, watchedAt: watchedAtDate, plays: 1 },
@@ -101,7 +101,7 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
     });
 
     if (existingEvent) {
-      await prisma.watchEvent.update({ where: { id: existingEvent.id }, data: { plays: 1 } });
+      await prisma.watchEvent.update({ where: { id: existingEvent.id }, data: { plays: { increment: 1 } } });
     } else {
       await prisma.watchEvent.create({
         data: {

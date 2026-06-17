@@ -2,7 +2,6 @@ import { WatchEventType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { upsertSeriesProgressIfNewer } from "../lib/series-progress.js";
-import { recordWatchEvent } from "../lib/watch-event.js";
 
 const watchRoutes: FastifyPluginAsync = async (app) => {
   app.post<{ Body: unknown }>("/watch", async (request, reply) => {
@@ -120,9 +119,16 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
           });
 
           if (latest && latest.season != null && latest.episode != null) {
-            await tx.seriesProgress.update({
+            await tx.seriesProgress.upsert({
               where: { seriesImdbId: event.seriesImdbId },
-              data: {
+              update: {
+                lastSeason: latest.season,
+                lastEpisode: latest.episode,
+                lastWatchedAt: latest.watchedAt,
+                updatedAt: new Date(),
+              },
+              create: {
+                seriesImdbId: event.seriesImdbId,
                 lastSeason: latest.season,
                 lastEpisode: latest.episode,
                 lastWatchedAt: latest.watchedAt,
@@ -199,9 +205,9 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/watch/stats/detailed", async () => {
     const twelveMonthsAgo = new Date();
-    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
-    twelveMonthsAgo.setDate(1);
-    twelveMonthsAgo.setHours(0, 0, 0, 0);
+    twelveMonthsAgo.setUTCMonth(twelveMonthsAgo.getUTCMonth() - 12);
+    twelveMonthsAgo.setUTCDate(1);
+    twelveMonthsAgo.setUTCHours(0, 0, 0, 0);
 
     const [monthlyEvents, distinctMovieIds, distinctSeriesIds, watchDates] = await Promise.all([
       prisma.watchEvent.findMany({
@@ -236,8 +242,8 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     const monthly: { month: string; movies: number; episodes: number }[] = [];
     const now = new Date();
     for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
       const entry = monthlyMap.get(key) ?? { movies: 0, episodes: 0 };
       monthly.push({ month: key, ...entry });
     }

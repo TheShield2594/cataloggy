@@ -1,4 +1,3 @@
-import { MetadataType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { getTmdb } from "../lib/tmdb-client.js";
@@ -190,7 +189,7 @@ const metadataRoutes: FastifyPluginAsync = async (app) => {
             if (omdbKey) {
               try {
                 const omdb = await fetchOmdbRatings(item.imdbId, omdbKey);
-                await upsertOmdbRatings(item.imdbId, item.type, omdb);
+                if (omdb) await upsertOmdbRatings(item.imdbId, item.type, omdb);
               } catch { /* best-effort */ }
             }
             return true;

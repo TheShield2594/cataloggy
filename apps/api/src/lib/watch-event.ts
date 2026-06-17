@@ -1,7 +1,7 @@
 import { prisma } from "./prisma.js";
 import { upsertSeriesProgressIfNewer } from "./series-progress.js";
 import { shouldRefreshAiRecs, getAiRecommendations } from "./ai.js";
-import { trendingCache } from "./cache.js";
+import { trendingCacheDeletePrefix } from "./cache.js";
 import type { RecordWatchParams } from "./types.js";
 
 export const recordWatchEvent = async (params: RecordWatchParams) => {
@@ -18,6 +18,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
     const watchEvent = await prisma.$transaction(async (tx) => {
       const existing = await tx.watchEvent.findFirst({
         where: {
+          type: "episode",
           seriesImdbId: resolvedSeriesImdbId,
           season: season ?? null,
           episode: episode ?? null,
@@ -28,7 +29,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
       if (existing) {
         const updated = await tx.watchEvent.update({
           where: { id: existing.id },
-          data: { plays: existing.plays + 1, watchedAt },
+          data: { plays: { increment: 1 }, watchedAt },
         });
         req.log.info(
           { imdbId: resolvedSeriesImdbId, season, episode, plays: updated.plays },
@@ -62,8 +63,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
     void (async () => {
       try {
         if (await shouldRefreshAiRecs()) {
-          trendingCache.delete("ai-recs:movie");
-          trendingCache.delete("ai-recs:series");
+          trendingCacheDeletePrefix("ai-recs:");
           await Promise.allSettled([
             getAiRecommendations("movie", 15),
             getAiRecommendations("series", 15),
@@ -83,7 +83,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
     if (existing) {
       const updated = await tx.watchEvent.update({
         where: { id: existing.id },
-        data: { plays: existing.plays + 1, watchedAt },
+        data: { plays: { increment: 1 }, watchedAt },
       });
       req.log.info({ imdbId, plays: updated.plays }, `${source} scrobble: movie play incremented`);
       return updated;
@@ -99,8 +99,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
   void (async () => {
     try {
       if (await shouldRefreshAiRecs()) {
-        trendingCache.delete("ai-recs:movie");
-        trendingCache.delete("ai-recs:series");
+        trendingCacheDeletePrefix("ai-recs:");
         await Promise.allSettled([
           getAiRecommendations("movie", 15),
           getAiRecommendations("series", 15),

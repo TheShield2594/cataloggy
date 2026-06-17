@@ -1,7 +1,6 @@
 import { ScrobbleStatus, WatchEventType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
-import { upsertSeriesProgressIfNewer } from "../lib/series-progress.js";
 import { recordWatchEvent } from "../lib/watch-event.js";
 import type { CheckInData } from "../lib/types.js";
 
@@ -198,63 +197,24 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
     const watchedAt = new Date();
     const seriesImdbId = session.seriesImdbId;
 
-    const { stoppedSession, watchEvent } = await prisma.$transaction(async (tx) => {
-      const stoppedSession = await tx.scrobbleSession.update({
-        where: { id: session.id },
-        data: { status: ScrobbleStatus.stopped, progress: finalProgress },
-      });
-
-      let watchEvent = null;
-      if (finalProgress >= SCROBBLE_COMPLETE_THRESHOLD) {
-        const dayStart = new Date(watchedAt);
-        dayStart.setUTCHours(0, 0, 0, 0);
-        const dayEnd = new Date(watchedAt);
-        dayEnd.setUTCHours(23, 59, 59, 999);
-
-        const existingEvent = await tx.watchEvent.findFirst({
-          where: {
-            imdbId,
-            season: session.season,
-            episode: session.episode,
-            watchedAt: { gte: dayStart, lte: dayEnd },
-          },
-        });
-
-        if (existingEvent) {
-          watchEvent = await tx.watchEvent.update({
-            where: { id: existingEvent.id },
-            data: { plays: existingEvent.plays + 1 },
-          });
-        } else {
-          watchEvent = await tx.watchEvent.create({
-            data: {
-              type: session.type,
-              imdbId,
-              seriesImdbId,
-              season: session.season,
-              episode: session.episode,
-              watchedAt,
-              plays: 1,
-            },
-          });
-        }
-      }
-
-      return { stoppedSession, watchEvent };
+    const stoppedSession = await prisma.scrobbleSession.update({
+      where: { id: session.id },
+      data: { status: ScrobbleStatus.stopped, progress: finalProgress },
     });
 
-    if (
-      watchEvent &&
-      session.type === "episode" &&
-      seriesImdbId &&
-      session.season !== null &&
-      session.episode !== null
-    ) {
-      await upsertSeriesProgressIfNewer(seriesImdbId, {
-        lastSeason: session.season,
-        lastEpisode: session.episode,
-        lastWatchedAt: watchedAt,
+    let watchEvent = null;
+    if (finalProgress >= SCROBBLE_COMPLETE_THRESHOLD) {
+      const result = await recordWatchEvent({
+        type: session.type,
+        imdbId,
+        seriesImdbId: seriesImdbId ?? undefined,
+        season: session.season,
+        episode: session.episode,
+        watchedAt,
+        source: "Scrobble",
+        request,
       });
+      watchEvent = result.watchEvent;
     }
 
     return reply.code(200).send({

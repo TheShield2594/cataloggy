@@ -4,7 +4,10 @@ import { prisma } from "../lib/prisma.js";
 
 const usersRoutes: FastifyPluginAsync = async (app) => {
   app.get("/users", async () => {
-    const users = await prisma.user.findMany({ orderBy: { createdAt: "desc" } });
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { id: true, email: true, createdAt: true },
+    });
     return { users };
   });
 
@@ -13,10 +16,11 @@ const usersRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "email is required" });
     }
 
-    const email = (request.body as { email?: unknown }).email;
-    if (typeof email !== "string" || !email) {
+    const rawEmail = (request.body as { email?: unknown }).email;
+    if (typeof rawEmail !== "string" || !rawEmail.trim()) {
       return reply.code(400).send({ error: "email is required" });
     }
+    const email = rawEmail.trim().toLowerCase();
 
     try {
       const user = await prisma.user.create({ data: { email } });

@@ -51,7 +51,6 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
     const list = await prisma.list.findUnique({ where: { id: request.params.id } });
     if (!list) return reply.code(404).send({ error: "List not found" });
 
-    await prisma.listItem.deleteMany({ where: { listId: list.id } });
     await prisma.list.delete({ where: { id: list.id } });
 
     return reply.code(204).send();
@@ -111,11 +110,6 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
 
       const imdbId = (body.imdbId as string).trim();
       const type = body.type as ListItemType;
-
-      if (!Object.values(ItemType).includes(type as ItemType)) {
-        return reply.code(400).send({ error: "type must be a valid item type" });
-      }
-
       const itemType = type as ItemType;
 
       try {
@@ -157,6 +151,10 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
   app.delete<{ Params: { listId: string; type: string; imdbId: string } }>(
     "/lists/:listId/items/:type/:imdbId",
     async (request, reply) => {
+      if (!UUID_V4_PATTERN.test(request.params.listId)) {
+        return reply.code(400).send({ error: "listId must be a valid UUID" });
+      }
+
       const type = request.params.type;
       if (!Object.values(ListItemType).includes(type as ListItemType)) {
         return reply.code(400).send({ error: "type must be one of: movie, series" });

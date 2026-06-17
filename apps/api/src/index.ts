@@ -3,7 +3,7 @@ import { prisma } from "./lib/prisma.js";
 import { applyCorsHeaders } from "./lib/cors.js";
 import { verifyToken } from "./lib/auth.js";
 import { getAiRecommendations, isAiConfigured } from "./lib/ai.js";
-import { trendingCache } from "./lib/cache.js";
+import { trendingCacheDeletePrefix } from "./lib/cache.js";
 import { pollTraktHistory } from "./lib/trakt-client.js";
 import { ensureDefaultWatchlist } from "./lib/watchlist.js";
 import { cleanupStaleSessions, SCROBBLE_CLEANUP_INTERVAL_MS } from "./routes/scrobble.js";
@@ -126,8 +126,7 @@ const start = async () => {
 
   const refreshAiRecommendations = async () => {
     if (!(await isAiConfigured())) return;
-    trendingCache.delete("ai-recs:movie");
-    trendingCache.delete("ai-recs:series");
+    trendingCacheDeletePrefix("ai-recs:");
     await Promise.allSettled([
       getAiRecommendations("movie", 15),
       getAiRecommendations("series", 15),

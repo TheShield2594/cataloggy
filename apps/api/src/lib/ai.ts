@@ -1,6 +1,6 @@
 import { MetadataType } from "@prisma/client";
 import { prisma } from "./prisma.js";
-import { trendingCache, trendingCacheGet, trendingCacheSet } from "./cache.js";
+import { trendingCacheGet, trendingCacheSet } from "./cache.js";
 import { getTmdb } from "./tmdb-client.js";
 import { getRpdbApiKey, withRpdbPoster } from "./rpdb.js";
 import { upsertMetadata } from "./metadata.js";
@@ -42,6 +42,7 @@ export const shouldRefreshAiRecs = async (): Promise<boolean> => {
   if (!lastGenRow) return true;
 
   const lastGen = new Date(lastGenRow.value);
+  if (isNaN(lastGen.getTime())) return true;
   const hoursSinceLastGen = (Date.now() - lastGen.getTime()) / (1000 * 60 * 60);
   return hoursSinceLastGen >= 6;
 };
@@ -177,7 +178,7 @@ export const getAiRecommendations = async (
   type: "movie" | "series",
   limit = 10
 ): Promise<{ metas: StremioMetaPreview[]; reasons: Record<string, string> } | null> => {
-  const cacheKey = `ai-recs:${type}`;
+  const cacheKey = `ai-recs:${type}:${limit}`;
   const cached = trendingCacheGet(cacheKey);
   if (cached) return { metas: cached.data, reasons: cached.reasons ?? {} };
 
