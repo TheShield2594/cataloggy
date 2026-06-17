@@ -11,7 +11,7 @@ export const ALLOWED_ORIGINS = IS_DEVELOPMENT
   : Array.from(new Set([PRODUCTION_UI_ORIGIN, ...CATALOGGY_ALLOWED_ORIGINS]));
 
 const CORS_METHODS = "GET,POST,DELETE,PATCH,OPTIONS";
-const CORS_HEADERS = "Authorization,Content-Type";
+const CORS_HEADERS = "Authorization,Content-Type,X-Profile-Id";
 
 export const isAllowedOrigin = (origin: string | undefined): boolean => {
   if (IS_DEVELOPMENT) return true;
