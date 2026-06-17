@@ -41,10 +41,12 @@ export default defineConfig({
   ],
   server: {
     host: "0.0.0.0",
-    port: 7002
+    port: 7002,
+    allowedHosts: ["cataloggy.shieldsfam.lol"]
   },
   preview: {
     host: "0.0.0.0",
-    port: 7002
+    port: 7002,
+    allowedHosts: ["cataloggy.shieldsfam.lol"]
   }
 });
