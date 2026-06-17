@@ -95,6 +95,14 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
     return { language, region, spoilerProtection };
   });
 
+  // ─── TMDB ───
+  // TMDB_API_KEY is a deployment-time secret (no UI to set it), so this
+  // is informational only — used by the setup wizard to surface whether
+  // the server is configured, not to let the browser configure it.
+  app.get("/tmdb/status", async () => {
+    return { configured: !!process.env.TMDB_API_KEY?.trim() };
+  });
+
   // ─── OMDB ───
 
   app.get("/omdb/status", async () => {
