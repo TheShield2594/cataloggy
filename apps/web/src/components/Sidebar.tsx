@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
-import { BarChart3, Clapperboard, Pin, PinOff, Search, List, Settings } from "lucide-react";
+import { BarChart3, Clapperboard, History, Pin, PinOff, Search, List, Settings } from "lucide-react";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: Clapperboard, end: true },
   { to: "/search", label: "Search", icon: Search, end: false },
   { to: "/lists", label: "Lists", icon: List, end: false },
+  { to: "/history", label: "History", icon: History, end: false },
   { to: "/stats", label: "Stats", icon: BarChart3, end: false },
   { to: "/settings", label: "Settings", icon: Settings, end: false },
 ] as const;

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import { recordWatchEvent } from "../../lib/watch-event.js";
 
@@ -8,7 +9,8 @@ const verifyWebhookSecret = (request: import("fastify").FastifyRequest): boolean
   const provided =
     (request.query as Record<string, string>).token ??
     (request.headers["x-webhook-secret"] as string | undefined);
-  return provided === WEBHOOK_SECRET;
+  if (!provided || provided.length !== WEBHOOK_SECRET.length) return false;
+  return timingSafeEqual(Buffer.from(provided), Buffer.from(WEBHOOK_SECRET));
 };
 
 const jellyfinWebhookRoutes: FastifyPluginAsync = async (app) => {

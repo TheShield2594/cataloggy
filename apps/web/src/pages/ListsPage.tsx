@@ -209,7 +209,7 @@ export function ListsPage() {
         setSelectedListId(loaded[0].id);
       }
     });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (selectedListId) {

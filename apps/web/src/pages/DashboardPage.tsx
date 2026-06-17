@@ -3,7 +3,6 @@ import {
   AlertCircle,
   Film,
   Tv,
-  Play,
   ChevronRight,
   ChevronLeft,
   Check,
@@ -19,6 +18,7 @@ import {
   CheckIn,
   DetailedWatchStats,
   runtimeConfig,
+  ScrobbleSession,
   SearchResult,
   SeriesProgress,
   TrendingMeta,
@@ -264,6 +264,7 @@ export function DashboardPage() {
   const [markingNext, setMarkingNext] = useState<Set<string>>(new Set());
   const [markedDone, setMarkedDone] = useState<Set<string>>(new Set());
   const [activeCheckin, setActiveCheckin] = useState<CheckIn | null>(null);
+  const [nowPlaying, setNowPlaying] = useState<ScrobbleSession[]>([]);
 
   const continueScroll = useHorizontalScroll();
   const recentScroll = useHorizontalScroll();
@@ -290,16 +291,18 @@ export function DashboardPage() {
 
   const load = useCallback(async () => {
     try {
-      const [progressRes, historyRes, statsRes, checkinRes] = await Promise.all([
+      const [progressRes, historyRes, statsRes, checkinRes, nowPlayingRes] = await Promise.all([
         api.getSeriesProgress(),
         api.getWatchHistory(20),
         api.getWatchStats(),
         api.getCheckin().catch(() => ({ checkin: null })),
+        api.getNowPlaying().catch(() => ({ sessions: [] })),
       ]);
       setProgress(progressRes ?? []);
       setHistory(historyRes ?? []);
       setStats(statsRes);
       setActiveCheckin(checkinRes.checkin);
+      setNowPlaying(nowPlayingRes.sessions ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load dashboard");
     } finally {
@@ -389,7 +392,9 @@ export function DashboardPage() {
         setMarkedDone((prev) => { const next = new Set(prev); next.delete(imdbId); return next; });
         void load();
       }, 1200);
-    } catch { } finally {
+    } catch {
+      // best-effort; UI simply won't show the optimistic "done" state
+    } finally {
       setMarkingNext((prev) => { const next = new Set(prev); next.delete(imdbId); return next; });
     }
   };
@@ -492,6 +497,60 @@ export function DashboardPage() {
                 <X className="h-4 w-4" />
               </button>
             </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Live: Plex/Jellyfin scrobble sessions ── */}
+      {nowPlaying.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            Playing now
+          </h3>
+          <div className="space-y-2">
+            {nowPlaying.map((session) => (
+              <div
+                key={session.id}
+                className="flex items-center gap-3 rounded-xl p-3"
+                style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
+              >
+                <div
+                  className="flex h-12 w-12 flex-none items-center justify-center overflow-hidden rounded-lg"
+                  style={{ background: "var(--surface-strong)" }}
+                >
+                  {session.poster ? (
+                    <img src={session.poster} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  ) : session.type === "movie" ? (
+                    <Film className="h-5 w-5" style={{ color: "var(--text-mute)" }} />
+                  ) : (
+                    <Tv className="h-5 w-5" style={{ color: "var(--text-mute)" }} />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>
+                    {session.name ?? session.imdbId}
+                    {session.type === "episode" && session.season != null && session.episode != null && (
+                      <span style={{ color: "var(--text-mute)" }}>
+                        {" "}S{session.season}E{session.episode}
+                      </span>
+                    )}
+                  </p>
+                  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--surface-strong)" }}>
+                    <div
+                      className={`h-full rounded-full ${session.status === "paused" ? "bg-amber-400" : "bg-emerald-500"}`}
+                      style={{ width: `${Math.round(session.progress)}%` }}
+                    />
+                  </div>
+                </div>
+                <span className="flex-none text-2xs font-medium capitalize" style={{ color: "var(--text-mute)" }}>
+                  {session.status}
+                </span>
+              </div>
+            ))}
           </div>
         </section>
       )}
