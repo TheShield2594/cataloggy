@@ -28,20 +28,20 @@ function Section({ title, icon, defaultOpen, children }: { title: string; icon: 
   }, [open]);
 
   return (
-    <div className="rounded-2xl border border-ink-800/60 bg-ink-900/40 overflow-hidden">
+    <div className="rounded-2xl border border-ink-100 bg-cream-50 shadow-sm overflow-hidden">
       <button
         id={buttonId}
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center gap-3 px-5 py-[1.125rem] text-left transition-colors hover:bg-ink-800/30"
+        className="flex w-full items-center gap-3 px-5 py-[1.125rem] text-left transition-colors hover:bg-ink-100/40"
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink-800/60 text-ink-400">{icon}</span>
-        <span className="flex-1 text-base font-semibold">{title}</span>
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink-100 text-ink-500">{icon}</span>
+        <span className="flex-1 text-base font-semibold text-ink-900">{title}</span>
         <ChevronDown
           size={18}
-          className={`text-ink-400 transition-transform duration-300 ${open ? "rotate-180" : ""}`}
+          className={`text-ink-500 transition-transform duration-300 ${open ? "rotate-180" : ""}`}
         />
       </button>
       <div
@@ -52,7 +52,7 @@ function Section({ title, icon, defaultOpen, children }: { title: string; icon: 
         style={{ height: height !== undefined ? `${height}px` : "auto" }}
         className="overflow-hidden transition-[height] duration-300 ease-in-out"
       >
-        <div className="border-t border-ink-800/40 px-5 py-5">{children}</div>
+        <div className="border-t border-ink-100 px-5 py-5">{children}</div>
       </div>
     </div>
   );
@@ -62,10 +62,10 @@ export function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
-        ok ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20" : "bg-ink-800 text-ink-400 ring-1 ring-ink-700/60"
+        ok ? "bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/20" : "bg-ink-100 text-ink-500 ring-1 ring-ink-200"
       }`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-400" : "bg-ink-500"}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-500" : "bg-ink-400"}`} />
       {label}
     </span>
   );
@@ -85,7 +85,7 @@ function ApiTokenSection() {
 
   return (
     <form onSubmit={save} className="space-y-4">
-      <p className="text-sm text-ink-400 leading-relaxed">
+      <p className="text-sm text-ink-600 leading-relaxed">
         The API token authenticates requests to your Cataloggy server. It is stored in localStorage.
       </p>
       <div className="relative">
@@ -94,18 +94,18 @@ function ApiTokenSection() {
           value={token}
           onChange={(e) => setToken(e.target.value)}
           placeholder="Paste your API token"
-          className="w-full rounded-xl border border-ink-700/60 bg-[#0d0b0a] px-4 py-3 pr-20 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+          className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 pr-20 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         />
         <button
           type="button"
           onClick={() => setShowToken((p) => !p)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-200"
+          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-700"
           aria-label={showToken ? "Hide token" : "Show token"}
         >
           {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
       </div>
-      <p className="text-xs text-amber-400">Only use this on trusted devices.</p>
+      <p className="text-xs text-amber-600">Only use this on trusted devices.</p>
       <button
         type="submit"
         className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
@@ -176,7 +176,7 @@ export function TraktSection() {
   };
 
   if (loading) {
-    return <div className="flex items-center gap-2 text-sm text-ink-400"><Loader2 size={16} className="animate-spin" /> Checking Trakt status...</div>;
+    return <div className="flex items-center gap-2 text-sm text-ink-600"><Loader2 size={16} className="animate-spin" /> Checking Trakt status...</div>;
   }
 
   return (
@@ -184,17 +184,17 @@ export function TraktSection() {
       <div className="flex items-center gap-3">
         <StatusBadge ok={!!status?.connected} label={status?.connected ? "Connected" : "Not connected"} />
         {status && !status.configured && (
-          <span className="text-xs text-amber-400">Trakt credentials not configured on the server</span>
+          <span className="text-xs text-amber-600">Trakt credentials not configured on the server</span>
         )}
       </div>
 
       {status?.redirectUri && !status.connected && status.configured && (
-        <div className="rounded-xl border border-ink-800/40 bg-[#0d0b0a]/50 px-4 py-3 space-y-1">
-          <p className="text-xs text-ink-400">
-            Your Trakt app's <strong className="text-ink-300">Redirect URI</strong> must be set to:
+        <div className="rounded-xl border border-ink-100 bg-cream-100 px-4 py-3 space-y-1">
+          <p className="text-xs text-ink-600">
+            Your Trakt app's <strong className="text-ink-700">Redirect URI</strong> must be set to:
           </p>
-          <code className="block text-sm text-claw-400 break-all select-all">{status.redirectUri}</code>
-          <p className="text-xs text-ink-400">
+          <code className="block text-sm text-claw-600 break-all select-all">{status.redirectUri}</code>
+          <p className="text-xs text-ink-600">
             Set this at trakt.tv under Settings &gt; Your API Apps &gt; Edit. A mismatch causes an OAuth error.
           </p>
         </div>
@@ -224,14 +224,14 @@ export function TraktSection() {
             <button
               type="button"
               onClick={disconnect}
-              className="inline-flex items-center gap-2 rounded-xl bg-ink-800 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-rose-600 border border-ink-700/60"
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 transition-colors hover:bg-rose-600 hover:text-white border border-ink-200"
             >
               <Unplug size={16} /> Disconnect
             </button>
             <button
               type="button"
               onClick={fetchStatus}
-              className="rounded-xl bg-ink-800 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-ink-700 border border-ink-700/60"
+              className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 transition-colors hover:bg-ink-100 border border-ink-200"
             >
               Refresh
             </button>
@@ -240,12 +240,12 @@ export function TraktSection() {
       </div>
 
       {importResult && (
-        <p className="flex items-center gap-2 text-sm text-emerald-400">
+        <p className="flex items-center gap-2 text-sm text-emerald-600">
           <Check size={16} /> {importResult}
         </p>
       )}
       {error && (
-        <p className="flex items-center gap-2 text-sm text-rose-400">
+        <p className="flex items-center gap-2 text-sm text-rose-600">
           <AlertCircle size={16} /> {error}
         </p>
       )}
@@ -302,15 +302,15 @@ function OmdbSection() {
   };
 
   if (loading) {
-    return <div className="flex items-center gap-2 text-sm text-ink-400"><Loader2 size={16} className="animate-spin" /> Checking OMDB status...</div>;
+    return <div className="flex items-center gap-2 text-sm text-ink-600"><Loader2 size={16} className="animate-spin" /> Checking OMDB status...</div>;
   }
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-ink-400 leading-relaxed">
-        OMDB provides ratings from <strong className="text-ink-300">IMDb</strong>, <strong className="text-ink-300">Rotten Tomatoes</strong>, and <strong className="text-ink-300">Metacritic</strong> for every movie and show in your detail panels.
+      <p className="text-sm text-ink-600 leading-relaxed">
+        OMDB provides ratings from <strong className="text-ink-700">IMDb</strong>, <strong className="text-ink-700">Rotten Tomatoes</strong>, and <strong className="text-ink-700">Metacritic</strong> for every movie and show in your detail panels.
         Get a free API key at{" "}
-        <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" rel="noopener noreferrer" className="text-claw-400 underline hover:text-claw-300">
+        <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" rel="noopener noreferrer" className="text-claw-600 underline hover:text-claw-500">
           omdbapi.com
         </a>.
       </p>
@@ -324,7 +324,7 @@ function OmdbSection() {
           <button
             type="button"
             onClick={disconnect}
-            className="inline-flex items-center gap-2 rounded-xl bg-ink-800 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-rose-600 border border-ink-700/60"
+            className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 transition-colors hover:bg-rose-600 hover:text-white border border-ink-200"
           >
             <Unplug size={16} /> Remove Key
           </button>
@@ -337,12 +337,12 @@ function OmdbSection() {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="Paste your OMDB API key"
-              className="w-full rounded-xl border border-ink-700/60 bg-[#0d0b0a] px-4 py-3 pr-20 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+              className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 pr-20 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
             />
             <button
               type="button"
               onClick={() => setShowKey((p) => !p)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-200"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-700"
               aria-label={showKey ? "Hide key" : "Show key"}
             >
               {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -353,8 +353,8 @@ function OmdbSection() {
             disabled={saving || !apiKey.trim()}
             className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
               saved
-                ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
-                : "bg-claw-500 text-white hover:bg-claw-600 shadow-lg shadow-claw-500/20 disabled:opacity-50"
+                ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/20"
+                : "bg-claw-500 text-white hover:bg-claw-600 disabled:opacity-50"
             }`}
           >
             {saved ? <><Check size={16} /> Saved</> : saving ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : "Save OMDB Key"}
@@ -362,7 +362,7 @@ function OmdbSection() {
         </form>
       )}
 
-      {error && <p className="flex items-center gap-2 text-sm text-rose-400"><AlertCircle size={16} /> {error}</p>}
+      {error && <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>}
     </div>
   );
 }
@@ -417,16 +417,16 @@ function RpdbSection() {
   };
 
   if (loading) {
-    return <div className="flex items-center gap-2 text-sm text-ink-400"><Loader2 size={16} className="animate-spin" /> Checking RPDB status...</div>;
+    return <div className="flex items-center gap-2 text-sm text-ink-600"><Loader2 size={16} className="animate-spin" /> Checking RPDB status...</div>;
   }
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-ink-400 leading-relaxed">
+      <p className="text-sm text-ink-600 leading-relaxed">
         RPDB (Rating Poster Database) overlays rating badges directly onto poster images.
         When enabled, all posters across the web UI and Stremio will show rating badges on the artwork.
         Get an API key at{" "}
-        <a href="https://ratingposterdb.com/api-key/" target="_blank" rel="noopener noreferrer" className="text-claw-400 underline hover:text-claw-300">
+        <a href="https://ratingposterdb.com/api-key/" target="_blank" rel="noopener noreferrer" className="text-claw-600 underline hover:text-claw-500">
           ratingposterdb.com
         </a>.
       </p>
@@ -440,7 +440,7 @@ function RpdbSection() {
           <button
             type="button"
             onClick={disconnect}
-            className="inline-flex items-center gap-2 rounded-xl bg-ink-800 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-rose-600 border border-ink-700/60"
+            className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 transition-colors hover:bg-rose-600 hover:text-white border border-ink-200"
           >
             <Unplug size={16} /> Remove Key
           </button>
@@ -453,12 +453,12 @@ function RpdbSection() {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="Paste your RPDB API key"
-              className="w-full rounded-xl border border-ink-700/60 bg-[#0d0b0a] px-4 py-3 pr-20 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+              className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 pr-20 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
             />
             <button
               type="button"
               onClick={() => setShowKey((p) => !p)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-200"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-700"
               aria-label={showKey ? "Hide key" : "Show key"}
             >
               {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -469,8 +469,8 @@ function RpdbSection() {
             disabled={saving || !apiKey.trim()}
             className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
               saved
-                ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
-                : "bg-claw-500 text-white hover:bg-claw-600 shadow-lg shadow-claw-500/20 disabled:opacity-50"
+                ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/20"
+                : "bg-claw-500 text-white hover:bg-claw-600 disabled:opacity-50"
             }`}
           >
             {saved ? <><Check size={16} /> Saved</> : saving ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : "Save RPDB Key"}
@@ -478,7 +478,7 @@ function RpdbSection() {
         </form>
       )}
 
-      {error && <p className="flex items-center gap-2 text-sm text-rose-400"><AlertCircle size={16} /> {error}</p>}
+      {error && <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>}
     </div>
   );
 }
@@ -522,13 +522,13 @@ function AddonManifestUrl() {
   };
 
   return (
-    <div className="rounded-xl border border-ink-700/60 bg-[#0d0b0a]/60 p-4 space-y-3">
-      <p className="text-sm font-medium text-ink-300">Manifest URL</p>
-      <p className="text-xs text-ink-400 leading-relaxed">
-        Copy this URL and paste it into Stremio under <strong className="text-ink-300">Add-ons &rarr; Install from URL</strong>.
+    <div className="rounded-xl border border-ink-200 bg-cream-100 p-4 space-y-3">
+      <p className="text-sm font-medium text-ink-700">Manifest URL</p>
+      <p className="text-xs text-ink-600 leading-relaxed">
+        Copy this URL and paste it into Stremio under <strong className="text-ink-700">Add-ons &rarr; Install from URL</strong>.
       </p>
       <div className="flex items-center gap-2">
-        <code className="flex-1 overflow-x-auto rounded-lg bg-ink-900 px-3 py-2 text-xs text-claw-400 select-all whitespace-nowrap scrollbar-hide">
+        <code className="flex-1 overflow-x-auto rounded-lg bg-white border border-ink-200 px-3 py-2 text-xs text-claw-600 select-all whitespace-nowrap scrollbar-hide">
           {manifestUrl}
         </code>
         <button
@@ -536,10 +536,10 @@ function AddonManifestUrl() {
           onClick={copy}
           className={`flex-none inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
             copied
-              ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
+              ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/20"
               : copyError
-                ? "bg-rose-500/15 text-rose-400 ring-1 ring-rose-500/20"
-                : "bg-ink-800 text-ink-300 hover:bg-ink-700 border border-ink-700/60"
+                ? "bg-rose-500/15 text-rose-600 ring-1 ring-rose-500/20"
+                : "bg-white text-ink-700 hover:bg-ink-100 border border-ink-200"
           }`}
           aria-label="Copy manifest URL"
         >
@@ -549,13 +549,13 @@ function AddonManifestUrl() {
           href={manifestUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-none inline-flex items-center gap-1.5 rounded-lg bg-ink-800 border border-ink-700/60 px-3 py-2 text-xs font-semibold text-ink-300 hover:bg-ink-700 transition-colors"
+          className="flex-none inline-flex items-center gap-1.5 rounded-lg bg-white border border-ink-200 px-3 py-2 text-xs font-semibold text-ink-700 hover:bg-ink-100 transition-colors"
           aria-label="Open manifest URL"
         >
           <ExternalLink size={13} />
         </a>
       </div>
-      <p className="text-xs text-ink-400">
+      <p className="text-xs text-ink-600">
         The URL points to your local API server. Stremio must be able to reach it on your network.
       </p>
     </div>
@@ -610,13 +610,13 @@ function AddonConfigSection() {
   };
 
   if (loading) {
-    return <div className="flex items-center gap-2 text-sm text-ink-400"><Loader2 size={16} className="animate-spin" /> Loading configuration...</div>;
+    return <div className="flex items-center gap-2 text-sm text-ink-600"><Loader2 size={16} className="animate-spin" /> Loading configuration...</div>;
   }
 
   return (
     <div className="space-y-4">
       <AddonManifestUrl />
-      <p className="text-sm text-ink-400 leading-relaxed">
+      <p className="text-sm text-ink-600 leading-relaxed">
         Choose which catalogs appear in Stremio. Changes take effect after the manifest cache refreshes (~60s).
       </p>
 
@@ -629,8 +629,8 @@ function AddonConfigSection() {
               key={catalog}
               className={`flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-colors ${
                 isAiCatalog
-                  ? "border-plum-500/40 bg-ink-900/30 hover:bg-ink-900/40"
-                  : "border-ink-800/40 bg-ink-900/30 hover:bg-ink-900/60"
+                  ? "border-plum-500/30 bg-plum-500/5 hover:bg-plum-500/10"
+                  : "border-ink-100 bg-cream-50 hover:bg-ink-100/40"
               } ${isAiCatalog && !aiConfigured ? "opacity-50" : ""}`}
             >
               <input
@@ -638,9 +638,9 @@ function AddonConfigSection() {
                 checked={enabled.includes(catalog)}
                 onChange={() => toggle(catalog)}
                 disabled={isAiCatalog && !aiConfigured}
-                className="h-4 w-4 rounded border-ink-600 bg-ink-800 text-claw-500 focus:ring-claw-500/30"
+                className="h-4 w-4 rounded border-ink-300 bg-white text-claw-500 focus:ring-claw-500/30"
               />
-              <span className="flex-1 text-sm font-medium text-ink-200">{CATALOG_LABELS[catalog] ?? catalog}</span>
+              <span className="flex-1 text-sm font-medium text-ink-800">{CATALOG_LABELS[catalog] ?? catalog}</span>
               {isAiCatalog && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-plum-500/80 px-1.5 py-0.5 text-2xs font-semibold text-white">
                   <Sparkles className="h-2.5 w-2.5" /> AI
@@ -651,28 +651,28 @@ function AddonConfigSection() {
         })}
       </div>
       {available.some((c) => c === "cataloggy-ai-movie" || c === "cataloggy-ai-series") && !aiConfigured && (
-        <p className="text-xs text-ink-400 italic">Configure AI Recommendations to enable the AI Picks catalogs.</p>
+        <p className="text-xs text-ink-600 italic">Configure AI Recommendations to enable the AI Picks catalogs.</p>
       )}
 
       {/* User lists */}
       {availableLists.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-ink-400 pt-1">My Lists</p>
-          <p className="text-xs text-ink-400">Each list adds separate Movies and Series catalogs to Stremio.</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-ink-500 pt-1">My Lists</p>
+          <p className="text-xs text-ink-600">Each list adds separate Movies and Series catalogs to Stremio.</p>
           {availableLists.map((list) => {
             const catalogId = `list:${list.id}`;
             return (
               <label
                 key={list.id}
-                className="flex items-center gap-3 rounded-xl border border-ink-800/40 bg-ink-900/30 px-4 py-3 cursor-pointer transition-colors hover:bg-ink-900/60"
+                className="flex items-center gap-3 rounded-xl border border-ink-100 bg-cream-50 px-4 py-3 cursor-pointer transition-colors hover:bg-ink-100/40"
               >
                 <input
                   type="checkbox"
                   checked={enabled.includes(catalogId)}
                   onChange={() => toggle(catalogId)}
-                  className="h-4 w-4 rounded border-ink-600 bg-ink-800 text-claw-500 focus:ring-claw-500/30"
+                  className="h-4 w-4 rounded border-ink-300 bg-white text-claw-500 focus:ring-claw-500/30"
                 />
-                <span className="text-sm font-medium text-ink-200">{list.name}</span>
+                <span className="text-sm font-medium text-ink-800">{list.name}</span>
               </label>
             );
           })}
@@ -685,13 +685,13 @@ function AddonConfigSection() {
         disabled={saving}
         className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
           saved
-            ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
-            : "bg-claw-500 text-white hover:bg-claw-600 shadow-lg shadow-claw-500/20"
+            ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/20"
+            : "bg-claw-500 text-white hover:bg-claw-600"
         }`}
       >
         {saved ? <><Check size={16} /> Saved</> : saving ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : "Save Configuration"}
       </button>
-      {error && <p className="flex items-center gap-2 text-sm text-rose-400"><AlertCircle size={16} /> {error}</p>}
+      {error && <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>}
     </div>
   );
 }
@@ -810,20 +810,20 @@ function AiRecommendationsSection() {
   };
 
   if (loading) {
-    return <div className="flex items-center gap-2 text-sm text-ink-400"><Loader2 size={16} className="animate-spin" /> Loading...</div>;
+    return <div className="flex items-center gap-2 text-sm text-ink-600"><Loader2 size={16} className="animate-spin" /> Loading...</div>;
   }
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-ink-400 leading-relaxed">
+      <p className="text-sm text-ink-600 leading-relaxed">
         Connect an OpenAI-compatible LLM to generate personalised recommendations based on your watch history.
-        Paste a JSON config with <code className="text-ink-300">url</code>, <code className="text-ink-300">headers</code>, and <code className="text-ink-300">payload</code> fields.
+        Paste a JSON config with <code className="text-ink-700">url</code>, <code className="text-ink-700">headers</code>, and <code className="text-ink-700">payload</code> fields.
       </p>
 
       <div className="flex items-center gap-3">
         <StatusBadge ok={configured} label={configured ? "Configured" : "Not configured"} />
         {lastGeneratedAt && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-ink-400">
+          <span className="inline-flex items-center gap-1.5 text-xs text-ink-600">
             <Clock size={12} /> Last generated {timeAgo(lastGeneratedAt)}
           </span>
         )}
@@ -834,13 +834,13 @@ function AiRecommendationsSection() {
         onChange={(e) => handleChange(e.target.value)}
         placeholder={AI_PLACEHOLDER}
         rows={8}
-        className="w-full rounded-xl border border-ink-700/60 bg-[#0d0b0a]/60 px-4 py-3 font-mono text-xs text-ink-200 placeholder:text-ink-600 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/30 resize-y"
+        className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 font-mono text-xs text-ink-800 placeholder:text-ink-400 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/30 resize-y"
         spellCheck={false}
       />
-      {jsonError && <p className="text-xs text-rose-400">{jsonError}</p>}
+      {jsonError && <p className="text-xs text-rose-600">{jsonError}</p>}
 
       {testStatus && (
-        <p className={`flex items-center gap-2 text-sm ${testStatus === "ok" ? "text-emerald-400" : "text-rose-400"}`}>
+        <p className={`flex items-center gap-2 text-sm ${testStatus === "ok" ? "text-emerald-600" : "text-rose-600"}`}>
           {testStatus === "ok" ? <Check size={14} /> : <AlertCircle size={14} />}
           {testMessage}
         </p>
@@ -851,7 +851,7 @@ function AiRecommendationsSection() {
           type="button"
           onClick={handleTest}
           disabled={testing || !rawInput.trim() || !!jsonError}
-          className="inline-flex items-center gap-2 rounded-xl border border-ink-700/60 bg-ink-800 px-4 py-2 text-sm font-semibold text-ink-200 transition-all hover:bg-ink-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2 text-sm font-semibold text-ink-700 transition-all hover:bg-ink-100 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {testing ? <><Loader2 size={14} className="animate-spin" /> Testing…</> : "Test Connection"}
         </button>
@@ -861,8 +861,8 @@ function AiRecommendationsSection() {
           disabled={saving || !rawInput.trim() || !!jsonError}
           className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
             saved
-              ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
-              : "bg-plum-500 text-white hover:bg-plum-600 shadow-lg shadow-plum-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+              ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/20"
+              : "bg-plum-500 text-white hover:bg-plum-600 disabled:opacity-40 disabled:cursor-not-allowed"
           }`}
         >
           {saved ? <><Check size={14} /> Saved</> : saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : "Save Config"}
@@ -872,13 +872,13 @@ function AiRecommendationsSection() {
             type="button"
             onClick={handleRemove}
             disabled={removing}
-            className="inline-flex items-center gap-2 rounded-xl border border-rose-700/40 bg-rose-950/30 px-4 py-2 text-sm font-semibold text-rose-400 transition-all hover:bg-rose-950/50 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-600 transition-all hover:bg-rose-100 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {removing ? <><Loader2 size={14} className="animate-spin" /> Removing…</> : "Remove"}
           </button>
         )}
       </div>
-      {error && <p className="flex items-center gap-2 text-sm text-rose-400"><AlertCircle size={16} /> {error}</p>}
+      {error && <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>}
     </div>
   );
 }
@@ -904,17 +904,17 @@ function DataSection() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-ink-400 leading-relaxed">Re-fetch metadata (posters, descriptions, etc.) for all tracked items from TMDB.</p>
+      <p className="text-sm text-ink-600 leading-relaxed">Re-fetch metadata (posters, descriptions, etc.) for all tracked items from TMDB.</p>
       <button
         type="button"
         onClick={refreshAll}
         disabled={syncing}
-        className="inline-flex items-center gap-2 rounded-xl bg-claw-500 px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-claw-600 disabled:opacity-60 shadow-lg shadow-claw-500/20"
+        className="inline-flex items-center gap-2 rounded-xl bg-claw-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-claw-600 disabled:opacity-60"
       >
         {syncing ? <><Loader2 size={16} className="animate-spin" /> Syncing...</> : "Sync all metadata"}
       </button>
-      {result && <p className="flex items-center gap-2 text-sm text-emerald-400"><Check size={16} /> {result}</p>}
-      {error && <p className="flex items-center gap-2 text-sm text-rose-400"><AlertCircle size={16} /> {error}</p>}
+      {result && <p className="flex items-center gap-2 text-sm text-emerald-600"><Check size={16} /> {result}</p>}
+      {error && <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>}
     </div>
   );
 }
@@ -996,24 +996,24 @@ function PreferencesSection() {
   };
 
   if (loading) {
-    return <div className="flex items-center gap-2 text-sm text-ink-400"><Loader2 size={16} className="animate-spin" /> Loading preferences...</div>;
+    return <div className="flex items-center gap-2 text-sm text-ink-600"><Loader2 size={16} className="animate-spin" /> Loading preferences...</div>;
   }
 
   return (
     <div className="space-y-5">
-      <p className="text-sm text-ink-400 leading-relaxed">
+      <p className="text-sm text-ink-600 leading-relaxed">
         Configure metadata language, streaming region, and spoiler protection.
         Changes affect TMDB metadata fetching and Stremio catalog content.
       </p>
 
       {/* Language */}
       <div>
-        <label htmlFor="pref-language" className="mb-1.5 block text-sm font-medium text-ink-300">Metadata Language</label>
+        <label htmlFor="pref-language" className="mb-1.5 block text-sm font-medium text-ink-700">Metadata Language</label>
         <select
           id="pref-language"
           value={language}
           onChange={(e) => { setLanguage(e.target.value); setSaved(false); }}
-          className="w-full rounded-xl border border-ink-700/60 bg-[#0d0b0a] px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+          className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         >
           {!COMMON_LANGUAGES.some((l) => l.code === language) && (
             <option value={language}>{language}</option>
@@ -1022,19 +1022,19 @@ function PreferencesSection() {
             <option key={l.code} value={l.code}>{l.label} ({l.code})</option>
           ))}
         </select>
-        <p className="mt-1 text-xs text-ink-400">
+        <p className="mt-1 text-xs text-ink-500">
           Titles, descriptions, and metadata will be fetched in this language from TMDB.
         </p>
       </div>
 
       {/* Region */}
       <div>
-        <label htmlFor="pref-region" className="mb-1.5 block text-sm font-medium text-ink-300">Streaming Region</label>
+        <label htmlFor="pref-region" className="mb-1.5 block text-sm font-medium text-ink-700">Streaming Region</label>
         <select
           id="pref-region"
           value={region}
           onChange={(e) => { setRegion(e.target.value); setSaved(false); }}
-          className="w-full rounded-xl border border-ink-700/60 bg-[#0d0b0a] px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+          className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         >
           {!COMMON_REGIONS.includes(region) && (
             <option value={region}>{region}</option>
@@ -1043,26 +1043,26 @@ function PreferencesSection() {
             <option key={r} value={r}>{r}</option>
           ))}
         </select>
-        <p className="mt-1 text-xs text-ink-400">
+        <p className="mt-1 text-xs text-ink-500">
           Streaming service catalogs (Netflix, Disney+, etc.) show content available in this region.
         </p>
       </div>
 
       {/* Spoiler Protection */}
-      <label htmlFor="pref-spoiler" className="flex items-start gap-3 rounded-xl border border-ink-800/40 bg-ink-900/30 px-4 py-3.5 cursor-pointer transition-colors hover:bg-ink-900/60">
+      <label htmlFor="pref-spoiler" className="flex items-start gap-3 rounded-xl border border-ink-100 bg-cream-50 px-4 py-3.5 cursor-pointer transition-colors hover:bg-ink-100/40">
         <input
           id="pref-spoiler"
           type="checkbox"
           checked={spoilerProtection}
           onChange={(e) => { setSpoilerProtection(e.target.checked); setSaved(false); }}
-          className="mt-0.5 h-4 w-4 rounded border-ink-600 bg-ink-800 text-claw-500 focus:ring-claw-500/30"
+          className="mt-0.5 h-4 w-4 rounded border-ink-300 bg-white text-claw-500 focus:ring-claw-500/30"
         />
         <div>
-          <span className="text-sm font-medium text-ink-200 flex items-center gap-2">
+          <span className="text-sm font-medium text-ink-800 flex items-center gap-2">
             <Shield size={14} className="text-plum-500" />
             Spoiler Protection
           </span>
-          <p className="mt-0.5 text-xs text-ink-400">
+          <p className="mt-0.5 text-xs text-ink-500">
             Hides series descriptions in Stremio for shows you haven't finished watching yet.
           </p>
         </div>
@@ -1142,16 +1142,16 @@ function NotificationsSection() {
   };
 
   if (!supported) {
-    return <p className="text-sm text-ink-400">Push notifications aren't supported in this browser.</p>;
+    return <p className="text-sm text-ink-600">Push notifications aren't supported in this browser.</p>;
   }
 
   if (loading) {
-    return <div className="flex items-center gap-2 text-sm text-ink-400"><Loader2 size={16} className="animate-spin" /> Checking notification status...</div>;
+    return <div className="flex items-center gap-2 text-sm text-ink-600"><Loader2 size={16} className="animate-spin" /> Checking notification status...</div>;
   }
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-ink-400 leading-relaxed">
+      <p className="text-sm text-ink-600 leading-relaxed">
         Get a push notification when the next episode of a series you're tracking airs.
       </p>
 
@@ -1165,7 +1165,7 @@ function NotificationsSection() {
         disabled={busy}
         className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all disabled:opacity-50 ${
           subscribed
-            ? "bg-ink-800 border border-ink-700/60 hover:bg-rose-600"
+            ? "bg-ink-100 border border-ink-200 text-ink-700 hover:bg-rose-600 hover:text-white"
             : "bg-claw-500 text-white hover:bg-claw-600 shadow-lg shadow-claw-500/20"
         }`}
       >
@@ -1191,14 +1191,14 @@ function ProfileSection() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-ink-400 leading-relaxed">
+      <p className="text-sm text-ink-600 leading-relaxed">
         Switch to a different profile, or create a new one. Each profile has its own watch history,
         lists, and stats.
       </p>
       <button
         type="button"
         onClick={switchProfile}
-        className="inline-flex items-center gap-2 rounded-xl bg-ink-800 border border-ink-700/60 px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-ink-700"
+        className="inline-flex items-center gap-2 rounded-xl bg-ink-100 border border-ink-200 text-ink-700 px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-ink-200"
       >
         <Users size={16} /> Switch Profile
       </button>
@@ -1220,7 +1220,7 @@ export function SettingsPage() {
     <div className="mx-auto max-w-2xl space-y-4">
       <h2 className="text-2xl font-bold">Settings</h2>
 
-      <div className="flex rounded-full border border-ink-700/60 bg-ink-800/60 p-1">
+      <div className="flex rounded-full border border-ink-200 bg-ink-100/60 p-1">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -1229,7 +1229,7 @@ export function SettingsPage() {
             className={`flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
               tab === t.id
                 ? "bg-claw-500 text-white shadow-lg shadow-claw-500/25"
-                : "text-ink-400 hover:text-white"
+                : "text-ink-600 hover:text-ink-900"
             }`}
           >
             {t.label}
@@ -1252,8 +1252,8 @@ export function SettingsPage() {
           </Section>
 
           <Section title="About" icon={<Info size={20} />}>
-            <div className="space-y-2 text-sm text-ink-400">
-              <p className="text-base font-semibold text-ink-200">Cataloggy <span className="font-mono text-claw-400">v{APP_VERSION}</span></p>
+            <div className="space-y-2 text-sm text-ink-600">
+              <p className="text-base font-semibold text-ink-900">Cataloggy <span className="font-mono text-claw-600">v{APP_VERSION}</span></p>
               <p className="text-sm">A personal media catalog and watchlist manager.</p>
             </div>
           </Section>

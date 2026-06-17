@@ -10,10 +10,10 @@ function Shell({ children }: { children: React.ReactNode }) {
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-claw-500">
             <Clapperboard className="h-6 w-6 text-white" />
           </div>
-          <span className="text-2xl font-bold">Cataloggy</span>
+          <span className="text-2xl font-bold text-ink-900">Cataloggy</span>
         </div>
 
-        <div className="rounded-2xl border border-ink-700/60 bg-[#171310] p-6 shadow-xl">
+        <div className="rounded-2xl border border-ink-100 bg-white p-6 shadow-sm">
           {children}
         </div>
       </div>
@@ -60,8 +60,8 @@ function CreateProfileForm({
   return (
     <form onSubmit={submit} className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">{title}</h2>
-        <p className="mt-1 text-sm text-ink-400 leading-relaxed">{subtitle}</p>
+        <h2 className="text-lg font-semibold text-ink-900">{title}</h2>
+        <p className="mt-1 text-sm text-ink-500 leading-relaxed">{subtitle}</p>
       </div>
       <input
         autoFocus
@@ -69,7 +69,7 @@ function CreateProfileForm({
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Profile name"
-        className="w-full rounded-xl border border-ink-700/60 bg-[#0d0b0a] px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+        className="w-full rounded-xl border border-ink-100 bg-cream-50 px-4 py-3 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
       />
       <input
         type="password"
@@ -77,17 +77,17 @@ function CreateProfileForm({
         value={pin}
         onChange={(e) => setPin(e.target.value)}
         placeholder="PIN (optional)"
-        className="w-full rounded-xl border border-ink-700/60 bg-[#0d0b0a] px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+        className="w-full rounded-xl border border-ink-100 bg-cream-50 px-4 py-3 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
       />
       {error && (
-        <p className="flex items-center gap-2 text-sm text-rose-400"><AlertCircle size={16} /> {error}</p>
+        <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>
       )}
       <div className="flex gap-2">
         {onCancel && (
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-xl border border-ink-700/60 bg-ink-800 px-5 py-3 text-sm font-semibold transition-colors hover:bg-ink-700"
+            className="flex-1 rounded-xl border border-ink-100 bg-white px-5 py-3 text-sm font-semibold text-ink-700 transition-colors hover:bg-ink-100"
           >
             Cancel
           </button>
@@ -95,7 +95,7 @@ function CreateProfileForm({
         <button
           type="submit"
           disabled={creating || !name.trim()}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-claw-600 disabled:opacity-50 shadow-lg shadow-claw-500/20"
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-claw-600 disabled:opacity-50"
         >
           {creating ? <><Loader2 size={16} className="animate-spin" /> Creating...</> : <>Create <ArrowRight size={16} /></>}
         </button>
@@ -138,8 +138,8 @@ function PinPrompt({
   return (
     <form onSubmit={submit} className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">Enter PIN for {profile.name}</h2>
-        <p className="mt-1 text-sm text-ink-400 leading-relaxed">This profile is PIN-protected.</p>
+        <h2 className="text-lg font-semibold text-ink-900">Enter PIN for {profile.name}</h2>
+        <p className="mt-1 text-sm text-ink-500 leading-relaxed">This profile is PIN-protected.</p>
       </div>
       <input
         autoFocus
@@ -148,23 +148,23 @@ function PinPrompt({
         value={pin}
         onChange={(e) => setPin(e.target.value)}
         placeholder="PIN"
-        className="w-full rounded-xl border border-ink-700/60 bg-[#0d0b0a] px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+        className="w-full rounded-xl border border-ink-100 bg-cream-50 px-4 py-3 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
       />
       {error && (
-        <p className="flex items-center gap-2 text-sm text-rose-400"><AlertCircle size={16} /> {error}</p>
+        <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>
       )}
       <div className="flex gap-2">
         <button
           type="button"
           onClick={onBack}
-          className="flex-1 rounded-xl border border-ink-700/60 bg-ink-800 px-5 py-3 text-sm font-semibold transition-colors hover:bg-ink-700"
+          className="flex-1 rounded-xl border border-ink-100 bg-white px-5 py-3 text-sm font-semibold text-ink-700 transition-colors hover:bg-ink-100"
         >
           Back
         </button>
         <button
           type="submit"
           disabled={verifying || !pin.trim()}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-claw-600 disabled:opacity-50 shadow-lg shadow-claw-500/20"
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-claw-600 disabled:opacity-50"
         >
           {verifying ? <Loader2 size={16} className="animate-spin" /> : <>Unlock <ArrowRight size={16} /></>}
         </button>
@@ -185,8 +185,8 @@ function ProfilePicker({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">Who's watching?</h2>
-        <p className="mt-1 text-sm text-ink-400 leading-relaxed">Choose a profile to continue.</p>
+        <h2 className="text-lg font-semibold text-ink-900">Who's watching?</h2>
+        <p className="mt-1 text-sm text-ink-500 leading-relaxed">Choose a profile to continue.</p>
       </div>
       <div className="space-y-2">
         {profiles.map((profile) => (
@@ -194,20 +194,20 @@ function ProfilePicker({
             key={profile.id}
             type="button"
             onClick={() => onSelect(profile)}
-            className="flex w-full items-center gap-3 rounded-xl border border-ink-700/60 bg-[#0d0b0a] px-4 py-3 text-left text-sm font-medium transition-colors hover:border-claw-500/60 hover:bg-ink-800"
+            className="flex w-full items-center gap-3 rounded-xl border border-ink-100 bg-white px-4 py-3 text-left text-sm font-medium text-ink-900 transition-colors hover:border-claw-500/60 hover:bg-cream-50"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-800">
-              <User className="h-4 w-4 text-ink-300" />
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-100">
+              <User className="h-4 w-4 text-ink-600" />
             </span>
             <span className="flex-1">{profile.name}</span>
-            {profile.hasPin && <Lock className="h-4 w-4 text-ink-500" />}
+            {profile.hasPin && <Lock className="h-4 w-4 text-ink-400" />}
           </button>
         ))}
       </div>
       <button
         type="button"
         onClick={onCreateNew}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-ink-700/60 bg-ink-800 px-5 py-3 text-sm font-semibold transition-colors hover:bg-ink-700"
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-ink-100 bg-white px-5 py-3 text-sm font-semibold text-ink-700 transition-colors hover:bg-ink-100"
       >
         <Plus size={16} /> New Profile
       </button>
@@ -259,7 +259,7 @@ export function ProfileSwitcher({ onSelected }: { onSelected: (profile: Profile)
   if (loading) {
     return (
       <Shell>
-        <div className="flex items-center justify-center gap-2 py-6 text-sm text-ink-400">
+        <div className="flex items-center justify-center gap-2 py-6 text-sm text-ink-500">
           <Loader2 size={16} className="animate-spin" /> Loading profiles...
         </div>
       </Shell>
@@ -269,7 +269,7 @@ export function ProfileSwitcher({ onSelected }: { onSelected: (profile: Profile)
   if (error) {
     return (
       <Shell>
-        <p className="flex items-center gap-2 text-sm text-rose-400"><AlertCircle size={16} /> {error}</p>
+        <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>
       </Shell>
     );
   }
