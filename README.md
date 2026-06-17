@@ -31,6 +31,12 @@ cataloggy/
 
    > **Non-local deployments:** You **must** change `POSTGRES_PASSWORD` and `API_TOKEN` from their development defaults. Set them via a `.env` file next to `docker-compose.yml` or export them in your shell.
 
+   **Internal vs. public URLs:** the `api` and `addon` services distinguish between the URL used for service-to-service traffic inside the Docker network and the URL your browser/Apple TV/Omni actually reach:
+
+   - `CATALOGGY_API_BASE` (addon service) — internal URL the addon uses to call the API (e.g. `http://api:7000`). Only needs to change if you rename the `api` service or run it elsewhere.
+   - `CATALOGGY_API_PUBLIC` (api service) — externally reachable URL for the API, used to build the Trakt OAuth redirect URI. Set this to the LAN IP or domain you actually use to reach the API.
+   - `ADDON_PUBLIC_BASE` (addon service) — externally reachable URL for the addon, used when generating manifest/catalog URLs for clients like Apple TV.
+
 2. Start everything:
 
    ```bash
