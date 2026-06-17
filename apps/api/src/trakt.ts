@@ -331,5 +331,3 @@ export class TraktClient {
     logger.info("Trakt tokens refreshed and persisted");
   }
 }
-
-export type { TraktEpisodeHistoryPayload, TraktMovieHistoryPayload, TraktMoviePayload, TraktShowPayload, TraktWatchedMoviePayload, TraktWatchedShowPayload };
