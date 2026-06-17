@@ -3,6 +3,15 @@ import type { PrismaClient } from "@prisma/client";
 
 const TRAKT_API_BASE = "https://api.trakt.tv";
 const MAX_PAGES = 100;
+const DEFAULT_POLL_MAX_PAGES = 20;
+
+function parsePollMaxPages(raw: string | undefined): number {
+  const parsed = raw !== undefined ? Number.parseInt(raw, 10) : NaN;
+  if (!Number.isInteger(parsed) || parsed < 1) return DEFAULT_POLL_MAX_PAGES;
+  return Math.min(parsed, MAX_PAGES);
+}
+
+const POLL_MAX_PAGES = parsePollMaxPages(process.env.TRAKT_POLL_MAX_PAGES);
 const DEFAULT_TOKEN_ROW_ID = "default";
 const DEFAULT_TOKEN_EXPIRY_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
@@ -149,23 +158,34 @@ export class TraktClient {
   }
 
   async fetchMovieHistory(logger: FastifyBaseLogger, startAt?: string): Promise<TraktMovieHistoryPayload[]> {
-    return this.fetchAllPages<TraktMovieHistoryPayload>("/sync/history/movies", logger, startAt ? { start_at: startAt } : undefined);
+    return this.fetchAllPages<TraktMovieHistoryPayload>(
+      "/sync/history/movies",
+      logger,
+      startAt ? { start_at: startAt } : undefined,
+      POLL_MAX_PAGES
+    );
   }
 
   async fetchEpisodeHistory(logger: FastifyBaseLogger, startAt?: string): Promise<TraktEpisodeHistoryPayload[]> {
-    return this.fetchAllPages<TraktEpisodeHistoryPayload>("/sync/history/episodes", logger, startAt ? { start_at: startAt } : undefined);
+    return this.fetchAllPages<TraktEpisodeHistoryPayload>(
+      "/sync/history/episodes",
+      logger,
+      startAt ? { start_at: startAt } : undefined,
+      POLL_MAX_PAGES
+    );
   }
 
   private async fetchAllPages<T>(
     path: string,
     logger: FastifyBaseLogger,
-    queryParams?: Record<string, string>
+    queryParams?: Record<string, string>,
+    maxPages: number = MAX_PAGES
   ): Promise<T[]> {
     const items: T[] = [];
     let page = 1;
     let pageCount = 1;
 
-    while (page <= pageCount && page <= MAX_PAGES) {
+    while (page <= pageCount && page <= maxPages) {
       const response = await this.request(path, {
         method: "GET",
         headers: {
@@ -191,18 +211,18 @@ export class TraktClient {
       const parsedTotalPages = totalPagesHeader ? Number.parseInt(totalPagesHeader, 10) : NaN;
 
       if (!Number.isNaN(parsedTotalPages) && parsedTotalPages > 0) {
-        pageCount = Math.min(parsedTotalPages, MAX_PAGES);
+        pageCount = Math.min(parsedTotalPages, maxPages);
       } else if (pageItems.length < 100) {
         pageCount = page;
       } else {
-        pageCount = Math.min(page + 1, MAX_PAGES);
+        pageCount = Math.min(page + 1, maxPages);
       }
 
       page += 1;
     }
 
-    if (pageCount >= MAX_PAGES) {
-      logger.warn({ path, maxPages: MAX_PAGES }, "Reached maximum Trakt pagination limit");
+    if (pageCount >= maxPages) {
+      logger.warn({ path, maxPages }, "Reached maximum Trakt pagination limit");
     }
 
     return items;

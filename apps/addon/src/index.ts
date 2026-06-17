@@ -311,8 +311,8 @@ const buildManifest = (lists: CataloggyList[], genres: string[], enabledCatalogs
   return {
     id: "com.cataloggy.addon",
     version: "0.3.0",
-    name: "CataLoggy",
-    description: "Personal catalogs, tracking, and discovery powered by CataLoggy.",
+    name: "Cataloggy",
+    description: "Personal catalogs, tracking, and discovery powered by Cataloggy.",
     resources: ["catalog", "meta", "subtitles"],
     types: ["movie", "series"],
     idPrefixes: ["tt"],
@@ -574,7 +574,7 @@ app.get<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", a
     const subtitles: StremioSubtitle[] = [{
       id: `cataloggy-watch-${imdbId}`,
       url: `${addonBase}/mark-watched/${type}/${imdbId}.srt`,
-      lang: "CataLoggy: Mark Watched",
+      lang: "Cataloggy: Mark Watched",
     }];
     return reply.send({ subtitles });
   }
@@ -587,7 +587,7 @@ app.get<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", a
       const subtitles: StremioSubtitle[] = [{
         id: `cataloggy-watch-${imdbId}-s${season}e${episode}`,
         url: `${addonBase}/mark-watched/episode/${imdbId}/${season}/${episode}.srt`,
-        lang: `CataLoggy: Mark S${season}E${episode} Watched`,
+        lang: `Cataloggy: Mark S${season}E${episode} Watched`,
       }];
       return reply.send({ subtitles });
     }
@@ -600,7 +600,7 @@ app.get<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", a
 
 const MINIMAL_SRT = `1
 00:00:00,000 --> 00:00:03,000
-Marked as watched on CataLoggy
+Marked as watched on Cataloggy
 `;
 
 app.get<{ Params: { type: string; imdbId: string } }>("/mark-watched/:type/:imdbId.srt", async (request, reply) => {
@@ -703,7 +703,7 @@ app.get("/configure", async (_request: FastifyRequest, reply: FastifyReply) => {
   if (WEB_PUBLIC_BASE) {
     return reply.redirect(`${WEB_PUBLIC_BASE}/settings`);
   }
-  return reply.code(200).send({ message: "Configure CataLoggy through the web UI." });
+  return reply.code(200).send({ message: "Configure Cataloggy through the web UI." });
 });
 
 // ─── Start ───
