@@ -67,8 +67,9 @@ export default {
         "3xl": "1.5rem",
       },
       boxShadow: {
-        glow: "0 0 20px rgba(217, 119, 66, 0.18)",
-        "card-hover": "0 20px 40px rgba(0, 0, 0, 0.5)",
+        glow: "0 0 20px rgba(217, 119, 66, 0.12)",
+        "card-hover": "0 8px 20px rgba(28, 24, 20, 0.08)",
+        feature: "0 12px 28px rgba(28, 24, 20, 0.18)",
       },
     },
   },

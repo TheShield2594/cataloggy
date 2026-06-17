@@ -49,13 +49,13 @@ export function InstallButton() {
           void onInstall();
         }}
         aria-label="Install Cataloggy"
-        className="flex items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/80 px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
+        className="flex items-center gap-1.5 rounded-full border border-ink-200 bg-white px-3.5 py-2 text-xs font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900 transition-all"
       >
         <Download className="h-3.5 w-3.5" />
         <span className="hidden sm:inline" aria-hidden="true">Install</span>
       </button>
       {showManualHint && (
-        <p className="max-w-xs text-right text-xs text-slate-400">
+        <p className="max-w-xs text-right text-xs text-ink-500">
           {isIOS
             ? "Safari: tap Share, then Add to Home Screen."
             : "Use your browser menu and choose Install app / Add to Home Screen."}
