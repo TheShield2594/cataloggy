@@ -39,13 +39,21 @@ export const subscribeToPush = async (): Promise<void> => {
 
   const json = subscription.toJSON();
   if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+    await subscription.unsubscribe();
     throw new Error("Browser did not return a usable push subscription");
   }
 
-  await api.pushSubscribe({
-    endpoint: json.endpoint,
-    keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
-  });
+  try {
+    await api.pushSubscribe({
+      endpoint: json.endpoint,
+      keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+    });
+  } catch (error) {
+    // Don't leave the browser locally subscribed if the server never
+    // learned about it — it would never receive a notification anyway.
+    await subscription.unsubscribe();
+    throw error;
+  }
 };
 
 export const unsubscribeFromPush = async (): Promise<void> => {

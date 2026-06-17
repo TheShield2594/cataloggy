@@ -65,10 +65,13 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
 
     // Each Trakt history entry represents exactly one play. Re-polling an
     // already-imported entry (e.g. overlapping windows) must be a no-op,
-    // not increment plays again.
-    const existingEvent = historyId
-      ? await prisma.watchEvent.findUnique({ where: { traktHistoryId: historyId } })
-      : await prisma.watchEvent.findFirst({ where: { type: "movie", imdbId, watchedAt: watchedAtDate } });
+    // not increment plays again. Also fall back to matching a legacy row
+    // (imported before traktHistoryId tracking existed, so its
+    // traktHistoryId is still null) so it gets backfilled instead of
+    // duplicated.
+    const existingEvent =
+      (historyId ? await prisma.watchEvent.findUnique({ where: { traktHistoryId: historyId } }) : null) ??
+      (await prisma.watchEvent.findFirst({ where: { type: "movie", imdbId, watchedAt: watchedAtDate } }));
 
     if (existingEvent) {
       if (historyId && existingEvent.traktHistoryId == null) {
@@ -105,12 +108,14 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
     // imdbId mirrors seriesImdbId for episode events, matching the convention
     // used by recordWatchEvent() for scrobbles from other sources (Plex,
     // Jellyfin, generic scrobble), so the same watch can't be double-counted
-    // across import paths.
-    const existingEvent = historyId
-      ? await prisma.watchEvent.findUnique({ where: { traktHistoryId: historyId } })
-      : await prisma.watchEvent.findFirst({
-          where: { type: "episode", seriesImdbId, season, episode, watchedAt: watchedAtDate },
-        });
+    // across import paths. Also fall back to matching a legacy row (imported
+    // before traktHistoryId tracking existed) so it gets backfilled instead
+    // of duplicated.
+    const existingEvent =
+      (historyId ? await prisma.watchEvent.findUnique({ where: { traktHistoryId: historyId } }) : null) ??
+      (await prisma.watchEvent.findFirst({
+        where: { type: "episode", seriesImdbId, season, episode, watchedAt: watchedAtDate },
+      }));
 
     if (existingEvent) {
       if (historyId && existingEvent.traktHistoryId == null) {

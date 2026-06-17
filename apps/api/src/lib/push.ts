@@ -1,8 +1,8 @@
 import webpush from "web-push";
+import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
 
-const VAPID_PUBLIC_KEY_KV = "push:vapidPublicKey";
-const VAPID_PRIVATE_KEY_KV = "push:vapidPrivateKey";
+const VAPID_KEYS_KV = "push:vapidKeys";
 const VAPID_SUBJECT = "mailto:admin@cataloggy.local";
 
 let configured: { publicKey: string } | null = null;
@@ -10,32 +10,26 @@ let configured: { publicKey: string } | null = null;
 // VAPID keys identify this server to push services and never change once
 // subscriptions exist against them, so generate one keypair on first use
 // and persist it in KV rather than requiring it as deployment config.
+// Both halves are stored as a single JSON row so concurrent first calls
+// can't interleave and end up with a mismatched public/private pair.
 const getOrCreateVapidKeys = async (): Promise<{ publicKey: string; privateKey: string }> => {
-  const [publicRow, privateRow] = await Promise.all([
-    prisma.kV.findUnique({ where: { key: VAPID_PUBLIC_KEY_KV } }),
-    prisma.kV.findUnique({ where: { key: VAPID_PRIVATE_KEY_KV } }),
-  ]);
-
-  if (publicRow?.value && privateRow?.value) {
-    return { publicKey: publicRow.value, privateKey: privateRow.value };
-  }
+  const row = await prisma.kV.findUnique({ where: { key: VAPID_KEYS_KV } });
+  if (row?.value) return JSON.parse(row.value);
 
   const generated = webpush.generateVAPIDKeys();
-  const now = new Date();
-  await Promise.all([
-    prisma.kV.upsert({
-      where: { key: VAPID_PUBLIC_KEY_KV },
-      create: { key: VAPID_PUBLIC_KEY_KV, value: generated.publicKey, updatedAt: now },
-      update: { value: generated.publicKey, updatedAt: now },
-    }),
-    prisma.kV.upsert({
-      where: { key: VAPID_PRIVATE_KEY_KV },
-      create: { key: VAPID_PRIVATE_KEY_KV, value: generated.privateKey, updatedAt: now },
-      update: { value: generated.privateKey, updatedAt: now },
-    }),
-  ]);
-
-  return generated;
+  try {
+    await prisma.kV.create({
+      data: { key: VAPID_KEYS_KV, value: JSON.stringify(generated), updatedAt: new Date() },
+    });
+    return generated;
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      // Another concurrent call already created the row; use that one.
+      const existing = await prisma.kV.findUnique({ where: { key: VAPID_KEYS_KV } });
+      if (existing?.value) return JSON.parse(existing.value);
+    }
+    throw error;
+  }
 };
 
 export const getPushPublicKey = async (): Promise<string> => {
@@ -60,7 +54,7 @@ export const sendPushToAllSubscriptions = async (payload: PushPayload): Promise<
   if (subscriptions.length === 0) return;
 
   const json = JSON.stringify(payload);
-  await Promise.allSettled(
+  const results = await Promise.allSettled(
     subscriptions.map(async (sub) => {
       try {
         await webpush.sendNotification(
@@ -78,4 +72,12 @@ export const sendPushToAllSubscriptions = async (payload: PushPayload): Promise<
       }
     })
   );
+
+  const failures = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures.map((f) => f.reason),
+      `${failures.length} of ${subscriptions.length} push notifications failed to send`
+    );
+  }
 };

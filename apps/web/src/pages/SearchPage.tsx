@@ -781,7 +781,9 @@ function WhereToWatchBadge({ type, imdbId }: { type: SearchResult["type"]; imdbI
         api
           .getWatchProviders(type, imdbId)
           .then((r) => {
-            if (!cancelled) setProviders([...r.providers.flatrate, ...r.providers.free]);
+            const merged = [...r.providers.flatrate, ...r.providers.free];
+            const deduped = merged.filter((p, i) => merged.findIndex((q) => q.id === p.id) === i);
+            if (!cancelled) setProviders(deduped);
           })
           .catch(() => { if (!cancelled) setProviders([]); });
       },
