@@ -1,4 +1,5 @@
 import Fastify, { type FastifyRequest, type FastifyReply, type RawRequestDefaultExpression } from "fastify";
+import rateLimit from "@fastify/rate-limit";
 
 const parseProxyPathPrefixes = (raw: string | undefined, fallback: readonly string[]) => {
   const parsed = (raw ?? "")
@@ -43,6 +44,16 @@ const normalizeProxyPath = (rawUrl: string) => {
 const app = Fastify({
   logger: true,
   rewriteUrl: (request: RawRequestDefaultExpression) => normalizeProxyPath(request.url ?? "/")
+});
+
+// ─── Rate limiting ───
+// All routes here are unauthenticated (Stremio doesn't send credentials), so apply a global limit.
+
+app.register(rateLimit, {
+  global: true,
+  max: 100,
+  timeWindow: "1 minute",
+  keyGenerator: (request) => request.ip,
 });
 
 // ─── API helpers ───

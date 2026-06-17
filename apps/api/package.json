@@ -13,6 +13,7 @@
     "prisma:push": "prisma db push"
   },
   "dependencies": {
+    "@fastify/rate-limit": "^11.0.0",
     "@prisma/client": "^5.22.0",
     "fastify": "^5.1.0",
     "lru-cache": "^11.5.1",

@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import rateLimit from "@fastify/rate-limit";
 import { prisma } from "./lib/prisma.js";
 import { applyCorsHeaders } from "./lib/cors.js";
 import { verifyToken } from "./lib/auth.js";
@@ -61,6 +62,15 @@ const app = Fastify({
   rewriteUrl: (request) => normalizeProxyPath(request.url ?? "/"),
 });
 
+// ─── Rate limiting ───
+
+app.register(rateLimit, {
+  global: true,
+  max: 200,
+  timeWindow: "1 minute",
+  keyGenerator: (request) => request.ip,
+});
+
 // ─── Global hooks ───
 
 app.addHook("onRequest", async (request, reply) => {
@@ -106,6 +116,11 @@ app.register(jellyfinWebhookRoutes);
 
 const start = async () => {
   const port = Number(process.env.PORT ?? 7000);
+
+  if (!process.env.WEBHOOK_SECRET?.trim()) {
+    app.log.warn("WEBHOOK_SECRET not set — webhook endpoints will reject all requests");
+  }
+
   await ensureDefaultWatchlist();
 
   if (TRAKT_POLL_INTERVAL_SEC > 0) {
