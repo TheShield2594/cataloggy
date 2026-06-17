@@ -888,11 +888,11 @@ export function DashboardPage() {
                     />
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/80 to-transparent px-3 pb-3 pt-16">
                       {progressPct !== null && (
-                        <div className="mb-2 h-1 w-full overflow-hidden rounded-full" style={{ background: "var(--surface-strong)" }}>
+                        <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-white/20">
                           <div className="h-full rounded-full bg-claw-500 transition-all duration-500" style={{ width: `${progressPct}%` }} />
                         </div>
                       )}
-                      <p className="text-xs" style={{ color: "var(--text-dim)" }}>
+                      <p className="text-xs text-white/70">
                         S{s.lastSeason}:E{s.lastEpisode}
                         {s.totalSeasons ? ` · ${s.totalSeasons} seasons` : ""}
                       </p>
@@ -902,9 +902,8 @@ export function DashboardPage() {
                         onClick={() => void handleMarkNext(s.imdbId)}
                         aria-label={isMarking ? "Marking" : isDone ? "Marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
                         className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all active:scale-[0.98] ${
-                          isDone ? "bg-emerald-500/20 text-emerald-400" : "text-white backdrop-blur-sm"
+                          isMarking ? "bg-white/10 text-white/50" : isDone ? "bg-emerald-500/20 text-emerald-400" : "bg-white/15 text-white backdrop-blur-sm hover:bg-white/25"
                         }`}
-                        style={isMarking ? { background: "var(--bg-1)", color: "var(--text-mute)" } : isDone ? {} : { background: "var(--surface)" }}
                       >
                         {isDone ? (
                           <><Check className="h-3.5 w-3.5" /> Marked</>
@@ -984,7 +983,7 @@ export function DashboardPage() {
                     ) : null}
                   </div>
                   <div className="absolute top-2.5 right-2.5">
-                    <span className="rounded-md bg-black/70 px-2 py-0.5 text-2xs font-medium backdrop-blur-sm" style={{ color: "var(--text-dim)" }}>
+                    <span className="rounded-md bg-black/70 px-2 py-0.5 text-2xs font-medium text-white/80 backdrop-blur-sm">
                       {timeAgo(event.watchedAt)}
                     </span>
                   </div>
