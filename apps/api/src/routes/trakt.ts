@@ -97,8 +97,12 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
     if (!tokenResponse.ok) {
       const body = await tokenResponse.text();
       request.log.error({ status: tokenResponse.status, body }, "Trakt token exchange failed");
+      const contentType = tokenResponse.headers.get("content-type") ?? "";
       let detail = "Failed to exchange authorization code";
-      if (tokenResponse.status === 401) {
+      if (!contentType.includes("json")) {
+        detail =
+          "Trakt's security service (Cloudflare) blocked this request before it reached Trakt's API. This is usually a temporary block on the server's outbound IP — wait a bit and try again.";
+      } else if (tokenResponse.status === 401) {
         detail = "Trakt client credentials are invalid. Check TRAKT_CLIENT_ID and TRAKT_CLIENT_SECRET.";
       } else if (tokenResponse.status === 403) {
         detail = "Trakt redirect URI mismatch. Check TRAKT_REDIRECT_URI matches what is registered in your Trakt app settings.";
