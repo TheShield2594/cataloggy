@@ -12,7 +12,7 @@ import {
 
 /* ─── Toast System ─── */
 
-function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: number) => void }) {
+function ToastContainer({ toasts }: { toasts: Toast[] }) {
   return (
     <div role="status" aria-live="polite" aria-atomic="true" className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 sm:bottom-6 max-sm:bottom-20 max-sm:right-4">
       {toasts.map((toast) => (
@@ -537,7 +537,7 @@ export function SearchPage() {
       )}
 
       {/* Toast notifications */}
-      <ToastContainer toasts={toasts} onRemove={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))} />
+      <ToastContainer toasts={toasts} />
     </div>
   );
 }

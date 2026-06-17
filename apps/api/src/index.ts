@@ -28,6 +28,7 @@ import stremioRoutes from "./routes/stremio.js";
 import traktRoutes from "./routes/trakt.js";
 import scrobbleRoutes from "./routes/scrobble.js";
 import pushRoutes from "./routes/push.js";
+import exportRoutes from "./routes/export.js";
 import plexWebhookRoutes from "./routes/webhooks/plex.js";
 import jellyfinWebhookRoutes from "./routes/webhooks/jellyfin.js";
 
@@ -126,6 +127,7 @@ app.register(stremioRoutes);
 app.register(traktRoutes);
 app.register(scrobbleRoutes);
 app.register(pushRoutes);
+app.register(exportRoutes);
 app.register(plexWebhookRoutes);
 app.register(jellyfinWebhookRoutes);
 

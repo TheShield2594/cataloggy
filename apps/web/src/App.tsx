@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, Route, Routes, useLocation } from "react-router-dom";
-import { BarChart3, Clapperboard, Search, List, Settings } from "lucide-react";
+import { BarChart3, Clapperboard, History, Search, List, Settings } from "lucide-react";
 import { runtimeConfig } from "./api";
 import { CommandPalette, useCommandPalette } from "./components/CommandPalette";
 import { InstallButton } from "./components/InstallButton";
@@ -8,6 +8,7 @@ import { Sidebar } from "./components/Sidebar";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useTheme } from "./hooks/useTheme";
 import { DashboardPage } from "./pages/DashboardPage";
+import { HistoryPage } from "./pages/HistoryPage";
 import { ListsPage } from "./pages/ListsPage";
 import { ProfileSwitcher } from "./pages/ProfileSwitcher";
 import { SearchPage } from "./pages/SearchPage";
@@ -19,6 +20,7 @@ const mobileNavItems = [
   { to: "/", label: "Dashboard", icon: Clapperboard, end: true },
   { to: "/search", label: "Search", icon: Search, end: false },
   { to: "/lists", label: "Lists", icon: List, end: false },
+  { to: "/history", label: "History", icon: History, end: false },
   { to: "/stats", label: "Stats", icon: BarChart3, end: false },
   { to: "/settings", label: "Settings", icon: Settings, end: false },
 ] as const;
@@ -93,6 +95,7 @@ export function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/lists/*" element={<ListsPage />} />
+          <Route path="/history" element={<HistoryPage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
