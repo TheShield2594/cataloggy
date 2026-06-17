@@ -1,6 +1,6 @@
-# CataLoggy Monorepo
+# Cataloggy Monorepo
 
-CataLoggy is a Node.js monorepo set up with `pnpm` workspaces.
+Cataloggy is a Node.js monorepo set up with `pnpm` workspaces.
 
 ## Structure
 
@@ -77,7 +77,7 @@ Your LAN IP is your computer's local network address (usually like `192.168.x.x`
 - **Windows:** Command Prompt → `ipconfig` → look for **IPv4 Address**
 - **Linux:** Terminal → `hostname -I`
 
-### Open CataLoggy on your phone
+### Open Cataloggy on your phone
 
 On your phone (connected to the same Wi-Fi), open:
 

@@ -1,3 +1,3 @@
 # @cataloggy/shared
 
-Shared types/utilities for CataLoggy applications.
+Shared types/utilities for Cataloggy applications.
