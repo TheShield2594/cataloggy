@@ -53,6 +53,7 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
     if (!imdbId || !watchedAt) continue;
 
     const watchedAtDate = new Date(watchedAt);
+    const historyId = entry.id != null ? BigInt(entry.id) : null;
     const title = entry.movie?.title?.trim();
     if (title) {
       await prisma.item.upsert({
@@ -62,15 +63,20 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
       });
     }
 
-    const existingEvent = await prisma.watchEvent.findFirst({
-      where: { type: "movie", imdbId, watchedAt: watchedAtDate },
-    });
+    // Each Trakt history entry represents exactly one play. Re-polling an
+    // already-imported entry (e.g. overlapping windows) must be a no-op,
+    // not increment plays again.
+    const existingEvent = historyId
+      ? await prisma.watchEvent.findUnique({ where: { traktHistoryId: historyId } })
+      : await prisma.watchEvent.findFirst({ where: { type: "movie", imdbId, watchedAt: watchedAtDate } });
 
     if (existingEvent) {
-      await prisma.watchEvent.update({ where: { id: existingEvent.id }, data: { plays: { increment: 1 } } });
+      if (historyId && existingEvent.traktHistoryId == null) {
+        await prisma.watchEvent.update({ where: { id: existingEvent.id }, data: { traktHistoryId: historyId } });
+      }
     } else {
       await prisma.watchEvent.create({
-        data: { type: "movie", imdbId, watchedAt: watchedAtDate, plays: 1 },
+        data: { type: "movie", imdbId, watchedAt: watchedAtDate, plays: 1, traktHistoryId: historyId },
       });
     }
 
@@ -78,15 +84,15 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
   }
 
   for (const entry of episodeHistory) {
-    const episodeImdbId = entry.episode?.ids?.imdb;
     const seriesImdbId = entry.show?.ids?.imdb;
     const watchedAt = entry.watched_at;
     const season = entry.episode?.season;
     const episode = entry.episode?.number;
 
-    if (!episodeImdbId || !seriesImdbId || !watchedAt || season === undefined || episode === undefined) continue;
+    if (!seriesImdbId || !watchedAt || season === undefined || episode === undefined) continue;
 
     const watchedAtDate = new Date(watchedAt);
+    const historyId = entry.id != null ? BigInt(entry.id) : null;
     const seriesTitle = entry.show?.title?.trim();
     if (seriesTitle) {
       await prisma.item.upsert({
@@ -96,22 +102,31 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"]) => {
       });
     }
 
-    const existingEvent = await prisma.watchEvent.findFirst({
-      where: { type: "episode", imdbId: episodeImdbId, seriesImdbId, season, episode, watchedAt: watchedAtDate },
-    });
+    // imdbId mirrors seriesImdbId for episode events, matching the convention
+    // used by recordWatchEvent() for scrobbles from other sources (Plex,
+    // Jellyfin, generic scrobble), so the same watch can't be double-counted
+    // across import paths.
+    const existingEvent = historyId
+      ? await prisma.watchEvent.findUnique({ where: { traktHistoryId: historyId } })
+      : await prisma.watchEvent.findFirst({
+          where: { type: "episode", seriesImdbId, season, episode, watchedAt: watchedAtDate },
+        });
 
     if (existingEvent) {
-      await prisma.watchEvent.update({ where: { id: existingEvent.id }, data: { plays: { increment: 1 } } });
+      if (historyId && existingEvent.traktHistoryId == null) {
+        await prisma.watchEvent.update({ where: { id: existingEvent.id }, data: { traktHistoryId: historyId } });
+      }
     } else {
       await prisma.watchEvent.create({
         data: {
           type: "episode",
-          imdbId: episodeImdbId,
+          imdbId: seriesImdbId,
           seriesImdbId,
           season,
           episode,
           watchedAt: watchedAtDate,
           plays: 1,
+          traktHistoryId: historyId,
         },
       });
     }
