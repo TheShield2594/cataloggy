@@ -4,7 +4,14 @@ import type { PrismaClient } from "@prisma/client";
 const TRAKT_API_BASE = "https://api.trakt.tv";
 const MAX_PAGES = 100;
 const DEFAULT_POLL_MAX_PAGES = 20;
-const POLL_MAX_PAGES = Number(process.env.TRAKT_POLL_MAX_PAGES ?? DEFAULT_POLL_MAX_PAGES) || DEFAULT_POLL_MAX_PAGES;
+
+function parsePollMaxPages(raw: string | undefined): number {
+  const parsed = raw !== undefined ? Number.parseInt(raw, 10) : NaN;
+  if (!Number.isInteger(parsed) || parsed < 1) return DEFAULT_POLL_MAX_PAGES;
+  return Math.min(parsed, MAX_PAGES);
+}
+
+const POLL_MAX_PAGES = parsePollMaxPages(process.env.TRAKT_POLL_MAX_PAGES);
 const DEFAULT_TOKEN_ROW_ID = "default";
 const DEFAULT_TOKEN_EXPIRY_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
