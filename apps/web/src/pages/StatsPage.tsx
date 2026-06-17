@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, Award, BarChart3, Film, Flame, Minus, Star, Trophy, TrendingDown, TrendingUp } from "lucide-react";
 import { api, DetailedWatchStats, WatchStats } from "../api";
+import { TicketTile } from "../components/TicketTile";
 
 type Milestone = { label: string; threshold: number; icon: typeof Film };
 
@@ -56,9 +57,9 @@ export function StatsPage() {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-lg rounded-2xl border border-rose-500/20 bg-rose-500/5 p-8 text-center">
+      <div className="mx-auto max-w-lg rounded-2xl p-8 text-center" style={{ border: "1px solid rgba(244,63,94,0.2)", background: "rgba(244,63,94,0.05)" }}>
         <AlertCircle className="mx-auto h-12 w-12 text-rose-500" />
-        <p className="mt-3 text-lg font-semibold text-rose-600">{error}</p>
+        <p className="mt-3 text-lg font-semibold text-rose-500">{error}</p>
       </div>
     );
   }
@@ -66,13 +67,10 @@ export function StatsPage() {
   if (loading) {
     return (
       <div className="mx-auto max-w-4xl space-y-6">
-        <h2 className="text-2xl font-bold text-ink-900">Watch Statistics</h2>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <h2 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Watch Statistics</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="rounded-2xl border border-ink-100 bg-cream-50 p-5">
-              <div className="skeleton h-8 w-16 rounded-lg mb-2" />
-              <div className="skeleton h-4 w-24 rounded" />
-            </div>
+            <div key={i} className="skeleton h-28 rounded-2xl" />
           ))}
         </div>
         <div className="skeleton h-64 rounded-2xl" />
@@ -99,15 +97,15 @@ export function StatsPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
-      <h2 className="text-2xl font-bold text-ink-900">Watch Statistics</h2>
+      <h2 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Watch Statistics</h2>
 
-      {/* Summary cards */}
+      {/* Summary tiles */}
       {stats && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <StatCard label="Movies" value={stats.totalMovies} icon={Film} color="red" />
-          <StatCard label="Episodes" value={stats.totalEpisodes} icon={BarChart3} color="violet" />
-          <StatCard label="Current Streak" value={detailed?.currentStreak ?? 0} icon={Flame} color="amber" suffix="d" />
-          <StatCard label="Longest Streak" value={detailed?.longestStreak ?? 0} icon={Trophy} color="emerald" suffix="d" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <TicketTile icon={Film} label="Movies" value={stats.totalMovies} />
+          <TicketTile icon={BarChart3} label="Episodes" value={stats.totalEpisodes} />
+          <TicketTile icon={Flame} label="Current Streak" value={`${detailed?.currentStreak ?? 0}d`} />
+          <TicketTile icon={Trophy} label="Longest Streak" value={`${detailed?.longestStreak ?? 0}d`} />
         </div>
       )}
 
@@ -122,18 +120,19 @@ export function StatsPage() {
 
       {/* Monthly activity chart */}
       {detailed && detailed.monthly.length > 0 && (
-        <section className="rounded-2xl border border-ink-100 bg-cream-50 p-5 shadow-sm">
+        <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h3 className="text-lg font-semibold text-ink-900">Monthly Activity</h3>
+            <h3 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Monthly Activity</h3>
             {momComparison && (
               <span
                 className={`flex items-center gap-1 text-xs font-medium ${
                   momComparison.diff > 0
-                    ? "text-emerald-600"
+                    ? "text-emerald-500"
                     : momComparison.diff < 0
-                      ? "text-rose-600"
-                      : "text-ink-500"
+                      ? "text-rose-500"
+                      : ""
                 }`}
+                style={momComparison.diff === 0 ? { color: "var(--text-dim)" } : undefined}
               >
                 {momComparison.diff > 0 ? (
                   <TrendingUp className="h-3.5 w-3.5" />
@@ -165,38 +164,41 @@ export function StatsPage() {
                   onTouchStart={() => setHoveredMonth(m.month)}
                 >
                   {isHovered && (
-                    <div className="absolute bottom-full z-10 mb-1.5 whitespace-nowrap rounded-lg border border-ink-100 bg-ink-900 px-2.5 py-1.5 text-2xs shadow-lg">
-                      <p className="font-semibold text-cream-50">
+                    <div
+                      className="absolute bottom-full z-10 mb-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-2xs shadow-lg"
+                      style={{ border: "1px solid var(--border)", background: "var(--bg-2)" }}
+                    >
+                      <p className="font-semibold" style={{ color: "var(--bg-0)" }}>
                         {new Date(m.month + "-15").toLocaleDateString(undefined, { month: "long", year: "numeric" })}
                       </p>
                       <p className="text-claw-400">{m.movies} movies</p>
-                      <p className="text-plum-400">{m.episodes} episodes</p>
+                      <p className="text-plum-500">{m.episodes} episodes</p>
                     </div>
                   )}
-                  <span className="text-2xs text-ink-500 tabular-nums">{total || ""}</span>
+                  <span className="text-2xs tabular-nums" style={{ color: "var(--text-mute)" }}>{total || ""}</span>
                   <div className="flex w-full flex-col justify-end" style={{ height: "140px" }}>
                     {episodeHeight > 0 && (
                       <div
-                        className={`w-full rounded-t bg-plum-500/70 transition-all duration-500 ${isHovered ? "bg-plum-400" : ""}`}
+                        className={`w-full rounded-t bg-plum-500/70 transition-all duration-500 ${isHovered ? "bg-plum-500" : ""}`}
                         style={{ height: `${episodeHeight}%` }}
                       />
                     )}
                     {movieHeight > 0 && (
                       <div
-                        className={`w-full bg-claw-500/70 transition-all duration-500 ${episodeHeight === 0 ? "rounded-t" : ""} rounded-b ${isHovered ? "bg-claw-400" : ""}`}
+                        className={`w-full bg-claw-500/70 transition-all duration-500 ${episodeHeight === 0 ? "rounded-t" : ""} rounded-b ${isHovered ? "bg-claw-500" : ""}`}
                         style={{ height: `${movieHeight}%` }}
                       />
                     )}
                     {total === 0 && (
-                      <div className="w-full rounded bg-ink-100" style={{ height: "2%" }} />
+                      <div className="w-full rounded" style={{ height: "2%", background: "var(--surface-strong)" }} />
                     )}
                   </div>
-                  <span className="text-2xs text-ink-500">{label}</span>
+                  <span className="text-2xs" style={{ color: "var(--text-mute)" }}>{label}</span>
                 </div>
               );
             })}
           </div>
-          <div className="mt-3 flex items-center gap-4 text-xs text-ink-500">
+          <div className="mt-3 flex items-center gap-4 text-xs" style={{ color: "var(--text-dim)" }}>
             <span className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-sm bg-claw-500/70" /> Movies
             </span>
@@ -209,14 +211,15 @@ export function StatsPage() {
 
       {/* Genre distribution */}
       {detailed && detailed.genreDistribution.length > 0 && (
-        <section className="rounded-2xl border border-ink-100 bg-cream-50 p-5 shadow-sm">
-          <h3 className="mb-4 text-lg font-semibold text-ink-900">Top Genres</h3>
+        <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+          <h3 className="mb-4 text-lg font-semibold" style={{ color: "var(--text)" }}>Top Genres</h3>
           <div className="space-y-2.5">
             {detailed.genreDistribution.map((g) => (
               <div key={g.genre} className="flex items-center gap-3">
-                <span className="w-28 shrink-0 truncate text-sm text-ink-600">{g.genre}</span>
+                <span className="w-28 shrink-0 truncate text-sm" style={{ color: "var(--text-dim)" }}>{g.genre}</span>
                 <div
-                  className="flex-1 h-5 rounded-full bg-ink-100 overflow-hidden"
+                  className="flex-1 h-5 overflow-hidden rounded-full"
+                  style={{ background: "var(--surface-strong)" }}
                   title={`${g.genre}: ${g.count} watched`}
                 >
                   <div
@@ -224,7 +227,7 @@ export function StatsPage() {
                     style={{ width: `${(g.count / maxGenreCount) * 100}%` }}
                   />
                 </div>
-                <span className="w-8 text-right text-sm tabular-nums text-ink-500">{g.count}</span>
+                <span className="w-8 text-right text-sm tabular-nums" style={{ color: "var(--text-mute)" }}>{g.count}</span>
               </div>
             ))}
           </div>
@@ -233,30 +236,32 @@ export function StatsPage() {
 
       {/* Top rated watched content */}
       {detailed && detailed.topRated.length > 0 && (
-        <section className="rounded-2xl border border-ink-100 bg-cream-50 p-5 shadow-sm">
-          <h3 className="mb-4 text-lg font-semibold flex items-center gap-2 text-ink-900">
-            <Star className="h-5 w-5 text-amber-500" /> Top Rated Watched
+        <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold" style={{ color: "var(--text)" }}>
+            <Star className="h-5 w-5 text-amber-400" /> Top Rated Watched
           </h3>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
             {detailed.topRated.map((item) => (
               <div key={item.imdbId} className="group">
-                <div className="relative overflow-hidden rounded-xl ring-1 ring-ink-900/10" style={{ aspectRatio: "2/3" }}>
+                <div
+                  className="relative overflow-hidden rounded-xl transition-transform duration-300 group-hover:scale-[1.03]"
+                  style={{ aspectRatio: "2/3", boxShadow: "inset 0 0 0 1px var(--border)" }}
+                >
                   {item.poster ? (
                     <img src={item.poster} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ink-100 to-ink-200">
-                      <Film className="h-8 w-8 text-ink-400" />
+                    <div className="flex h-full w-full items-center justify-center" style={{ background: "var(--surface-strong)" }}>
+                      <Film className="h-8 w-8" style={{ color: "var(--text-mute)" }} />
                     </div>
                   )}
                   {item.rating != null && (
-                    <div className="absolute top-2 right-2 flex items-center gap-1 rounded-md bg-ink-900/80 px-1.5 py-0.5 text-xs font-bold text-amber-400 backdrop-blur-sm">
-                      <Star className="h-3 w-3 fill-amber-400" />
-                      {item.rating.toFixed(1)}
+                    <div className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
+                      <span className="text-2xs font-bold tabular-nums text-amber-400">{item.rating.toFixed(1)}</span>
                     </div>
                   )}
                 </div>
-                <p className="mt-1.5 truncate text-sm font-medium text-ink-900">{item.name}</p>
-                <p className="text-2xs text-ink-500 capitalize">{item.type}</p>
+                <p className="mt-1.5 truncate text-sm font-medium" style={{ color: "var(--text)" }}>{item.name}</p>
+                <p className="text-2xs capitalize" style={{ color: "var(--text-mute)" }}>{item.type}</p>
               </div>
             ))}
           </div>
@@ -294,30 +299,32 @@ function MilestoneBadges({
   if (earned.length === 0 && upcoming.length === 0) return null;
 
   return (
-    <section className="rounded-2xl border border-ink-100 bg-cream-50 p-5 shadow-sm">
-      <h3 className="mb-4 text-lg font-semibold flex items-center gap-2 text-ink-900">
-        <Award className="h-5 w-5 text-amber-500" /> Achievements
+    <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+      <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold" style={{ color: "var(--text)" }}>
+        <Award className="h-5 w-5 text-amber-400" /> Achievements
       </h3>
       {earned.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {earned.map((m) => (
             <span
               key={m.label}
-              className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-700"
+              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-amber-400"
+              style={{ border: "1px solid rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.1)" }}
             >
               <m.icon className="h-3.5 w-3.5" /> {m.label}
             </span>
           ))}
         </div>
       ) : (
-        <p className="text-sm text-ink-500">No badges earned yet — keep watching!</p>
+        <p className="text-sm" style={{ color: "var(--text-dim)" }}>No badges earned yet — keep watching!</p>
       )}
       {upcoming.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
           {upcoming.map((m) => (
             <span
               key={m.label}
-              className="flex items-center gap-1.5 rounded-full border border-ink-100 bg-ink-50 px-3 py-1.5 text-xs font-medium text-ink-500"
+              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
+              style={{ border: "1px solid var(--border)", background: "var(--surface-strong)", color: "var(--text-dim)" }}
             >
               <m.icon className="h-3.5 w-3.5" /> {m.label} ({m.value}/{m.threshold})
             </span>
@@ -325,43 +332,5 @@ function MilestoneBadges({
         </div>
       )}
     </section>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  color,
-  suffix = "",
-}: {
-  label: string;
-  value: number;
-  icon: typeof Film;
-  color: "red" | "violet" | "amber" | "emerald";
-  suffix?: string;
-}) {
-  const colorMap = {
-    red: { bg: "from-claw-500/10", border: "border-claw-500/20", icon: "text-claw-500" },
-    violet: { bg: "from-plum-500/10", border: "border-plum-500/20", icon: "text-plum-500" },
-    amber: { bg: "from-amber-500/10", border: "border-amber-500/20", icon: "text-amber-400" },
-    emerald: { bg: "from-emerald-500/10", border: "border-emerald-500/20", icon: "text-emerald-400" },
-  };
-  const c = colorMap[color];
-
-  return (
-    <div className={`rounded-2xl border ${c.border} bg-gradient-to-br ${c.bg} bg-cream-50 p-5 shadow-sm`}>
-      <div className="flex items-center gap-3">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-ink-100 ${c.icon}`}>
-          <Icon className="h-5 w-5" />
-        </div>
-        <div>
-          <span className="text-2xl font-bold text-ink-900 tabular-nums">
-            {value.toLocaleString()}{suffix}
-          </span>
-          <p className="text-xs text-ink-500 font-medium">{label}</p>
-        </div>
-      </div>
-    </div>
   );
 }
