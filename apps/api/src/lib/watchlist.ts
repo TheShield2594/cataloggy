@@ -2,25 +2,20 @@ import { ListKind, Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
 
 export const ensureDefaultWatchlist = async () => {
-  await prisma.$transaction(
-    async (tx) => {
-      const defaultWatchlists = await tx.list.findMany({
-        where: { kind: ListKind.watchlist, name: "Watchlist" },
-        orderBy: { createdAt: "asc" },
-      });
+  const existing = await prisma.list.findFirst({
+    where: { kind: ListKind.watchlist, name: "Watchlist" },
+  });
+  if (existing) return;
 
-      if (defaultWatchlists.length === 0) {
-        await tx.list.create({ data: { kind: ListKind.watchlist, name: "Watchlist" } });
-        return;
-      }
-
-      if (defaultWatchlists.length > 1) {
-        const [, ...duplicates] = defaultWatchlists;
-        await tx.list.deleteMany({ where: { id: { in: duplicates.map((l) => l.id) } } });
-      }
-    },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
-  );
+  try {
+    await prisma.list.create({ data: { kind: ListKind.watchlist, name: "Watchlist" } });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      // race condition — another instance created it first
+      return;
+    }
+    throw error;
+  }
 };
 
 export const getDefaultWatchlist = async () => {
