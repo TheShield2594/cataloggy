@@ -67,14 +67,14 @@ const pushRoutes: FastifyPluginAsync = async (app) => {
     return reply.code(201).send({ subscribed: true });
   });
 
-  app.post<{ Body: unknown }>("/push/unsubscribe", async (request, reply) => {
+  app.post<{ Body: unknown }>("/push/unsubscribe", { preHandler: resolveProfile }, async (request, reply) => {
     const body = request.body as { endpoint?: unknown } | null;
     const endpoint = typeof body?.endpoint === "string" ? body.endpoint.trim() : "";
     if (!endpoint) {
       return reply.code(400).send({ error: "endpoint is required" });
     }
 
-    await prisma.pushSubscription.deleteMany({ where: { endpoint } });
+    await prisma.pushSubscription.deleteMany({ where: { endpoint, profileId: request.profileId! } });
     return { subscribed: false };
   });
 };
