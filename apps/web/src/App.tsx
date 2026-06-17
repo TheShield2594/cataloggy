@@ -1,10 +1,13 @@
+import { useState } from "react";
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { BarChart3, Clapperboard, LayoutDashboard, Search, List, Settings } from "lucide-react";
+import { runtimeConfig } from "./api";
 import { InstallButton } from "./components/InstallButton";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ListsPage } from "./pages/ListsPage";
 import { SearchPage } from "./pages/SearchPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { SetupWizard } from "./pages/SetupWizard";
 import { StatsPage } from "./pages/StatsPage";
 
 const navItems = [
@@ -17,6 +20,11 @@ const navItems = [
 
 export function App() {
   const location = useLocation();
+  const [needsSetup, setNeedsSetup] = useState(() => !runtimeConfig.getToken());
+
+  if (needsSetup) {
+    return <SetupWizard onComplete={() => setNeedsSetup(false)} />;
+  }
 
   return (
     <div className="min-h-screen w-full">

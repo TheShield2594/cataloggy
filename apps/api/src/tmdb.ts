@@ -62,6 +62,24 @@ type TmdbFindResponse = {
   tv_results?: TmdbSearchResult[];
 };
 
+type TmdbWatchProviderEntry = {
+  provider_id: number;
+  provider_name: string;
+  logo_path?: string | null;
+};
+
+type TmdbWatchProvidersResponse = {
+  results?: Record<
+    string,
+    {
+      link?: string;
+      flatrate?: TmdbWatchProviderEntry[];
+      free?: TmdbWatchProviderEntry[];
+      ads?: TmdbWatchProviderEntry[];
+    }
+  >;
+};
+
 type TmdbCreditsResponse = {
   cast?: {
     id: number;
@@ -85,6 +103,19 @@ export type SeasonInfo = {
   episodeCount: number;
   airYear: number | null;
   poster: string | null;
+};
+
+export type WatchProvider = {
+  id: number;
+  name: string;
+  logo: string | null;
+};
+
+export type WatchProviders = {
+  link: string | null;
+  flatrate: WatchProvider[];
+  free: WatchProvider[];
+  ads: WatchProvider[];
 };
 
 export type MetadataPayload = {
@@ -135,6 +166,7 @@ export class TmdbClient {
   private static readonly baseUrl = "https://api.themoviedb.org/3";
   private static readonly imageBaseUrl = "https://image.tmdb.org/t/p/w500";
   private static readonly profileBaseUrl = "https://image.tmdb.org/t/p/w185";
+  private static readonly logoBaseUrl = "https://image.tmdb.org/t/p/w92";
 
   private readonly language: string;
 
@@ -381,6 +413,31 @@ export class TmdbClient {
         }));
     } catch {
       return [];
+    }
+  }
+
+  async getWatchProviders(type: MetadataType, tmdbId: number, region: string = "US"): Promise<WatchProviders> {
+    const mediaType = this.toMediaType(type);
+    const empty: WatchProviders = { link: null, flatrate: [], free: [], ads: [] };
+    try {
+      const data = await this.request<TmdbWatchProvidersResponse>(`/${mediaType}/${tmdbId}/watch/providers`);
+      const forRegion = data.results?.[region];
+      if (!forRegion) return empty;
+
+      const toProvider = (p: TmdbWatchProviderEntry): WatchProvider => ({
+        id: p.provider_id,
+        name: p.provider_name,
+        logo: p.logo_path ? `${TmdbClient.logoBaseUrl}${p.logo_path}` : null,
+      });
+
+      return {
+        link: forRegion.link ?? null,
+        flatrate: (forRegion.flatrate ?? []).map(toProvider),
+        free: (forRegion.free ?? []).map(toProvider),
+        ads: (forRegion.ads ?? []).map(toProvider),
+      };
+    } catch {
+      return empty;
     }
   }
 

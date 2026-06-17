@@ -84,14 +84,15 @@ model ListItem {
 }
 
 model WatchEvent {
-  id           String         @id @default(uuid()) @db.Uuid
-  type         WatchEventType
-  imdbId       String
-  seriesImdbId String?
-  season       Int?
-  episode      Int?
-  watchedAt    DateTime       @db.Timestamptz(6)
-  plays        Int            @default(1)
+  id             String         @id @default(uuid()) @db.Uuid
+  type           WatchEventType
+  imdbId         String
+  seriesImdbId   String?
+  season         Int?
+  episode        Int?
+  watchedAt      DateTime       @db.Timestamptz(6)
+  plays          Int            @default(1)
+  traktHistoryId BigInt?        @unique
 }
 
 model SeriesProgress {
@@ -108,6 +109,24 @@ model KV {
   key       String   @id
   value     String
   updatedAt DateTime @db.Timestamp(6)
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model NotifiedEpisode {
+  id           String   @id @default(uuid()) @db.Uuid
+  seriesImdbId String
+  season       Int
+  episode      Int
+  notifiedAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([seriesImdbId, season, episode])
 }
 
 model TraktToken {
