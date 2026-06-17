@@ -7,7 +7,6 @@ import {
   ChevronRight,
   ChevronLeft,
   Check,
-  Star,
   TrendingUp,
   Sparkles,
   X,
@@ -27,231 +26,50 @@ import {
   WatchStats,
 } from "../api";
 import { Link } from "react-router-dom";
-import { useHorizontalScroll, getInitials, getGradient } from "../components/carousel-utils";
+import { useHorizontalScroll } from "../components/carousel-utils";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
+import { Poster } from "../components/Poster";
+import { TicketTile } from "../components/TicketTile";
 import { timeAgo } from "../utils/timeAgo";
 
-/* ─── Mini SVG bar chart ─── */
+/* ─── Collectible stat strip: a row of distinct "ticket" tiles, demoted below the fold ─── */
 
-function MiniBarChart({ data, active = true }: { data: number[]; active?: boolean }) {
-  const max = Math.max(...data, 1);
-  const barW = 10;
-  const gap = 4;
-  const chartH = 40;
-  const totalW = data.length * barW + (data.length - 1) * gap;
-
-  return (
-    <svg width={totalW} height={chartH} aria-hidden="true">
-      {data.map((v, i) => {
-        const barH = Math.max((v / max) * chartH, 2);
-        const x = i * (barW + gap);
-        const isLatest = i === data.length - 1;
-        return (
-          <rect
-            key={i}
-            x={x}
-            y={chartH - barH}
-            width={barW}
-            height={barH}
-            rx={3}
-            fill={isLatest && active ? "var(--accent)" : "var(--surface-strong)"}
-          />
-        );
-      })}
-    </svg>
-  );
-}
-
-/* ─── Stat block (used inside the unified overview card) ─── */
-
-function StatBlock({
-  label,
-  value,
-  sub,
-  bars,
-  delta,
-  icon: Icon,
-}: {
-  label: string;
-  value: string | number;
-  sub?: string;
-  bars?: number[];
-  delta?: number | null;
-  icon: React.ElementType;
-}) {
-  return (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex items-center gap-1.5">
-        <Icon className="h-3.5 w-3.5 text-claw-400" />
-        <span className="text-2xs font-medium uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
-          {label}
-        </span>
-      </div>
-      {bars && bars.length > 0 && <MiniBarChart data={bars} />}
-      <div className="flex items-baseline gap-1.5">
-        <span className="text-2xl font-bold tabular-nums leading-none" style={{ color: "var(--text)" }}>
-          {typeof value === "number" ? value.toLocaleString() : value}
-        </span>
-        {delta != null && (
-          <span className={`text-xs font-medium tabular-nums ${delta >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
-            {delta >= 0 ? "+" : ""}{delta}
-          </span>
-        )}
-      </div>
-      {sub && <p className="text-xs" style={{ color: "var(--text-dim)" }}>{sub}</p>}
-    </div>
-  );
-}
-
-/* ─── Unified overview card: lifetime stats, this month, top genres ─── */
-
-function OverviewCard({
+function StatStrip({
   stats,
   monthly,
   genres,
+  currentStreak,
+  longestStreak,
   loading,
 }: {
   stats: WatchStats | null;
   monthly: DetailedWatchStats["monthly"];
   genres: DetailedWatchStats["genreDistribution"];
+  currentStreak: number;
+  longestStreak: number;
   loading: boolean;
 }) {
   const last6 = monthly.slice(-6);
   const movieBars = last6.length ? last6.map((m) => m.movies) : [0, 0, 0, 0, 0, 0];
   const epBars = last6.length ? last6.map((m) => m.episodes) : [0, 0, 0, 0, 0, 0];
-  const playBars = last6.map((m, i) => movieBars[i] + epBars[i]);
+  const topGenre = genres[0]?.genre;
 
-  const current = monthly.length >= 2 ? monthly[monthly.length - 1] : null;
-  const prev = monthly.length >= 2 ? monthly[monthly.length - 2] : null;
-  const movieDelta = current && prev ? current.movies - prev.movies : null;
-  const epDelta = current && prev ? current.episodes - prev.episodes : null;
-
-  const topGenres = genres.slice(0, 5);
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="skeleton h-28 rounded-2xl" />
+        ))}
+      </div>
+    );
+  }
 
   return (
-    <div
-      className="rounded-2xl p-6 h-full flex flex-col gap-6"
-      style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
-    >
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>Overview</p>
-        <Link
-          to="/stats"
-          className="text-xs font-medium text-claw-400 hover:text-claw-300 transition-colors"
-        >
-          Full stats
-        </Link>
-      </div>
-
-      {loading || !stats ? (
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-6">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex flex-col gap-3">
-              <div className="skeleton h-3 w-16 rounded" />
-              <div className="skeleton h-8 w-full rounded" />
-              <div className="skeleton h-5 w-12 rounded" />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-x-6 gap-y-6">
-          <StatBlock label="Movies" value={stats.totalMovies} bars={movieBars} icon={Film} />
-          <StatBlock label="Episodes" value={stats.totalEpisodes} bars={epBars} icon={Tv} />
-          <StatBlock label="Total plays" value={stats.totalPlays} bars={playBars} icon={Play} />
-          <StatBlock label="This month" value={current?.movies ?? 0} sub="movies" delta={movieDelta} icon={TrendingUp} />
-          <StatBlock label="This month" value={current?.episodes ?? 0} sub="episodes" delta={epDelta} icon={TrendingUp} />
-        </div>
-      )}
-
-      <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1.5rem" }}>
-        <p className="mb-3 text-2xs font-medium uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
-          Top genres
-        </p>
-        {loading ? (
-          <div className="flex flex-wrap gap-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="skeleton h-7 w-20 rounded-full" />
-            ))}
-          </div>
-        ) : topGenres.length === 0 ? (
-          <p className="text-xs" style={{ color: "var(--text-mute)" }}>No genre data yet.</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {topGenres.map((g, i) => (
-              <span
-                key={g.genre}
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
-                style={
-                  i === 0
-                    ? { background: "var(--accent)", color: "white" }
-                    : { background: "var(--surface-strong)", color: "var(--text-dim)" }
-                }
-              >
-                {g.genre}
-                <span
-                  className="text-2xs tabular-nums"
-                  style={{ opacity: i === 0 ? 0.85 : 0.7 }}
-                >
-                  {g.count}
-                </span>
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ─── Streak card (accent dark card) ─── */
-
-function StreakCard({
-  current,
-  longest,
-  loading,
-}: {
-  current: number;
-  longest: number;
-  loading: boolean;
-}) {
-  return (
-    <div className="rounded-2xl p-6 flex flex-col justify-between h-full bg-ink-900 text-cream-50">
-      <p className="text-sm font-semibold text-cream-50">Streaks</p>
-
-      {loading ? (
-        <div className="flex-1 flex flex-col gap-4 mt-5">
-          <div className="skeleton h-12 w-20 rounded" />
-          <div className="skeleton h-3 w-24 rounded" />
-          <div className="skeleton h-8 w-16 rounded mt-4" />
-          <div className="skeleton h-3 w-20 rounded" />
-        </div>
-      ) : (
-        <div className="flex flex-col gap-5 mt-3">
-          <div>
-            <div className="flex items-end gap-2">
-              <Flame className="h-5 w-5 text-claw-400 mb-0.5" />
-              <span className="text-4xl font-bold tabular-nums leading-none text-cream-50">
-                {current}
-              </span>
-            </div>
-            <p className="mt-1.5 text-xs text-ink-300">
-              day streak
-            </p>
-          </div>
-
-          <div className="pt-5 border-t border-ink-700">
-            <div className="flex items-end gap-2">
-              <Trophy className="h-4 w-4 text-claw-300 mb-0.5" />
-              <span className="text-2xl font-bold tabular-nums leading-none text-ink-200">
-                {longest}
-              </span>
-            </div>
-            <p className="mt-1.5 text-xs text-ink-400">
-              longest streak
-            </p>
-          </div>
-        </div>
-      )}
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <TicketTile icon={Flame} label="Day streak" value={currentStreak} sub={`Best: ${longestStreak}`} />
+      <TicketTile icon={Film} label="Movies watched" value={stats?.totalMovies ?? 0} bars={movieBars} />
+      <TicketTile icon={Tv} label="Episodes watched" value={stats?.totalEpisodes ?? 0} bars={epBars} />
+      <TicketTile icon={Trophy} label="Top genre" value={topGenre ?? "—"} sub={genres[0] ? `${genres[0].count} watched` : undefined} />
     </div>
   );
 }
@@ -286,42 +104,6 @@ function RecentlyWatchedSkeleton() {
   );
 }
 
-/* ─── Poster component with initials fallback ─── */
-
-function Poster({
-  src,
-  alt,
-  className = "",
-}: {
-  src?: string;
-  alt: string | null | undefined;
-  className?: string;
-}) {
-  const [loadFailed, setLoadFailed] = useState(false);
-
-  useEffect(() => { setLoadFailed(false); }, [src]);
-
-  if (!src || loadFailed) {
-    return (
-      <div className={`flex items-center justify-center bg-gradient-to-br ${getGradient(alt)} ${className}`}>
-        <span className="text-xl font-bold text-white/60 select-none">
-          {getInitials(alt)}
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={src}
-      alt={alt ?? "Poster"}
-      className={`object-cover ${className}`}
-      loading="lazy"
-      onError={() => setLoadFailed(true)}
-    />
-  );
-}
-
 /* ─── Discovery Card ─── */
 
 type DiscoveryItem = {
@@ -351,34 +133,21 @@ function DiscoveryCard({ item, badge, reason, onSelect }: {
       aria-label={`View details for ${item.name}`}
     >
       <div
-        className="relative aspect-poster overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
+        className="relative aspect-poster overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:scale-[1.03] group-hover:shadow-card-hover"
         style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
       >
         <Poster src={item.poster} alt={item.name} className="h-full w-full" />
         {item.rating != null && item.rating > 0 && (
-          <div className="absolute top-2.5 left-2.5">
-            <span className="inline-flex items-center gap-1 rounded-md bg-black/70 px-2 py-0.5 text-2xs font-semibold text-amber-400 backdrop-blur-sm">
-              <Star className="h-2.5 w-2.5 fill-amber-400" />
-              {item.rating.toFixed(1)}
-            </span>
+          <div
+            className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm"
+            style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}
+          >
+            <span className="text-2xs font-bold tabular-nums text-amber-400">{item.rating.toFixed(1)}</span>
           </div>
         )}
-        {badge && <div className="absolute top-2.5 right-2.5">{badge}</div>}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/60 to-transparent px-3 pb-3 pt-10">
-          {item.genres && item.genres.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {item.genres.slice(0, 2).map((g) => (
-                <span
-                  key={g}
-                  className="rounded px-1.5 py-0.5 text-2xs backdrop-blur-sm"
-                  style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
-                >
-                  {g}
-                </span>
-              ))}
-            </div>
-          )}
+        {badge && <div className="absolute top-2 right-2">{badge}</div>}
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/55 to-transparent px-3 pb-2.5 pt-10 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          <p className="truncate text-xs font-semibold text-white">{item.name}</p>
         </div>
       </div>
       <p
@@ -387,8 +156,10 @@ function DiscoveryCard({ item, badge, reason, onSelect }: {
       >
         {item.name}
       </p>
-      <p className="text-2xs" style={{ color: "var(--text-dim)" }}>
-        {item.year ?? ""}{item.type ? ` ${item.type === "movie" ? "Movie" : "Series"}` : ""}
+      <p className="truncate text-2xs" style={{ color: "var(--text-dim)" }}>
+        {item.year ?? ""}
+        {item.type ? ` · ${item.type === "movie" ? "Movie" : "Series"}` : ""}
+        {item.genres && item.genres.length > 0 ? ` · ${item.genres.slice(0, 2).join(", ")}` : ""}
       </p>
       {reason && (
         <p className="mt-0.5 truncate text-2xs italic" style={{ color: "var(--text-dim)" }} title={reason}>
@@ -664,68 +435,66 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      {/* ── Now Watching Banner ── */}
+      {/* ── Hero: Now Watching ── */}
       {activeCheckin && (
-        <div
-          className="flex items-center gap-4 rounded-2xl border border-claw-400/25 bg-claw-400/6 px-5 py-4"
+        <section
+          className="relative overflow-hidden rounded-3xl"
+          style={{ minHeight: "13rem", border: "1px solid var(--border)" }}
         >
           {activeCheckin.poster && (
-            <div className="h-14 w-10 flex-none overflow-hidden rounded-lg" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
-              <img src={activeCheckin.poster} alt="" className="h-full w-full object-cover" loading="lazy" />
-            </div>
+            <img
+              src={activeCheckin.poster}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 h-full w-full object-cover blur-2xl scale-110 opacity-50"
+            />
           )}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-claw-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-claw-500" />
-              </span>
-              <span className="text-xs font-semibold uppercase tracking-wider text-claw-400">Now Watching</span>
-            </div>
-            <p className="mt-0.5 truncate text-sm font-semibold" style={{ color: "var(--text)" }}>{activeCheckin.name}</p>
-            {activeCheckin.season != null && activeCheckin.episode != null && (
-              <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-                S{String(activeCheckin.season).padStart(2, "0")}:E{String(activeCheckin.episode).padStart(2, "0")}
-              </p>
+          <div
+            className="absolute inset-0"
+            style={{ background: "linear-gradient(110deg, var(--bg-0) 15%, color-mix(in srgb, var(--bg-0) 35%, transparent) 60%, transparent)" }}
+          />
+          <div className="relative z-10 flex h-full flex-col gap-5 p-6 sm:flex-row sm:items-center">
+            {activeCheckin.poster && (
+              <div className="h-32 w-[5.5rem] flex-none overflow-hidden rounded-xl shadow-feature" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
+                <img src={activeCheckin.poster} alt="" className="h-full w-full object-cover" loading="lazy" />
+              </div>
             )}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-claw-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-claw-500" />
+                </span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-claw-400">Now Watching</span>
+              </div>
+              <p className="mt-1 truncate text-2xl font-bold" style={{ color: "var(--text)" }}>{activeCheckin.name}</p>
+              {activeCheckin.season != null && activeCheckin.episode != null && (
+                <p className="mt-1 text-sm" style={{ color: "var(--text-dim)" }}>
+                  S{String(activeCheckin.season).padStart(2, "0")}:E{String(activeCheckin.episode).padStart(2, "0")}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-none">
+              <button
+                type="button"
+                onClick={() => void handleCheckout(true)}
+                className="flex items-center gap-1.5 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 active:scale-[0.98] transition-all"
+              >
+                <Check className="h-4 w-4" /> Finished
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleCheckout(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-xl transition-all active:scale-95"
+                style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
+                aria-label="Check out without logging"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 flex-none">
-            <button
-              type="button"
-              onClick={() => void handleCheckout(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-claw-500 px-3 py-2 text-xs font-semibold text-white hover:bg-claw-600 active:scale-[0.98] transition-all"
-            >
-              <Check className="h-3.5 w-3.5" /> Finished
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleCheckout(false)}
-              className="flex h-8 w-8 items-center justify-center rounded-xl transition-all active:scale-95"
-              style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
-              aria-label="Check out without logging"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+        </section>
       )}
-
-      {/* ── Overview ── */}
-      <section>
-        <div className="grid gap-3 lg:grid-cols-[1fr_220px]">
-          <OverviewCard
-            stats={stats}
-            monthly={monthly}
-            genres={detailedStats?.genreDistribution ?? []}
-            loading={loading || detailedLoading}
-          />
-          <StreakCard
-            current={detailedStats?.currentStreak ?? 0}
-            longest={detailedStats?.longestStreak ?? 0}
-            loading={detailedLoading}
-          />
-        </div>
-      </section>
 
       {/* ── Continue Watching ── */}
       <section>
@@ -818,76 +587,9 @@ export function DashboardPage() {
         )}
       </section>
 
-      {/* ── Recently Watched ── */}
+      {/* ── Trending Now ── */}
       <section>
-        <SectionHeader title="Recently Watched" count={history.length}>
-          {!loading && history.length > 0 && (
-            <ScrollArrows
-              canScrollLeft={recentScroll.canScrollLeft}
-              canScrollRight={recentScroll.canScrollRight}
-              onScroll={recentScroll.scroll}
-            />
-          )}
-        </SectionHeader>
-        {loading ? (
-          <RecentlyWatchedSkeleton />
-        ) : history.length === 0 ? (
-          <div className="rounded-2xl py-12 text-center" style={{ border: "1px dashed var(--border-strong)" }}>
-            <Film className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
-            <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>No watch history yet.</p>
-          </div>
-        ) : (
-          <div ref={recentScroll.ref} className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide">
-            {history.map((event) => (
-              <div
-                key={event.id}
-                role="button"
-                tabIndex={0}
-                className="flex-none group cursor-pointer"
-                style={{ width: "11rem" }}
-                onClick={() => setSelectedItem(toSearchResult(event.imdbId, event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster }))}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedItem(toSearchResult(event.imdbId, event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster })); } }}
-                aria-label={`View details for ${event.name}`}
-              >
-                <div
-                  className="relative aspect-poster overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
-                  style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
-                >
-                  <Poster src={event.poster} alt={event.name} className="h-full w-full" />
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent px-3 pb-3 pt-12">
-                    {event.type === "episode" && event.season != null && event.episode != null ? (
-                      <span className="inline-block rounded px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm" style={{ background: "var(--surface-strong)" }}>
-                        S{event.season}:E{event.episode}
-                      </span>
-                    ) : event.type === "movie" ? (
-                      <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold text-claw-300 backdrop-blur-sm bg-claw-500/20">
-                        <Film className="h-3 w-3" /> Movie
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="absolute top-2.5 right-2.5">
-                    <span className="rounded-md bg-black/70 px-2 py-0.5 text-2xs font-medium text-white/80 backdrop-blur-sm">
-                      {timeAgo(event.watchedAt)}
-                    </span>
-                  </div>
-                </div>
-                <p className="mt-2.5 truncate text-sm font-semibold transition-colors group-hover:text-claw-600" style={{ color: "var(--text)" }}>
-                  {event.name}
-                </p>
-                <p className="text-2xs" style={{ color: "var(--text-dim)" }}>
-                  {event.type === "episode" && event.season != null && event.episode != null
-                    ? `Season ${event.season}, Episode ${event.episode}`
-                    : event.type === "movie" ? "Movie" : ""}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* ── Trending Movies ── */}
-      <section>
-        <SectionHeader title="Trending This Week">
+        <SectionHeader title="Trending Now">
           <div className="flex items-center gap-3">
             {!trendingLoading && trendingMovies.length > 0 && (
               <ScrollArrows
@@ -997,6 +699,73 @@ export function DashboardPage() {
         </section>
       )}
 
+      {/* ── Recently Watched ── */}
+      <section>
+        <SectionHeader title="Recently Watched" count={history.length}>
+          {!loading && history.length > 0 && (
+            <ScrollArrows
+              canScrollLeft={recentScroll.canScrollLeft}
+              canScrollRight={recentScroll.canScrollRight}
+              onScroll={recentScroll.scroll}
+            />
+          )}
+        </SectionHeader>
+        {loading ? (
+          <RecentlyWatchedSkeleton />
+        ) : history.length === 0 ? (
+          <div className="rounded-2xl py-12 text-center" style={{ border: "1px dashed var(--border-strong)" }}>
+            <Film className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
+            <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>No watch history yet.</p>
+          </div>
+        ) : (
+          <div ref={recentScroll.ref} className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide">
+            {history.map((event) => (
+              <div
+                key={event.id}
+                role="button"
+                tabIndex={0}
+                className="flex-none group cursor-pointer"
+                style={{ width: "11rem" }}
+                onClick={() => setSelectedItem(toSearchResult(event.imdbId, event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster }))}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedItem(toSearchResult(event.imdbId, event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster })); } }}
+                aria-label={`View details for ${event.name}`}
+              >
+                <div
+                  className="relative aspect-poster overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:scale-[1.03] group-hover:shadow-card-hover"
+                  style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
+                >
+                  <Poster src={event.poster} alt={event.name} className="h-full w-full" />
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent px-3 pb-3 pt-12">
+                    {event.type === "episode" && event.season != null && event.episode != null ? (
+                      <span className="inline-block rounded px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm" style={{ background: "var(--surface-strong)" }}>
+                        S{event.season}:E{event.episode}
+                      </span>
+                    ) : event.type === "movie" ? (
+                      <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold text-claw-300 backdrop-blur-sm bg-claw-500/20">
+                        <Film className="h-3 w-3" /> Movie
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="absolute top-2.5 right-2.5">
+                    <span className="rounded-md bg-black/70 px-2 py-0.5 text-2xs font-medium text-white/80 backdrop-blur-sm">
+                      {timeAgo(event.watchedAt)}
+                    </span>
+                  </div>
+                </div>
+                <p className="mt-2.5 truncate text-sm font-semibold transition-colors group-hover:text-claw-600" style={{ color: "var(--text)" }}>
+                  {event.name}
+                </p>
+                <p className="text-2xs" style={{ color: "var(--text-dim)" }}>
+                  {event.type === "episode" && event.season != null && event.episode != null
+                    ? `Season ${event.season}, Episode ${event.episode}`
+                    : event.type === "movie" ? "Movie" : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* ── Detail Panel ── */}
       {selectedItem && (
         <DetailPanel
@@ -1073,6 +842,23 @@ export function DashboardPage() {
           )}
         </section>
       )}
+
+      {/* ── Stat strip ── */}
+      <section>
+        <SectionHeader title="Your Stats">
+          <Link to="/stats" className="text-sm font-medium text-claw-400 hover:text-claw-300 transition-colors">
+            Full stats &rarr;
+          </Link>
+        </SectionHeader>
+        <StatStrip
+          stats={stats}
+          monthly={monthly}
+          genres={detailedStats?.genreDistribution ?? []}
+          currentStreak={detailedStats?.currentStreak ?? 0}
+          longestStreak={detailedStats?.longestStreak ?? 0}
+          loading={loading || detailedLoading}
+        />
+      </section>
     </div>
   );
 }
