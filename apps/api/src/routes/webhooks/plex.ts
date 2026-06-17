@@ -4,7 +4,7 @@ import { recordWatchEvent } from "../../lib/watch-event.js";
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET?.trim();
 
 const verifyWebhookSecret = (request: import("fastify").FastifyRequest): boolean => {
-  if (!WEBHOOK_SECRET) return true;
+  if (!WEBHOOK_SECRET) return false;
   const provided =
     (request.query as Record<string, string>).token ??
     (request.headers["x-webhook-secret"] as string | undefined);
