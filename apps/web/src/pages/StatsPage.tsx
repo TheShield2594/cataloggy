@@ -1,12 +1,41 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, BarChart3, Film, Flame, Star, Trophy } from "lucide-react";
+import { AlertCircle, Award, BarChart3, Film, Flame, Minus, Star, Trophy, TrendingDown, TrendingUp } from "lucide-react";
 import { api, DetailedWatchStats, WatchStats } from "../api";
+
+type Milestone = { label: string; threshold: number; icon: typeof Film };
+
+const MOVIE_MILESTONES: Milestone[] = [
+  { label: "10 Movies", threshold: 10, icon: Film },
+  { label: "50 Movies", threshold: 50, icon: Film },
+  { label: "100 Movies", threshold: 100, icon: Film },
+  { label: "250 Movies", threshold: 250, icon: Film },
+  { label: "500 Movies", threshold: 500, icon: Film },
+];
+
+const EPISODE_MILESTONES: Milestone[] = [
+  { label: "100 Episodes", threshold: 100, icon: BarChart3 },
+  { label: "500 Episodes", threshold: 500, icon: BarChart3 },
+  { label: "1,000 Episodes", threshold: 1000, icon: BarChart3 },
+  { label: "2,500 Episodes", threshold: 2500, icon: BarChart3 },
+];
+
+const STREAK_MILESTONES: Milestone[] = [
+  { label: "3-Day Streak", threshold: 3, icon: Flame },
+  { label: "7-Day Streak", threshold: 7, icon: Flame },
+  { label: "30-Day Streak", threshold: 30, icon: Flame },
+  { label: "100-Day Streak", threshold: 100, icon: Flame },
+];
+
+function nextMilestone(milestones: Milestone[], value: number) {
+  return milestones.find((m) => value < m.threshold) ?? null;
+}
 
 export function StatsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<WatchStats | null>(null);
   const [detailed, setDetailed] = useState<DetailedWatchStats | null>(null);
+  const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -57,6 +86,17 @@ export function StatsPage() {
 
   const maxGenreCount = detailed?.genreDistribution[0]?.count ?? 1;
 
+  const momComparison = (() => {
+    if (!detailed || detailed.monthly.length < 2) return null;
+    const current = detailed.monthly[detailed.monthly.length - 1];
+    const previous = detailed.monthly[detailed.monthly.length - 2];
+    const currentTotal = current.movies + current.episodes;
+    const previousTotal = previous.movies + previous.episodes;
+    const diff = currentTotal - previousTotal;
+    const percent = previousTotal > 0 ? Math.round((diff / previousTotal) * 100) : null;
+    return { diff, percent };
+  })();
+
   return (
     <div className="mx-auto max-w-4xl space-y-8">
       <h2 className="text-2xl font-bold">Watch Statistics</h2>
@@ -71,10 +111,43 @@ export function StatsPage() {
         </div>
       )}
 
+      {/* Achievement badges */}
+      {stats && (
+        <MilestoneBadges
+          totalMovies={stats.totalMovies}
+          totalEpisodes={stats.totalEpisodes}
+          longestStreak={detailed?.longestStreak ?? 0}
+        />
+      )}
+
       {/* Monthly activity chart */}
       {detailed && detailed.monthly.length > 0 && (
         <section className="rounded-2xl border border-ink-800/60 bg-ink-900/40 p-5">
-          <h3 className="mb-4 text-lg font-semibold">Monthly Activity</h3>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="text-lg font-semibold">Monthly Activity</h3>
+            {momComparison && (
+              <span
+                className={`flex items-center gap-1 text-xs font-medium ${
+                  momComparison.diff > 0
+                    ? "text-emerald-400"
+                    : momComparison.diff < 0
+                      ? "text-rose-400"
+                      : "text-ink-400"
+                }`}
+              >
+                {momComparison.diff > 0 ? (
+                  <TrendingUp className="h-3.5 w-3.5" />
+                ) : momComparison.diff < 0 ? (
+                  <TrendingDown className="h-3.5 w-3.5" />
+                ) : (
+                  <Minus className="h-3.5 w-3.5" />
+                )}
+                {momComparison.diff > 0 ? "+" : ""}
+                {momComparison.diff}
+                {momComparison.percent !== null ? ` (${momComparison.diff > 0 ? "+" : ""}${momComparison.percent}%)` : ""} vs last month
+              </span>
+            )}
+          </div>
           <div className="flex items-end gap-1.5 sm:gap-2" style={{ height: "180px" }}>
             {detailed.monthly.map((m) => {
               const total = m.movies + m.episodes;
@@ -82,22 +155,36 @@ export function StatsPage() {
               const movieHeight = total > 0 ? (m.movies / total) * height : 0;
               const episodeHeight = height - movieHeight;
               const label = new Date(m.month + "-15").toLocaleDateString(undefined, { month: "short" });
+              const isHovered = hoveredMonth === m.month;
               return (
-                <div key={m.month} className="flex flex-1 flex-col items-center gap-1">
+                <div
+                  key={m.month}
+                  className="relative flex flex-1 flex-col items-center gap-1"
+                  onMouseEnter={() => setHoveredMonth(m.month)}
+                  onMouseLeave={() => setHoveredMonth(null)}
+                  onTouchStart={() => setHoveredMonth(m.month)}
+                >
+                  {isHovered && (
+                    <div className="absolute bottom-full z-10 mb-1.5 whitespace-nowrap rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-2xs shadow-lg">
+                      <p className="font-semibold text-ink-200">
+                        {new Date(m.month + "-15").toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                      </p>
+                      <p className="text-claw-400">{m.movies} movies</p>
+                      <p className="text-plum-400">{m.episodes} episodes</p>
+                    </div>
+                  )}
                   <span className="text-2xs text-ink-400 tabular-nums">{total || ""}</span>
                   <div className="flex w-full flex-col justify-end" style={{ height: "140px" }}>
                     {episodeHeight > 0 && (
                       <div
-                        className="w-full rounded-t bg-plum-500/70 transition-all duration-500"
+                        className={`w-full rounded-t bg-plum-500/70 transition-all duration-500 ${isHovered ? "bg-plum-400" : ""}`}
                         style={{ height: `${episodeHeight}%` }}
-                        title={`${m.episodes} episodes`}
                       />
                     )}
                     {movieHeight > 0 && (
                       <div
-                        className={`w-full bg-claw-500/70 transition-all duration-500 ${episodeHeight === 0 ? "rounded-t" : ""} rounded-b`}
+                        className={`w-full bg-claw-500/70 transition-all duration-500 ${episodeHeight === 0 ? "rounded-t" : ""} rounded-b ${isHovered ? "bg-claw-400" : ""}`}
                         style={{ height: `${movieHeight}%` }}
-                        title={`${m.movies} movies`}
                       />
                     )}
                     {total === 0 && (
@@ -128,7 +215,10 @@ export function StatsPage() {
             {detailed.genreDistribution.map((g) => (
               <div key={g.genre} className="flex items-center gap-3">
                 <span className="w-28 shrink-0 truncate text-sm text-ink-300">{g.genre}</span>
-                <div className="flex-1 h-5 rounded-full bg-ink-800/60 overflow-hidden">
+                <div
+                  className="flex-1 h-5 rounded-full bg-ink-800/60 overflow-hidden"
+                  title={`${g.genre}: ${g.count} watched`}
+                >
                   <div
                     className="h-full rounded-full bg-claw-500/80 transition-all duration-500"
                     style={{ width: `${(g.count / maxGenreCount) * 100}%` }}
@@ -173,6 +263,68 @@ export function StatsPage() {
         </section>
       )}
     </div>
+  );
+}
+
+function MilestoneBadges({
+  totalMovies,
+  totalEpisodes,
+  longestStreak,
+}: {
+  totalMovies: number;
+  totalEpisodes: number;
+  longestStreak: number;
+}) {
+  const groups = [
+    { value: totalMovies, milestones: MOVIE_MILESTONES },
+    { value: totalEpisodes, milestones: EPISODE_MILESTONES },
+    { value: longestStreak, milestones: STREAK_MILESTONES },
+  ];
+
+  const earned = groups.flatMap(({ value, milestones }) =>
+    milestones.filter((m) => value >= m.threshold)
+  );
+  const upcoming = groups
+    .map(({ value, milestones }) => {
+      const next = nextMilestone(milestones, value);
+      return next ? { ...next, value } : null;
+    })
+    .filter((m): m is Milestone & { value: number } => m !== null);
+
+  if (earned.length === 0 && upcoming.length === 0) return null;
+
+  return (
+    <section className="rounded-2xl border border-ink-800/60 bg-ink-900/40 p-5">
+      <h3 className="mb-4 text-lg font-semibold flex items-center gap-2">
+        <Award className="h-5 w-5 text-amber-400" /> Achievements
+      </h3>
+      {earned.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {earned.map((m) => (
+            <span
+              key={m.label}
+              className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300"
+            >
+              <m.icon className="h-3.5 w-3.5" /> {m.label}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-ink-400">No badges earned yet — keep watching!</p>
+      )}
+      {upcoming.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {upcoming.map((m) => (
+            <span
+              key={m.label}
+              className="flex items-center gap-1.5 rounded-full border border-ink-700 bg-ink-800/40 px-3 py-1.5 text-xs font-medium text-ink-400"
+            >
+              <m.icon className="h-3.5 w-3.5" /> {m.label} ({m.value}/{m.threshold})
+            </span>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
