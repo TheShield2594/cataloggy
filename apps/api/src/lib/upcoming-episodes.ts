@@ -12,10 +12,13 @@ export type UpcomingEpisode = {
   overview: string | null;
 };
 
-export const getUpcomingEpisodes = async (daysAhead: number): Promise<UpcomingEpisode[]> => {
+export const getUpcomingEpisodes = async (
+  daysAhead: number,
+  limit: number | null = 30
+): Promise<UpcomingEpisode[]> => {
   const progressRows = await prisma.seriesProgress.findMany({
     orderBy: { lastWatchedAt: "desc" },
-    take: 30,
+    ...(limit != null ? { take: limit } : {}),
   });
 
   if (progressRows.length === 0) return [];
@@ -55,6 +58,7 @@ export const getUpcomingEpisodes = async (daysAhead: number): Promise<UpcomingEp
 
         const ep = details.nextEpisodeToAir;
         const airDate = new Date(ep.air_date);
+        if (Number.isNaN(airDate.getTime())) return [];
         if (airDate < today || airDate > futureDate) return [];
 
         return [{

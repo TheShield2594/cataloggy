@@ -1098,6 +1098,17 @@ function NotificationsSection() {
       try {
         const existing = await getExistingPushSubscription();
         setSubscribed(!!existing);
+        if (existing) {
+          // The server may have dropped this subscription (e.g. a failed
+          // send cleaned it up), so re-register it to keep both sides in
+          // sync. Best-effort: a failure here doesn't affect the toggle.
+          const json = existing.toJSON();
+          if (json.endpoint && json.keys?.p256dh && json.keys?.auth) {
+            await api
+              .pushSubscribe({ endpoint: json.endpoint, keys: { p256dh: json.keys.p256dh, auth: json.keys.auth } })
+              .catch(() => {});
+          }
+        }
       } finally {
         setLoading(false);
       }

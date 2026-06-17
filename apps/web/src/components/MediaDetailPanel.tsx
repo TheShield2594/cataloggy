@@ -782,7 +782,9 @@ export function DetailPanel({
                 <MonitorPlay className="h-3.5 w-3.5" /> Where to Watch
               </h3>
               <div className="flex flex-wrap gap-2">
-                {[...providers.flatrate, ...providers.free].map((p) => (
+                {[...providers.flatrate, ...providers.free]
+                  .filter((p, i, arr) => arr.findIndex((q) => q.id === p.id) === i)
+                  .map((p) => (
                   <span
                     key={p.id}
                     title={p.name}
