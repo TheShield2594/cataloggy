@@ -58,7 +58,7 @@ function Section({ title, icon, defaultOpen, children }: { title: string; icon: 
   );
 }
 
-function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
+export function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
@@ -120,7 +120,7 @@ function ApiTokenSection() {
   );
 }
 
-function TraktSection() {
+export function TraktSection() {
   const [status, setStatus] = useState<{ connected: boolean; configured: boolean; redirectUri?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);

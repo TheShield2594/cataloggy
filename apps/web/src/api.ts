@@ -347,6 +347,9 @@ export const api = {
   getOmdbStatus() {
     return request<{ configured: boolean }>("/omdb/status");
   },
+  getTmdbStatus() {
+    return request<{ configured: boolean }>("/tmdb/status");
+  },
   setOmdbKey(apiKey: string) {
     return request<{ configured: boolean }>("/omdb/key", {
       method: "POST",
