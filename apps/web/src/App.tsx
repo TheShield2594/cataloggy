@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link, Route, Routes, useLocation } from "react-router-dom";
-import { BarChart3, Clapperboard, Search, List, Settings, Sun, Moon } from "lucide-react";
+import { BarChart3, Clapperboard, Search, List, Settings } from "lucide-react";
 import { runtimeConfig } from "./api";
 import { CommandPalette, useCommandPalette } from "./components/CommandPalette";
 import { InstallButton } from "./components/InstallButton";
 import { Sidebar } from "./components/Sidebar";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { useTheme } from "./hooks/useTheme";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ListsPage } from "./pages/ListsPage";
@@ -80,15 +81,7 @@ export function App() {
           </button>
 
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="flex h-9 w-9 items-center justify-center rounded-full transition-all active:scale-95"
-              style={{ border: "1px solid var(--border-strong)", color: "var(--text-dim)" }}
-              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            >
-              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <InstallButton />
           </div>
         </div>
