@@ -2,6 +2,7 @@ import { prisma } from "./prisma.js";
 import { upsertSeriesProgressIfNewer } from "./series-progress.js";
 import { shouldRefreshAiRecs, getAiRecommendations } from "./ai.js";
 import { trendingCacheDeletePrefix } from "./cache.js";
+import { syncWatchEventToTrakt } from "./trakt-client.js";
 import type { RecordWatchParams } from "./types.js";
 
 export const recordWatchEvent = async (params: RecordWatchParams) => {
@@ -63,6 +64,12 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
       });
     }
 
+    syncWatchEventToTrakt(
+      watchEvent,
+      { type: "episode", imdbId: resolvedSeriesImdbId, seriesImdbId: resolvedSeriesImdbId, season, episode },
+      req.log
+    );
+
     void (async () => {
       try {
         if (await shouldRefreshAiRecs()) {
@@ -98,6 +105,8 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
     req.log.info({ imdbId }, `${source} scrobble: movie recorded`);
     return created;
   });
+
+  syncWatchEventToTrakt(watchEvent, { type: "movie", imdbId }, req.log);
 
   void (async () => {
     try {
