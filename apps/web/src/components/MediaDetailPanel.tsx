@@ -446,6 +446,8 @@ export function StarRating({
               onClick={() => void handleRate(star)}
               onMouseEnter={() => setHoverRating(star)}
               onMouseLeave={() => setHoverRating(null)}
+              onFocus={() => setHoverRating(star)}
+              onBlur={() => setHoverRating(null)}
               className="flex flex-col items-center gap-0.5 p-0.5 disabled:opacity-50"
               aria-label={`Rate ${star} out of 10`}
             >
@@ -454,7 +456,7 @@ export function StarRating({
                   className={`absolute h-5 w-5 transition-colors duration-300 ${isPreview ? "text-amber-400" : "text-ink-300"}`}
                 />
                 <Star
-                  className={`absolute h-5 w-5 fill-amber-400 text-amber-400 transition-opacity duration-300 ${isFilled ? "star-pop opacity-100" : "opacity-0"}`}
+                  className={`star-shake-target absolute h-5 w-5 fill-amber-400 text-amber-400 transition-opacity duration-300 ${isFilled ? "star-pop opacity-100" : "opacity-0"}`}
                 />
               </span>
               <span
