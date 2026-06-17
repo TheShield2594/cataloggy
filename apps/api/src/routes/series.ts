@@ -4,10 +4,13 @@ import { prisma } from "../lib/prisma.js";
 import { getTmdb } from "../lib/tmdb-client.js";
 import { upsertMetadata } from "../lib/metadata.js";
 import { upsertSeriesProgressIfNewer } from "../lib/series-progress.js";
+import { resolveProfile } from "../lib/profile.js";
 
 const DROPPED_KEY = (imdbId: string) => `dropped:series:${imdbId}`;
 
 const seriesRoutes: FastifyPluginAsync = async (app) => {
+  app.addHook("preHandler", resolveProfile);
+
   app.get<{ Params: { imdbId: string } }>("/show/:imdbId/dropped", async (request) => {
     const row = await prisma.kV.findUnique({ where: { key: DROPPED_KEY(request.params.imdbId) } });
     return { dropped: !!row };
@@ -27,8 +30,10 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
     return { dropped: false };
   });
 
-  app.get("/series/progress", async () => {
+  app.get("/series/progress", async (request) => {
+    const profileId = request.profileId!;
     const progressRows = await prisma.seriesProgress.findMany({
+      where: { profileId },
       orderBy: { lastWatchedAt: "desc" },
     });
 
@@ -42,7 +47,7 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
       }),
       prisma.watchEvent.groupBy({
         by: ["seriesImdbId", "season", "episode"],
-        where: { seriesImdbId: { in: imdbIds }, type: "episode" },
+        where: { profileId, seriesImdbId: { in: imdbIds }, type: "episode" },
         _count: { _all: true },
       }),
     ]);
@@ -124,8 +129,11 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Params: { imdbId: string } }>("/series/progress/:imdbId", async (request, reply) => {
     const { imdbId } = request.params;
+    const profileId = request.profileId!;
 
-    const row = await prisma.seriesProgress.findUnique({ where: { seriesImdbId: imdbId } });
+    const row = await prisma.seriesProgress.findUnique({
+      where: { profileId_seriesImdbId: { profileId, seriesImdbId: imdbId } },
+    });
     if (!row) return reply.code(404).send({ error: "No progress found for this series" });
 
     const [meta, uniqueEpisodes] = await Promise.all([
@@ -135,7 +143,7 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
       }),
       prisma.watchEvent.groupBy({
         by: ["season", "episode"],
-        where: { seriesImdbId: imdbId, type: "episode" },
+        where: { profileId, seriesImdbId: imdbId, type: "episode" },
       }),
     ]);
 
@@ -159,8 +167,11 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
     "/series/:imdbId/watch-next",
     async (request, reply) => {
       const { imdbId } = request.params;
+      const profileId = request.profileId!;
 
-      const row = await prisma.seriesProgress.findUnique({ where: { seriesImdbId: imdbId } });
+      const row = await prisma.seriesProgress.findUnique({
+        where: { profileId_seriesImdbId: { profileId, seriesImdbId: imdbId } },
+      });
       if (!row) return reply.code(404).send({ error: "No progress found for this series" });
 
       const nextEpisode = row.lastEpisode + 1;
@@ -176,10 +187,11 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
           episode: nextEpisode,
           watchedAt,
           plays: 1,
+          profileId,
         },
       });
 
-      await upsertSeriesProgressIfNewer(imdbId, {
+      await upsertSeriesProgressIfNewer(profileId, imdbId, {
         lastSeason: nextSeason,
         lastEpisode: nextEpisode,
         lastWatchedAt: watchedAt,

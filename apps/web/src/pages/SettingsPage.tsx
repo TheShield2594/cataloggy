@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { api, runtimeConfig } from "../api";
-import { ChevronDown, Key, Link, Database, Info, Eye, EyeOff, Loader2, Check, AlertCircle, Unplug, Clapperboard, Image, Globe, Shield, Copy, ExternalLink, Star, Sparkles, Clock, Bell } from "lucide-react";
+import { ChevronDown, Key, Link, Database, Info, Eye, EyeOff, Loader2, Check, AlertCircle, Unplug, Clapperboard, Image, Globe, Shield, Copy, ExternalLink, Star, Sparkles, Clock, Bell, Users } from "lucide-react";
 import { timeAgo } from "../utils/timeAgo";
 import { isPushSupported, getExistingPushSubscription, subscribeToPush, unsubscribeFromPush } from "../utils/push";
 
@@ -1183,6 +1183,29 @@ function NotificationsSection() {
   );
 }
 
+function ProfileSection() {
+  const switchProfile = () => {
+    runtimeConfig.clearProfileId();
+    window.location.reload();
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-ink-400 leading-relaxed">
+        Switch to a different profile, or create a new one. Each profile has its own watch history,
+        lists, and stats.
+      </p>
+      <button
+        type="button"
+        onClick={switchProfile}
+        className="inline-flex items-center gap-2 rounded-xl bg-ink-800 border border-ink-700/60 px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-ink-700"
+      >
+        <Users size={16} /> Switch Profile
+      </button>
+    </div>
+  );
+}
+
 type SettingsTab = "preferences" | "integrations";
 
 export function SettingsPage() {
@@ -1218,6 +1241,10 @@ export function SettingsPage() {
         <div className="space-y-4">
           <Section title="Preferences" icon={<Globe size={20} />} defaultOpen>
             <PreferencesSection />
+          </Section>
+
+          <Section title="Profile" icon={<Users size={20} />}>
+            <ProfileSection />
           </Section>
 
           <Section title="Notifications" icon={<Bell size={20} />}>
