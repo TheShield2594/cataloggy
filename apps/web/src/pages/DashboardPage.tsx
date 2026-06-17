@@ -276,8 +276,7 @@ function ThisMonthCard({
               </span>
               {movieDelta !== null && (
                 <span
-                  className="text-xs font-medium tabular-nums"
-                  className={movieDelta >= 0 ? "text-emerald-500" : "text-rose-500"}
+                  className={`text-xs font-medium tabular-nums ${movieDelta >= 0 ? "text-emerald-500" : "text-rose-500"}`}
                 >
                   {movieDelta >= 0 ? "+" : ""}{movieDelta}
                 </span>
@@ -293,8 +292,7 @@ function ThisMonthCard({
               </span>
               {epDelta !== null && (
                 <span
-                  className="text-xs font-medium tabular-nums"
-                  className={epDelta >= 0 ? "text-emerald-500" : "text-rose-500"}
+                  className={`text-xs font-medium tabular-nums ${epDelta >= 0 ? "text-emerald-500" : "text-rose-500"}`}
                 >
                   {epDelta >= 0 ? "+" : ""}{epDelta}
                 </span>
