@@ -428,24 +428,6 @@ export function SearchPage() {
               ]}
             />
 
-            {/* Provider — not yet available in search results */}
-            <FilterSelect
-              label="Provider"
-              value=""
-              onChange={() => {}}
-              disabled
-              options={[{ value: "", label: "Coming soon" }]}
-            />
-
-            {/* Runtime — not available in search results */}
-            <FilterSelect
-              label="Runtime"
-              value=""
-              onChange={() => {}}
-              disabled
-              options={[{ value: "", label: "Coming soon" }]}
-            />
-
             {/* Sort */}
             <FilterSelect
               label="Sort by"
