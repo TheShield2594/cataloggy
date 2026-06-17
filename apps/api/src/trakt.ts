@@ -40,6 +40,7 @@ type TraktShowPayload = {
 };
 
 type TraktEpisodeHistoryPayload = {
+  id?: number;
   watched_at?: string;
   action?: string;
   episode?: {
@@ -55,6 +56,7 @@ type TraktEpisodeHistoryPayload = {
 };
 
 type TraktMovieHistoryPayload = {
+  id?: number;
   watched_at?: string;
   action?: string;
   movie?: {

@@ -5,7 +5,8 @@ import { upsertMetadata, fetchMetadata, syncMetadata } from "../lib/metadata.js"
 import { getOmdbApiKey, fetchOmdbRatings, upsertOmdbRatings } from "../lib/omdb.js";
 import { getRpdbApiKey, withRpdbPoster } from "../lib/rpdb.js";
 import { getMetadataType } from "../lib/types.js";
-import { castCache, seasonsCache } from "../lib/cache.js";
+import { castCache, seasonsCache, watchProvidersCache } from "../lib/cache.js";
+import { getRegionSetting } from "../lib/settings.js";
 
 const metadataRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { type: string; imdbId: string } }>(
@@ -126,6 +127,46 @@ const metadataRoutes: FastifyPluginAsync = async (app) => {
         return { seasons };
       } catch {
         return { seasons: [] };
+      }
+    }
+  );
+
+  app.get<{ Params: { type: string; imdbId: string } }>(
+    "/meta/:type/:imdbId/providers",
+    async (request) => {
+      const type = getMetadataType(request.params.type);
+      if (!type) return { providers: { link: null, flatrate: [], free: [], ads: [] } };
+
+      const imdbId = request.params.imdbId.trim();
+      const region = await getRegionSetting();
+      const cacheKey = `providers:${type}:${imdbId}:${region}`;
+      const cached = watchProvidersCache.get(cacheKey);
+      if (cached) return { providers: cached };
+
+      let meta = await prisma.metadata.findUnique({
+        where: { imdbId_type: { imdbId, type } },
+        select: { tmdbId: true },
+      });
+
+      if (!meta?.tmdbId) {
+        await fetchMetadata(type, imdbId).catch((err) =>
+          request.log.warn({ imdbId, type, err }, "Background metadata fetch failed")
+        );
+        meta = await prisma.metadata.findUnique({
+          where: { imdbId_type: { imdbId, type } },
+          select: { tmdbId: true },
+        });
+      }
+
+      if (!meta?.tmdbId) return { providers: { link: null, flatrate: [], free: [], ads: [] } };
+
+      try {
+        const tmdb = await getTmdb();
+        const providers = await tmdb.getWatchProviders(type, meta.tmdbId, region);
+        watchProvidersCache.set(cacheKey, providers);
+        return { providers };
+      } catch {
+        return { providers: { link: null, flatrate: [], free: [], ads: [] } };
       }
     }
   );

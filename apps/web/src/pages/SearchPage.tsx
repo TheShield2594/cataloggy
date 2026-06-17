@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronUp, Film, Filter, Plus, Search, SlidersHorizontal, Star, Tv, X, Heart } from "lucide-react";
-import { api, CatalogList, SearchResult } from "../api";
+import { Check, ChevronDown, ChevronUp, Film, Filter, MonitorPlay, Plus, Search, SlidersHorizontal, Star, Tv, X, Heart } from "lucide-react";
+import { api, CatalogList, SearchResult, WatchProvider } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import {
   useSearchFilters,
@@ -757,7 +757,53 @@ function ResultCard({
             ))}
           </div>
         )}
+        <WhereToWatchBadge type={result.type} imdbId={result.imdbId} />
       </div>
+    </div>
+  );
+}
+
+/* ─── Where to Watch Badge ────────────────────────────────── */
+
+function WhereToWatchBadge({ type, imdbId }: { type: SearchResult["type"]; imdbId: string }) {
+  const [providers, setProviders] = useState<WatchProvider[] | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    let cancelled = false;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return;
+        observer.disconnect();
+        api
+          .getWatchProviders(type, imdbId)
+          .then((r) => {
+            const merged = [...r.providers.flatrate, ...r.providers.free];
+            const deduped = merged.filter((p, i) => merged.findIndex((q) => q.id === p.id) === i);
+            if (!cancelled) setProviders(deduped);
+          })
+          .catch(() => { if (!cancelled) setProviders([]); });
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(node);
+    return () => { cancelled = true; observer.disconnect(); };
+  }, [type, imdbId]);
+
+  if (!providers || providers.length === 0) return <div ref={ref} />;
+
+  return (
+    <div ref={ref} className="mt-1.5 flex items-center gap-1" title={`Streaming on ${providers.map((p) => p.name).join(", ")}`}>
+      {providers.slice(0, 4).map((p) => (
+        p.logo ? (
+          <img key={p.id} src={p.logo} alt={p.name} className="h-4 w-4 rounded" />
+        ) : (
+          <MonitorPlay key={p.id} className="h-3.5 w-3.5 text-ink-400" />
+        )
+      ))}
     </div>
   );
 }

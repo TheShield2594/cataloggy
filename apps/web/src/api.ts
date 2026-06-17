@@ -184,6 +184,19 @@ export type CalendarEntry = {
   overview: string | null;
 };
 
+export type WatchProvider = {
+  id: number;
+  name: string;
+  logo: string | null;
+};
+
+export type WatchProviders = {
+  link: string | null;
+  flatrate: WatchProvider[];
+  free: WatchProvider[];
+  ads: WatchProvider[];
+};
+
 export type ItemListMembership = {
   listId: string;
   listName: string;
@@ -334,6 +347,9 @@ export const api = {
   getOmdbStatus() {
     return request<{ configured: boolean }>("/omdb/status");
   },
+  getTmdbStatus() {
+    return request<{ configured: boolean }>("/tmdb/status");
+  },
   setOmdbKey(apiKey: string) {
     return request<{ configured: boolean }>("/omdb/key", {
       method: "POST",
@@ -425,6 +441,11 @@ export const api = {
       `/meta/series/${encodeURIComponent(imdbId)}/seasons`
     );
   },
+  getWatchProviders(type: MediaType, imdbId: string) {
+    return request<{ providers: WatchProviders }>(
+      `/meta/${type}/${encodeURIComponent(imdbId)}/providers`
+    );
+  },
   getDropped(imdbId: string) {
     return request<{ dropped: boolean }>(`/show/${encodeURIComponent(imdbId)}/dropped`);
   },
@@ -487,5 +508,21 @@ export const api = {
   },
   getAiRecommendations(type: MediaType, limit = 20) {
     return request<{ metas: TrendingMeta[]; reasons?: Record<string, string> }>(`/recommendations/ai?type=${type}&limit=${limit}`);
+  },
+  // Push notifications
+  getPushPublicKey() {
+    return request<{ publicKey: string }>("/push/public-key");
+  },
+  pushSubscribe(subscription: { endpoint: string; keys: { p256dh: string; auth: string } }) {
+    return request<{ subscribed: boolean }>("/push/subscribe", {
+      method: "POST",
+      body: JSON.stringify(subscription),
+    });
+  },
+  pushUnsubscribe(endpoint: string) {
+    return request<{ subscribed: boolean }>("/push/unsubscribe", {
+      method: "POST",
+      body: JSON.stringify({ endpoint }),
+    });
   },
 };
