@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import rateLimit from "@fastify/rate-limit";
 import { prisma } from "./lib/prisma.js";
 import { applyCorsHeaders } from "./lib/cors.js";
 import { verifyToken } from "./lib/auth.js";
@@ -56,9 +57,30 @@ const normalizeProxyPath = (rawUrl: string) => {
   return rawUrl;
 };
 
+// Only trust X-Forwarded-* headers from explicitly configured proxies, so
+// request.ip (used as the rate-limit key) can't be spoofed by clients when
+// there's no reverse proxy in front of this service.
+const parseTrustProxy = (raw: string | undefined): boolean | string[] | undefined => {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (trimmed === "true") return true;
+  if (trimmed === "false") return false;
+  return trimmed.split(",").map((entry) => entry.trim()).filter(Boolean);
+};
+
 const app = Fastify({
   logger: true,
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   rewriteUrl: (request) => normalizeProxyPath(request.url ?? "/"),
+});
+
+// ─── Rate limiting ───
+
+app.register(rateLimit, {
+  global: true,
+  max: 200,
+  timeWindow: "1 minute",
+  keyGenerator: (request) => request.ip,
 });
 
 // ─── Global hooks ───
@@ -106,6 +128,11 @@ app.register(jellyfinWebhookRoutes);
 
 const start = async () => {
   const port = Number(process.env.PORT ?? 7000);
+
+  if (!process.env.WEBHOOK_SECRET?.trim()) {
+    app.log.warn("WEBHOOK_SECRET not set — webhook endpoints will reject all requests");
+  }
+
   await ensureDefaultWatchlist();
 
   if (TRAKT_POLL_INTERVAL_SEC > 0) {

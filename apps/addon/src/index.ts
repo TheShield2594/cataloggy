@@ -1,4 +1,5 @@
 import Fastify, { type FastifyRequest, type FastifyReply, type RawRequestDefaultExpression } from "fastify";
+import rateLimit from "@fastify/rate-limit";
 
 const parseProxyPathPrefixes = (raw: string | undefined, fallback: readonly string[]) => {
   const parsed = (raw ?? "")
@@ -40,9 +41,31 @@ const normalizeProxyPath = (rawUrl: string) => {
   return rawUrl;
 };
 
+// Only trust X-Forwarded-* headers from explicitly configured proxies, so
+// request.ip (used as the rate-limit key) can't be spoofed by clients when
+// there's no reverse proxy in front of this service.
+const parseTrustProxy = (raw: string | undefined): boolean | string[] | undefined => {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (trimmed === "true") return true;
+  if (trimmed === "false") return false;
+  return trimmed.split(",").map((entry) => entry.trim()).filter(Boolean);
+};
+
 const app = Fastify({
   logger: true,
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   rewriteUrl: (request: RawRequestDefaultExpression) => normalizeProxyPath(request.url ?? "/")
+});
+
+// ─── Rate limiting ───
+// All routes here are unauthenticated (Stremio doesn't send credentials), so apply a global limit.
+
+app.register(rateLimit, {
+  global: true,
+  max: 100,
+  timeWindow: "1 minute",
+  keyGenerator: (request) => request.ip,
 });
 
 // ─── API helpers ───

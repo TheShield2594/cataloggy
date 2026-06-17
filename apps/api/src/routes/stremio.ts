@@ -201,8 +201,10 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ─── Stremio Manifest ───
+  // Stricter limit than the global default since this route is unauthenticated.
+  const PUBLIC_STREMIO_RATE_LIMIT = { max: 60, timeWindow: "1 minute" };
 
-  app.get("/addon/stremio/manifest.json", async () => {
+  app.get("/addon/stremio/manifest.json", { config: { rateLimit: PUBLIC_STREMIO_RATE_LIMIT } }, async () => {
     const [config, aiConfigured] = await Promise.all([getAddonConfig(), isAiConfigured()]);
 
     const enabledCatalogs = config.enabledCatalogs.filter((id) => {
@@ -255,6 +257,7 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Params: { type: string; id: string }; Querystring: { skip?: string } }>(
     "/addon/stremio/:type/catalog/:id.json",
+    { config: { rateLimit: PUBLIC_STREMIO_RATE_LIMIT } },
     async (request, reply) => {
       const { type: rawType, id: catalogId } = request.params;
       const type = parseMetaType(rawType);
