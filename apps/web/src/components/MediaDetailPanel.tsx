@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  Calendar, Check, ChevronRight, Clock, Film, Radio, Star, Trash2, Tv, TvMinimalPlay, User, X,
+  Calendar, Check, ChevronRight, Clock, Film, MonitorPlay, Radio, Star, Trash2, Tv, TvMinimalPlay, User, X,
 } from "lucide-react";
-import { api, ApiError, CatalogList, CheckIn, MediaType, SearchResult, WatchEvent } from "../api";
+import { api, ApiError, CatalogList, CheckIn, MediaType, SearchResult, WatchEvent, WatchProviders } from "../api";
 
 /* ─── Rating Source Logos ─────────────────────────────────── */
 
@@ -486,6 +486,10 @@ export function DetailPanel({
   const [cast, setCast] = useState<Array<{ name: string; character: string; photo: string | null }>>([]);
   const [castLoading, setCastLoading] = useState(true);
 
+  // Where to watch
+  const [providers, setProviders] = useState<WatchProviders | null>(null);
+  const [providersLoading, setProvidersLoading] = useState(true);
+
   // Seasons (series only)
   const [seasons, setSeasons] = useState<Array<{ seasonNumber: number; name: string; episodeCount: number; airYear: number | null; poster: string | null }>>([]);
   const [seasonsLoading, setSeasonsLoading] = useState(item.type === "series");
@@ -508,11 +512,15 @@ export function DetailPanel({
     setSeasons([]); setSeasonsLoading(item.type === "series");
     setIsDropped(false); setDroppedLoading(item.type === "series");
     setActiveCheckin(null); setCheckinLoading(true);
+    setProviders(null); setProvidersLoading(true);
 
     const loads: Promise<void>[] = [
       api.getCast(item.type, item.imdbId).then((r) => {
         if (!cancelled) { setCast(r.cast); setCastLoading(false); }
       }).catch(() => { if (!cancelled) setCastLoading(false); }),
+      api.getWatchProviders(item.type, item.imdbId).then((r) => {
+        if (!cancelled) { setProviders(r.providers); setProvidersLoading(false); }
+      }).catch(() => { if (!cancelled) setProvidersLoading(false); }),
       api.getCheckin().then((r) => {
         if (!cancelled) {
           const c = r.checkin;
@@ -764,6 +772,31 @@ export function DetailPanel({
             <div>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-400">Overview</h3>
               <p className="text-sm leading-relaxed text-ink-300">{item.description}</p>
+            </div>
+          )}
+
+          {/* Where to watch */}
+          {!providersLoading && providers && (providers.flatrate.length > 0 || providers.free.length > 0) && (
+            <div>
+              <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-400">
+                <MonitorPlay className="h-3.5 w-3.5" /> Where to Watch
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {[...providers.flatrate, ...providers.free].map((p) => (
+                  <span
+                    key={p.id}
+                    title={p.name}
+                    className="flex items-center gap-1.5 rounded-full bg-ink-800/80 px-2.5 py-1 text-xs text-ink-300"
+                  >
+                    {p.logo ? (
+                      <img src={p.logo} alt="" className="h-4 w-4 rounded" />
+                    ) : (
+                      <MonitorPlay className="h-3.5 w-3.5 text-ink-400" />
+                    )}
+                    {p.name}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
 

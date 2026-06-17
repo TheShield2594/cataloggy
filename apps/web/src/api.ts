@@ -184,6 +184,19 @@ export type CalendarEntry = {
   overview: string | null;
 };
 
+export type WatchProvider = {
+  id: number;
+  name: string;
+  logo: string | null;
+};
+
+export type WatchProviders = {
+  link: string | null;
+  flatrate: WatchProvider[];
+  free: WatchProvider[];
+  ads: WatchProvider[];
+};
+
 export type ItemListMembership = {
   listId: string;
   listName: string;
@@ -423,6 +436,11 @@ export const api = {
   getSeasons(imdbId: string) {
     return request<{ seasons: Array<{ seasonNumber: number; name: string; episodeCount: number; airYear: number | null; poster: string | null }> }>(
       `/meta/series/${encodeURIComponent(imdbId)}/seasons`
+    );
+  },
+  getWatchProviders(type: MediaType, imdbId: string) {
+    return request<{ providers: WatchProviders }>(
+      `/meta/${type}/${encodeURIComponent(imdbId)}/providers`
     );
   },
   getDropped(imdbId: string) {
