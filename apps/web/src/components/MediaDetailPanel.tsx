@@ -633,7 +633,7 @@ export function DetailPanel({
     <>
       <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
-      <aside className="fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col overflow-y-auto border-l border-ink-800/60 bg-[#0d0b0a] shadow-2xl sm:w-[28rem]">
+      <aside className="fixed right-0 top-0 z-50 flex h-full w-full flex-col overflow-y-auto border-l border-ink-800/60 bg-[#0d0b0a] shadow-2xl sm:max-w-lg md:max-w-2xl lg:max-w-3xl">
         {/* Close */}
         <button
           type="button" onClick={onClose}
@@ -644,7 +644,7 @@ export function DetailPanel({
         </button>
 
         {/* Poster */}
-        <div className="relative w-full" style={{ aspectRatio: "2 / 3", maxHeight: "50vh" }}>
+        <div className="relative z-0 w-full" style={{ aspectRatio: "2 / 3", maxHeight: "50vh" }}>
           {item.poster ? (
             <img src={item.poster} alt={item.name} className="h-full w-full object-cover" />
           ) : (
@@ -656,7 +656,7 @@ export function DetailPanel({
         </div>
 
         {/* Content */}
-        <div className="-mt-16 relative z-10 flex-1 space-y-6 px-6 pb-8">
+        <div className="-mt-16 relative z-20 flex-1 space-y-6 px-6 pb-8">
 
           {/* Title + badges */}
           <div>
