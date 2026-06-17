@@ -183,9 +183,10 @@ export class TraktClient {
   ): Promise<T[]> {
     const items: T[] = [];
     let page = 1;
-    let pageCount = 1;
+    let hasMore = true;
+    let reachedMaxPages = false;
 
-    while (page <= pageCount && page <= maxPages) {
+    while (hasMore && page <= maxPages) {
       const response = await this.request(path, {
         method: "GET",
         headers: {
@@ -208,20 +209,23 @@ export class TraktClient {
       items.push(...pageItems);
 
       const totalPagesHeader = response.headers.get("x-pagination-page-count");
-      const parsedTotalPages = totalPagesHeader ? Number.parseInt(totalPagesHeader, 10) : NaN;
+      const totalPages = totalPagesHeader ? Number.parseInt(totalPagesHeader, 10) : NaN;
 
-      if (!Number.isNaN(parsedTotalPages) && parsedTotalPages > 0) {
-        pageCount = Math.min(parsedTotalPages, maxPages);
-      } else if (pageItems.length < 100) {
-        pageCount = page;
+      if (!Number.isNaN(totalPages) && totalPages > 0) {
+        hasMore = page < Math.min(totalPages, maxPages);
+        reachedMaxPages = totalPages > maxPages && !hasMore;
       } else {
-        pageCount = Math.min(page + 1, maxPages);
+        hasMore = pageItems.length >= 100;
       }
 
       page += 1;
+
+      if (hasMore && page > maxPages) {
+        reachedMaxPages = true;
+      }
     }
 
-    if (pageCount >= maxPages) {
+    if (reachedMaxPages) {
       logger.warn({ path, maxPages }, "Reached maximum Trakt pagination limit");
     }
 
