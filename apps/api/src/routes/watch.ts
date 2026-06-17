@@ -4,6 +4,10 @@ import { prisma } from "../lib/prisma.js";
 import { upsertSeriesProgressIfNewer } from "../lib/series-progress.js";
 import { resolveProfile } from "../lib/profile.js";
 
+function serializeWatchEvent<T extends { traktHistoryId: bigint | null }>(event: T) {
+  return { ...event, traktHistoryId: event.traktHistoryId != null ? event.traktHistoryId.toString() : null };
+}
+
 const watchRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", resolveProfile);
 
@@ -84,7 +88,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
         where: { id: existing.id },
         data: { plays: existing.plays + 1 },
       });
-      return reply.code(200).send({ watchEvent: updated });
+      return reply.code(200).send({ watchEvent: serializeWatchEvent(updated) });
     }
 
     const watchEvent = await prisma.watchEvent.create({
@@ -99,7 +103,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    return reply.code(201).send({ watchEvent });
+    return reply.code(201).send({ watchEvent: serializeWatchEvent(watchEvent) });
   });
 
   app.delete<{ Params: { eventId: string } }>("/watch/:eventId", async (request, reply) => {
@@ -193,7 +197,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
         const lookupId =
           event.type === "episode" && event.seriesImdbId ? event.seriesImdbId : event.imdbId;
         const meta = metadataByImdbId.get(lookupId);
-        return { ...event, name: meta?.name ?? null, poster: meta?.poster ?? null };
+        return { ...serializeWatchEvent(event), name: meta?.name ?? null, poster: meta?.poster ?? null };
       });
 
       return { history };
