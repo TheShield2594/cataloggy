@@ -7,6 +7,7 @@ import { getAiRecommendations, isAiConfigured } from "./lib/ai.js";
 import { trendingCacheDeletePrefix } from "./lib/cache.js";
 import { pollTraktHistory } from "./lib/trakt-client.js";
 import { ensureDefaultWatchlist } from "./lib/watchlist.js";
+import { checkUpcomingEpisodesAndNotify } from "./lib/notify-episodes.js";
 import { cleanupStaleSessions, SCROBBLE_CLEANUP_INTERVAL_MS } from "./routes/scrobble.js";
 
 // Route modules
@@ -25,11 +26,13 @@ import aiRoutes from "./routes/ai.js";
 import stremioRoutes from "./routes/stremio.js";
 import traktRoutes from "./routes/trakt.js";
 import scrobbleRoutes from "./routes/scrobble.js";
+import pushRoutes from "./routes/push.js";
 import plexWebhookRoutes from "./routes/webhooks/plex.js";
 import jellyfinWebhookRoutes from "./routes/webhooks/jellyfin.js";
 
 const TRAKT_POLL_INTERVAL_SEC = Number(process.env.TRAKT_POLL_INTERVAL_SEC ?? 300);
 const AI_REFRESH_INTERVAL_SEC = Number(process.env.AI_REFRESH_INTERVAL_SEC ?? 86400);
+const NOTIFICATION_CHECK_INTERVAL_SEC = Number(process.env.NOTIFICATION_CHECK_INTERVAL_SEC ?? 3600);
 
 const parseProxyPathPrefixes = (raw: string | undefined, fallback: readonly string[]) => {
   const parsed = (raw ?? "")
@@ -121,6 +124,7 @@ app.register(aiRoutes);
 app.register(stremioRoutes);
 app.register(traktRoutes);
 app.register(scrobbleRoutes);
+app.register(pushRoutes);
 app.register(plexWebhookRoutes);
 app.register(jellyfinWebhookRoutes);
 
@@ -150,6 +154,18 @@ const start = async () => {
       app.log.error(error, "Scrobble session cleanup failed");
     });
   }, SCROBBLE_CLEANUP_INTERVAL_MS);
+
+  if (NOTIFICATION_CHECK_INTERVAL_SEC > 0) {
+    setInterval(() => {
+      void checkUpcomingEpisodesAndNotify(app.log).catch((error) => {
+        app.log.error(error, "Scheduled upcoming-episode notification check failed");
+      });
+    }, NOTIFICATION_CHECK_INTERVAL_SEC * 1000);
+  } else {
+    app.log.info(
+      "Scheduled episode notification check disabled because NOTIFICATION_CHECK_INTERVAL_SEC is set to 0"
+    );
+  }
 
   const refreshAiRecommendations = async () => {
     if (!(await isAiConfigured())) return;

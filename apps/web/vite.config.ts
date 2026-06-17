@@ -11,6 +11,12 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.js",
+      injectManifest: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"]
+      },
       includeAssets: ["favicon.ico", "icons/icon-192.png", "icons/icon-512.png"],
       manifest: {
         name: "Cataloggy",
@@ -32,10 +38,6 @@ export default defineConfig({
             purpose: "any maskable"
           }
         ]
-      },
-      workbox: {
-        navigateFallback: "/index.html",
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"]
       }
     })
   ],
