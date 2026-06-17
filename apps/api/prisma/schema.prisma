@@ -39,10 +39,18 @@ enum ScrobbleStatus {
   stopped
 }
 
-model User {
+model Profile {
   id        String   @id @default(uuid()) @db.Uuid
-  email     String   @unique
+  name      String
+  pinHash   String?
   createdAt DateTime @default(now()) @db.Timestamp(6)
+
+  lists             List[]
+  watchEvents       WatchEvent[]
+  seriesProgress    SeriesProgress[]
+  notifiedEpisodes  NotifiedEpisode[]
+  scrobbleSessions  ScrobbleSession[]
+  pushSubscriptions PushSubscription[]
 }
 
 model Item {
@@ -69,6 +77,11 @@ model List {
   kind      ListKind
   createdAt DateTime   @default(now()) @db.Timestamp(6)
   items     ListItem[]
+
+  profileId String  @db.Uuid
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
 }
 
 model ListItem {
@@ -93,15 +106,24 @@ model WatchEvent {
   watchedAt      DateTime       @db.Timestamptz(6)
   plays          Int            @default(1)
   traktHistoryId BigInt?        @unique
+
+  profileId String  @db.Uuid
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
 }
 
 model SeriesProgress {
-  seriesImdbId String   @id
-  lastSeason   Int
-  lastEpisode  Int
+  seriesImdbId  String
+  lastSeason    Int
+  lastEpisode   Int
   lastWatchedAt DateTime @db.Timestamptz(6)
-  updatedAt    DateTime @db.Timestamptz(6)
+  updatedAt     DateTime @db.Timestamptz(6)
 
+  profileId String  @db.Uuid
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@id([profileId, seriesImdbId])
   @@index([lastWatchedAt], name: "idx_seriesprogress_lastWatchedAt")
 }
 
@@ -117,6 +139,11 @@ model PushSubscription {
   p256dh    String
   auth      String
   createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  profileId String  @db.Uuid
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
 }
 
 model NotifiedEpisode {
@@ -126,7 +153,10 @@ model NotifiedEpisode {
   episode      Int
   notifiedAt   DateTime @default(now()) @db.Timestamptz(6)
 
-  @@unique([seriesImdbId, season, episode])
+  profileId String  @db.Uuid
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, seriesImdbId, season, episode])
 }
 
 model TraktToken {
@@ -149,7 +179,11 @@ model ScrobbleSession {
   startedAt    DateTime        @default(now()) @db.Timestamptz(6)
   updatedAt    DateTime        @updatedAt @db.Timestamptz(6)
 
+  profileId String  @db.Uuid
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
   @@index([imdbId, season, episode, status])
+  @@index([profileId])
 }
 
 model Metadata {

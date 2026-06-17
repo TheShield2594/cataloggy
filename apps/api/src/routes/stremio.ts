@@ -14,6 +14,7 @@ import {
   getCustomListMetas,
 } from "../lib/stremio-helpers.js";
 import { upsertMetadata } from "../lib/metadata.js";
+import { getDefaultProfileId } from "../lib/profile.js";
 import { parseMetaType, parseCatalogLimit, UUID_V4_PATTERN } from "../lib/types.js";
 import type { StremioMetaPreview, StremioMetaType } from "../lib/types.js";
 import type { MetadataPayload } from "../tmdb.js";
@@ -75,37 +76,55 @@ const DISCOVERY_CATALOG_LABELS: Record<string, string> = {
 };
 
 const stremioRoutes: FastifyPluginAsync = async (app) => {
+  // The Stremio addon protocol (and the legacy catalog routes below) has no
+  // concept of multiple profiles — there's no header or auth flow to carry
+  // one through. We approximate multi-profile support by accepting an
+  // optional `profileId` query string param (which a per-profile addon
+  // manifest URL could embed) and otherwise falling back to the default
+  // (oldest) profile, so existing single-profile installs keep working
+  // unchanged.
+  const resolveStremioProfileId = async (queryProfileId: unknown): Promise<string> => {
+    if (typeof queryProfileId === "string" && UUID_V4_PATTERN.test(queryProfileId)) {
+      return queryProfileId;
+    }
+    return getDefaultProfileId();
+  };
+
   // ─── Legacy stremio routes ───
 
-  app.get<{ Querystring: { limit?: string } }>(
+  app.get<{ Querystring: { limit?: string; profileId?: string } }>(
     "/stremio/catalog/my_watchlist_movies",
     async (request) => {
       const limit = parseCatalogLimit(request.query.limit);
-      return { metas: await getWatchlistMetas("movie", limit) };
+      const profileId = await resolveStremioProfileId(request.query.profileId);
+      return { metas: await getWatchlistMetas("movie", limit, profileId) };
     }
   );
 
-  app.get<{ Querystring: { limit?: string } }>(
+  app.get<{ Querystring: { limit?: string; profileId?: string } }>(
     "/stremio/catalog/my_watchlist_series",
     async (request) => {
       const limit = parseCatalogLimit(request.query.limit);
-      return { metas: await getWatchlistMetas("series", limit) };
+      const profileId = await resolveStremioProfileId(request.query.profileId);
+      return { metas: await getWatchlistMetas("series", limit, profileId) };
     }
   );
 
-  app.get<{ Querystring: { limit?: string } }>(
+  app.get<{ Querystring: { limit?: string; profileId?: string } }>(
     "/stremio/catalog/my_recent_movies",
     async (request) => {
       const limit = parseCatalogLimit(request.query.limit);
-      return { metas: await getRecentMetas("movie", limit) };
+      const profileId = await resolveStremioProfileId(request.query.profileId);
+      return { metas: await getRecentMetas("movie", limit, profileId) };
     }
   );
 
-  app.get<{ Querystring: { limit?: string } }>(
+  app.get<{ Querystring: { limit?: string; profileId?: string } }>(
     "/stremio/catalog/my_continue_series",
     async (request) => {
       const limit = parseCatalogLimit(request.query.limit);
-      return { metas: await getContinueMetas(limit) };
+      const profileId = await resolveStremioProfileId(request.query.profileId);
+      return { metas: await getContinueMetas(limit, profileId) };
     }
   );
 
@@ -135,28 +154,31 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
 
   // ─── Watchlist / Recent / Continue ───
 
-  app.get<{ Querystring: { type?: string; limit?: string } }>(
+  app.get<{ Querystring: { type?: string; limit?: string; profileId?: string } }>(
     "/watchlist",
     async (request, reply) => {
       const type = parseMetaType(request.query.type);
       if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
       const limit = parseCatalogLimit(request.query.limit);
-      return { metas: await getWatchlistMetas(type, limit) };
+      const profileId = await resolveStremioProfileId(request.query.profileId);
+      return { metas: await getWatchlistMetas(type, limit, profileId) };
     }
   );
 
-  app.get<{ Querystring: { limit?: string } }>("/continue", async (request) => {
+  app.get<{ Querystring: { limit?: string; profileId?: string } }>("/continue", async (request) => {
     const limit = parseCatalogLimit(request.query.limit);
-    return { metas: await getContinueMetas(limit) };
+    const profileId = await resolveStremioProfileId(request.query.profileId);
+    return { metas: await getContinueMetas(limit, profileId) };
   });
 
-  app.get<{ Querystring: { type?: string; limit?: string } }>(
+  app.get<{ Querystring: { type?: string; limit?: string; profileId?: string } }>(
     "/recent",
     async (request, reply) => {
       const type = parseMetaType(request.query.type);
       if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
       const limit = parseCatalogLimit(request.query.limit);
-      return { metas: await getRecentMetas(type, limit) };
+      const profileId = await resolveStremioProfileId(request.query.profileId);
+      return { metas: await getRecentMetas(type, limit, profileId) };
     }
   );
 
@@ -255,7 +277,7 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
 
   // ─── Stremio Catalog Handler ───
 
-  app.get<{ Params: { type: string; id: string }; Querystring: { skip?: string } }>(
+  app.get<{ Params: { type: string; id: string }; Querystring: { skip?: string; profileId?: string } }>(
     "/addon/stremio/:type/catalog/:id.json",
     { config: { rateLimit: PUBLIC_STREMIO_RATE_LIMIT } },
     async (request, reply) => {
@@ -267,19 +289,23 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
 
       if (catalogId === "my_watchlist_movies") {
         if (type !== "movie") return reply.code(400).send({ metas: [] });
-        return { metas: await getWatchlistMetas("movie", limit) };
+        const profileId = await resolveStremioProfileId(request.query.profileId);
+        return { metas: await getWatchlistMetas("movie", limit, profileId) };
       }
       if (catalogId === "my_watchlist_series") {
         if (type !== "series") return reply.code(400).send({ metas: [] });
-        return { metas: await getWatchlistMetas("series", limit) };
+        const profileId = await resolveStremioProfileId(request.query.profileId);
+        return { metas: await getWatchlistMetas("series", limit, profileId) };
       }
       if (catalogId === "my_recent_movies") {
         if (type !== "movie") return reply.code(400).send({ metas: [] });
-        return { metas: await getRecentMetas("movie", limit) };
+        const profileId = await resolveStremioProfileId(request.query.profileId);
+        return { metas: await getRecentMetas("movie", limit, profileId) };
       }
       if (catalogId === "my_continue_series") {
         if (type !== "series") return reply.code(400).send({ metas: [] });
-        return { metas: await getContinueMetas(limit) };
+        const profileId = await resolveStremioProfileId(request.query.profileId);
+        return { metas: await getContinueMetas(limit, profileId) };
       }
 
       if (catalogId.startsWith("list:")) {

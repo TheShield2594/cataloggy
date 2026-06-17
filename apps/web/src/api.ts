@@ -8,11 +8,13 @@ export class ApiError extends Error {
 const API_BASE_DEFAULT = import.meta.env.VITE_API_BASE ?? "http://localhost:7000";
 const API_BASE_OVERRIDE_KEY = "cataloggy_api_base_override";
 const TOKEN_KEY = "cataloggy_token";
+const PROFILE_ID_KEY = "cataloggy_profile_id";
 
 export const runtimeConfig = {
   apiBaseDefault: API_BASE_DEFAULT,
   apiBaseOverrideKey: API_BASE_OVERRIDE_KEY,
   tokenKey: TOKEN_KEY,
+  profileIdKey: PROFILE_ID_KEY,
   getApiBaseOverride() {
     return window.localStorage.getItem(API_BASE_OVERRIDE_KEY)?.trim() ?? "";
   },
@@ -39,6 +41,21 @@ export const runtimeConfig = {
     }
 
     window.localStorage.setItem(TOKEN_KEY, trimmed);
+  },
+  getProfileId() {
+    return window.localStorage.getItem(PROFILE_ID_KEY) ?? "";
+  },
+  setProfileId(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      window.localStorage.removeItem(PROFILE_ID_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(PROFILE_ID_KEY, trimmed);
+  },
+  clearProfileId() {
+    window.localStorage.removeItem(PROFILE_ID_KEY);
   }
 };
 
@@ -205,6 +222,12 @@ export type ItemListMembership = {
   addedAt: string;
 };
 
+export type Profile = {
+  id: string;
+  name: string;
+  hasPin: boolean;
+};
+
 const authHeaders = (hasBody: boolean) => {
   const token = runtimeConfig.getToken();
   const headers: Record<string, string> = {
@@ -212,6 +235,10 @@ const authHeaders = (hasBody: boolean) => {
   };
   if (hasBody) {
     headers["Content-Type"] = "application/json";
+  }
+  const profileId = runtimeConfig.getProfileId();
+  if (profileId) {
+    headers["x-profile-id"] = profileId;
   }
   return headers;
 };
@@ -524,5 +551,24 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ endpoint }),
     });
+  },
+  // Profiles
+  getProfiles() {
+    return request<{ profiles: Profile[] }>("/profiles");
+  },
+  createProfile(payload: { name: string; pin?: string }) {
+    return request<{ profile: Profile }>("/profiles", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  verifyProfile(profileId: string, pin?: string) {
+    return request<{ id: string; name: string }>(`/profiles/${encodeURIComponent(profileId)}/verify`, {
+      method: "POST",
+      body: JSON.stringify(pin ? { pin } : {}),
+    });
+  },
+  deleteProfile(profileId: string) {
+    return request<void>(`/profiles/${encodeURIComponent(profileId)}`, { method: "DELETE" });
   },
 };

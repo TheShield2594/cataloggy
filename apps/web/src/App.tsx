@@ -5,6 +5,7 @@ import { runtimeConfig } from "./api";
 import { InstallButton } from "./components/InstallButton";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ListsPage } from "./pages/ListsPage";
+import { ProfileSwitcher } from "./pages/ProfileSwitcher";
 import { SearchPage } from "./pages/SearchPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupWizard } from "./pages/SetupWizard";
@@ -21,9 +22,21 @@ const navItems = [
 export function App() {
   const location = useLocation();
   const [needsSetup, setNeedsSetup] = useState(() => !runtimeConfig.getToken());
+  const [needsProfile, setNeedsProfile] = useState(() => !runtimeConfig.getProfileId());
 
   if (needsSetup) {
-    return <SetupWizard onComplete={() => setNeedsSetup(false)} />;
+    return (
+      <SetupWizard
+        onComplete={() => {
+          setNeedsSetup(false);
+          setNeedsProfile(!runtimeConfig.getProfileId());
+        }}
+      />
+    );
+  }
+
+  if (needsProfile) {
+    return <ProfileSwitcher onSelected={() => setNeedsProfile(false)} />;
   }
 
   return (

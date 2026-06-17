@@ -6,6 +6,7 @@ import type { RecordWatchParams } from "./types.js";
 
 export const recordWatchEvent = async (params: RecordWatchParams) => {
   const { type, imdbId, seriesImdbId, season, episode, watchedAt, source, request: req } = params;
+  const profileId = req.profileId!;
 
   const dayStart = new Date(watchedAt);
   dayStart.setUTCHours(0, 0, 0, 0);
@@ -18,6 +19,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
     const watchEvent = await prisma.$transaction(async (tx) => {
       const existing = await tx.watchEvent.findFirst({
         where: {
+          profileId,
           type: "episode",
           seriesImdbId: resolvedSeriesImdbId,
           season: season ?? null,
@@ -46,6 +48,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
           season: season ?? null,
           episode: episode ?? null,
           watchedAt,
+          profileId,
         },
       });
       req.log.info({ imdbId: resolvedSeriesImdbId, season, episode }, `${source} scrobble: episode recorded`);
@@ -53,7 +56,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
     });
 
     if (season != null && episode != null) {
-      await upsertSeriesProgressIfNewer(resolvedSeriesImdbId, {
+      await upsertSeriesProgressIfNewer(profileId, resolvedSeriesImdbId, {
         lastSeason: season,
         lastEpisode: episode,
         lastWatchedAt: watchedAt,
@@ -77,7 +80,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
 
   const watchEvent = await prisma.$transaction(async (tx) => {
     const existing = await tx.watchEvent.findFirst({
-      where: { imdbId, type: "movie", watchedAt: { gte: dayStart, lte: dayEnd } },
+      where: { profileId, imdbId, type: "movie", watchedAt: { gte: dayStart, lte: dayEnd } },
     });
 
     if (existing) {
@@ -90,7 +93,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
     }
 
     const created = await tx.watchEvent.create({
-      data: { type: "movie", imdbId, watchedAt },
+      data: { type: "movie", imdbId, watchedAt, profileId },
     });
     req.log.info({ imdbId }, `${source} scrobble: movie recorded`);
     return created;

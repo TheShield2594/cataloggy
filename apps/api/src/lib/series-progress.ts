@@ -15,11 +15,13 @@ export const isIncomingSeriesProgressNewer = (
 };
 
 export const upsertSeriesProgressIfNewer = async (
+  profileId: string,
   seriesImdbId: string,
   incoming: SeriesProgressCandidate
 ) => {
   const { count } = await prisma.seriesProgress.updateMany({
     where: {
+      profileId,
       seriesImdbId,
       OR: [
         { lastWatchedAt: { lt: incoming.lastWatchedAt } },
@@ -47,6 +49,7 @@ export const upsertSeriesProgressIfNewer = async (
   try {
     await prisma.seriesProgress.create({
       data: {
+        profileId,
         seriesImdbId,
         lastSeason: incoming.lastSeason,
         lastEpisode: incoming.lastEpisode,

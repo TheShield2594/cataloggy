@@ -43,8 +43,8 @@ export const buildMetasFromIds = async (
   });
 };
 
-export const getWatchlistMetas = async (type: StremioMetaType, limit: number) => {
-  const watchlist = await getDefaultWatchlist();
+export const getWatchlistMetas = async (type: StremioMetaType, limit: number, profileId: string) => {
+  const watchlist = await getDefaultWatchlist(profileId);
   const listItemType = type === "movie" ? ListItemType.movie : ListItemType.series;
 
   const watchlistItems = await prisma.listItem.findMany({
@@ -60,11 +60,11 @@ export const getWatchlistMetas = async (type: StremioMetaType, limit: number) =>
   );
 };
 
-export const getRecentMetas = async (type: StremioMetaType, limit: number) => {
+export const getRecentMetas = async (type: StremioMetaType, limit: number, profileId: string) => {
   if (type === "movie") {
     const grouped = await prisma.watchEvent.groupBy({
       by: ["imdbId"],
-      where: { type: "movie" },
+      where: { type: "movie", profileId },
       _max: { watchedAt: true },
       orderBy: { _max: { watchedAt: "desc" } },
       take: limit,
@@ -74,7 +74,7 @@ export const getRecentMetas = async (type: StremioMetaType, limit: number) => {
 
   const grouped = await prisma.watchEvent.groupBy({
     by: ["seriesImdbId"],
-    where: { type: "episode", seriesImdbId: { not: null } },
+    where: { type: "episode", seriesImdbId: { not: null }, profileId },
     _max: { watchedAt: true },
     orderBy: { _max: { watchedAt: "desc" } },
     take: limit,
@@ -87,8 +87,9 @@ export const getRecentMetas = async (type: StremioMetaType, limit: number) => {
   return buildMetasFromIds(ids, type);
 };
 
-export const getContinueMetas = async (limit: number): Promise<ContinueMetaPreview[]> => {
+export const getContinueMetas = async (limit: number, profileId: string): Promise<ContinueMetaPreview[]> => {
   const seriesProgress = await prisma.seriesProgress.findMany({
+    where: { profileId },
     orderBy: { lastWatchedAt: "desc" },
     take: limit,
     select: { seriesImdbId: true, lastSeason: true, lastEpisode: true, lastWatchedAt: true },

@@ -2,8 +2,11 @@ import { WatchEventType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { upsertSeriesProgressIfNewer } from "../lib/series-progress.js";
+import { resolveProfile } from "../lib/profile.js";
 
 const watchRoutes: FastifyPluginAsync = async (app) => {
+  app.addHook("preHandler", resolveProfile);
+
   app.post<{ Body: unknown }>("/watch", async (request, reply) => {
     if (!request.body || typeof request.body !== "object") {
       return reply.code(400).send({ error: "type and imdbId are required" });
@@ -65,6 +68,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     const seriesImdbId = body.seriesImdbId ? (body.seriesImdbId as string).trim() : null;
     const season = (body.season as number | undefined) ?? null;
     const episode = (body.episode as number | undefined) ?? null;
+    const profileId = request.profileId!;
 
     const dayStart = new Date(watchedAt);
     dayStart.setUTCHours(0, 0, 0, 0);
@@ -72,7 +76,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     dayEnd.setUTCHours(23, 59, 59, 999);
 
     const existing = await prisma.watchEvent.findFirst({
-      where: { imdbId, season, episode, watchedAt: { gte: dayStart, lte: dayEnd } },
+      where: { profileId, imdbId, season, episode, watchedAt: { gte: dayStart, lte: dayEnd } },
     });
 
     if (existing) {
@@ -84,11 +88,11 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const watchEvent = await prisma.watchEvent.create({
-      data: { type, imdbId, seriesImdbId, season, episode, watchedAt },
+      data: { type, imdbId, seriesImdbId, season, episode, watchedAt, profileId },
     });
 
     if (type === "episode" && seriesImdbId && season !== null && episode !== null) {
-      await upsertSeriesProgressIfNewer(seriesImdbId, {
+      await upsertSeriesProgressIfNewer(profileId, seriesImdbId, {
         lastSeason: season,
         lastEpisode: episode,
         lastWatchedAt: watchedAt,
@@ -100,9 +104,10 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { eventId: string } }>("/watch/:eventId", async (request, reply) => {
     const { eventId } = request.params;
+    const profileId = request.profileId!;
     try {
       await prisma.$transaction(async (tx) => {
-        const event = await tx.watchEvent.findUnique({ where: { id: eventId } });
+        const event = await tx.watchEvent.findFirst({ where: { id: eventId, profileId } });
         if (!event) throw Object.assign(new Error("not found"), { code: "NOT_FOUND" });
 
         await tx.watchEvent.delete({ where: { id: eventId } });
@@ -110,6 +115,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
         if (event.type === "episode" && event.seriesImdbId) {
           const latest = await tx.watchEvent.findFirst({
             where: {
+              profileId,
               seriesImdbId: event.seriesImdbId,
               type: "episode",
               season: { not: null },
@@ -120,7 +126,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
 
           if (latest && latest.season != null && latest.episode != null) {
             await tx.seriesProgress.upsert({
-              where: { seriesImdbId: event.seriesImdbId },
+              where: { profileId_seriesImdbId: { profileId, seriesImdbId: event.seriesImdbId } },
               update: {
                 lastSeason: latest.season,
                 lastEpisode: latest.episode,
@@ -128,6 +134,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
                 updatedAt: new Date(),
               },
               create: {
+                profileId,
                 seriesImdbId: event.seriesImdbId,
                 lastSeason: latest.season,
                 lastEpisode: latest.episode,
@@ -136,7 +143,9 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
               },
             });
           } else {
-            await tx.seriesProgress.deleteMany({ where: { seriesImdbId: event.seriesImdbId } });
+            await tx.seriesProgress.deleteMany({
+              where: { profileId, seriesImdbId: event.seriesImdbId },
+            });
           }
         }
       });
@@ -156,6 +165,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
       const offset = Math.max(Number(request.query.offset) || 0, 0);
 
       const events = await prisma.watchEvent.findMany({
+        where: { profileId: request.profileId! },
         orderBy: { watchedAt: "desc" },
         take: limit,
         skip: offset,
@@ -190,10 +200,19 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
-  app.get("/watch/stats", async () => {
+  app.get("/watch/stats", async (request) => {
+    const profileId = request.profileId!;
     const [movieAgg, episodeAgg] = await Promise.all([
-      prisma.watchEvent.aggregate({ where: { type: "movie" }, _count: true, _sum: { plays: true } }),
-      prisma.watchEvent.aggregate({ where: { type: "episode" }, _count: true, _sum: { plays: true } }),
+      prisma.watchEvent.aggregate({
+        where: { profileId, type: "movie" },
+        _count: true,
+        _sum: { plays: true },
+      }),
+      prisma.watchEvent.aggregate({
+        where: { profileId, type: "episode" },
+        _count: true,
+        _sum: { plays: true },
+      }),
     ]);
 
     return {
@@ -203,7 +222,8 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     };
   });
 
-  app.get("/watch/stats/detailed", async () => {
+  app.get("/watch/stats/detailed", async (request) => {
+    const profileId = request.profileId!;
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setUTCMonth(twelveMonthsAgo.getUTCMonth() - 12);
     twelveMonthsAgo.setUTCDate(1);
@@ -211,20 +231,20 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
 
     const [monthlyEvents, distinctMovieIds, distinctSeriesIds, watchDates] = await Promise.all([
       prisma.watchEvent.findMany({
-        where: { watchedAt: { gte: twelveMonthsAgo } },
+        where: { profileId, watchedAt: { gte: twelveMonthsAgo } },
         select: { type: true, watchedAt: true, plays: true },
       }),
       prisma.watchEvent.findMany({
-        where: { type: "movie" },
+        where: { profileId, type: "movie" },
         select: { imdbId: true },
         distinct: ["imdbId"],
       }),
       prisma.watchEvent.findMany({
-        where: { type: "episode", seriesImdbId: { not: null } },
+        where: { profileId, type: "episode", seriesImdbId: { not: null } },
         select: { seriesImdbId: true },
         distinct: ["seriesImdbId"],
       }),
-      prisma.watchEvent.findMany({ select: { watchedAt: true } }),
+      prisma.watchEvent.findMany({ where: { profileId }, select: { watchedAt: true } }),
     ]);
 
     const monthlyMap = new Map<string, { movies: number; episodes: number }>();
