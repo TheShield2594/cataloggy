@@ -482,6 +482,13 @@ export function DetailPanel({
 }) {
   const listNames = item.lists.map((id) => listMap.get(id)?.name).filter(Boolean) as string[];
 
+  // Lock background scroll while the panel is open
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, []);
+
   // Cast
   const [cast, setCast] = useState<Array<{ name: string; character: string; photo: string | null }>>([]);
   const [castLoading, setCastLoading] = useState(true);
@@ -633,7 +640,7 @@ export function DetailPanel({
     <>
       <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
-      <aside className="fixed right-0 top-0 z-50 flex h-full w-full flex-col overflow-y-auto border-l border-ink-800/60 bg-[#0d0b0a] shadow-2xl sm:max-w-lg md:max-w-2xl lg:max-w-3xl">
+      <aside className="fixed right-0 top-0 z-50 flex h-full w-full flex-col overflow-y-auto border-l border-ink-800/60 bg-[#0d0b0a] shadow-2xl sm:w-[90vw] sm:max-w-3xl md:max-w-4xl lg:max-w-5xl">
         {/* Close */}
         <button
           type="button" onClick={onClose}
@@ -656,7 +663,7 @@ export function DetailPanel({
         </div>
 
         {/* Content */}
-        <div className="-mt-16 relative z-20 flex-1 space-y-6 px-6 pb-8">
+        <div className="-mt-16 relative z-20 flex-1 space-y-6 px-6 pb-16">
 
           {/* Title + badges */}
           <div>
