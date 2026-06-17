@@ -23,12 +23,12 @@ function WizardShell({ step, children }: { step: Step; children: React.ReactNode
           {steps.map((s, i) => (
             <span
               key={s}
-              className={`h-1.5 w-8 rounded-full transition-colors ${i <= index ? "bg-claw-500" : "bg-ink-800"}`}
+              className={`h-1.5 w-8 rounded-full transition-colors ${i <= index ? "bg-claw-500" : "bg-ink-100"}`}
             />
           ))}
         </div>
 
-        <div className="rounded-2xl border border-ink-700/60 bg-[#171310] p-6 shadow-xl">
+        <div className="rounded-2xl border border-ink-100 bg-white p-6 shadow-sm">
           {children}
         </div>
       </div>
@@ -70,7 +70,7 @@ function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => vo
     <form onSubmit={submit} className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold">Welcome to Cataloggy</h2>
-        <p className="mt-1 text-sm text-ink-400 leading-relaxed">
+        <p className="mt-1 text-sm text-ink-500 leading-relaxed">
           Enter the API token configured on your Cataloggy server to get started.
         </p>
       </div>
@@ -81,19 +81,19 @@ function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => vo
           value={token}
           onChange={(e) => setToken(e.target.value)}
           placeholder="Paste your API token"
-          className="w-full rounded-xl border border-ink-700/60 bg-[#0d0b0a] px-4 py-3 pr-12 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+          className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 pr-12 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         />
         <button
           type="button"
           onClick={() => setShowToken((p) => !p)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-200"
+          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-900"
           aria-label={showToken ? "Hide token" : "Show token"}
         >
           {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
       </div>
       {error && (
-        <p className="flex items-center gap-2 text-sm text-rose-400"><AlertCircle size={16} /> {error}</p>
+        <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>
       )}
       <button
         type="submit"
@@ -111,7 +111,7 @@ function TmdbStep({ configured, onContinue }: { configured: boolean; onContinue:
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold">TMDB Metadata</h2>
-        <p className="mt-1 text-sm text-ink-400 leading-relaxed">
+        <p className="mt-1 text-sm text-ink-500 leading-relaxed">
           Cataloggy uses TMDB to fetch posters, ratings, and details for movies and shows.
         </p>
       </div>
@@ -121,8 +121,8 @@ function TmdbStep({ configured, onContinue }: { configured: boolean; onContinue:
       </div>
 
       {!configured && (
-        <p className="text-sm text-amber-400 leading-relaxed">
-          The server is missing a TMDB API key. Set the <code className="text-ink-200">TMDB_API_KEY</code>{" "}
+        <p className="text-sm text-amber-600 leading-relaxed">
+          The server is missing a TMDB API key. Set the <code className="text-ink-700">TMDB_API_KEY</code>{" "}
           environment variable on your Cataloggy server and restart it. You can continue setup now and
           come back to this later.
         </p>
@@ -144,7 +144,7 @@ function TraktStep({ onContinue }: { onContinue: () => void }) {
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold">Connect Trakt (optional)</h2>
-        <p className="mt-1 text-sm text-ink-400 leading-relaxed">
+        <p className="mt-1 text-sm text-ink-500 leading-relaxed">
           Sync your watch history and watchlist from Trakt. You can also do this later in Settings.
         </p>
       </div>
@@ -154,7 +154,7 @@ function TraktStep({ onContinue }: { onContinue: () => void }) {
       <button
         type="button"
         onClick={onContinue}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink-800 px-5 py-3 text-sm font-semibold transition-colors hover:bg-ink-700 border border-ink-700/60"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink-100 px-5 py-3 text-sm font-semibold text-ink-800 transition-colors hover:bg-ink-200 border border-ink-200"
       >
         Continue <ArrowRight size={16} />
       </button>
@@ -166,11 +166,11 @@ function DoneStep({ onFinish }: { onFinish: () => void }) {
   return (
     <div className="space-y-4 text-center">
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/20">
-        <Check className="h-7 w-7 text-emerald-400" />
+        <Check className="h-7 w-7 text-emerald-600" />
       </div>
       <div>
         <h2 className="text-lg font-semibold">You're all set</h2>
-        <p className="mt-1 text-sm text-ink-400 leading-relaxed">
+        <p className="mt-1 text-sm text-ink-500 leading-relaxed">
           Start searching for movies and shows to build your catalog.
         </p>
       </div>

@@ -183,11 +183,8 @@ function StreakCard({
   loading: boolean;
 }) {
   return (
-    <div
-      className="rounded-2xl p-5 flex flex-col justify-between row-span-2"
-      style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
-    >
-      <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>Streaks</p>
+    <div className="rounded-2xl p-5 flex flex-col justify-between row-span-2 bg-ink-900 text-cream-50">
+      <p className="text-sm font-semibold text-cream-50">Streaks</p>
 
       {loading ? (
         <div className="flex-1 flex flex-col gap-4 mt-5">
@@ -201,26 +198,23 @@ function StreakCard({
           <div>
             <div className="flex items-end gap-2">
               <Flame className="h-5 w-5 text-claw-400 mb-0.5" />
-              <span className="text-4xl font-bold tabular-nums leading-none" style={{ color: "var(--text)" }}>
+              <span className="text-4xl font-bold tabular-nums leading-none text-cream-50">
                 {current}
               </span>
             </div>
-            <p className="mt-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
+            <p className="mt-1.5 text-xs text-ink-300">
               day streak
             </p>
           </div>
 
-          <div
-            className="pt-5"
-            style={{ borderTop: "1px solid var(--border)" }}
-          >
+          <div className="pt-5 border-t border-ink-700">
             <div className="flex items-end gap-2">
-              <Trophy className="h-4 w-4 text-ink-400 mb-0.5" />
-              <span className="text-2xl font-bold tabular-nums leading-none" style={{ color: "var(--text-dim)" }}>
+              <Trophy className="h-4 w-4 text-claw-300 mb-0.5" />
+              <span className="text-2xl font-bold tabular-nums leading-none text-ink-200">
                 {longest}
               </span>
             </div>
-            <p className="mt-1.5 text-xs" style={{ color: "var(--text-mute)" }}>
+            <p className="mt-1.5 text-xs text-ink-400">
               longest streak
             </p>
           </div>
@@ -468,8 +462,8 @@ function DiscoveryCard({ item, badge, reason, onSelect }: {
       aria-label={`View details for ${item.name}`}
     >
       <div
-        className="relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
-        style={{ aspectRatio: "2 / 3", boxShadow: "inset 0 0 0 1px var(--border)" }}
+        className="relative aspect-poster overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
+        style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
       >
         <Poster src={item.poster} alt={item.name} className="h-full w-full" />
         {item.rating != null && item.rating > 0 && (
@@ -499,7 +493,7 @@ function DiscoveryCard({ item, badge, reason, onSelect }: {
         </div>
       </div>
       <p
-        className="mt-2.5 truncate text-sm font-semibold transition-colors group-hover:text-cream-100"
+        className="mt-2.5 truncate text-sm font-semibold transition-colors group-hover:text-claw-600"
         style={{ color: "var(--text)" }}
       >
         {item.name}
@@ -535,7 +529,7 @@ function ScrollArrows({
         onClick={() => onScroll("left")}
         disabled={!canScrollLeft}
         className="flex h-8 w-8 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95"
-        style={{ border: "1px solid var(--border-strong)", background: "var(--bg-2)", color: "var(--text-dim)" }}
+        style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
         aria-label="Scroll left"
       >
         <ChevronLeft className="h-4 w-4" />
@@ -545,7 +539,7 @@ function ScrollArrows({
         onClick={() => onScroll("right")}
         disabled={!canScrollRight}
         className="flex h-8 w-8 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95"
-        style={{ border: "1px solid var(--border-strong)", background: "var(--bg-2)", color: "var(--text-dim)" }}
+        style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
         aria-label="Scroll right"
       >
         <ChevronRight className="h-4 w-4" />
@@ -780,7 +774,7 @@ export function DashboardPage() {
   const monthly = detailedStats?.monthly ?? [];
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       {/* ── Now Watching Banner ── */}
       {activeCheckin && (
         <div
@@ -818,7 +812,7 @@ export function DashboardPage() {
               type="button"
               onClick={() => void handleCheckout(false)}
               className="flex h-8 w-8 items-center justify-center rounded-xl transition-all active:scale-95"
-              style={{ border: "1px solid var(--border-strong)", background: "var(--bg-2)", color: "var(--text-dim)" }}
+              style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
               aria-label="Check out without logging"
             >
               <X className="h-4 w-4" />
@@ -830,7 +824,7 @@ export function DashboardPage() {
       {/* ── Stats bento grid ── */}
       <section>
         {/* Desktop: 3-col asymmetric bento. Mobile: 2-col stacked. */}
-        <div className="hidden lg:grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 220px", gridTemplateRows: "auto auto" }}>
+        <div className="hidden lg:grid gap-3" style={{ gridTemplateColumns: "1fr 1fr 220px", gridTemplateRows: "auto auto" }}>
           <StatsOverviewCard stats={stats} monthly={monthly} loading={loading || detailedLoading} />
           <StreakCard current={detailedStats?.currentStreak ?? 0} longest={detailedStats?.longestStreak ?? 0} loading={detailedLoading} />
           <ThisMonthCard monthly={monthly} loading={detailedLoading} />
@@ -882,8 +876,8 @@ export function DashboardPage() {
               return (
                 <div key={s.imdbId} className="flex-none group" style={{ width: "11rem" }}>
                   <div
-                    className="relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
-                    style={{ aspectRatio: "2 / 3", boxShadow: "inset 0 0 0 1px var(--border)" }}
+                    className="relative aspect-poster overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
+                    style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
                   >
                     <Poster src={s.poster} alt={s.name} className="h-full w-full" />
                     <button
@@ -910,7 +904,7 @@ export function DashboardPage() {
                         className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all active:scale-[0.98] ${
                           isDone ? "bg-emerald-500/20 text-emerald-400" : "text-white backdrop-blur-sm"
                         }`}
-                        style={isMarking ? { background: "var(--bg-2)", color: "var(--text-mute)" } : isDone ? {} : { background: "var(--surface)" }}
+                        style={isMarking ? { background: "var(--bg-1)", color: "var(--text-mute)" } : isDone ? {} : { background: "var(--surface)" }}
                       >
                         {isDone ? (
                           <><Check className="h-3.5 w-3.5" /> Marked</>
@@ -924,7 +918,7 @@ export function DashboardPage() {
                   </div>
                   <button
                     type="button"
-                    className="mt-2.5 block truncate text-sm font-semibold transition-colors text-left w-full hover:text-cream-100"
+                    className="mt-2.5 block truncate text-sm font-semibold transition-colors text-left w-full hover:text-claw-600"
                     style={{ color: "var(--text)" }}
                     onClick={() => setSelectedItem(toSearchResult(s.imdbId, "series", s.name, { poster: s.poster }))}
                   >
@@ -974,8 +968,8 @@ export function DashboardPage() {
                 aria-label={`View details for ${event.name}`}
               >
                 <div
-                  className="relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
-                  style={{ aspectRatio: "2 / 3", boxShadow: "inset 0 0 0 1px var(--border)" }}
+                  className="relative aspect-poster overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
+                  style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
                 >
                   <Poster src={event.poster} alt={event.name} className="h-full w-full" />
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent px-3 pb-3 pt-12">
@@ -995,7 +989,7 @@ export function DashboardPage() {
                     </span>
                   </div>
                 </div>
-                <p className="mt-2.5 truncate text-sm font-semibold transition-colors group-hover:text-cream-100" style={{ color: "var(--text)" }}>
+                <p className="mt-2.5 truncate text-sm font-semibold transition-colors group-hover:text-claw-600" style={{ color: "var(--text)" }}>
                   {event.name}
                 </p>
                 <p className="text-2xs" style={{ color: "var(--text-dim)" }}>
@@ -1180,7 +1174,7 @@ export function DashboardPage() {
                             ? "bg-claw-500/15 text-claw-400"
                             : isTomorrow
                               ? "bg-amber-500/15 text-amber-400"
-                              : "text-ink-400"
+                              : "text-ink-600"
                         }`}
                         style={!isToday && !isTomorrow ? { background: "var(--surface-strong)" } : undefined}
                       >

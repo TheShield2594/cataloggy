@@ -18,7 +18,7 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`toast-enter flex items-center gap-3 rounded-xl border bg-ink-900 px-5 py-3.5 shadow-xl ${
+          className={`toast-enter flex items-center gap-3 rounded-xl border bg-cream-50 px-5 py-3.5 shadow-md ${
             toast.type === "success"
               ? "border-emerald-500/30"
               : toast.type === "error"
@@ -28,13 +28,13 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
           style={{ borderLeftWidth: "4px" }}
         >
           {toast.type === "success" ? (
-            <Check aria-hidden="true" className="h-5 w-5 flex-none text-emerald-400" />
+            <Check aria-hidden="true" className="h-5 w-5 flex-none text-emerald-500" />
           ) : toast.type === "error" ? (
-            <X aria-hidden="true" className="h-5 w-5 flex-none text-rose-400" />
+            <X aria-hidden="true" className="h-5 w-5 flex-none text-rose-500" />
           ) : (
-            <Heart aria-hidden="true" className="h-5 w-5 flex-none text-claw-400" />
+            <Heart aria-hidden="true" className="h-5 w-5 flex-none text-claw-600" />
           )}
-          <span className="text-sm font-medium text-ink-200">{toast.message}</span>
+          <span className="text-sm font-medium text-ink-900">{toast.message}</span>
         </div>
       ))}
     </div>
@@ -290,7 +290,7 @@ export function SearchPage() {
       {/* Search bar */}
       <form
         onSubmit={submitSearch}
-        className="sticky top-[76px] z-40 rounded-2xl border border-ink-800/60 bg-ink-900/90 p-4 backdrop-blur-xl shadow-lg"
+        className="sticky top-[76px] z-40 rounded-2xl border border-ink-100 bg-cream-50/90 p-4 backdrop-blur-xl shadow-sm"
       >
         <div className="relative">
           <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-400" />
@@ -298,14 +298,14 @@ export function SearchPage() {
             value={filters.query}
             onChange={(e) => setFilters({ query: e.target.value })}
             placeholder="Search movies & TV shows..."
-            className="w-full rounded-full border border-ink-700/60 bg-[#0d0b0a] py-3.5 pl-14 pr-12 text-base placeholder:text-ink-400 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15 transition-all"
+            className="w-full rounded-full border border-ink-200 bg-white py-3.5 pl-14 pr-12 text-base text-ink-900 placeholder:text-ink-400 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15 transition-all"
             autoFocus
           />
           {filters.query && (
             <button
               type="button"
               onClick={() => { setFilters({ query: "" }); setRawResults(null); }}
-              className="absolute right-4 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full bg-ink-600 text-xs font-bold text-[#0d0b0a] hover:bg-ink-400 transition-colors"
+              className="absolute right-4 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full bg-ink-200 text-xs font-bold text-ink-900 hover:bg-ink-300 transition-colors"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -314,7 +314,7 @@ export function SearchPage() {
 
         {/* Filter pills + advanced toggle */}
         <div className="mt-3 flex items-center gap-2 flex-wrap">
-          <div className="flex rounded-full border border-ink-700/60 bg-ink-800/60 p-1">
+          <div className="flex rounded-full border border-ink-200 bg-ink-100/60 p-1">
             {filterOptions.map((opt) => {
               const Icon = opt.icon;
               const active = filters.filter === opt.value;
@@ -325,8 +325,8 @@ export function SearchPage() {
                   onClick={() => setFilters({ filter: opt.value })}
                   className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
                     active
-                      ? "bg-claw-500 text-white shadow-lg shadow-claw-500/25"
-                      : "text-ink-400 hover:text-white"
+                      ? "bg-claw-500 text-white shadow-sm"
+                      : "text-ink-500 hover:text-ink-900"
                   }`}
                 >
                   {Icon && <Icon className="h-3.5 w-3.5" />}
@@ -342,8 +342,8 @@ export function SearchPage() {
             onClick={() => setFiltersOpen((v) => !v)}
             className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all ${
               hasActiveFilters
-                ? "border-claw-500/50 bg-claw-500/10 text-claw-400"
-                : "border-ink-700/60 bg-ink-800/60 text-ink-400 hover:text-white"
+                ? "border-claw-500/50 bg-claw-500/10 text-claw-600"
+                : "border-ink-200 bg-ink-100/60 text-ink-500 hover:text-ink-900"
             }`}
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -360,7 +360,7 @@ export function SearchPage() {
             <button
               type="button"
               onClick={clearFilters}
-              className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm text-ink-400 hover:text-white transition-colors"
+              className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm text-ink-500 hover:text-ink-900 transition-colors"
             >
               <X className="h-3 w-3" />
               Clear
@@ -368,7 +368,7 @@ export function SearchPage() {
           )}
 
           {isSearching && (
-            <span className="ml-auto flex items-center gap-2 text-sm text-ink-400">
+            <span className="ml-auto flex items-center gap-2 text-sm text-ink-500">
               <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-claw-500 border-t-transparent" />
               Searching...
             </span>
@@ -377,7 +377,7 @@ export function SearchPage() {
 
         {/* Advanced filters panel */}
         {filtersOpen && (
-          <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl border border-ink-700/40 bg-ink-800/40 p-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl border border-ink-100 bg-cream-50 p-3 sm:grid-cols-3 lg:grid-cols-6">
             {/* Genre */}
             <FilterSelect
               label="Genre"
@@ -388,7 +388,7 @@ export function SearchPage() {
 
             {/* Year range */}
             <div className="flex flex-col gap-1">
-              <label className="text-2xs font-medium uppercase tracking-wider text-ink-400">Year</label>
+              <label className="text-2xs font-medium uppercase tracking-wider text-ink-500">Year</label>
               <div className="flex gap-1.5">
                 <input
                   type="number"
@@ -398,7 +398,7 @@ export function SearchPage() {
                   max="2030"
                   value={filters.yearMin}
                   onChange={(e) => setFilters({ yearMin: e.target.value })}
-                  className="w-full rounded-lg border border-ink-700/60 bg-ink-900 px-2.5 py-2 text-sm text-ink-200 placeholder:text-ink-500 focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
+                  className="w-full rounded-lg border border-ink-200 bg-white px-2.5 py-2 text-sm text-ink-900 placeholder:text-ink-400 focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
                 />
                 <input
                   type="number"
@@ -408,7 +408,7 @@ export function SearchPage() {
                   max="2030"
                   value={filters.yearMax}
                   onChange={(e) => setFilters({ yearMax: e.target.value })}
-                  className="w-full rounded-lg border border-ink-700/60 bg-ink-900 px-2.5 py-2 text-sm text-ink-200 placeholder:text-ink-500 focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
+                  className="w-full rounded-lg border border-ink-200 bg-white px-2.5 py-2 text-sm text-ink-900 placeholder:text-ink-400 focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
                 />
               </div>
             </div>
@@ -442,11 +442,11 @@ export function SearchPage() {
       {/* Empty state – no search yet */}
       {!hasSearched && !isSearching && (
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="flex h-28 w-28 items-center justify-center rounded-full bg-ink-900 ring-1 ring-ink-800">
-            <Search className="h-14 w-14 text-ink-700" />
+          <div className="flex h-28 w-28 items-center justify-center rounded-full bg-ink-100 ring-1 ring-ink-200">
+            <Search className="h-14 w-14 text-ink-400" />
           </div>
-          <p className="mt-6 text-2xl font-bold text-ink-100">Discover your next favorite</p>
-          <p className="mt-2 max-w-sm text-ink-400">
+          <p className="mt-6 text-2xl font-bold text-ink-900">Discover your next favorite</p>
+          <p className="mt-2 max-w-sm text-ink-500">
             Search for movies and series to add them to your lists and track what you watch.
           </p>
         </div>
@@ -455,11 +455,11 @@ export function SearchPage() {
       {/* No results */}
       {noResults && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="flex h-24 w-24 items-center justify-center rounded-full bg-ink-900 ring-1 ring-ink-800">
-            <Filter className="h-12 w-12 text-ink-700" />
+          <div className="flex h-24 w-24 items-center justify-center rounded-full bg-ink-100 ring-1 ring-ink-200">
+            <Filter className="h-12 w-12 text-ink-400" />
           </div>
-          <p className="mt-5 text-lg font-semibold text-ink-300">No results found</p>
-          <p className="mt-1 text-sm text-ink-400">
+          <p className="mt-5 text-lg font-semibold text-ink-700">No results found</p>
+          <p className="mt-1 text-sm text-ink-500">
             {hasActiveFilters
               ? "Try adjusting your filters or search term."
               : "Try a different search term or filter."}
@@ -467,7 +467,7 @@ export function SearchPage() {
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="mt-3 rounded-full border border-ink-700/60 px-4 py-2 text-sm font-medium text-ink-300 hover:bg-ink-800 transition-colors"
+              className="mt-3 rounded-full border border-ink-200 px-4 py-2 text-sm font-medium text-ink-700 hover:bg-ink-100 transition-colors"
             >
               Clear all filters
             </button>
@@ -479,10 +479,10 @@ export function SearchPage() {
       {hasSearched && results !== null && results.length > 0 && (
         <>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-ink-400">
+            <p className="text-sm text-ink-500">
               {results.length} result{results.length !== 1 ? "s" : ""}
               {rawResults && results.length !== rawResults.length && (
-                <span className="text-ink-500"> (filtered from {rawResults.length})</span>
+                <span className="text-ink-400"> (filtered from {rawResults.length})</span>
               )}
             </p>
             {/* Inline sort shortcut on desktop */}
@@ -496,7 +496,7 @@ export function SearchPage() {
                   className={`rounded-full px-2.5 py-1 text-2xs font-medium transition-all ${
                     filters.sort === s
                       ? "bg-ink-700 text-white"
-                      : "text-ink-400 hover:text-white"
+                      : "text-ink-500 hover:text-ink-900"
                   }`}
                 >
                   {SORT_LABELS[s]}
@@ -566,7 +566,7 @@ function FilterSelect({
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-ink-700/60 bg-ink-900 px-2.5 py-2 text-sm text-ink-200 focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30 appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        className="rounded-lg border border-ink-200 bg-white px-2.5 py-2 text-sm text-ink-800 focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30 appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238f8475' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
           backgroundRepeat: "no-repeat",
@@ -616,7 +616,7 @@ function ResultCard({
       <div
         role="button"
         tabIndex={0}
-        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0d0b0a]"
+        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
         style={{ aspectRatio: "var(--poster-ratio)" }}
         onClick={() => onSelect(result)}
         onKeyDown={(e) => {
@@ -635,8 +635,8 @@ function ResultCard({
             loading="lazy"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ink-800 to-ink-900">
-            <Film className="h-12 w-12 text-ink-600" />
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ink-100 to-ink-200">
+            <Film className="h-12 w-12 text-ink-400" />
           </div>
         )}
 
@@ -662,7 +662,7 @@ function ResultCard({
             e.stopPropagation();
             onToggleDropdown(result.imdbId);
           }}
-          className="absolute bottom-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-claw-500 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shadow-lg transition-all duration-300 hover:bg-claw-600 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0d0b0a]"
+          className="absolute bottom-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-claw-500 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shadow-lg transition-all duration-300 hover:bg-claw-600 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-300 focus-visible:ring-offset-2"
           aria-label={`Add ${result.name} to a list`}
         >
           <Plus className="h-4 w-4" strokeWidth={3} />
@@ -679,8 +679,8 @@ function ResultCard({
       {/* Quick-add dropdown */}
       {isOpen && (
         <div ref={dropdownRef} className="relative z-30 mt-1">
-          <div className="absolute left-0 right-0 overflow-hidden rounded-xl border border-ink-700/60 bg-ink-900 shadow-2xl">
-            <p className="border-b border-ink-800 px-3 py-2.5 text-2xs font-semibold uppercase tracking-wider text-ink-400">
+          <div className="absolute left-0 right-0 overflow-hidden rounded-xl border border-ink-100 bg-white shadow-lg">
+            <p className="border-b border-ink-100 px-3 py-2.5 text-2xs font-semibold uppercase tracking-wider text-ink-500">
               Add to list
             </p>
             {lists.map((list) => {
@@ -696,14 +696,14 @@ function ResultCard({
                     e.stopPropagation();
                     void onAdd(list.id, result);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-ink-800 disabled:opacity-50"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-ink-100 disabled:opacity-50"
                 >
                   {already ? (
-                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                    <Check className="h-3.5 w-3.5 text-emerald-600" />
                   ) : (
-                    <Plus className="h-3.5 w-3.5 text-ink-400" />
+                    <Plus className="h-3.5 w-3.5 text-ink-500" />
                   )}
-                  <span className={already ? "text-ink-400" : "text-ink-200"}>{list.name}</span>
+                  <span className={already ? "text-ink-400" : "text-ink-800"}>{list.name}</span>
                   {already && <span className="ml-auto text-2xs text-ink-400">Added</span>}
                   {pending && (
                     <span className="ml-auto inline-block h-3 w-3 animate-spin rounded-full border border-claw-500 border-t-transparent" />
@@ -717,17 +717,17 @@ function ResultCard({
 
       {/* Title & metadata */}
       <div className="mt-3">
-        <p className="truncate text-sm font-semibold text-ink-100">{result.name}</p>
+        <p className="truncate text-sm font-semibold text-ink-900">{result.name}</p>
         <div className="mt-0.5 flex items-center gap-2">
-          <span className="text-xs text-ink-400">{result.year ?? "Unknown year"}</span>
+          <span className="text-xs text-ink-500">{result.year ?? "Unknown year"}</span>
           {result.rating != null && result.rating > 0 && (
-            <span className="flex items-center gap-0.5 text-xs text-amber-400">
-              <Star className="h-3 w-3 fill-amber-400" />
+            <span className="flex items-center gap-0.5 text-xs text-amber-600">
+              <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
               {result.rating.toFixed(1)}
             </span>
           )}
           {listNames.length > 0 && (
-            <span className="rounded bg-ink-800 px-1.5 py-0.5 text-2xs font-medium text-ink-400" title={listNames.join(", ")}>
+            <span className="rounded bg-ink-100 px-1.5 py-0.5 text-2xs font-medium text-ink-600" title={listNames.join(", ")}>
               In {listNames.join(", ")}
             </span>
           )}
@@ -735,7 +735,7 @@ function ResultCard({
         {result.genres.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {result.genres.slice(0, 3).map((g) => (
-              <span key={g} className="rounded bg-ink-800/80 px-1.5 py-0.5 text-2xs text-ink-400">{g}</span>
+              <span key={g} className="rounded bg-ink-100 px-1.5 py-0.5 text-2xs text-ink-600">{g}</span>
             ))}
           </div>
         )}
