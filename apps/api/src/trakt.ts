@@ -264,7 +264,7 @@ export class TraktClient {
 
     const response = await fetch(url, {
       method: options.method,
-      headers: options.headers,
+      headers: { "User-Agent": "Cataloggy/1.0", ...options.headers },
       body: options.body
     });
 
@@ -292,7 +292,8 @@ export class TraktClient {
     const response = await fetch(new URL("/oauth/token", TRAKT_API_BASE), {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "Cataloggy/1.0"
       },
       body: JSON.stringify({
         refresh_token: this.refreshToken,
