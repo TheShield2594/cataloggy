@@ -87,7 +87,7 @@ function StatBlock({
           {label}
         </span>
       </div>
-      {bars && <MiniBarChart data={bars} />}
+      {bars && bars.length > 0 && <MiniBarChart data={bars} />}
       <div className="flex items-baseline gap-1.5">
         <span className="text-2xl font-bold tabular-nums leading-none" style={{ color: "var(--text)" }}>
           {typeof value === "number" ? value.toLocaleString() : value}
@@ -121,11 +121,8 @@ function OverviewCard({
   const epBars = last6.length ? last6.map((m) => m.episodes) : [0, 0, 0, 0, 0, 0];
   const playBars = last6.map((m, i) => movieBars[i] + epBars[i]);
 
-  const now = new Date();
-  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const current = monthly.find((m) => m.month === monthKey);
-  const prevIdx = monthly.findIndex((m) => m.month === monthKey) - 1;
-  const prev = prevIdx >= 0 ? monthly[prevIdx] : null;
+  const current = monthly.length >= 2 ? monthly[monthly.length - 1] : null;
+  const prev = monthly.length >= 2 ? monthly[monthly.length - 2] : null;
   const movieDelta = current && prev ? current.movies - prev.movies : null;
   const epDelta = current && prev ? current.episodes - prev.episodes : null;
 
