@@ -1,5 +1,5 @@
 import { ItemType } from "@prisma/client";
-import { TraktClient, computeTokenExpiresAt } from "../trakt.js";
+import { TraktClient, computeTokenExpiresAt, type TraktScrobblePayload } from "../trakt.js";
 import { prisma } from "./prisma.js";
 import { upsertSeriesProgressIfNewer } from "./series-progress.js";
 import type { SeriesProgressCandidate } from "./types.js";
@@ -18,6 +18,88 @@ export const getTraktClient = async (): Promise<TraktClient> => {
 
 export const resetTraktClient = () => {
   traktClient = null;
+};
+
+export const isTraktConnected = async (): Promise<boolean> => {
+  if (!process.env.TRAKT_CLIENT_ID?.trim() || !process.env.TRAKT_CLIENT_SECRET?.trim()) return false;
+  const token = await prisma.traktToken.findUnique({ where: { id: "default" } });
+  return !!token;
+};
+
+export type TraktScrobbleAction = "start" | "pause" | "stop";
+
+export type TraktScrobbleParams = {
+  type: "movie" | "episode";
+  imdbId: string;
+  seriesImdbId?: string | null;
+  season?: number | null;
+  episode?: number | null;
+  progress: number;
+};
+
+/**
+ * Pushes a live playback transition to Trakt, mirroring what Trakt's own
+ * apps/plugins do. Best-effort: never throws, returns null on any failure
+ * or when Trakt isn't connected. On "stop", a non-null return is the Trakt
+ * history id created for the watch (only when progress crossed Trakt's own
+ * completion threshold).
+ */
+export const pushTraktScrobble = async (
+  action: TraktScrobbleAction,
+  params: TraktScrobbleParams,
+  logger: FastifyRequest["log"]
+): Promise<bigint | null> => {
+  if (params.type === "episode" && (params.season == null || params.episode == null)) return null;
+  if (!(await isTraktConnected())) return null;
+
+  try {
+    const client = await getTraktClient();
+    const progress = Math.max(0, Math.min(100, Math.round(params.progress)));
+
+    const payload: TraktScrobblePayload =
+      params.type === "movie"
+        ? { movie: { ids: { imdb: params.imdbId } }, progress }
+        : {
+            show: { ids: { imdb: params.seriesImdbId ?? params.imdbId } },
+            episode: { season: params.season as number, number: params.episode as number },
+            progress
+          };
+
+    const response =
+      action === "start"
+        ? await client.scrobbleStart(payload, logger)
+        : action === "pause"
+          ? await client.scrobblePause(payload, logger)
+          : await client.scrobbleStop(payload, logger);
+
+    return response.id != null ? BigInt(response.id) : null;
+  } catch (error) {
+    logger.warn({ error, action }, "Trakt scrobble push failed");
+    return null;
+  }
+};
+
+/**
+ * Fire-and-forget: pushes a completed watch to Trakt's history (if not
+ * already synced) and persists the returned Trakt history id, so a later
+ * pollTraktHistory() run recognizes it and doesn't import it as a duplicate.
+ */
+export const syncWatchEventToTrakt = (
+  watchEvent: { id: string; traktHistoryId: bigint | null },
+  params: { type: "movie" | "episode"; imdbId: string; seriesImdbId?: string | null; season?: number | null; episode?: number | null },
+  logger: FastifyRequest["log"]
+): void => {
+  if (watchEvent.traktHistoryId != null) return;
+
+  void (async () => {
+    const historyId = await pushTraktScrobble("stop", { ...params, progress: 100 }, logger);
+    if (historyId == null) return;
+    try {
+      await prisma.watchEvent.update({ where: { id: watchEvent.id }, data: { traktHistoryId: historyId } });
+    } catch (error) {
+      logger.warn({ error }, "Failed to persist Trakt history id on watch event");
+    }
+  })();
 };
 
 export const TRAKT_LAST_POLLED_AT_KEY = "trakt:lastPolledAt";

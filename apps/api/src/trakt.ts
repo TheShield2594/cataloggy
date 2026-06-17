@@ -97,6 +97,16 @@ type TraktTokenResponse = {
   expires_in?: number;
 };
 
+export type TraktScrobblePayload =
+  | { movie: { ids: { imdb: string } }; progress: number }
+  | { show: { ids: { imdb: string } }; episode: { season: number; number: number }; progress: number };
+
+export type TraktScrobbleResponse = {
+  id?: number;
+  action?: string;
+  progress?: number;
+};
+
 export class TraktClient {
   private readonly clientId: string;
   private readonly clientSecret: string;
@@ -175,6 +185,42 @@ export class TraktClient {
       startAt ? { start_at: startAt } : undefined,
       POLL_MAX_PAGES
     );
+  }
+
+  async scrobbleStart(payload: TraktScrobblePayload, logger: FastifyBaseLogger): Promise<TraktScrobbleResponse> {
+    return this.postScrobble("/scrobble/start", payload, logger);
+  }
+
+  async scrobblePause(payload: TraktScrobblePayload, logger: FastifyBaseLogger): Promise<TraktScrobbleResponse> {
+    return this.postScrobble("/scrobble/pause", payload, logger);
+  }
+
+  async scrobbleStop(payload: TraktScrobblePayload, logger: FastifyBaseLogger): Promise<TraktScrobbleResponse> {
+    return this.postScrobble("/scrobble/stop", payload, logger);
+  }
+
+  private async postScrobble(
+    path: string,
+    payload: TraktScrobblePayload,
+    logger: FastifyBaseLogger
+  ): Promise<TraktScrobbleResponse> {
+    const response = await this.request(path, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "trakt-api-version": "2",
+        "trakt-api-key": this.clientId,
+        Authorization: `Bearer ${this.accessToken}`
+      },
+      body: JSON.stringify(payload),
+      logger
+    });
+
+    try {
+      return (await response.json()) as TraktScrobbleResponse;
+    } catch {
+      return {};
+    }
   }
 
   private async fetchAllPages<T>(
