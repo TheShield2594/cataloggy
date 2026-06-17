@@ -99,7 +99,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
       request.log.error({ status: tokenResponse.status, body }, "Trakt token exchange failed");
       const contentType = tokenResponse.headers.get("content-type") ?? "";
       let detail = "Failed to exchange authorization code";
-      if (!contentType.includes("application/json")) {
+      if (!contentType.includes("json")) {
         detail =
           "Trakt's security service (Cloudflare) blocked this request before it reached Trakt's API. This is usually a temporary block on the server's outbound IP — wait a bit and try again.";
       } else if (tokenResponse.status === 401) {
