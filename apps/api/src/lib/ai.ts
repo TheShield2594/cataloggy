@@ -1,4 +1,5 @@
 import { MetadataType } from "@prisma/client";
+import type { FastifyBaseLogger } from "fastify";
 import { prisma } from "./prisma.js";
 import { trendingCacheGet, trendingCacheSet } from "./cache.js";
 import { getTmdb } from "./tmdb-client.js";
@@ -47,7 +48,7 @@ export const shouldRefreshAiRecs = async (): Promise<boolean> => {
   return hoursSinceLastGen >= 6;
 };
 
-export const buildTasteProfile = async (profileId?: string) => {
+export const buildTasteProfile = async (profileId?: string, logger?: FastifyBaseLogger) => {
   const recentEvents = await prisma.watchEvent.findMany({
     where: profileId ? { profileId } : undefined,
     orderBy: { watchedAt: "desc" },
@@ -86,7 +87,9 @@ export const buildTasteProfile = async (profileId?: string) => {
       if (parsed.imdbId && typeof parsed.rating === "number") {
         ratings.push({ imdbId: parsed.imdbId, rating: parsed.rating });
       }
-    } catch { /* skip */ }
+    } catch (error) {
+      logger?.debug({ error, key: row.key }, "Skipped malformed rating row");
+    }
   }
 
   const genreFreq = new Map<string, number>();
@@ -178,7 +181,8 @@ const parseRecsFromContent = (content: string): AiRecItem[] => {
 export const getAiRecommendations = async (
   type: "movie" | "series",
   limit = 10,
-  profileId?: string
+  profileId?: string,
+  logger?: FastifyBaseLogger
 ): Promise<{ metas: StremioMetaPreview[]; reasons: Record<string, string> } | null> => {
   const cacheKey = `ai-recs:${type}:${limit}${profileId ? `:${profileId}` : ""}`;
   const cached = trendingCacheGet(cacheKey);
@@ -188,7 +192,7 @@ export const getAiRecommendations = async (
   if (!config) return null;
 
   try {
-    const profile = await buildTasteProfile(profileId);
+    const profile = await buildTasteProfile(profileId, logger);
     const avgRatingStr = profile.avgRating !== null ? `${profile.avgRating}/10` : "unrated";
     const typeLabel = type === "movie" ? "movies" : "TV series";
 
@@ -240,7 +244,9 @@ Return ONLY a JSON array, no other text, no markdown:
           rating: first.rating ?? undefined,
         });
         reasons[first.imdbId] = rec.reason;
-      } catch { /* skip failed lookups */ }
+      } catch (error) {
+        logger?.debug({ error, title: rec.title }, "Skipped failed AI recommendation lookup");
+      }
     }
 
     trendingCacheSet(cacheKey, { data: metas, reasons }, AI_RECS_TTL_MS);
@@ -254,7 +260,7 @@ Return ONLY a JSON array, no other text, no markdown:
 
     return { metas, reasons };
   } catch (err) {
-    console.error("AI recommendations generation failed", err);
+    logger?.error(err, "AI recommendations generation failed");
     return null;
   }
 };

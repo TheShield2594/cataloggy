@@ -140,7 +140,8 @@ const fetchGenres = async (): Promise<string[]> => {
     const payload = await apiGet<{ genres: string[] }>("/genres");
     cachedGenres = { data: payload.genres, expiry: now + GENRES_CACHE_TTL_MS };
     return payload.genres;
-  } catch {
+  } catch (error) {
+    app.log.warn(error, "Failed to fetch genres, using cached value");
     return cachedGenres?.data ?? [];
   }
 };
@@ -153,7 +154,8 @@ const fetchRpdbConfig = async (): Promise<RpdbConfig> => {
     const payload = await apiGet<RpdbConfig>("/rpdb/config");
     cachedRpdb = { data: payload, expiry: now + RPDB_CACHE_TTL_MS };
     return payload;
-  } catch {
+  } catch (error) {
+    app.log.warn(error, "Failed to fetch RPDB config, using cached value");
     const fallback: RpdbConfig = { enabled: false, apiKey: null };
     return cachedRpdb?.data ?? fallback;
   }
@@ -216,7 +218,8 @@ const fetchDiscoveryMetas = async (catalogId: string): Promise<StremioMetaPrevie
     }));
     trendingPopularCache.set(catalogId, { data: metas, expiry: now + TRENDING_CACHE_TTL_MS });
     return metas;
-  } catch {
+  } catch (error) {
+    app.log.warn(error, `Failed to fetch discovery catalog ${catalogId}, using cached value`);
     return cached?.data ?? [];
   }
 };
@@ -237,7 +240,8 @@ const fetchEnabledCatalogs = async (): Promise<string[] | null> => {
     const catalogs = res.config.enabledCatalogs;
     cachedEnabledCatalogs = { data: catalogs, expiry: now + ENABLED_CATALOGS_CACHE_TTL_MS };
     return catalogs;
-  } catch {
+  } catch (error) {
+    app.log.warn(error, "Failed to fetch enabled catalogs, using cached value");
     return cachedEnabledCatalogs?.data ?? null;
   }
 };
@@ -443,7 +447,8 @@ const isSpoilerProtectionEnabled = async (): Promise<boolean> => {
     const enabled = prefs.spoilerProtection === true;
     cachedSpoilerProtection = { data: enabled, expiry: now + SPOILER_CACHE_TTL_MS };
     return enabled;
-  } catch {
+  } catch (error) {
+    app.log.warn(error, "Failed to fetch spoiler protection setting, using cached value");
     return cachedSpoilerProtection?.data ?? false;
   }
 };
@@ -502,8 +507,8 @@ app.get<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async 
         }
       }
       // No progress row = not started = hide
-    } catch {
-      // Error fetching progress = hide to be safe
+    } catch (error) {
+      request.log.debug(error, "Failed to fetch series progress for spoiler check, hiding description");
     }
     if (shouldHide) {
       description = spoilerMsg;
@@ -575,6 +580,19 @@ app.get<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", a
   return reply.send({ subtitles: [] });
 });
 
+// ─── CSRF guard for mutation endpoints ───
+// Stremio (desktop/mobile app, not a browser) doesn't send an Origin header
+// when calling subtitle/scrobble URLs. Browsers always send one for
+// cross-origin fetch/img requests, so reject those to stop arbitrary web
+// pages from triggering mark-watched/scrobble side effects via CORS *.
+const STREMIO_WEB_ORIGINS = ["https://web.strem.io", "https://app.strem.io"];
+
+const isAllowedMutationOrigin = (request: FastifyRequest): boolean => {
+  const origin = request.headers.origin;
+  if (!origin) return true;
+  return STREMIO_WEB_ORIGINS.includes(origin);
+};
+
 // ─── Mark watched endpoints (return minimal SRT after recording) ───
 
 const MINIMAL_SRT = `1
@@ -592,6 +610,11 @@ app.get<{ Params: { type: string; imdbId: string } }>("/mark-watched/:type/:imdb
   reply.header("Content-Type", "text/srt; charset=utf-8");
 
   const { type, imdbId } = request.params;
+
+  if (!isAllowedMutationOrigin(request)) {
+    request.log.warn({ origin: request.headers.origin }, "Rejected mark-watched request from disallowed origin");
+    return reply.send(MINIMAL_SRT);
+  }
 
   try {
     if (type === "movie") {
@@ -618,6 +641,11 @@ app.get<{ Params: { type: string; imdbId: string; season: string; episode: strin
     const { imdbId, season: seasonStr, episode: episodeStr } = request.params;
     const season = parseInt(seasonStr, 10);
     const episode = parseInt(episodeStr, 10);
+
+    if (!isAllowedMutationOrigin(request)) {
+      request.log.warn({ origin: request.headers.origin }, "Rejected mark-watched request from disallowed origin");
+      return reply.send(MINIMAL_SRT);
+    }
 
     try {
       await apiPost("/watch", {
@@ -646,6 +674,11 @@ app.post<{ Body: unknown }>("/scrobble/:action", async (request, reply) => {
   const action = (request.params as { action: string }).action as ScrobbleAction;
   if (!["start", "pause", "stop"].includes(action)) {
     return reply.code(400).send({ error: "action must be one of: start, pause, stop" });
+  }
+
+  if (!isAllowedMutationOrigin(request)) {
+    request.log.warn({ origin: request.headers.origin }, "Rejected scrobble request from disallowed origin");
+    return reply.code(403).send({ error: "Origin not allowed" });
   }
 
   if (!request.body || typeof request.body !== "object") {
