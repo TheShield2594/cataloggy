@@ -7,6 +7,7 @@ export type TrendingCacheEntry = { data: StremioMetaPreview[]; reasons?: Record<
 export const TRENDING_CACHE_TTL_MS = 30 * 60 * 1000;
 export const CAST_CACHE_TTL_MS = 60 * 60 * 1000;
 export const WATCH_PROVIDERS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+export const EXTERNAL_IDS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const trendingCache = new LRUCache<string, TrendingCacheEntry>({ max: 100, ttl: TRENDING_CACHE_TTL_MS });
 export const castCache = new LRUCache<string, CastMember[]>({ max: 500, ttl: CAST_CACHE_TTL_MS });
@@ -14,6 +15,10 @@ export const seasonsCache = new LRUCache<string, SeasonInfo[]>({ max: 500, ttl: 
 export const watchProvidersCache = new LRUCache<string, WatchProviders>({
   max: 1000,
   ttl: WATCH_PROVIDERS_CACHE_TTL_MS,
+});
+export const externalIdsCache = new LRUCache<string, { imdbId: string | null }>({
+  max: 5000,
+  ttl: EXTERNAL_IDS_CACHE_TTL_MS,
 });
 
 export const trendingCacheGet = (key: string): TrendingCacheEntry | undefined => trendingCache.get(key);
