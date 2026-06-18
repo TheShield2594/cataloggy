@@ -1,7 +1,8 @@
 import { FormEvent, useState } from "react";
 import { Check, Clapperboard, Eye, EyeOff, Loader2, AlertCircle, ArrowRight } from "lucide-react";
 import { api, ApiError, runtimeConfig } from "../api";
-import { StatusBadge, TraktSection } from "./SettingsPage";
+import { StatusBadge } from "../components/settings/StatusBadge";
+import { TraktSettings } from "../components/settings/TraktSettings";
 
 type Step = "token" | "tmdb" | "trakt" | "done";
 
@@ -149,7 +150,7 @@ function TraktStep({ onContinue }: { onContinue: () => void }) {
         </p>
       </div>
 
-      <TraktSection />
+      <TraktSettings />
 
       <button
         type="button"

@@ -51,6 +51,8 @@ model Profile {
   notifiedEpisodes  NotifiedEpisode[]
   scrobbleSessions  ScrobbleSession[]
   pushSubscriptions PushSubscription[]
+  ratings           Rating[]
+  checkIn           CheckIn?
 }
 
 model Item {
@@ -131,6 +133,37 @@ model KV {
   key       String   @id
   value     String
   updatedAt DateTime @db.Timestamp(6)
+}
+
+model Rating {
+  imdbId    String
+  type      MetadataType
+  rating    Float
+  ratedAt   DateTime     @db.Timestamptz(6)
+  updatedAt DateTime     @updatedAt @db.Timestamptz(6)
+
+  profileId String  @db.Uuid
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@id([profileId, type, imdbId])
+  @@index([profileId])
+}
+
+// A single active check-in per profile — starting a new one replaces it,
+// mirroring the previous KV upsert-by-profile behavior.
+model CheckIn {
+  type         WatchEventType
+  imdbId       String
+  seriesImdbId String?
+  season       Int?
+  episode      Int?
+  name         String
+  poster       String?
+  startedAt    DateTime  @db.Timestamptz(6)
+  expiresAt    DateTime? @db.Timestamptz(6)
+
+  profileId String  @id @db.Uuid
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 }
 
 model PushSubscription {
