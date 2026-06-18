@@ -3,6 +3,14 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import packageJson from "./package.json";
 
+// Extra hostnames (beyond IPs/localhost, which Vite always allows) that may
+// reach this dev/preview server — e.g. a domain proxied via Nginx Proxy
+// Manager. Comma-separated, set via the ALLOWED_HOSTS env var.
+const allowedHosts = (process.env.ALLOWED_HOSTS ?? "")
+  .split(",")
+  .map((host) => host.trim())
+  .filter(Boolean);
+
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version)
@@ -44,11 +52,11 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     port: 7002,
-    allowedHosts: ["cataloggy.shieldsfam.lol"]
+    ...(allowedHosts.length > 0 ? { allowedHosts } : {})
   },
   preview: {
     host: "0.0.0.0",
     port: 7002,
-    allowedHosts: ["cataloggy.shieldsfam.lol"]
+    ...(allowedHosts.length > 0 ? { allowedHosts } : {})
   }
 });

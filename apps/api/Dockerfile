@@ -18,6 +18,10 @@ RUN pnpm --filter @cataloggy/api build
 RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
 USER app
 
+# Set after the build steps above, which need devDependencies that pnpm
+# would skip installing if NODE_ENV were already "production".
+ENV NODE_ENV=production
+
 EXPOSE 7000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s CMD wget -q --spider http://127.0.0.1:7000/health || exit 1
 CMD ["sh", "-c", "pnpm exec prisma migrate deploy --schema=apps/api/prisma/schema.prisma && node apps/api/dist/index.js"]
