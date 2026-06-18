@@ -1,9 +1,8 @@
-import { WatchEventType } from "@prisma/client";
+import { Prisma, WatchEventType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
-import { upsertSeriesProgressIfNewer } from "../lib/series-progress.js";
 import { resolveProfile } from "../lib/profile.js";
-import { syncWatchEventToTrakt } from "../lib/trakt-client.js";
+import { recordWatchEvent } from "../lib/watch-event.js";
 
 function serializeWatchEvent<T extends { traktHistoryId: bigint | null }>(event: T) {
   return { ...event, traktHistoryId: event.traktHistoryId != null ? event.traktHistoryId.toString() : null };
@@ -70,44 +69,20 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
 
     const type = body.type as WatchEventType;
     const imdbId = (body.imdbId as string).trim();
-    const seriesImdbId = body.seriesImdbId ? (body.seriesImdbId as string).trim() : null;
+    const seriesImdbId = body.seriesImdbId ? (body.seriesImdbId as string).trim() : undefined;
     const season = (body.season as number | undefined) ?? null;
     const episode = (body.episode as number | undefined) ?? null;
-    const profileId = request.profileId!;
 
-    const dayStart = new Date(watchedAt);
-    dayStart.setUTCHours(0, 0, 0, 0);
-    const dayEnd = new Date(watchedAt);
-    dayEnd.setUTCHours(23, 59, 59, 999);
-
-    const { watchEvent, wasCreated } = await prisma.$transaction(async (tx) => {
-      const existing = await tx.watchEvent.findFirst({
-        where: { profileId, imdbId, season, episode, watchedAt: { gte: dayStart, lte: dayEnd } },
-      });
-
-      if (existing) {
-        const updated = await tx.watchEvent.update({
-          where: { id: existing.id },
-          data: { plays: { increment: 1 }, watchedAt },
-        });
-        return { watchEvent: updated, wasCreated: false };
-      }
-
-      const created = await tx.watchEvent.create({
-        data: { type, imdbId, seriesImdbId, season, episode, watchedAt, profileId },
-      });
-      return { watchEvent: created, wasCreated: true };
+    const { watchEvent, wasCreated } = await recordWatchEvent({
+      type,
+      imdbId,
+      seriesImdbId,
+      season,
+      episode,
+      watchedAt,
+      source: "manual",
+      request,
     });
-
-    syncWatchEventToTrakt(watchEvent, { type, imdbId, seriesImdbId, season, episode }, request.log);
-
-    if (type === "episode" && seriesImdbId && season !== null && episode !== null) {
-      await upsertSeriesProgressIfNewer(profileId, seriesImdbId, {
-        lastSeason: season,
-        lastEpisode: episode,
-        lastWatchedAt: watchedAt,
-      });
-    }
 
     return reply.code(wasCreated ? 201 : 200).send({ watchEvent: serializeWatchEvent(watchEvent) });
   });
@@ -239,7 +214,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     twelveMonthsAgo.setUTCDate(1);
     twelveMonthsAgo.setUTCHours(0, 0, 0, 0);
 
-    const [monthlyEvents, distinctMovieIds, distinctSeriesIds, watchDates] = await Promise.all([
+    const [monthlyEvents, distinctMovieIds, distinctSeriesIds, streaks] = await Promise.all([
       prisma.watchEvent.findMany({
         where: { profileId, watchedAt: { gte: twelveMonthsAgo } },
         select: { type: true, watchedAt: true, plays: true },
@@ -254,7 +229,25 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
         select: { seriesImdbId: true },
         distinct: ["seriesImdbId"],
       }),
-      prisma.watchEvent.findMany({ where: { profileId }, select: { watchedAt: true } }),
+      prisma.$queryRaw<{ longest_streak: bigint; current_streak: bigint }[]>(Prisma.sql`
+        WITH distinct_days AS (
+          SELECT DISTINCT DATE("watchedAt" AT TIME ZONE 'UTC') AS day
+          FROM "WatchEvent"
+          WHERE "profileId" = ${profileId}::uuid
+        ),
+        grouped AS (
+          SELECT day, day - (ROW_NUMBER() OVER (ORDER BY day))::int * INTERVAL '1 day' AS grp
+          FROM distinct_days
+        ),
+        run_lengths AS (
+          SELECT grp, COUNT(*) AS streak_len, MAX(day) AS streak_end
+          FROM grouped
+          GROUP BY grp
+        )
+        SELECT
+          COALESCE((SELECT MAX(streak_len) FROM run_lengths), 0) AS longest_streak,
+          COALESCE((SELECT streak_len FROM run_lengths WHERE streak_end = (now() AT TIME ZONE 'UTC')::date), 0) AS current_streak
+      `),
     ]);
 
     const monthlyMap = new Map<string, { movies: number; episodes: number }>();
@@ -301,39 +294,8 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
       .slice(0, 15)
       .map(([genre, count]) => ({ genre, count }));
 
-    const watchDays = new Set(watchDates.map((e) => e.watchedAt.toISOString().slice(0, 10)));
-    const sortedDays = [...watchDays].sort();
-    let longestStreak = 0;
-    let currentStreak = 0;
-
-    if (sortedDays.length > 0) {
-      let streak = 1;
-      for (let i = 1; i < sortedDays.length; i++) {
-        const prev = new Date(sortedDays[i - 1]);
-        const curr = new Date(sortedDays[i]);
-        if (curr.getTime() - prev.getTime() === 86_400_000) {
-          streak++;
-        } else {
-          if (streak > longestStreak) longestStreak = streak;
-          streak = 1;
-        }
-      }
-      if (streak > longestStreak) longestStreak = streak;
-
-      const todayStr = new Date().toISOString().slice(0, 10);
-      if (watchDays.has(todayStr)) {
-        currentStreak = 1;
-        for (let i = sortedDays.length - 2; i >= 0; i--) {
-          const curr = new Date(sortedDays[i + 1]);
-          const prev = new Date(sortedDays[i]);
-          if (curr.getTime() - prev.getTime() === 86_400_000) {
-            currentStreak++;
-          } else {
-            break;
-          }
-        }
-      }
-    }
+    const longestStreak = Number(streaks[0]?.longest_streak ?? 0);
+    const currentStreak = Number(streaks[0]?.current_streak ?? 0);
 
     const topRated =
       allMetadataIds.length > 0
