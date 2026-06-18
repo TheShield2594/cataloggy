@@ -1,7 +1,11 @@
+import { MetadataType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
+import { resolveProfile } from "../lib/profile.js";
 
 const ratingsRoutes: FastifyPluginAsync = async (app) => {
+  app.addHook("preHandler", resolveProfile);
+
   app.post<{ Body: unknown }>("/ratings", async (request, reply) => {
     const body = request.body as { imdbId?: unknown; type?: unknown; rating?: unknown } | null;
     if (!body) return reply.code(400).send({ error: "Body is required" });
@@ -13,6 +17,7 @@ const ratingsRoutes: FastifyPluginAsync = async (app) => {
     if (rawType !== "movie" && rawType !== "series") {
       return reply.code(400).send({ error: "type must be one of: movie, series" });
     }
+    const type = rawType as MetadataType;
 
     const rating =
       typeof body.rating === "number" && Number.isFinite(body.rating) ? body.rating : null;
@@ -21,21 +26,15 @@ const ratingsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const roundedRating = Math.round(rating * 10) / 10;
-    const row = await prisma.kV.upsert({
-      where: { key: `rating:${rawType}:${imdbId}` },
-      create: {
-        key: `rating:${rawType}:${imdbId}`,
-        value: JSON.stringify({ imdbId, type: rawType, rating: roundedRating, ratedAt: new Date().toISOString() }),
-        updatedAt: new Date(),
-      },
-      update: {
-        value: JSON.stringify({ imdbId, type: rawType, rating: roundedRating, ratedAt: new Date().toISOString() }),
-        updatedAt: new Date(),
-      },
+    const profileId = request.profileId!;
+    const ratedAt = new Date();
+    const row = await prisma.rating.upsert({
+      where: { profileId_type_imdbId: { profileId, type, imdbId } },
+      create: { profileId, type, imdbId, rating: roundedRating, ratedAt },
+      update: { rating: roundedRating, ratedAt },
     });
 
-    const parsed = JSON.parse(row.value);
-    return reply.code(200).send({ rating: parsed });
+    return reply.code(200).send({ rating: toRatingPayload(row) });
   });
 
   app.get<{ Params: { type: string; imdbId: string } }>(
@@ -46,10 +45,12 @@ const ratingsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: "type must be one of: movie, series" });
       }
 
-      const row = await prisma.kV.findUnique({ where: { key: `rating:${type}:${imdbId}` } });
+      const row = await prisma.rating.findUnique({
+        where: { profileId_type_imdbId: { profileId: request.profileId!, type, imdbId } },
+      });
       if (!row) return reply.code(404).send({ error: "No rating found" });
 
-      return { rating: JSON.parse(row.value) };
+      return { rating: toRatingPayload(row) };
     }
   );
 
@@ -62,7 +63,9 @@ const ratingsRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        await prisma.kV.delete({ where: { key: `rating:${type}:${imdbId}` } });
+        await prisma.rating.delete({
+          where: { profileId_type_imdbId: { profileId: request.profileId!, type, imdbId } },
+        });
       } catch { /* not found is fine */ }
 
       return reply.code(204).send();
@@ -76,22 +79,24 @@ const ratingsRoutes: FastifyPluginAsync = async (app) => {
     }
     const limit = Math.min(Math.max(Number(request.query.limit) || 50, 1), 200);
 
-    const prefix = typeFilter ? `rating:${typeFilter}:` : "rating:";
-    const rows = await prisma.kV.findMany({
-      where: { key: { startsWith: prefix } },
+    const rows = await prisma.rating.findMany({
+      where: {
+        profileId: request.profileId!,
+        ...(typeFilter ? { type: typeFilter as MetadataType } : {}),
+      },
       orderBy: { updatedAt: "desc" },
       take: limit,
     });
 
-    const ratings = rows.flatMap((r) => {
-      try {
-        return [JSON.parse(r.value)];
-      } catch {
-        return [];
-      }
-    });
-    return { ratings };
+    return { ratings: rows.map(toRatingPayload) };
   });
 };
+
+const toRatingPayload = (row: { imdbId: string; type: MetadataType; rating: number; ratedAt: Date }) => ({
+  imdbId: row.imdbId,
+  type: row.type,
+  rating: row.rating,
+  ratedAt: row.ratedAt.toISOString(),
+});
 
 export default ratingsRoutes;

@@ -63,6 +63,9 @@ importers:
       lru-cache:
         specifier: ^11.5.1
         version: 11.5.1
+      prisma:
+        specifier: ^5.22.0
+        version: 5.22.0
       web-push:
         specifier: ^3.6.7
         version: 3.6.7
@@ -70,9 +73,6 @@ importers:
       '@types/web-push':
         specifier: ^3.6.4
         version: 3.6.4
-      prisma:
-        specifier: ^5.22.0
-        version: 5.22.0
       tsx:
         specifier: ^4.19.2
         version: 4.21.0

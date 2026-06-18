@@ -1,4 +1,4 @@
-import { ListItemType, ListKind, Prisma, WatchEventType } from "@prisma/client";
+import { ListItemType, ListKind, MetadataType, Prisma, WatchEventType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { resolveProfile } from "../lib/profile.js";
@@ -77,17 +77,15 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       }),
       prisma.watchEvent.findMany({ where: { profileId }, orderBy: { watchedAt: "asc" } }),
       prisma.seriesProgress.findMany({ where: { profileId } }),
-      prisma.kV.findMany({ where: { key: { startsWith: "rating:" } } }),
+      prisma.rating.findMany({ where: { profileId } }),
     ]);
 
-    const ratings = ratingRows.flatMap((row) => {
-      try {
-        const parsed = JSON.parse(row.value) as ExportRating;
-        return [parsed];
-      } catch {
-        return [];
-      }
-    });
+    const ratings: ExportRating[] = ratingRows.map((row) => ({
+      imdbId: row.imdbId,
+      type: row.type,
+      rating: row.rating,
+      ratedAt: row.ratedAt.toISOString(),
+    }));
 
     const payload: ExportPayload = {
       version: EXPORT_VERSION,
@@ -239,19 +237,14 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       ) {
         continue;
       }
-      const ratedAt = parseDate(rating.ratedAt)?.toISOString() ?? new Date().toISOString();
-      const key = `rating:${rating.type}:${rating.imdbId.trim()}`;
-      const value = JSON.stringify({
-        imdbId: rating.imdbId.trim(),
-        type: rating.type,
-        rating: rating.rating,
-        ratedAt,
-      });
+      const ratedAt = parseDate(rating.ratedAt) ?? new Date();
+      const imdbId = rating.imdbId.trim();
+      const type = rating.type as MetadataType;
 
-      await prisma.kV.upsert({
-        where: { key },
-        create: { key, value, updatedAt: new Date() },
-        update: { value, updatedAt: new Date() },
+      await prisma.rating.upsert({
+        where: { profileId_type_imdbId: { profileId, type, imdbId } },
+        create: { profileId, type, imdbId, rating: rating.rating, ratedAt },
+        update: { rating: rating.rating, ratedAt },
       });
       summary.ratings += 1;
     }

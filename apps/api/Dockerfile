@@ -1,8 +1,8 @@
-FROM node:20-alpine
+FROM node:20-alpine AS build
 
 WORKDIR /app
 RUN corepack enable
-RUN apk add --no-cache wget openssl
+RUN apk add --no-cache openssl
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs .npmrc ./
 COPY apps/api/package.json ./apps/api/package.json
@@ -18,11 +18,28 @@ COPY packages/shared ./packages/shared
 RUN pnpm exec prisma generate --schema=apps/api/prisma/schema.prisma
 RUN pnpm --filter @cataloggy/shared build
 RUN pnpm --filter @cataloggy/api build
+
+RUN pnpm prune --prod
+
+FROM node:20-alpine AS runtime
+
+WORKDIR /app
+RUN corepack enable
+RUN apk add --no-cache wget openssl
+
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/apps/api/package.json ./apps/api/package.json
+COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=build /app/apps/api/dist ./apps/api/dist
+COPY --from=build /app/apps/api/prisma ./apps/api/prisma
+COPY --from=build /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=build /app/packages/shared/node_modules ./packages/shared/node_modules
+
 RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
 USER app
 
-# Set after the build steps above, which need devDependencies that pnpm
-# would skip installing if NODE_ENV were already "production".
 ENV NODE_ENV=production
 
 EXPOSE 7000
