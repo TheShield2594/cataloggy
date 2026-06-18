@@ -161,7 +161,7 @@ const callAiProvider = async (config: AiProviderConfig, prompt: string): Promise
   const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   let content = data.choices?.[0]?.message?.content ?? "";
 
-  content = content.replace(/<[\s\S]*?<\/think>/gi, "");
+  content = content.replace(/<think>[\s\S]*?<\/think>/gi, "");
   content = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 
   return content;
