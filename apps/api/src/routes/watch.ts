@@ -231,7 +231,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
       }),
       prisma.$queryRaw<{ longest_streak: bigint; current_streak: bigint }[]>(Prisma.sql`
         WITH distinct_days AS (
-          SELECT DISTINCT DATE("watchedAt") AS day
+          SELECT DISTINCT DATE("watchedAt" AT TIME ZONE 'UTC') AS day
           FROM "WatchEvent"
           WHERE "profileId" = ${profileId}::uuid
         ),
@@ -246,7 +246,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
         )
         SELECT
           COALESCE((SELECT MAX(streak_len) FROM run_lengths), 0) AS longest_streak,
-          COALESCE((SELECT streak_len FROM run_lengths WHERE streak_end = CURRENT_DATE), 0) AS current_streak
+          COALESCE((SELECT streak_len FROM run_lengths WHERE streak_end = (now() AT TIME ZONE 'UTC')::date), 0) AS current_streak
       `),
     ]);
 
