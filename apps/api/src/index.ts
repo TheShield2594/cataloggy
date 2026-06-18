@@ -5,7 +5,7 @@ import { applyCorsHeaders } from "./lib/cors.js";
 import { verifyToken } from "./lib/auth.js";
 import { getAiRecommendations, isAiConfigured } from "./lib/ai.js";
 import { trendingCacheDeletePrefix } from "./lib/cache.js";
-import { pollTraktHistory } from "./lib/trakt-client.js";
+import { pollTraktHistory, syncTraktWatchlist } from "./lib/trakt-client.js";
 import { ensureDefaultWatchlist } from "./lib/watchlist.js";
 import { getDefaultProfileId } from "./lib/profile.js";
 import { checkUpcomingEpisodesAndNotify } from "./lib/notify-episodes.js";
@@ -147,6 +147,7 @@ const start = async () => {
       void (async () => {
         const profileId = await getDefaultProfileId();
         await pollTraktHistory(app.log, profileId);
+        await syncTraktWatchlist(app.log, profileId);
       })().catch((error) => {
         app.log.error(error, "Scheduled Trakt poll failed");
       });

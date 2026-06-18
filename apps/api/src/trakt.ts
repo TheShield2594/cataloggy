@@ -107,6 +107,11 @@ export type TraktScrobbleResponse = {
   progress?: number;
 };
 
+export type TraktWatchlistMutationPayload = {
+  movies?: { ids: { imdb: string } }[];
+  shows?: { ids: { imdb: string } }[];
+};
+
 export class TraktClient {
   private readonly clientId: string;
   private readonly clientSecret: string;
@@ -221,6 +226,32 @@ export class TraktClient {
     } catch {
       return {};
     }
+  }
+
+  async addToWatchlist(payload: TraktWatchlistMutationPayload, logger: FastifyBaseLogger): Promise<void> {
+    await this.postWatchlistMutation("/sync/watchlist", payload, logger);
+  }
+
+  async removeFromWatchlist(payload: TraktWatchlistMutationPayload, logger: FastifyBaseLogger): Promise<void> {
+    await this.postWatchlistMutation("/sync/watchlist/remove", payload, logger);
+  }
+
+  private async postWatchlistMutation(
+    path: string,
+    payload: TraktWatchlistMutationPayload,
+    logger: FastifyBaseLogger
+  ): Promise<void> {
+    await this.request(path, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "trakt-api-version": "2",
+        "trakt-api-key": this.clientId,
+        Authorization: `Bearer ${this.accessToken}`
+      },
+      body: JSON.stringify(payload),
+      logger
+    });
   }
 
   private async fetchAllPages<T>(
