@@ -23,13 +23,16 @@ cataloggy/
 
 ## Docker Compose install (recommended)
 
-1. Create a `.env` file (or export environment variables) to override defaults:
+1. Copy `.env.example` to `.env` next to `docker-compose.yml` and fill in real values:
 
-   - **Required:** `API_TOKEN` (used by both `api` and `addon` services — they share the same variable)
+   ```bash
+   cp .env.example .env
+   ```
+
+   - **Required:** `API_TOKEN` and `POSTGRES_PASSWORD` — `docker compose up` will refuse to start without them (used by both `api` and `addon` services — they share the same `API_TOKEN`). Generate a token with `openssl rand -hex 32`.
    - **Recommended for LAN devices** (phone/Apple TV): update the URLs in `api`, `addon`, and `web` services to use your LAN IP instead of `localhost`
    - **Optional integrations:** `TMDB_API_KEY`, `TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET` (in `api` service)
-
-   > **Non-local deployments:** You **must** change `POSTGRES_PASSWORD` and `API_TOKEN` from their development defaults. Set them via a `.env` file next to `docker-compose.yml` or export them in your shell.
+   - **Optional:** `ALLOWED_HOSTS` (in `web` service) — comma-separated hostnames allowed to reach the web server beyond IPs/localhost, e.g. a domain proxied via Nginx Proxy Manager (see below). Leave unset for LAN-IP-only access.
 
    **Internal vs. public URLs:** the `api` and `addon` services distinguish between the URL used for service-to-service traffic inside the Docker network and the URL your browser/Apple TV/Omni actually reach:
 
@@ -70,7 +73,7 @@ cataloggy/
 - API: http://localhost:7000/health
 - Addon: http://localhost:7001/manifest.json
 - Web: http://localhost:7002
-- Postgres: `localhost:5432` (`postgres` / `postgres`, db `cataloggy`)
+- Postgres: `localhost:5432` (user `postgres` by default, db `cataloggy`, password from `POSTGRES_PASSWORD` in your `.env`)
 
 
 ## Use on Your Local Network (Phone + Apple TV)
@@ -137,6 +140,8 @@ Configure Nginx Proxy Manager with one Proxy Host for your domain (for example, 
 - **Advanced locations:**
   - `/api/` → port `7000`
   - `/addon/` → port `7001`
+
+Set `ALLOWED_HOSTS=cataloggy.domain.com` in your `.env` so the web service accepts requests for that hostname, then restart the `web` service.
 
 Use this Omni add-on URL to install when accessing through your domain:
 

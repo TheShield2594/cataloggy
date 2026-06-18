@@ -2,6 +2,7 @@ node_modules
 .pnpm-store
 .env
 .env.*
+!.env.example
 *.log
 dist
 coverage

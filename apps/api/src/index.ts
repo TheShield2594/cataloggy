@@ -136,6 +136,22 @@ app.register(jellyfinWebhookRoutes);
 const start = async () => {
   const port = Number(process.env.PORT ?? 7000);
 
+  if (process.env.NODE_ENV === "production") {
+    const startupConfigIssues = [
+      !process.env.API_TOKEN && "API_TOKEN is not set",
+      process.env.API_TOKEN === "dev-token" && "API_TOKEN is set to the development default \"dev-token\"",
+      !process.env.DATABASE_URL && "DATABASE_URL is not set",
+      (process.env.DATABASE_URL ?? "").includes(":postgres@") && "DATABASE_URL uses the development default Postgres password",
+    ].filter((message): message is string => Boolean(message));
+
+    if (startupConfigIssues.length > 0) {
+      app.log.error(
+        `Refusing to start in production due to configuration problems: ${startupConfigIssues.join("; ")}. Set real values via your .env file (see README.md).`,
+      );
+      process.exit(1);
+    }
+  }
+
   if (!process.env.WEBHOOK_SECRET?.trim()) {
     app.log.warn("WEBHOOK_SECRET not set — webhook endpoints will reject all requests");
   }
