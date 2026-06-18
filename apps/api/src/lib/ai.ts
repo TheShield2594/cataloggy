@@ -48,7 +48,7 @@ export const shouldRefreshAiRecs = async (): Promise<boolean> => {
   return hoursSinceLastGen >= 6;
 };
 
-export const buildTasteProfile = async (profileId?: string, logger?: FastifyBaseLogger) => {
+export const buildTasteProfile = async (profileId?: string) => {
   const recentEvents = await prisma.watchEvent.findMany({
     where: profileId ? { profileId } : undefined,
     orderBy: { watchedAt: "desc" },
@@ -74,23 +74,12 @@ export const buildTasteProfile = async (profileId?: string, logger?: FastifyBase
 
   const metaByImdbId = new Map(allMetadata.map((m) => [m.imdbId, m]));
 
-  const ratingRows = await prisma.kV.findMany({
-    where: { key: { startsWith: "rating:" } },
+  const ratings = await prisma.rating.findMany({
+    where: profileId ? { profileId } : undefined,
     orderBy: { updatedAt: "desc" },
     take: 50,
+    select: { imdbId: true, rating: true },
   });
-
-  const ratings: Array<{ imdbId: string; rating: number }> = [];
-  for (const row of ratingRows) {
-    try {
-      const parsed = JSON.parse(row.value) as { imdbId?: string; rating?: number };
-      if (parsed.imdbId && typeof parsed.rating === "number") {
-        ratings.push({ imdbId: parsed.imdbId, rating: parsed.rating });
-      }
-    } catch (error) {
-      logger?.debug({ error, key: row.key }, "Skipped malformed rating row");
-    }
-  }
 
   const genreFreq = new Map<string, number>();
   for (const id of allIds) {
@@ -192,7 +181,7 @@ export const getAiRecommendations = async (
   if (!config) return null;
 
   try {
-    const profile = await buildTasteProfile(profileId, logger);
+    const profile = await buildTasteProfile(profileId);
     const avgRatingStr = profile.avgRating !== null ? `${profile.avgRating}/10` : "unrated";
     const typeLabel = type === "movie" ? "movies" : "TV series";
 
