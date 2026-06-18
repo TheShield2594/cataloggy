@@ -80,7 +80,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     const dayEnd = new Date(watchedAt);
     dayEnd.setUTCHours(23, 59, 59, 999);
 
-    const watchEvent = await prisma.$transaction(async (tx) => {
+    const { watchEvent, wasCreated } = await prisma.$transaction(async (tx) => {
       const existing = await tx.watchEvent.findFirst({
         where: { profileId, imdbId, season, episode, watchedAt: { gte: dayStart, lte: dayEnd } },
       });
@@ -90,12 +90,13 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
           where: { id: existing.id },
           data: { plays: { increment: 1 }, watchedAt },
         });
-        return updated;
+        return { watchEvent: updated, wasCreated: false };
       }
 
-      return tx.watchEvent.create({
+      const created = await tx.watchEvent.create({
         data: { type, imdbId, seriesImdbId, season, episode, watchedAt, profileId },
       });
+      return { watchEvent: created, wasCreated: true };
     });
 
     syncWatchEventToTrakt(watchEvent, { type, imdbId, seriesImdbId, season, episode }, request.log);
@@ -108,7 +109,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    return reply.code(existing ? 200 : 201).send({ watchEvent: serializeWatchEvent(watchEvent) });
+    return reply.code(wasCreated ? 201 : 200).send({ watchEvent: serializeWatchEvent(watchEvent) });
   });
 
   app.delete<{ Params: { eventId: string } }>("/watch/:eventId", async (request, reply) => {
