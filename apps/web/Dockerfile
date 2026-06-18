@@ -20,10 +20,13 @@ WORKDIR /app
 RUN apk add --no-cache wget && npm install -g serve@14
 
 COPY --from=build /app/apps/web/dist ./dist
+COPY apps/web/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
 USER app
 
 EXPOSE 7002
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s CMD wget -q --spider http://127.0.0.1:7002/ || exit 1
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["serve", "-s", "dist", "-l", "7002"]
