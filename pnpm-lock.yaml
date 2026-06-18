@@ -32,6 +32,9 @@ importers:
 
   apps/addon:
     dependencies:
+      '@cataloggy/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/rate-limit':
         specifier: ^11.0.0
         version: 11.0.0
@@ -45,6 +48,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@cataloggy/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/rate-limit':
         specifier: ^11.0.0
         version: 11.0.0
@@ -122,6 +128,12 @@ importers:
       workbox-precaching:
         specifier: ^7.4.1
         version: 7.4.1
+
+  packages/shared:
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
 
 packages:
 
