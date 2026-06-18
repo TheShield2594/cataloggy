@@ -13,10 +13,13 @@ import {
   redactAiConfig,
   getAiRecommendations,
 } from "../lib/ai.js";
+import { resolveProfile } from "../lib/profile.js";
 import { getMetadataType } from "../lib/types.js";
 import type { StremioMetaPreview, StremioMetaType } from "../lib/types.js";
 
 const aiRoutes: FastifyPluginAsync = async (app) => {
+  app.addHook("preHandler", resolveProfile);
+
   app.get<{ Querystring: { imdbId?: string; type?: string } }>(
     "/recommendations",
     async (request, reply) => {
@@ -60,22 +63,24 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       const type = getMetadataType(rawType);
       if (!type) return { metas: [] };
       const limit = Math.min(Math.max(Number(request.query.limit) || 20, 1), 40);
+      const profileId = request.profileId!;
 
       if (await isAiConfigured()) {
-        const aiResult = await getAiRecommendations(rawType as "movie" | "series", limit);
+        const aiResult = await getAiRecommendations(rawType as "movie" | "series", limit, profileId);
         if (aiResult) return { metas: aiResult.metas };
       }
 
       const recentItems =
         rawType === "movie"
           ? await prisma.watchEvent.findMany({
-              where: { type: "movie" },
+              where: { type: "movie", profileId },
               orderBy: { watchedAt: "desc" },
               take: 5,
               distinct: ["imdbId"],
               select: { imdbId: true },
             })
           : await prisma.seriesProgress.findMany({
+              where: { profileId },
               orderBy: { lastWatchedAt: "desc" },
               take: 5,
               select: { seriesImdbId: true },
@@ -180,18 +185,20 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       if (rawType !== "movie" && rawType !== "series") return { metas: [], reasons: {} };
       const type = rawType as "movie" | "series";
       const limit = Math.min(Math.max(Number(request.query.limit) || 10, 1), 20);
+      const profileId = request.profileId!;
 
       if (!(await isAiConfigured())) {
         const recentItems =
           type === "movie"
             ? await prisma.watchEvent.findMany({
-                where: { type: "movie" },
+                where: { type: "movie", profileId },
                 orderBy: { watchedAt: "desc" },
                 take: 3,
                 distinct: ["imdbId"],
                 select: { imdbId: true },
               })
             : await prisma.seriesProgress.findMany({
+                where: { profileId },
                 orderBy: { lastWatchedAt: "desc" },
                 take: 3,
                 select: { seriesImdbId: true },
@@ -242,7 +249,7 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      const result = await getAiRecommendations(type, limit);
+      const result = await getAiRecommendations(type, limit, profileId);
       if (!result) return { metas: [], reasons: {} };
       return { metas: result.metas, reasons: result.reasons };
     }

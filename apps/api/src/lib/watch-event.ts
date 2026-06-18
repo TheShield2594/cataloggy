@@ -75,8 +75,8 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
         if (await shouldRefreshAiRecs()) {
           trendingCacheDeletePrefix("ai-recs:");
           await Promise.allSettled([
-            getAiRecommendations("movie", 15),
-            getAiRecommendations("series", 15),
+            getAiRecommendations("movie", 15, profileId),
+            getAiRecommendations("series", 15, profileId),
           ]);
         }
       } catch { /* never let this affect the watch event response */ }
@@ -113,8 +113,8 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
       if (await shouldRefreshAiRecs()) {
         trendingCacheDeletePrefix("ai-recs:");
         await Promise.allSettled([
-          getAiRecommendations("movie", 15),
-          getAiRecommendations("series", 15),
+          getAiRecommendations("movie", 15, profileId),
+          getAiRecommendations("series", 15, profileId),
         ]);
       }
     } catch { /* never let this affect the watch event response */ }

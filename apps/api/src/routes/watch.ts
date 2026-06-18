@@ -80,22 +80,25 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     const dayEnd = new Date(watchedAt);
     dayEnd.setUTCHours(23, 59, 59, 999);
 
-    const existing = await prisma.watchEvent.findFirst({
-      where: { profileId, imdbId, season, episode, watchedAt: { gte: dayStart, lte: dayEnd } },
-    });
-
-    if (existing) {
-      const updated = await prisma.watchEvent.update({
-        where: { id: existing.id },
-        data: { plays: existing.plays + 1 },
+    const watchEvent = await prisma.$transaction(async (tx) => {
+      const existing = await tx.watchEvent.findFirst({
+        where: { profileId, imdbId, season, episode, watchedAt: { gte: dayStart, lte: dayEnd } },
       });
-      syncWatchEventToTrakt(updated, { type, imdbId, seriesImdbId, season, episode }, request.log);
-      return reply.code(200).send({ watchEvent: serializeWatchEvent(updated) });
-    }
 
-    const watchEvent = await prisma.watchEvent.create({
-      data: { type, imdbId, seriesImdbId, season, episode, watchedAt, profileId },
+      if (existing) {
+        const updated = await tx.watchEvent.update({
+          where: { id: existing.id },
+          data: { plays: { increment: 1 }, watchedAt },
+        });
+        return updated;
+      }
+
+      return tx.watchEvent.create({
+        data: { type, imdbId, seriesImdbId, season, episode, watchedAt, profileId },
+      });
     });
+
+    syncWatchEventToTrakt(watchEvent, { type, imdbId, seriesImdbId, season, episode }, request.log);
 
     if (type === "episode" && seriesImdbId && season !== null && episode !== null) {
       await upsertSeriesProgressIfNewer(profileId, seriesImdbId, {
@@ -105,9 +108,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    syncWatchEventToTrakt(watchEvent, { type, imdbId, seriesImdbId, season, episode }, request.log);
-
-    return reply.code(201).send({ watchEvent: serializeWatchEvent(watchEvent) });
+    return reply.code(existing ? 200 : 201).send({ watchEvent: serializeWatchEvent(watchEvent) });
   });
 
   app.delete<{ Params: { eventId: string } }>("/watch/:eventId", async (request, reply) => {
