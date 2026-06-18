@@ -17,7 +17,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
   if (type === "episode") {
     const resolvedSeriesImdbId = seriesImdbId ?? imdbId;
 
-    const watchEvent = await prisma.$transaction(async (tx) => {
+    const { watchEvent, wasCreated } = await prisma.$transaction(async (tx) => {
       const existing = await tx.watchEvent.findFirst({
         where: {
           profileId,
@@ -38,7 +38,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
           { imdbId: resolvedSeriesImdbId, season, episode, plays: updated.plays },
           `${source} scrobble: episode play incremented`
         );
-        return updated;
+        return { watchEvent: updated, wasCreated: false };
       }
 
       const created = await tx.watchEvent.create({
@@ -53,7 +53,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
         },
       });
       req.log.info({ imdbId: resolvedSeriesImdbId, season, episode }, `${source} scrobble: episode recorded`);
-      return created;
+      return { watchEvent: created, wasCreated: true };
     });
 
     if (season != null && episode != null) {
@@ -82,10 +82,10 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
       } catch { /* never let this affect the watch event response */ }
     })();
 
-    return { status: "recorded" as const, watchEvent };
+    return { status: "recorded" as const, watchEvent, wasCreated };
   }
 
-  const watchEvent = await prisma.$transaction(async (tx) => {
+  const { watchEvent, wasCreated } = await prisma.$transaction(async (tx) => {
     const existing = await tx.watchEvent.findFirst({
       where: { profileId, imdbId, type: "movie", watchedAt: { gte: dayStart, lte: dayEnd } },
     });
@@ -96,14 +96,14 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
         data: { plays: { increment: 1 }, watchedAt },
       });
       req.log.info({ imdbId, plays: updated.plays }, `${source} scrobble: movie play incremented`);
-      return updated;
+      return { watchEvent: updated, wasCreated: false };
     }
 
     const created = await tx.watchEvent.create({
       data: { type: "movie", imdbId, watchedAt, profileId },
     });
     req.log.info({ imdbId }, `${source} scrobble: movie recorded`);
-    return created;
+    return { watchEvent: created, wasCreated: true };
   });
 
   syncWatchEventToTrakt(watchEvent, { type: "movie", imdbId }, req.log);
@@ -120,5 +120,5 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
     } catch { /* never let this affect the watch event response */ }
   })();
 
-  return { status: "recorded" as const, watchEvent };
+  return { status: "recorded" as const, watchEvent, wasCreated };
 };

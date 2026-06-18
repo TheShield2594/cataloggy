@@ -1,4 +1,5 @@
 import { MetadataType } from "@prisma/client";
+import { externalIdsCache } from "./lib/cache.js";
 
 type TmdbMediaType = "movie" | "tv";
 
@@ -194,8 +195,7 @@ export class TmdbClient {
           return null;
         }
 
-        const externalIds = await this.getExternalIds(mediaType, result.id);
-        const imdbId = externalIds.imdb_id?.trim();
+        const imdbId = await this.getImdbId(mediaType, result.id);
         if (!imdbId) {
           return null;
         }
@@ -221,8 +221,7 @@ export class TmdbClient {
 
         const mediaType = result.media_type as TmdbMediaType;
         const type = mediaType === "movie" ? MetadataType.movie : MetadataType.series;
-        const externalIds = await this.getExternalIds(mediaType, result.id);
-        const imdbId = externalIds.imdb_id?.trim();
+        const imdbId = await this.getImdbId(mediaType, result.id);
         if (!imdbId) {
           return null;
         }
@@ -242,8 +241,7 @@ export class TmdbClient {
     const withImdb = await Promise.all(
       results.slice(0, 20).map(async (result) => {
         if (!result.id) return null;
-        const externalIds = await this.getExternalIds(mediaType, result.id);
-        const imdbId = externalIds.imdb_id?.trim();
+        const imdbId = await this.getImdbId(mediaType, result.id);
         if (!imdbId) return null;
         return this.toMetadataPayload(type, result, imdbId);
       })
@@ -260,8 +258,7 @@ export class TmdbClient {
     const withImdb = await Promise.all(
       results.slice(0, 20).map(async (result) => {
         if (!result.id) return null;
-        const externalIds = await this.getExternalIds(mediaType, result.id);
-        const imdbId = externalIds.imdb_id?.trim();
+        const imdbId = await this.getImdbId(mediaType, result.id);
         if (!imdbId) return null;
         return this.toMetadataPayload(type, result, imdbId);
       })
@@ -278,8 +275,7 @@ export class TmdbClient {
     const withImdb = await Promise.all(
       results.slice(0, 20).map(async (result) => {
         if (!result.id) return null;
-        const externalIds = await this.getExternalIds(mediaType, result.id);
-        const imdbId = externalIds.imdb_id?.trim();
+        const imdbId = await this.getImdbId(mediaType, result.id);
         if (!imdbId) return null;
         return this.toMetadataPayload(type, result, imdbId);
       })
@@ -300,8 +296,7 @@ export class TmdbClient {
     const withImdb = await Promise.all(
       results.slice(0, 20).map(async (result) => {
         if (!result.id) return null;
-        const externalIds = await this.getExternalIds(mediaType, result.id);
-        const imdbId = externalIds.imdb_id?.trim();
+        const imdbId = await this.getImdbId(mediaType, result.id);
         if (!imdbId) return null;
         return this.toMetadataPayload(type, result, imdbId);
       })
@@ -331,8 +326,7 @@ export class TmdbClient {
     const withImdb = await Promise.all(
       results.slice(0, 20).map(async (result) => {
         if (!result.id) return null;
-        const externalIds = await this.getExternalIds(mediaType, result.id);
-        const imdbId = externalIds.imdb_id?.trim();
+        const imdbId = await this.getImdbId(mediaType, result.id);
         if (!imdbId) return null;
         return this.toMetadataPayload(type, result, imdbId);
       })
@@ -441,8 +435,17 @@ export class TmdbClient {
     }
   }
 
-  private async getExternalIds(mediaType: TmdbMediaType, tmdbId: number) {
-    return this.request<TmdbExternalIds>(`/${mediaType}/${tmdbId}/external_ids`);
+  private async getImdbId(mediaType: TmdbMediaType, tmdbId: number): Promise<string | null> {
+    const cacheKey = `${mediaType}:${tmdbId}`;
+    const cached = externalIdsCache.get(cacheKey);
+    if (cached !== undefined) {
+      return cached.imdbId;
+    }
+
+    const externalIds = await this.request<TmdbExternalIds>(`/${mediaType}/${tmdbId}/external_ids`);
+    const imdbId = externalIds.imdb_id?.trim() || null;
+    externalIdsCache.set(cacheKey, { imdbId });
+    return imdbId;
   }
 
   private parseCertification(type: MetadataType, details: TmdbDetailsResult): string | null {
