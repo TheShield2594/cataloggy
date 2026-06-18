@@ -24,7 +24,27 @@ export const cleanupStaleSessions = async (logger?: FastifyBaseLogger) => {
   }
 };
 
-const checkinKey = (profileId: string) => `checkin:active:${profileId}`;
+const toCheckInData = (row: {
+  type: WatchEventType;
+  imdbId: string;
+  seriesImdbId: string | null;
+  season: number | null;
+  episode: number | null;
+  name: string;
+  poster: string | null;
+  startedAt: Date;
+  expiresAt: Date | null;
+}): CheckInData => ({
+  type: row.type,
+  imdbId: row.imdbId,
+  seriesImdbId: row.seriesImdbId ?? undefined,
+  name: row.name,
+  poster: row.poster ?? undefined,
+  season: row.season ?? undefined,
+  episode: row.episode ?? undefined,
+  startedAt: row.startedAt.toISOString(),
+  expiresAt: row.expiresAt?.toISOString(),
+});
 
 const scrobbleRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", resolveProfile);
@@ -32,15 +52,9 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
   // ─── Check-in ───
 
   app.get("/checkin", async (request) => {
-    const key = checkinKey(request.profileId!);
-    const row = await prisma.kV.findUnique({ where: { key } });
+    const row = await prisma.checkIn.findUnique({ where: { profileId: request.profileId! } });
     if (!row) return { checkin: null };
-    try {
-      return { checkin: JSON.parse(row.value) as CheckInData };
-    } catch (error) {
-      request.log.debug({ error }, "Failed to parse stored check-in data");
-      return { checkin: null };
-    }
+    return { checkin: toCheckInData(row) };
   });
 
   app.post<{
@@ -56,24 +70,34 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
     };
   }>("/checkin", async (request) => {
     const { type, imdbId, seriesImdbId, name, poster, season, episode, runtime } = request.body;
-    const startedAt = new Date().toISOString();
-    const expiresAt = runtime ? new Date(Date.now() + runtime * 60 * 1000).toISOString() : undefined;
-    const checkin: CheckInData = { type, imdbId, seriesImdbId, name, poster, season, episode, startedAt, expiresAt };
-    const key = checkinKey(request.profileId!);
-    await prisma.kV.upsert({
-      where: { key },
-      create: { key, value: JSON.stringify(checkin), updatedAt: new Date() },
-      update: { value: JSON.stringify(checkin), updatedAt: new Date() },
+    const startedAt = new Date();
+    const expiresAt = runtime ? new Date(Date.now() + runtime * 60 * 1000) : null;
+    const profileId = request.profileId!;
+    const data = {
+      type: type as WatchEventType,
+      imdbId,
+      seriesImdbId: seriesImdbId ?? null,
+      name,
+      poster: poster ?? null,
+      season: season ?? null,
+      episode: episode ?? null,
+      startedAt,
+      expiresAt,
+    };
+    const row = await prisma.checkIn.upsert({
+      where: { profileId },
+      create: { profileId, ...data },
+      update: data,
     });
-    return { checkin };
+    return { checkin: toCheckInData(row) };
   });
 
   app.delete<{ Querystring: { log?: string } }>("/checkin", async (request, reply) => {
-    const key = checkinKey(request.profileId!);
-    const row = await prisma.kV.findUnique({ where: { key } });
+    const profileId = request.profileId!;
+    const row = await prisma.checkIn.findUnique({ where: { profileId } });
     if (row && request.query.log === "true") {
       try {
-        const checkin = JSON.parse(row.value) as CheckInData;
+        const checkin = toCheckInData(row);
         const seriesImdbId = checkin.seriesImdbId ?? checkin.imdbId;
         await recordWatchEvent({
           type: checkin.type,
@@ -89,7 +113,7 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
         request.log.warn(error, "Failed to log watch event from check-in");
       }
     }
-    await prisma.kV.deleteMany({ where: { key } });
+    await prisma.checkIn.deleteMany({ where: { profileId } });
     return reply.code(204).send();
   });
 
