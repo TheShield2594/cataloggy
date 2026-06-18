@@ -2,6 +2,7 @@ import { ScrobbleStatus, WatchEventType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { recordWatchEvent } from "../lib/watch-event.js";
+import { pushTraktScrobble } from "../lib/trakt-client.js";
 import { resolveProfile } from "../lib/profile.js";
 import type { CheckInData } from "../lib/types.js";
 
@@ -118,7 +119,7 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
     const progress = typeof body.progress === "number" ? Math.max(0, Math.min(100, body.progress)) : 0;
     const profileId = request.profileId!;
 
-    const { session, created } = await prisma.$transaction(async (tx) => {
+    const { session, created, wasPlaying } = await prisma.$transaction(async (tx) => {
       const existing = await tx.scrobbleSession.findFirst({
         where: {
           profileId,
@@ -134,14 +135,18 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
           where: { id: existing.id },
           data: { status: ScrobbleStatus.playing, progress },
         });
-        return { session: updated, created: false };
+        return { session: updated, created: false, wasPlaying: existing.status === ScrobbleStatus.playing };
       }
 
       const newSession = await tx.scrobbleSession.create({
         data: { type, imdbId, seriesImdbId, season, episode, status: ScrobbleStatus.playing, progress, profileId },
       });
-      return { session: newSession, created: true };
+      return { session: newSession, created: true, wasPlaying: false };
     });
+
+    if (!wasPlaying) {
+      void pushTraktScrobble("start", { type, imdbId, seriesImdbId, season, episode, progress }, request.log);
+    }
 
     return reply.code(created ? 201 : 200).send({ session });
   });
@@ -172,6 +177,19 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
       where: { id: session.id },
       data: { status: ScrobbleStatus.paused, ...(progress !== undefined ? { progress } : {}) },
     });
+
+    void pushTraktScrobble(
+      "pause",
+      {
+        type: session.type,
+        imdbId,
+        seriesImdbId: session.seriesImdbId,
+        season,
+        episode,
+        progress: updated.progress,
+      },
+      request.log
+    );
 
     return reply.code(200).send({ session: updated });
   });
@@ -226,6 +244,19 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
         request,
       });
       watchEvent = result.watchEvent;
+    } else {
+      void pushTraktScrobble(
+        "stop",
+        {
+          type: session.type,
+          imdbId,
+          seriesImdbId: session.seriesImdbId,
+          season: session.season,
+          episode: session.episode,
+          progress: finalProgress,
+        },
+        request.log
+      );
     }
 
     return reply.code(200).send({

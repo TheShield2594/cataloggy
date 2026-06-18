@@ -228,6 +228,56 @@ export type Profile = {
   hasPin: boolean;
 };
 
+export type ScrobbleSession = {
+  id: string;
+  type: "movie" | "episode";
+  imdbId: string;
+  seriesImdbId: string | null;
+  season: number | null;
+  episode: number | null;
+  status: "playing" | "paused" | "stopped";
+  progress: number;
+  startedAt: string;
+  updatedAt: string;
+  name: string | null;
+  poster: string | null;
+};
+
+export type ExportPayload = {
+  version: number;
+  exportedAt: string;
+  profile: { name: string };
+  lists: Array<{
+    name: string;
+    kind: "watchlist" | "custom";
+    items: Array<{ type: "movie" | "series"; imdbId: string; addedAt: string }>;
+  }>;
+  watchEvents: Array<{
+    type: "movie" | "episode";
+    imdbId: string;
+    seriesImdbId: string | null;
+    season: number | null;
+    episode: number | null;
+    watchedAt: string;
+    plays: number;
+  }>;
+  seriesProgress: Array<{
+    seriesImdbId: string;
+    lastSeason: number;
+    lastEpisode: number;
+    lastWatchedAt: string;
+  }>;
+  ratings: Array<{ imdbId: string; type: string; rating: number; ratedAt: string }>;
+};
+
+export type ImportSummary = {
+  lists: number;
+  listItems: number;
+  watchEvents: number;
+  seriesProgress: number;
+  ratings: number;
+};
+
 const authHeaders = (hasBody: boolean) => {
   const token = runtimeConfig.getToken();
   const headers: Record<string, string> = {
@@ -257,7 +307,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         ...(init?.headers ?? {})
       }
     });
-  } catch (err) {
+  } catch {
     clearTimeout(timeoutId);
     if (controller.signal.aborted) {
       throw new Error(`Request timed out – is the API server running at ${runtimeConfig.getApiBase()}?`);
@@ -332,8 +382,8 @@ export const api = {
     const res = await request<{ progress: SeriesProgress[] }>("/series/progress");
     return res.progress;
   },
-  async getWatchHistory(limit = 10) {
-    const res = await request<{ history: WatchEvent[] }>(`/watch/history?limit=${limit}`);
+  async getWatchHistory(limit = 10, offset = 0) {
+    const res = await request<{ history: WatchEvent[] }>(`/watch/history?limit=${limit}&offset=${offset}`);
     return res.history;
   },
   getWatchStats() {
@@ -570,5 +620,25 @@ export const api = {
   },
   deleteProfile(profileId: string) {
     return request<void>(`/profiles/${encodeURIComponent(profileId)}`, { method: "DELETE" });
+  },
+  // Now playing (live Plex/Jellyfin scrobble sessions)
+  getNowPlaying() {
+    return request<{ sessions: ScrobbleSession[] }>("/scrobble/now-playing");
+  },
+  // Data export / import
+  exportData() {
+    return request<ExportPayload>("/export");
+  },
+  importData(payload: ExportPayload) {
+    return request<{ status: string; summary: ImportSummary }>("/import", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  importCsv(csv: string) {
+    return request<{ status: string; summary: { imported: number; skipped: number } }>("/import/csv", {
+      method: "POST",
+      body: JSON.stringify({ csv }),
+    });
   },
 };

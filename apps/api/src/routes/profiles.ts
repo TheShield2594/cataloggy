@@ -14,6 +14,43 @@ const pinMatches = (pin: string, pinHash: string): boolean => {
   return timingSafeEqual(incoming, expected);
 };
 
+const MAX_PIN_ATTEMPTS = 5;
+const PIN_LOCKOUT_MS = 5 * 60 * 1000;
+
+const pinAttempts = new Map<string, { count: number; lockedUntil: number }>();
+
+// Only purge entries whose lockout has fully expired (lockedUntil > 0 acts as
+// the "is/was locked" marker). Entries below MAX_PIN_ATTEMPTS default to
+// lockedUntil 0, and 0 <= Date.now() is always true, so checking lockedUntil
+// alone would wipe in-progress failed-attempt counters on every call.
+const pruneExpiredPinLockouts = (): void => {
+  const now = Date.now();
+  for (const [profileId, entry] of pinAttempts) {
+    if (entry.lockedUntil > 0 && entry.lockedUntil <= now) pinAttempts.delete(profileId);
+  }
+};
+
+const getPinLockout = (profileId: string): { locked: boolean; retryAfterSec: number } => {
+  pruneExpiredPinLockouts();
+  const entry = pinAttempts.get(profileId);
+  if (!entry || entry.lockedUntil <= Date.now()) return { locked: false, retryAfterSec: 0 };
+  return { locked: true, retryAfterSec: Math.ceil((entry.lockedUntil - Date.now()) / 1000) };
+};
+
+const recordPinFailure = (profileId: string): void => {
+  const entry = pinAttempts.get(profileId) ?? { count: 0, lockedUntil: 0 };
+  entry.count += 1;
+  if (entry.count >= MAX_PIN_ATTEMPTS) {
+    entry.lockedUntil = Date.now() + PIN_LOCKOUT_MS;
+    entry.count = 0;
+  }
+  pinAttempts.set(profileId, entry);
+};
+
+const clearPinAttempts = (profileId: string): void => {
+  pinAttempts.delete(profileId);
+};
+
 const profilesRoutes: FastifyPluginAsync = async (app) => {
   app.get("/profiles", async () => {
     const profiles = await prisma.profile.findMany({
@@ -61,12 +98,21 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(200).send({ id: profile.id, name: profile.name });
     }
 
+    const lockout = getPinLockout(profile.id);
+    if (lockout.locked) {
+      return reply
+        .code(429)
+        .send({ error: "Too many incorrect attempts. Try again later.", retryAfterSec: lockout.retryAfterSec });
+    }
+
     const body = (request.body ?? {}) as { pin?: unknown };
     const pin = typeof body.pin === "string" ? body.pin.trim() : "";
     if (!pin || !pinMatches(pin, profile.pinHash)) {
+      recordPinFailure(profile.id);
       return reply.code(401).send({ error: "Incorrect PIN" });
     }
 
+    clearPinAttempts(profile.id);
     return reply.code(200).send({ id: profile.id, name: profile.name });
   });
 

@@ -2,6 +2,7 @@ import { ItemType, ListItemType, ListKind, MetadataType, Prisma } from "@prisma/
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { syncMetadata } from "../lib/metadata.js";
+import { pushTraktWatchlistChange } from "../lib/trakt-client.js";
 import { resolveProfile } from "../lib/profile.js";
 import { UUID_V4_PATTERN } from "../lib/types.js";
 
@@ -148,6 +149,10 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
           app.log.warn({ imdbId, type: metadataTypeForSync, err }, "Background metadata sync failed")
         );
 
+        if (list.kind === ListKind.watchlist) {
+          await pushTraktWatchlistChange("add", { type, imdbId }, request.log);
+        }
+
         return reply.code(201).send({ listItem });
       } catch (error) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -185,6 +190,14 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
 
       if (removed.count === 0) return reply.code(404).send({ error: "List item not found" });
 
+      if (list.kind === ListKind.watchlist) {
+        await pushTraktWatchlistChange(
+          "remove",
+          { type: type as ListItemType, imdbId: request.params.imdbId },
+          request.log
+        );
+      }
+
       return reply.code(204).send();
     }
   );
@@ -212,17 +225,22 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
         }
         where.type = request.query.type as ListItemType;
       } else {
-        const count = await prisma.listItem.count({ where });
-        if (count === 0) return reply.code(404).send({ error: "List item not found" });
-        if (count > 1) {
+        const matches = await prisma.listItem.findMany({ where });
+        if (matches.length === 0) return reply.code(404).send({ error: "List item not found" });
+        if (matches.length > 1) {
           return reply.code(400).send({
             error: "Multiple items match this imdbId; provide ?type=movie or ?type=series to disambiguate",
           });
         }
+        where.type = matches[0].type;
       }
 
       const removed = await prisma.listItem.deleteMany({ where });
       if (removed.count === 0) return reply.code(404).send({ error: "List item not found" });
+
+      if (list.kind === ListKind.watchlist) {
+        await pushTraktWatchlistChange("remove", { type: where.type!, imdbId: request.params.imdbId }, request.log);
+      }
 
       return reply.code(204).send();
     }
