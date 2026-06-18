@@ -143,7 +143,7 @@ const start = async () => {
   }
 
   setInterval(() => {
-    void cleanupStaleSessions().catch((error) => {
+    void cleanupStaleSessions(app.log).catch((error) => {
       app.log.error(error, "Scrobble session cleanup failed");
     });
   }, SCROBBLE_CLEANUP_INTERVAL_MS);

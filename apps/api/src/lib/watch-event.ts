@@ -75,11 +75,13 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
         if (await shouldRefreshAiRecs()) {
           trendingCacheDeletePrefix("ai-recs:");
           await Promise.allSettled([
-            getAiRecommendations("movie", 15, profileId),
-            getAiRecommendations("series", 15, profileId),
+            getAiRecommendations("movie", 15, profileId, req.log),
+            getAiRecommendations("series", 15, profileId, req.log),
           ]);
         }
-      } catch { /* never let this affect the watch event response */ }
+      } catch (error) {
+        req.log.warn(error, "Background AI recs refresh failed");
+      }
     })();
 
     return { status: "recorded" as const, watchEvent, wasCreated };
@@ -113,11 +115,13 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
       if (await shouldRefreshAiRecs()) {
         trendingCacheDeletePrefix("ai-recs:");
         await Promise.allSettled([
-          getAiRecommendations("movie", 15, profileId),
-          getAiRecommendations("series", 15, profileId),
+          getAiRecommendations("movie", 15, profileId, req.log),
+          getAiRecommendations("series", 15, profileId, req.log),
         ]);
       }
-    } catch { /* never let this affect the watch event response */ }
+    } catch (error) {
+      req.log.warn(error, "Background AI recs refresh failed");
+    }
   })();
 
   return { status: "recorded" as const, watchEvent, wasCreated };
