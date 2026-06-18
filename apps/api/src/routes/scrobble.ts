@@ -24,15 +24,16 @@ export const cleanupStaleSessions = async () => {
   }
 };
 
-const CHECKIN_KV_KEY = "checkin:active";
+const checkinKey = (profileId: string) => `checkin:active:${profileId}`;
 
 const scrobbleRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", resolveProfile);
 
   // ─── Check-in ───
 
-  app.get("/checkin", async () => {
-    const row = await prisma.kV.findUnique({ where: { key: CHECKIN_KV_KEY } });
+  app.get("/checkin", async (request) => {
+    const key = checkinKey(request.profileId!);
+    const row = await prisma.kV.findUnique({ where: { key } });
     if (!row) return { checkin: null };
     try {
       return { checkin: JSON.parse(row.value) as CheckInData };
@@ -57,16 +58,18 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
     const startedAt = new Date().toISOString();
     const expiresAt = runtime ? new Date(Date.now() + runtime * 60 * 1000).toISOString() : undefined;
     const checkin: CheckInData = { type, imdbId, seriesImdbId, name, poster, season, episode, startedAt, expiresAt };
+    const key = checkinKey(request.profileId!);
     await prisma.kV.upsert({
-      where: { key: CHECKIN_KV_KEY },
-      create: { key: CHECKIN_KV_KEY, value: JSON.stringify(checkin), updatedAt: new Date() },
+      where: { key },
+      create: { key, value: JSON.stringify(checkin), updatedAt: new Date() },
       update: { value: JSON.stringify(checkin), updatedAt: new Date() },
     });
     return { checkin };
   });
 
   app.delete<{ Querystring: { log?: string } }>("/checkin", async (request, reply) => {
-    const row = await prisma.kV.findUnique({ where: { key: CHECKIN_KV_KEY } });
+    const key = checkinKey(request.profileId!);
+    const row = await prisma.kV.findUnique({ where: { key } });
     if (row && request.query.log === "true") {
       try {
         const checkin = JSON.parse(row.value) as CheckInData;
@@ -83,7 +86,7 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
         });
       } catch { /* best-effort */ }
     }
-    await prisma.kV.deleteMany({ where: { key: CHECKIN_KV_KEY } });
+    await prisma.kV.deleteMany({ where: { key } });
     return reply.code(204).send();
   });
 

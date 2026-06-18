@@ -17,38 +17,69 @@ const pinMatches = (pin: string, pinHash: string): boolean => {
 const MAX_PIN_ATTEMPTS = 5;
 const PIN_LOCKOUT_MS = 5 * 60 * 1000;
 
-const pinAttempts = new Map<string, { count: number; lockedUntil: number }>();
+const pinAttemptKey = (profileId: string) => `pinattempts:${profileId}`;
 
-// Only purge entries whose lockout has fully expired (lockedUntil > 0 acts as
-// the "is/was locked" marker). Entries below MAX_PIN_ATTEMPTS default to
-// lockedUntil 0, and 0 <= Date.now() is always true, so checking lockedUntil
-// alone would wipe in-progress failed-attempt counters on every call.
-const pruneExpiredPinLockouts = (): void => {
-  const now = Date.now();
-  for (const [profileId, entry] of pinAttempts) {
-    if (entry.lockedUntil > 0 && entry.lockedUntil <= now) pinAttempts.delete(profileId);
-  }
+type PinAttemptData = { count: number; lockedUntil: string };
+
+const getPinLockout = async (profileId: string): Promise<{ locked: boolean; retryAfterSec: number }> => {
+  const row = await prisma.kV.findUnique({ where: { key: pinAttemptKey(profileId) } });
+  if (!row) return { locked: false, retryAfterSec: 0 };
+
+  try {
+    const data = JSON.parse(row.value) as PinAttemptData;
+    if (data.lockedUntil && new Date(data.lockedUntil).getTime() > Date.now()) {
+      const retryAfterSec = Math.ceil((new Date(data.lockedUntil).getTime() - Date.now()) / 1000);
+      return { locked: true, retryAfterSec };
+    }
+  } catch { /* invalid data — treat as not locked */ }
+
+  return { locked: false, retryAfterSec: 0 };
 };
 
-const getPinLockout = (profileId: string): { locked: boolean; retryAfterSec: number } => {
-  pruneExpiredPinLockouts();
-  const entry = pinAttempts.get(profileId);
-  if (!entry || entry.lockedUntil <= Date.now()) return { locked: false, retryAfterSec: 0 };
-  return { locked: true, retryAfterSec: Math.ceil((entry.lockedUntil - Date.now()) / 1000) };
+const recordPinFailure = async (profileId: string): Promise<void> => {
+  const key = pinAttemptKey(profileId);
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    // Lock the row for the duration of this transaction so concurrent
+    // attempts can't read the same stale count. If the row doesn't exist
+    // yet, we create it first and then lock it via the upsert below — the
+    // unique constraint on KV.key ensures only one row wins the race.
+    await tx.$executeRaw`SELECT value FROM "KV" WHERE key = ${key} FOR UPDATE`;
+
+    const row = await tx.kV.findUnique({ where: { key } });
+    let data: PinAttemptData;
+
+    if (row) {
+      try {
+        data = JSON.parse(row.value) as PinAttemptData;
+        // If a previous lockout has expired, reset count
+        if (data.lockedUntil && new Date(data.lockedUntil).getTime() <= Date.now()) {
+          data = { count: 0, lockedUntil: "" };
+        }
+      } catch {
+        data = { count: 0, lockedUntil: "" };
+      }
+    } else {
+      data = { count: 0, lockedUntil: "" };
+    }
+
+    data.count += 1;
+    if (data.count >= MAX_PIN_ATTEMPTS) {
+      data.lockedUntil = new Date(Date.now() + PIN_LOCKOUT_MS).toISOString();
+      data.count = 0;
+    }
+
+    await tx.kV.upsert({
+      where: { key },
+      create: { key, value: JSON.stringify(data), updatedAt: now },
+      update: { value: JSON.stringify(data), updatedAt: now },
+    });
+  });
 };
 
-const recordPinFailure = (profileId: string): void => {
-  const entry = pinAttempts.get(profileId) ?? { count: 0, lockedUntil: 0 };
-  entry.count += 1;
-  if (entry.count >= MAX_PIN_ATTEMPTS) {
-    entry.lockedUntil = Date.now() + PIN_LOCKOUT_MS;
-    entry.count = 0;
-  }
-  pinAttempts.set(profileId, entry);
-};
-
-const clearPinAttempts = (profileId: string): void => {
-  pinAttempts.delete(profileId);
+const clearPinAttempts = async (profileId: string): Promise<void> => {
+  await prisma.kV.deleteMany({ where: { key: pinAttemptKey(profileId) } });
 };
 
 const profilesRoutes: FastifyPluginAsync = async (app) => {
@@ -98,7 +129,7 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(200).send({ id: profile.id, name: profile.name });
     }
 
-    const lockout = getPinLockout(profile.id);
+    const lockout = await getPinLockout(profile.id);
     if (lockout.locked) {
       return reply
         .code(429)
@@ -108,11 +139,11 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
     const body = (request.body ?? {}) as { pin?: unknown };
     const pin = typeof body.pin === "string" ? body.pin.trim() : "";
     if (!pin || !pinMatches(pin, profile.pinHash)) {
-      recordPinFailure(profile.id);
+      await recordPinFailure(profile.id);
       return reply.code(401).send({ error: "Incorrect PIN" });
     }
 
-    clearPinAttempts(profile.id);
+    await clearPinAttempts(profile.id);
     return reply.code(200).send({ id: profile.id, name: profile.name });
   });
 
@@ -130,6 +161,9 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
     }
 
     await prisma.profile.delete({ where: { id: profile.id } });
+
+    // Clean up any PIN attempt records for the deleted profile
+    await clearPinAttempts(profile.id);
 
     return reply.code(204).send();
   });
