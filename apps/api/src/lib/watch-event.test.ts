@@ -26,7 +26,7 @@ vi.mock("./trakt-client.js", () => traktClientMock);
 const makeRequest = (profileId = "profile-1"): FastifyRequest =>
   ({
     profileId,
-    log: { info: vi.fn(), warn: vi.fn() },
+    log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), trace: vi.fn(), fatal: vi.fn() },
   }) as unknown as FastifyRequest;
 
 describe("recordWatchEvent", () => {

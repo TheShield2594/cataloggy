@@ -48,14 +48,14 @@ export function WatchHistorySection({
                 )}
               </div>
               <time className="shrink-0 text-2xs text-ink-500">
-                {new Date(event.watchedAt).getFullYear() === 2000 && new Date(event.watchedAt).getMonth() === 0
+                {new Date(event.watchedAt).toISOString().slice(0, 10) === "2000-01-01"
                   ? "Unknown date"
                   : new Date(event.watchedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
               </time>
               <button
                 type="button"
                 onClick={() => onDeleteEvent(event.id)}
-                className="shrink-0 rounded p-1 text-ink-400 opacity-0 group-hover:opacity-100 hover:bg-rose-500/10 hover:text-rose-500 transition-all"
+                className="shrink-0 rounded p-1 text-ink-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-rose-500/10 hover:text-rose-500 transition-all"
                 aria-label="Remove watch event"
               >
                 <Trash2 className="h-3.5 w-3.5" />

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Star } from "lucide-react";
 import { api, ApiError, MediaType } from "../../api";
 import { ImdbLogo, RtLogo, McIcon } from "./RatingLogos";
@@ -50,25 +50,26 @@ export function StarRating({
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const canceledRef = useRef(false);
 
   useEffect(() => {
     setUserRating(null); setHoverRating(null); setLoaded(false); setLoadError(null);
-    let canceled = false;
+    canceledRef.current = false;
     void (async () => {
       try {
         const res = await api.getRating(type, imdbId);
-        if (!canceled) setUserRating(res.rating.rating);
+        if (!canceledRef.current) setUserRating(res.rating.rating);
       } catch (err) {
-        if (!canceled) {
+        if (!canceledRef.current) {
           if (!(err instanceof ApiError && err.status === 404)) {
             setLoadError(err instanceof Error ? err.message : "Failed to load rating");
           }
         }
       } finally {
-        if (!canceled) setLoaded(true);
+        if (!canceledRef.current) setLoaded(true);
       }
     })();
-    return () => { canceled = true; };
+    return () => { canceledRef.current = true; };
   }, [imdbId, type]);
 
   const handleRate = async (rating: number) => {
@@ -91,12 +92,14 @@ export function StarRating({
     void (async () => {
       try {
         const res = await api.getRating(type, imdbId);
-        setUserRating(res.rating.rating);
+        if (!canceledRef.current) setUserRating(res.rating.rating);
       } catch (err) {
-        if (!(err instanceof ApiError && err.status === 404)) {
+        if (!canceledRef.current && !(err instanceof ApiError && err.status === 404)) {
           setLoadError(err instanceof Error ? err.message : "Failed to load rating");
         }
-      } finally { setLoaded(true); }
+      } finally {
+        if (!canceledRef.current) setLoaded(true);
+      }
     })();
   }, [imdbId, type]);
 

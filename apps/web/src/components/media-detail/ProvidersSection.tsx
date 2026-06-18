@@ -5,15 +5,20 @@ export function ProvidersSection({ providers, loading }: { providers: WatchProvi
   if (loading || !providers) return null;
   if (providers.flatrate.length === 0 && providers.free.length === 0) return null;
 
+  const seen = new Set<number>();
+  const uniqueProviders = [...providers.flatrate, ...providers.free].filter((p) => {
+    if (seen.has(p.id)) return false;
+    seen.add(p.id);
+    return true;
+  });
+
   return (
     <div>
       <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-500">
         <MonitorPlay className="h-3.5 w-3.5" /> Where to Watch
       </h3>
       <div className="flex flex-wrap gap-2">
-        {[...providers.flatrate, ...providers.free]
-          .filter((p, i, arr) => arr.findIndex((q) => q.id === p.id) === i)
-          .map((p) => (
+        {uniqueProviders.map((p) => (
           <span
             key={p.id}
             title={p.name}

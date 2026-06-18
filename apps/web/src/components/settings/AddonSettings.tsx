@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { api, runtimeConfig } from "../../api";
 import { Loader2, Check, AlertCircle, Copy, ExternalLink, Sparkles } from "lucide-react";
 
+const AI_CATALOGS = new Set(["cataloggy-ai-movie", "cataloggy-ai-series"]);
+
 const CATALOG_LABELS: Record<string, string> = {
   "cataloggy-trending-movie": "Trending Movies",
   "cataloggy-trending-series": "Trending Series",
@@ -142,7 +144,7 @@ export function AddonSettings() {
       {/* Discovery catalogs */}
       <div className="space-y-2">
         {available.map((catalog) => {
-          const isAiCatalog = catalog === "cataloggy-ai-movie" || catalog === "cataloggy-ai-series";
+          const isAiCatalog = AI_CATALOGS.has(catalog);
           return (
             <label
               key={catalog}
@@ -169,7 +171,7 @@ export function AddonSettings() {
           );
         })}
       </div>
-      {available.some((c) => c === "cataloggy-ai-movie" || c === "cataloggy-ai-series") && !aiConfigured && (
+      {available.some((c) => AI_CATALOGS.has(c)) && !aiConfigured && (
         <p className="text-xs text-ink-600 italic">Configure AI Recommendations to enable the AI Picks catalogs.</p>
       )}
 

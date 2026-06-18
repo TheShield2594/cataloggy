@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { runtimeConfig } from "../../api";
 import { Eye, EyeOff, Check } from "lucide-react";
 
@@ -6,12 +6,18 @@ export function ApiTokenSettings() {
   const [token, setToken] = useState(runtimeConfig.getToken());
   const [showToken, setShowToken] = useState(false);
   const [saved, setSaved] = useState(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => {
+    return () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current); };
+  }, []);
 
   const save = (e: FormEvent) => {
     e.preventDefault();
     runtimeConfig.setToken(token);
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
   };
 
   return (

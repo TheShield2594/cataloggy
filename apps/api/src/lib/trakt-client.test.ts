@@ -6,6 +6,11 @@ const makeLogger = (): FastifyBaseLogger =>
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
+    debug: vi.fn(),
+    trace: vi.fn(),
+    fatal: vi.fn(),
+    silent: vi.fn(),
+    child: vi.fn(),
   }) as unknown as FastifyBaseLogger;
 
 const prismaMock = {
@@ -27,20 +32,6 @@ vi.mock("./series-progress.js", () => seriesProgressMock);
 const resetMocks = () => {
   vi.resetModules();
   vi.clearAllMocks();
-  prismaMock.traktToken.findUnique.mockReset();
-  prismaMock.traktToken.upsert.mockReset();
-  prismaMock.kV.findUnique.mockReset();
-  prismaMock.kV.upsert.mockReset();
-  prismaMock.item.upsert.mockReset();
-  prismaMock.listItem.findMany.mockReset();
-  prismaMock.listItem.create.mockReset();
-  prismaMock.listItem.delete.mockReset();
-  prismaMock.watchEvent.update.mockReset();
-  prismaMock.watchEvent.findUnique.mockReset();
-  prismaMock.watchEvent.findFirst.mockReset();
-  prismaMock.watchEvent.create.mockReset();
-  watchlistMock.getDefaultWatchlist.mockReset();
-  seriesProgressMock.upsertSeriesProgressIfNewer.mockReset();
 };
 
 describe("trakt-client", () => {
