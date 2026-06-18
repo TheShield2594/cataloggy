@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-cataloggy}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in a .env file next to docker-compose.yml — see README.md}
     ports:
       - "5432:5432"
     volumes:
@@ -20,9 +20,9 @@ services:
   api:
     image: ghcr.io/theshield2594/cataloggy-api:latest
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-cataloggy}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in a .env file next to docker-compose.yml — see README.md}@db:5432/${POSTGRES_DB:-cataloggy}
       PORT: "7000"
-      API_TOKEN: ${API_TOKEN:-dev-token}
+      API_TOKEN: ${API_TOKEN:?Set API_TOKEN in a .env file next to docker-compose.yml — see README.md}
       CATALOGGY_ALLOWED_ORIGINS: ${CATALOGGY_ALLOWED_ORIGINS:-http://192.168.1.25:7002}
       CATALOGGY_API_PUBLIC: ${CATALOGGY_API_PUBLIC:-http://192.168.1.25:7000}
       # Optional integrations — set these in a .env file or export them.
@@ -54,7 +54,7 @@ services:
     environment:
       PORT: "7001"
       CATALOGGY_API_BASE: http://api:7000
-      CATALOGGY_API_TOKEN: ${API_TOKEN:-dev-token}
+      CATALOGGY_API_TOKEN: ${API_TOKEN:?Set API_TOKEN in a .env file next to docker-compose.yml — see README.md}
       ADDON_PUBLIC_BASE: ${ADDON_PUBLIC_BASE:-http://192.168.1.25:7001}
     ports:
       - "7001:7001"
@@ -74,6 +74,10 @@ services:
     image: ghcr.io/theshield2594/cataloggy-web:latest
     environment:
       VITE_API_BASE: ${VITE_API_BASE:-http://192.168.1.25:7000}
+      # Comma-separated hostnames allowed to reach the web server, beyond
+      # IPs/localhost (which are always allowed) — e.g. a domain proxied via
+      # Nginx Proxy Manager. Leave unset for LAN-IP-only access.
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
     ports:
       - "7002:7002"
     depends_on:

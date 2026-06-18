@@ -1,14 +1,11 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 const IS_DEVELOPMENT = process.env.NODE_ENV === "development";
-const PRODUCTION_UI_ORIGIN = "https://cataloggy.domain.com";
 const CATALOGGY_ALLOWED_ORIGINS = (process.env.CATALOGGY_ALLOWED_ORIGINS ?? "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
-export const ALLOWED_ORIGINS = IS_DEVELOPMENT
-  ? ["*"]
-  : Array.from(new Set([PRODUCTION_UI_ORIGIN, ...CATALOGGY_ALLOWED_ORIGINS]));
+export const ALLOWED_ORIGINS = IS_DEVELOPMENT ? ["*"] : Array.from(new Set(CATALOGGY_ALLOWED_ORIGINS));
 
 const CORS_METHODS = "GET,POST,DELETE,PATCH,OPTIONS";
 const CORS_HEADERS = "Authorization,Content-Type,X-Profile-Id";

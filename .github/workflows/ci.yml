@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  lint-typecheck-build:
+  lint-typecheck-test-build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -38,6 +38,9 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
 
       - name: Build
         run: pnpm build
