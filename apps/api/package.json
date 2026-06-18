@@ -9,6 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src",
+    "test": "vitest run",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push"
   },
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@types/web-push": "^3.6.4",
     "prisma": "^5.22.0",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "vitest": "^3.2.4"
   }
 }
