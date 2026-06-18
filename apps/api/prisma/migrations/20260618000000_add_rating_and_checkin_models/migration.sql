@@ -65,6 +65,10 @@ SELECT
     substring(kv.key from length('checkin:active:') + 1)::UUID AS "profileId"
 FROM "KV" kv
 WHERE kv.key LIKE 'checkin:active:%'
+  AND EXISTS (
+    SELECT 1 FROM "Profile" p
+    WHERE p.id = substring(kv.key from length('checkin:active:') + 1)::UUID
+  )
 ON CONFLICT DO NOTHING;
 
 DELETE FROM "KV" WHERE key LIKE 'rating:%' OR key LIKE 'checkin:active:%';

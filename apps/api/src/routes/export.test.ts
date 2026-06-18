@@ -244,7 +244,7 @@ describe("export routes", () => {
       await app.close();
     });
 
-    it("returns 400 when the CSV has only a header row", async () => {
+    it("returns 200 with an empty summary when the CSV has only a header row", async () => {
       const app = await buildApp();
       const response = await app.inject({
         method: "POST",

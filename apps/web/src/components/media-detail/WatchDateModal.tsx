@@ -41,12 +41,15 @@ export function WatchDateModal({
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="watch-date-modal-title"
         className="w-full max-w-sm rounded-2xl border border-ink-100 bg-cream-50 p-6 shadow-md"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-ink-900">When did you watch this?</h3>
-          <button type="button" onClick={onClose} className="rounded-lg p-1 text-ink-500 hover:text-ink-900">
+          <h3 id="watch-date-modal-title" className="text-base font-semibold text-ink-900">When did you watch this?</h3>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-ink-500 hover:text-ink-900">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -55,8 +58,9 @@ export function WatchDateModal({
         {target.kind === "episode" && (
           <div className="mb-4 flex gap-3">
             <div className="flex-1">
-              <label className="mb-1 block text-xs text-ink-500">Season</label>
+              <label htmlFor="watch-date-season" className="mb-1 block text-xs text-ink-500">Season</label>
               <input
+                id="watch-date-season"
                 type="number"
                 min={1}
                 value={season}
@@ -65,8 +69,9 @@ export function WatchDateModal({
               />
             </div>
             <div className="flex-1">
-              <label className="mb-1 block text-xs text-ink-500">Episode</label>
+              <label htmlFor="watch-date-episode" className="mb-1 block text-xs text-ink-500">Episode</label>
               <input
+                id="watch-date-episode"
                 type="number"
                 min={1}
                 value={episode}
@@ -103,7 +108,7 @@ export function WatchDateModal({
             <button
               type="button"
               disabled={saving}
-              onClick={() => void submit(new Date("2000-01-01T00:00:00.000Z").toISOString())}
+              onClick={() => void submit(new Date("2000-01-01T12:00:00.000Z").toISOString())}
               className="rounded-xl bg-ink-100 px-4 py-3 text-sm font-semibold text-ink-900 hover:bg-ink-200 disabled:opacity-50 transition-colors"
             >
               Unknown date

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import { Eye, EyeOff, Loader2, Check, AlertCircle, Unplug } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
@@ -11,6 +11,11 @@ export function OmdbSettings() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => {
+    return () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current); };
+  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -33,7 +38,8 @@ export function OmdbSettings() {
       const result = await api.setOmdbKey(apiKey.trim());
       setConfigured(result.configured);
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save OMDB key");
     } finally {

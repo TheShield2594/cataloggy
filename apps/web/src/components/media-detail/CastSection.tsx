@@ -31,8 +31,8 @@ export function CastSection({ cast, loading }: { cast: CastMember[]; loading: bo
         <User className="h-3.5 w-3.5" /> Cast
       </h3>
       <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
-        {cast.map((member) => (
-          <div key={member.name} className="flex-none w-16 text-center">
+        {cast.map((member, i) => (
+          <div key={`${i}-${member.name}`} className="flex-none w-16 text-center">
             {member.photo ? (
               <img
                 src={member.photo}

@@ -62,16 +62,18 @@ export function CheckInModal({
           <p className="text-sm text-ink-600">Which episode of <span className="font-semibold text-ink-900">{seriesName}</span> are you watching?</p>
           <div className="flex gap-3">
             <div className="flex-1">
-              <label className="mb-1.5 block text-xs font-medium text-ink-500">Season</label>
+              <label htmlFor="checkin-season" className="mb-1.5 block text-xs font-medium text-ink-500">Season</label>
               <input
+                id="checkin-season"
                 type="number" min="1" value={season}
                 onChange={(e) => setSeason(e.target.value)}
                 className="w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
               />
             </div>
             <div className="flex-1">
-              <label className="mb-1.5 block text-xs font-medium text-ink-500">Episode</label>
+              <label htmlFor="checkin-episode" className="mb-1.5 block text-xs font-medium text-ink-500">Episode</label>
               <input
+                id="checkin-episode"
                 type="number" min="1" value={episode}
                 onChange={(e) => setEpisode(e.target.value)}
                 className="w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
