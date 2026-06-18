@@ -196,10 +196,11 @@ const start = async () => {
 
   const refreshAiRecommendations = async () => {
     if (!(await isAiConfigured())) return;
+    const profileId = await getDefaultProfileId();
     trendingCacheDeletePrefix("ai-recs:");
     await Promise.allSettled([
-      getAiRecommendations("movie", 15),
-      getAiRecommendations("series", 15),
+      getAiRecommendations("movie", 15, profileId),
+      getAiRecommendations("series", 15, profileId),
     ]);
   };
 
