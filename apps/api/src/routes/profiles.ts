@@ -39,35 +39,42 @@ const getPinLockout = async (profileId: string): Promise<{ locked: boolean; retr
 const recordPinFailure = async (profileId: string): Promise<void> => {
   const key = pinAttemptKey(profileId);
   const now = new Date();
-  const nowIso = now.toISOString();
 
-  const row = await prisma.kV.findUnique({ where: { key } });
-  let data: PinAttemptData;
+  await prisma.$transaction(async (tx) => {
+    // Lock the row for the duration of this transaction so concurrent
+    // attempts can't read the same stale count. If the row doesn't exist
+    // yet, we create it first and then lock it via the upsert below — the
+    // unique constraint on KV.key ensures only one row wins the race.
+    await tx.$executeRaw`SELECT value FROM "KV" WHERE key = ${key} FOR UPDATE`;
 
-  if (row) {
-    try {
-      data = JSON.parse(row.value) as PinAttemptData;
-      // If a previous lockout has expired, reset count
-      if (data.lockedUntil && new Date(data.lockedUntil).getTime() <= Date.now()) {
+    const row = await tx.kV.findUnique({ where: { key } });
+    let data: PinAttemptData;
+
+    if (row) {
+      try {
+        data = JSON.parse(row.value) as PinAttemptData;
+        // If a previous lockout has expired, reset count
+        if (data.lockedUntil && new Date(data.lockedUntil).getTime() <= Date.now()) {
+          data = { count: 0, lockedUntil: "" };
+        }
+      } catch {
         data = { count: 0, lockedUntil: "" };
       }
-    } catch {
+    } else {
       data = { count: 0, lockedUntil: "" };
     }
-  } else {
-    data = { count: 0, lockedUntil: "" };
-  }
 
-  data.count += 1;
-  if (data.count >= MAX_PIN_ATTEMPTS) {
-    data.lockedUntil = new Date(Date.now() + PIN_LOCKOUT_MS).toISOString();
-    data.count = 0;
-  }
+    data.count += 1;
+    if (data.count >= MAX_PIN_ATTEMPTS) {
+      data.lockedUntil = new Date(Date.now() + PIN_LOCKOUT_MS).toISOString();
+      data.count = 0;
+    }
 
-  await prisma.kV.upsert({
-    where: { key },
-    create: { key, value: JSON.stringify(data), updatedAt: now },
-    update: { value: JSON.stringify(data), updatedAt: now },
+    await tx.kV.upsert({
+      where: { key },
+      create: { key, value: JSON.stringify(data), updatedAt: now },
+      update: { value: JSON.stringify(data), updatedAt: now },
+    });
   });
 };
 
