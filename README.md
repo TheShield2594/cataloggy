@@ -100,6 +100,7 @@ http://192.168.1.25:7002
 ### Install as a PWA
 
 - **iOS Safari:** **Share** → **Add to Home Screen**
+- **Android Chrome:** **⋮ menu** → **Add to Home screen** (Chrome may also show an automatic "Install app" banner)
 
 ### Install Omni add-on on Apple TV
 
@@ -110,6 +111,23 @@ http://LAN-IP:7001/manifest.json
 ```
 
 > **Important:** Apple TV cannot use `localhost` URLs. The add-on URL must be reachable on your LAN from Apple TV.
+
+### Install the add-on on Android / Android TV
+
+Cataloggy's add-on service speaks the standard Stremio add-on protocol, so it works with the [Stremio app](https://www.stremio.com/downloads) on both Android phones/tablets and Android TV:
+
+1. Install **Stremio** from the Play Store (or sideload the APK on Android TV devices without Play Store access).
+2. Open Stremio → **Add-ons** → search icon / **"Community Add-ons"** → paste the add-on URL:
+
+   ```text
+   http://LAN-IP:7001/manifest.json
+   ```
+
+3. Confirm installation. Cataloggy's catalogs and metadata now appear inside Stremio's **Board**/**Discover** views.
+
+> **Important:** Android TV cannot use `localhost` URLs either — use your LAN IP (or your public domain, if set up via the Nginx Proxy Manager section below) so the URL is reachable from the TV.
+
+The web app itself also installs fine as a PWA on Android TV browsers that support it, but the Stremio app gives a better remote-control-friendly experience for browsing/playback on a TV.
 
 ## Nginx Proxy Manager Setup
 
@@ -127,6 +145,30 @@ https://cataloggy.domain.com/addon/manifest.json
 ```
 
 LAN development URLs stay available, so you can continue using direct local access like `http://LAN-IP:7002` and `http://LAN-IP:7001/manifest.json` on your network.
+
+## Backup & Restore
+
+Cataloggy stores everything in the Postgres database run by the `db` service in `docker-compose.yml`. Two helper scripts wrap `pg_dump`/`psql` for simple backup and restore:
+
+```bash
+# Back up the database to backups/cataloggy-<timestamp>.sql.gz
+./scripts/backup.sh
+
+# Restore from a backup file (prompts for confirmation; overwrites current data)
+./scripts/restore.sh backups/cataloggy-20260101-120000.sql.gz
+```
+
+Both scripts run against the `db` service via `docker compose exec`, so Docker Compose must already be up. They read `POSTGRES_USER`/`POSTGRES_DB` from the environment (same defaults as `docker-compose.yml`: `postgres`/`cataloggy`), and `backup.sh` writes into `BACKUP_DIR` (defaults to `./backups`).
+
+To schedule automatic backups, add a cron entry that runs `backup.sh` on a schedule, e.g. nightly at 3am:
+
+```cron
+0 3 * * * cd /path/to/cataloggy && ./scripts/backup.sh >> backups/backup.log 2>&1
+```
+
+### Export / import your data
+
+In addition to full database backups, Settings → Data lets you export your lists, watch history, series progress, and ratings as a single JSON file, and re-import it later (e.g. after a fresh install, or to migrate to a new instance). The API also accepts CSV watch-history imports (columns: `imdbId`, `type`, `watchedAt`, with optional `season`/`episode`) for importing history exported from other tools.
 
 ## Useful Commands
 

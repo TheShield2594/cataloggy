@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { upsertSeriesProgressIfNewer } from "../lib/series-progress.js";
 import { resolveProfile } from "../lib/profile.js";
+import { syncWatchEventToTrakt } from "../lib/trakt-client.js";
 
 function serializeWatchEvent<T extends { traktHistoryId: bigint | null }>(event: T) {
   return { ...event, traktHistoryId: event.traktHistoryId != null ? event.traktHistoryId.toString() : null };
@@ -88,6 +89,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
         where: { id: existing.id },
         data: { plays: existing.plays + 1 },
       });
+      syncWatchEventToTrakt(updated, { type, imdbId, seriesImdbId, season, episode }, request.log);
       return reply.code(200).send({ watchEvent: serializeWatchEvent(updated) });
     }
 
@@ -102,6 +104,8 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
         lastWatchedAt: watchedAt,
       });
     }
+
+    syncWatchEventToTrakt(watchEvent, { type, imdbId, seriesImdbId, season, episode }, request.log);
 
     return reply.code(201).send({ watchEvent: serializeWatchEvent(watchEvent) });
   });
