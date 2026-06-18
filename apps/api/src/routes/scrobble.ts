@@ -1,5 +1,5 @@
 import { ScrobbleStatus, WatchEventType } from "@prisma/client";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyBaseLogger } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { recordWatchEvent } from "../lib/watch-event.js";
 import { pushTraktScrobble } from "../lib/trakt-client.js";
@@ -10,7 +10,7 @@ export const SCROBBLE_COMPLETE_THRESHOLD = 80;
 export const SCROBBLE_STALE_TTL_MS = 24 * 60 * 60 * 1000;
 export const SCROBBLE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
-export const cleanupStaleSessions = async () => {
+export const cleanupStaleSessions = async (logger?: FastifyBaseLogger) => {
   const cutoff = new Date(Date.now() - SCROBBLE_STALE_TTL_MS);
   const { count } = await prisma.scrobbleSession.updateMany({
     where: {
@@ -20,7 +20,7 @@ export const cleanupStaleSessions = async () => {
     data: { status: ScrobbleStatus.stopped },
   });
   if (count > 0) {
-    console.info(`Cleaned up ${count} stale scrobble sessions`);
+    logger?.info(`Cleaned up ${count} stale scrobble sessions`);
   }
 };
 
@@ -37,7 +37,8 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
     if (!row) return { checkin: null };
     try {
       return { checkin: JSON.parse(row.value) as CheckInData };
-    } catch {
+    } catch (error) {
+      request.log.debug({ error }, "Failed to parse stored check-in data");
       return { checkin: null };
     }
   });
@@ -84,7 +85,9 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
           source: "checkin",
           request,
         });
-      } catch { /* best-effort */ }
+      } catch (error) {
+        request.log.warn(error, "Failed to log watch event from check-in");
+      }
     }
     await prisma.kV.deleteMany({ where: { key } });
     return reply.code(204).send();
