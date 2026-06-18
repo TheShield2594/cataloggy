@@ -66,7 +66,7 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       const profileId = request.profileId!;
 
       if (await isAiConfigured()) {
-        const aiResult = await getAiRecommendations(rawType as "movie" | "series", limit, profileId);
+        const aiResult = await getAiRecommendations(rawType as "movie" | "series", limit, profileId, request.log);
         if (aiResult) return { metas: aiResult.metas };
       }
 
@@ -249,7 +249,7 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      const result = await getAiRecommendations(type, limit, profileId);
+      const result = await getAiRecommendations(type, limit, profileId, request.log);
       if (!result) return { metas: [], reasons: {} };
       return { metas: result.metas, reasons: result.reasons };
     }
