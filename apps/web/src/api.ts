@@ -5,7 +5,14 @@ export class ApiError extends Error {
   }
 }
 
-const API_BASE_DEFAULT = import.meta.env.VITE_API_BASE ?? "http://localhost:7000";
+declare global {
+  interface Window {
+    __CATALOGGY_API_BASE__?: string;
+  }
+}
+
+const API_BASE_DEFAULT =
+  window.__CATALOGGY_API_BASE__ || import.meta.env.VITE_API_BASE || "http://localhost:7000";
 const API_BASE_OVERRIDE_KEY = "cataloggy_api_base_override";
 const TOKEN_KEY = "cataloggy_token";
 const PROFILE_ID_KEY = "cataloggy_profile_id";
