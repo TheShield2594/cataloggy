@@ -1,0 +1,33 @@
+import { MonitorPlay } from "lucide-react";
+import { WatchProviders } from "../../api";
+
+export function ProvidersSection({ providers, loading }: { providers: WatchProviders | null; loading: boolean }) {
+  if (loading || !providers) return null;
+  if (providers.flatrate.length === 0 && providers.free.length === 0) return null;
+
+  return (
+    <div>
+      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-500">
+        <MonitorPlay className="h-3.5 w-3.5" /> Where to Watch
+      </h3>
+      <div className="flex flex-wrap gap-2">
+        {[...providers.flatrate, ...providers.free]
+          .filter((p, i, arr) => arr.findIndex((q) => q.id === p.id) === i)
+          .map((p) => (
+          <span
+            key={p.id}
+            title={p.name}
+            className="flex items-center gap-1.5 rounded-full bg-ink-100 px-2.5 py-1 text-xs text-ink-700"
+          >
+            {p.logo ? (
+              <img src={p.logo} alt="" className="h-4 w-4 rounded" />
+            ) : (
+              <MonitorPlay className="h-3.5 w-3.5 text-ink-500" />
+            )}
+            {p.name}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}

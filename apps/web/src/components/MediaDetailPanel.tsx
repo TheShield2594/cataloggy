@@ -1,481 +1,20 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Calendar, Check, ChevronRight, Clock, Film, MonitorPlay, Radio, Star, Trash2, Tv, TvMinimalPlay, User, X,
+  Check, Clock, Film, Star, Tv, TvMinimalPlay, X,
 } from "lucide-react";
-import { api, ApiError, CatalogList, CheckIn, MediaType, SearchResult, WatchEvent, WatchProviders } from "../api";
+import { api, CatalogList, CheckIn, SearchResult, WatchEvent, WatchProviders } from "../api";
+import { WatchDateModal } from "./media-detail/WatchDateModal";
+import { CheckInModal } from "./media-detail/CheckInModal";
+import { ExternalRatings, StarRating } from "./media-detail/RatingsSection";
+import { CastSection, CastMember } from "./media-detail/CastSection";
+import { SeasonsSection, SeasonInfo } from "./media-detail/SeasonsSection";
+import { ProvidersSection } from "./media-detail/ProvidersSection";
+import { CheckInBlock } from "./media-detail/CheckInBlock";
+import { WatchHistorySection } from "./media-detail/WatchHistorySection";
+import { DropShowButton } from "./media-detail/DropShowButton";
+import { formatRuntime, statusColor, WatchLogTarget } from "./media-detail/detailPanelUtils";
 
-/* ─── Rating Source Logos ─────────────────────────────────── */
-
-function ImdbLogo() {
-  return (
-    <span
-      className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-black leading-none text-black"
-      style={{ background: "#F5C518", fontFamily: "Arial Black, Arial, sans-serif" }}
-    >
-      IMDb
-    </span>
-  );
-}
-
-function RtLogo({ score }: { score: number }) {
-  const isFresh = score >= 60;
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Rotten Tomatoes">
-      {isFresh ? (
-        <>
-          <circle cx="9" cy="11" r="6.5" fill="#FA320A" />
-          <ellipse cx="9" cy="4.5" rx="1" ry="2" fill="#00C300" transform="rotate(-15 9 4.5)" />
-          <ellipse cx="11" cy="3.5" rx="0.8" ry="1.8" fill="#00C300" transform="rotate(15 11 3.5)" />
-          <ellipse cx="7" cy="3.5" rx="0.8" ry="1.8" fill="#00C300" transform="rotate(-15 7 3.5)" />
-          <circle cx="7" cy="9" r="1.5" fill="#FA6040" opacity="0.5" />
-          <circle cx="11.5" cy="11.5" r="1" fill="#FA6040" opacity="0.4" />
-        </>
-      ) : (
-        <>
-          <circle cx="9" cy="10" r="6" fill="#69BE28" opacity="0.9" />
-          <path d="M6 7 L12 13 M12 7 L6 13" stroke="#3a7a00" strokeWidth="1.5" strokeLinecap="round" />
-          <circle cx="9" cy="10" r="3" fill="#69BE28" />
-        </>
-      )}
-    </svg>
-  );
-}
-
-function McIcon({ score }: { score: number }) {
-  const color = score >= 61 ? "#6ac045" : score >= 40 ? "#ffbd3f" : "#ff4444";
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Metacritic">
-      <rect width="18" height="18" rx="3" fill={color} />
-      <text x="9" y="13" textAnchor="middle" fontSize="11" fontWeight="900" fill="white" fontFamily="Arial Black, Arial, sans-serif">M</text>
-    </svg>
-  );
-}
-
-/* ─── Helpers ─────────────────────────────────────────────── */
-
-function formatRuntime(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}
-
-function statusColor(status: string): string {
-  const s = status.toLowerCase();
-  if (s.includes("return") || s.includes("ongoing")) return "text-green-400 bg-green-500/10 ring-green-500/20";
-  if (s.includes("ended") || s.includes("cancel")) return "text-rose-400 bg-rose-500/10 ring-rose-500/20";
-  if (s.includes("production") || s.includes("planned")) return "text-amber-400 bg-amber-500/10 ring-amber-500/20";
-  return "text-ink-600 bg-ink-100 ring-ink-200";
-}
-
-/* ─── Watch Date Modal ────────────────────────────────────── */
-
-type WatchLogTarget =
-  | { kind: "movie"; imdbId: string; releaseDate: string | null | undefined }
-  | { kind: "episode"; seriesImdbId: string; season: number; episode: number };
-
-function WatchDateModal({
-  target,
-  onLog,
-  onClose,
-}: {
-  target: WatchLogTarget;
-  onLog: (date: string, episode?: { season: number; episode: number }) => Promise<void>;
-  onClose: () => void;
-}) {
-  const [mode, setMode] = useState<"quick" | "custom">("quick");
-  const [customDate, setCustomDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // For episode mode: let user pick season+episode
-  const [season, setSeason] = useState(target.kind === "episode" ? target.season : 1);
-  const [episode, setEpisode] = useState(target.kind === "episode" ? target.episode : 1);
-
-  const submit = async (dateIso: string) => {
-    setSaving(true);
-    setError(null);
-    try {
-      const episodeInfo = target.kind === "episode" ? { season, episode } : undefined;
-      await onLog(dateIso, episodeInfo);
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to log watch");
-      setSaving(false);
-    }
-  };
-
-  const releaseDate = target.kind === "movie" ? target.releaseDate : null;
-
-  return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-sm rounded-2xl border border-ink-100 bg-cream-50 p-6 shadow-md"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-5 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-ink-900">When did you watch this?</h3>
-          <button type="button" onClick={onClose} className="rounded-lg p-1 text-ink-500 hover:text-ink-900">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Episode pickers for series */}
-        {target.kind === "episode" && (
-          <div className="mb-4 flex gap-3">
-            <div className="flex-1">
-              <label className="mb-1 block text-xs text-ink-500">Season</label>
-              <input
-                type="number"
-                min={1}
-                value={season}
-                onChange={(e) => setSeason(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-claw-500/30"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="mb-1 block text-xs text-ink-500">Episode</label>
-              <input
-                type="number"
-                min={1}
-                value={episode}
-                onChange={(e) => setEpisode(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-claw-500/30"
-              />
-            </div>
-          </div>
-        )}
-
-        {mode === "quick" ? (
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => void submit(new Date().toISOString())}
-              className="rounded-xl bg-plum-500 px-4 py-3 text-sm font-semibold text-white hover:bg-plum-600 disabled:opacity-50 transition-colors"
-            >
-              Just finished
-            </button>
-            {releaseDate && (
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => {
-                  const [y, m, d] = releaseDate.split("-").map(Number);
-                  void submit(new Date(Date.UTC(y, m - 1, d, 12)).toISOString());
-                }}
-                className="rounded-xl bg-ink-100 px-4 py-3 text-sm font-semibold text-ink-900 hover:bg-ink-200 disabled:opacity-50 transition-colors"
-              >
-                Release date
-              </button>
-            )}
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => void submit(new Date("2000-01-01T00:00:00.000Z").toISOString())}
-              className="rounded-xl bg-ink-100 px-4 py-3 text-sm font-semibold text-ink-900 hover:bg-ink-200 disabled:opacity-50 transition-colors"
-            >
-              Unknown date
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("custom")}
-              className="rounded-xl bg-ink-100 px-4 py-3 text-sm font-semibold text-ink-900 hover:bg-ink-200 transition-colors"
-            >
-              Other date
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <input
-              type="date"
-              value={customDate}
-              max={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => setCustomDate(e.target.value)}
-              className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-claw-500/30"
-            />
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setMode("quick")}
-                className="flex-1 rounded-xl bg-ink-100 px-4 py-2.5 text-sm font-medium text-ink-700 hover:bg-ink-200 transition-colors"
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                disabled={saving || !customDate}
-                onClick={() => {
-                  const [y, m, d] = customDate.split("-").map(Number);
-                  void submit(new Date(Date.UTC(y, m - 1, d, 12)).toISOString());
-                }}
-                className="flex-1 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 disabled:opacity-50 transition-colors"
-              >
-                {saving ? "Saving…" : "Log Watch"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {error && <p className="mt-3 text-xs text-rose-400">{error}</p>}
-      </div>
-    </div>
-  );
-}
-
-/* ─── Check-in Modal (series episode picker) ─────────────── */
-
-function CheckInModal({
-  seriesName,
-  defaultSeason,
-  defaultEpisode,
-  onCheckIn,
-  onClose,
-}: {
-  seriesName: string;
-  defaultSeason: number;
-  defaultEpisode: number;
-  onCheckIn: (season: number, episode: number) => Promise<void>;
-  onClose: () => void;
-}) {
-  const [season, setSeason] = useState(String(defaultSeason));
-  const [episode, setEpisode] = useState(String(defaultEpisode));
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
-
-  const submit = async () => {
-    const s = parseInt(season, 10);
-    const ep = parseInt(episode, 10);
-    if (!s || !ep || s < 1 || ep < 1) { setError("Enter valid season and episode numbers"); return; }
-    setSaving(true);
-    setError(null);
-    try {
-      await onCheckIn(s, ep);
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to check in");
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="checkin-modal-title"
-        className="w-full max-w-sm rounded-2xl border border-ink-100 bg-cream-50 shadow-md"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
-          <div className="flex items-center gap-2">
-            <Radio className="h-4 w-4 text-claw-600" />
-            <h3 id="checkin-modal-title" className="text-base font-bold text-ink-900">Check In</h3>
-          </div>
-          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-ink-500 hover:bg-ink-100 hover:text-ink-900">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="px-5 py-4 space-y-4">
-          <p className="text-sm text-ink-600">Which episode of <span className="font-semibold text-ink-900">{seriesName}</span> are you watching?</p>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="mb-1.5 block text-xs font-medium text-ink-500">Season</label>
-              <input
-                type="number" min="1" value={season}
-                onChange={(e) => setSeason(e.target.value)}
-                className="w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="mb-1.5 block text-xs font-medium text-ink-500">Episode</label>
-              <input
-                type="number" min="1" value={episode}
-                onChange={(e) => setEpisode(e.target.value)}
-                className="w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
-              />
-            </div>
-          </div>
-          {error && <p className="text-xs text-rose-400">{error}</p>}
-          <div className="flex gap-3 pt-1">
-            <button
-              type="button" onClick={onClose}
-              className="flex-1 rounded-xl bg-ink-100 px-4 py-2.5 text-sm font-medium text-ink-700 hover:bg-ink-200 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="button" disabled={saving} onClick={() => void submit()}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 disabled:opacity-50 transition-colors"
-            >
-              <Radio className="h-3.5 w-3.5" />
-              {saving ? "Checking in…" : "Check In"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─── External Ratings ────────────────────────────────────── */
-
-function ExternalRatings({
-  imdbRating, rtScore, mcScore,
-}: {
-  imdbRating: number | null | undefined;
-  rtScore: number | null | undefined;
-  mcScore: number | null | undefined;
-}) {
-  if (imdbRating == null && rtScore == null && mcScore == null) return null;
-  return (
-    <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-500">Ratings</h3>
-      <div className="flex flex-wrap items-center gap-4">
-        {imdbRating != null && (
-          <div className="flex items-center gap-1.5">
-            <ImdbLogo />
-            <span className="text-sm font-semibold text-ink-900">{imdbRating.toFixed(1)}</span>
-            <span className="text-xs text-ink-500">/10</span>
-          </div>
-        )}
-        {rtScore != null && (
-          <div className="flex items-center gap-1.5">
-            <RtLogo score={rtScore} />
-            <span className={`text-sm font-semibold ${rtScore >= 60 ? "text-green-600" : "text-rose-500"}`}>{rtScore}%</span>
-          </div>
-        )}
-        {mcScore != null && (
-          <div className="flex items-center gap-1.5">
-            <McIcon score={mcScore} />
-            <span className="text-sm font-semibold text-ink-900">{mcScore}</span>
-            <span className="text-xs text-ink-500">/100</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ─── Star Rating Component ───────────────────────────────── */
-
-export function StarRating({
-  imdbId, type, onError,
-}: {
-  imdbId: string; type: MediaType; onError?: (message: string) => void;
-}) {
-  const [userRating, setUserRating] = useState<number | null>(null);
-  const [hoverRating, setHoverRating] = useState<number | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setUserRating(null); setHoverRating(null); setLoaded(false); setLoadError(null);
-    let canceled = false;
-    void (async () => {
-      try {
-        const res = await api.getRating(type, imdbId);
-        if (!canceled) setUserRating(res.rating.rating);
-      } catch (err) {
-        if (!canceled) {
-          if (!(err instanceof ApiError && err.status === 404)) {
-            setLoadError(err instanceof Error ? err.message : "Failed to load rating");
-          }
-        }
-      } finally {
-        if (!canceled) setLoaded(true);
-      }
-    })();
-    return () => { canceled = true; };
-  }, [imdbId, type]);
-
-  const handleRate = async (rating: number) => {
-    if (saving) return;
-    if (userRating === rating) {
-      setSaving(true);
-      try { await api.deleteRating(type, imdbId); setUserRating(null); setHoverRating(null); }
-      catch (err) { onError?.(err instanceof Error ? err.message : "Failed to remove rating"); }
-      finally { setSaving(false); }
-      return;
-    }
-    setSaving(true);
-    try { const res = await api.setRating(imdbId, type, rating); setUserRating(res.rating.rating); setHoverRating(null); }
-    catch (err) { onError?.(err instanceof Error ? err.message : "Failed to save rating"); }
-    finally { setSaving(false); }
-  };
-
-  const retryLoadRating = useCallback(() => {
-    setLoadError(null); setLoaded(false);
-    void (async () => {
-      try {
-        const res = await api.getRating(type, imdbId);
-        setUserRating(res.rating.rating);
-      } catch (err) {
-        if (!(err instanceof ApiError && err.status === 404)) {
-          setLoadError(err instanceof Error ? err.message : "Failed to load rating");
-        }
-      } finally { setLoaded(true); }
-    })();
-  }, [imdbId, type]);
-
-  if (!loaded) return <div className="skeleton h-8 w-40 rounded-lg" />;
-
-  const displayRating = hoverRating ?? userRating ?? 0;
-  return (
-    <div>
-      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-500">
-        <Star className="h-3.5 w-3.5" /> Your Rating
-      </h3>
-      <div className="flex items-center gap-1">
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => {
-          const isFilled = userRating !== null && star <= userRating;
-          const isPreview = star <= displayRating;
-          return (
-            <button
-              key={star} type="button" disabled={saving}
-              onClick={() => void handleRate(star)}
-              onMouseEnter={() => setHoverRating(star)}
-              onMouseLeave={() => setHoverRating(null)}
-              onFocus={() => setHoverRating(star)}
-              onBlur={() => setHoverRating(null)}
-              className="flex flex-col items-center gap-0.5 p-0.5 disabled:opacity-50"
-              aria-label={`Rate ${star} out of 10`}
-            >
-              <span className="relative grid h-5 w-5 place-items-center">
-                <Star
-                  className={`absolute h-5 w-5 transition-colors duration-300 ${isPreview ? "text-amber-400" : "text-ink-300"}`}
-                />
-                <Star
-                  className={`star-shake-target absolute h-5 w-5 fill-amber-400 text-amber-400 transition-opacity duration-300 ${isFilled ? "star-pop opacity-100" : "opacity-0"}`}
-                />
-              </span>
-              <span
-                className={`h-1 w-4 rounded-full bg-amber-500/30 blur-[2px] transition-opacity duration-300 ${isPreview || isFilled ? "opacity-60" : "opacity-0"}`}
-              />
-            </button>
-          );
-        })}
-        {userRating !== null && <span className="ml-2 text-sm font-semibold text-amber-500">{userRating}/10</span>}
-      </div>
-      {loadError && (
-        <p className="mt-1 flex items-center gap-2 text-xs text-rose-400">
-          {loadError}
-          <button type="button" onClick={retryLoadRating} className="underline hover:text-rose-300">Retry</button>
-        </p>
-      )}
-    </div>
-  );
-}
+export { StarRating };
 
 /* ─── Detail Panel ────────────────────────────────────────── */
 
@@ -506,7 +45,7 @@ export function DetailPanel({
   }, []);
 
   // Cast
-  const [cast, setCast] = useState<Array<{ name: string; character: string; photo: string | null }>>([]);
+  const [cast, setCast] = useState<CastMember[]>([]);
   const [castLoading, setCastLoading] = useState(true);
 
   // Where to watch
@@ -514,7 +53,7 @@ export function DetailPanel({
   const [providersLoading, setProvidersLoading] = useState(true);
 
   // Seasons (series only)
-  const [seasons, setSeasons] = useState<Array<{ seasonNumber: number; name: string; episodeCount: number; airYear: number | null; poster: string | null }>>([]);
+  const [seasons, setSeasons] = useState<SeasonInfo[]>([]);
   const [seasonsLoading, setSeasonsLoading] = useState(item.type === "series");
 
   // Dropped state (series only)
@@ -751,52 +290,14 @@ export function DetailPanel({
           <StarRating imdbId={item.imdbId} type={item.type} onError={(msg) => onShowToast(msg, "error")} />
 
           {/* Check-in / Now Watching */}
-          {!checkinLoading && (
-            activeCheckin ? (
-              <div className="rounded-xl border border-claw-500/30 bg-claw-500/5 p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-claw-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-claw-500" />
-                  </span>
-                  <span className="text-sm font-semibold text-claw-600">Now Watching</span>
-                  {activeCheckin.season != null && activeCheckin.episode != null && (
-                    <span className="text-xs text-ink-500">S{String(activeCheckin.season).padStart(2,"0")}:E{String(activeCheckin.episode).padStart(2,"0")}</span>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void handleCheckout(false)}
-                    className="flex-1 rounded-xl border border-ink-200 bg-ink-100 px-3 py-2 text-xs font-semibold text-ink-700 hover:bg-ink-200 transition-colors"
-                  >
-                    Check Out
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleCheckout(true)}
-                    className="flex-1 rounded-xl bg-claw-500 px-3 py-2 text-xs font-semibold text-white hover:bg-claw-600 transition-colors"
-                  >
-                    Finished &amp; Log
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  if (item.type === "series") {
-                    setShowCheckinModal(true);
-                  } else {
-                    void handleCheckin();
-                  }
-                }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-ink-200 bg-cream-50 px-4 py-2.5 text-sm font-semibold text-ink-700 hover:border-claw-500/40 hover:bg-claw-500/5 hover:text-claw-600 transition-colors"
-              >
-                <Radio className="h-4 w-4" /> Check In
-              </button>
-            )
-          )}
+          <CheckInBlock
+            loading={checkinLoading}
+            activeCheckin={activeCheckin}
+            isSeries={item.type === "series"}
+            onStartCheckin={() => void handleCheckin()}
+            onStartSeriesCheckin={() => setShowCheckinModal(true)}
+            onCheckout={(logWatch) => void handleCheckout(logWatch)}
+          />
 
           {/* Description */}
           {item.description && (
@@ -807,173 +308,31 @@ export function DetailPanel({
           )}
 
           {/* Where to watch */}
-          {!providersLoading && providers && (providers.flatrate.length > 0 || providers.free.length > 0) && (
-            <div>
-              <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-500">
-                <MonitorPlay className="h-3.5 w-3.5" /> Where to Watch
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {[...providers.flatrate, ...providers.free]
-                  .filter((p, i, arr) => arr.findIndex((q) => q.id === p.id) === i)
-                  .map((p) => (
-                  <span
-                    key={p.id}
-                    title={p.name}
-                    className="flex items-center gap-1.5 rounded-full bg-ink-100 px-2.5 py-1 text-xs text-ink-700"
-                  >
-                    {p.logo ? (
-                      <img src={p.logo} alt="" className="h-4 w-4 rounded" />
-                    ) : (
-                      <MonitorPlay className="h-3.5 w-3.5 text-ink-500" />
-                    )}
-                    {p.name}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+          <ProvidersSection providers={providers} loading={providersLoading} />
 
           {/* Cast */}
-          {castLoading ? (
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-500">Cast</h3>
-              <div className="flex gap-3 overflow-hidden">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="flex-none w-16 space-y-1">
-                    <div className="skeleton h-16 w-16 rounded-full" />
-                    <div className="skeleton h-2.5 w-14 rounded" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : cast.length > 0 && (
-            <div>
-              <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-500">
-                <User className="h-3.5 w-3.5" /> Cast
-              </h3>
-              <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
-                {cast.map((member) => (
-                  <div key={member.name} className="flex-none w-16 text-center">
-                    {member.photo ? (
-                      <img
-                        src={member.photo}
-                        alt={member.name}
-                        className="h-16 w-16 rounded-full object-cover ring-1 ring-ink-100 mx-auto"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="h-16 w-16 rounded-full bg-ink-100 flex items-center justify-center mx-auto ring-1 ring-ink-100">
-                        <User className="h-6 w-6 text-ink-400" />
-                      </div>
-                    )}
-                    <p className="mt-1.5 text-2xs font-medium text-ink-700 leading-tight truncate">{member.name}</p>
-                    <p className="text-2xs text-ink-500 truncate">{member.character}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <CastSection cast={cast} loading={castLoading} />
 
           {/* Season Breakdown (series only) */}
           {item.type === "series" && (
-            seasonsLoading ? (
-              <div>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-500">Seasons</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {[1, 2, 3, 4].map((i) => <div key={i} className="skeleton h-10 rounded-xl" />)}
-                </div>
-              </div>
-            ) : seasons.length > 0 && (
-              <div>
-                <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-500">
-                  <Tv className="h-3.5 w-3.5" /> Seasons
-                </h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {seasons.map((s) => (
-                    <div key={s.seasonNumber} className="flex items-center gap-2.5 rounded-xl bg-cream-50 border border-ink-100 px-3 py-2.5">
-                      <div className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-ink-100 text-xs font-bold text-ink-700">
-                        {s.seasonNumber}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium text-ink-900 truncate">{s.name}</p>
-                        <p className="text-2xs text-ink-500">{s.episodeCount} eps{s.airYear ? ` · ${s.airYear}` : ""}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
+            <SeasonsSection seasons={seasons} loading={seasonsLoading} />
           )}
 
           {/* Watch History */}
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-500">
-                <Clock className="h-3.5 w-3.5" /> Watch History
-              </h3>
-              <button
-                type="button"
-                onClick={openWatchModal}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-claw-500/10 px-2.5 py-1 text-xs font-semibold text-claw-600 ring-1 ring-claw-500/20 hover:bg-claw-500/20 transition-colors"
-              >
-                <Calendar className="h-3 w-3" /> Log a Watch
-              </button>
-            </div>
-
-            {historyLoading ? (
-              <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="skeleton h-11 rounded-lg" />)}</div>
-            ) : history.length === 0 ? (
-              <p className="rounded-xl bg-cream-50 border border-ink-100 py-5 text-center text-sm text-ink-500">
-                No watch history yet
-              </p>
-            ) : (
-              <div className="space-y-1.5">
-                {history.map((event) => (
-                  <div key={event.id} className="group flex items-center gap-3 rounded-lg bg-cream-50 border border-ink-100 px-3 py-2.5">
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-ink-400" />
-                    <div className="min-w-0 flex-1">
-                      {event.season != null && event.episode != null ? (
-                        <span className="text-sm text-ink-900">
-                          S{String(event.season).padStart(2, "0")}:E{String(event.episode).padStart(2, "0")}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-ink-900">Watched</span>
-                      )}
-                    </div>
-                    <time className="shrink-0 text-2xs text-ink-500">
-                      {new Date(event.watchedAt).getFullYear() === 2000 && new Date(event.watchedAt).getMonth() === 0
-                        ? "Unknown date"
-                        : new Date(event.watchedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                    </time>
-                    <button
-                      type="button"
-                      onClick={() => void handleDeleteEvent(event.id)}
-                      className="shrink-0 rounded p-1 text-ink-400 opacity-0 group-hover:opacity-100 hover:bg-rose-500/10 hover:text-rose-500 transition-all"
-                      aria-label="Remove watch event"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <WatchHistorySection
+            history={history}
+            loading={historyLoading}
+            onLogWatch={openWatchModal}
+            onDeleteEvent={(eventId) => void handleDeleteEvent(eventId)}
+          />
 
           {/* Drop Show (series only) */}
-          {item.type === "series" && !droppedLoading && (
-            <div className="pt-2 border-t border-ink-100">
-              <button
-                type="button"
-                onClick={() => void handleToggleDrop()}
-                className={`w-full rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
-                  isDropped
-                    ? "bg-ink-100 text-ink-700 hover:bg-ink-200"
-                    : "bg-rose-500/10 text-rose-500 ring-1 ring-rose-500/20 hover:bg-rose-500/20"
-                }`}
-              >
-                {isDropped ? "✓ Dropped — Click to Undrop" : "Drop Show"}
-              </button>
-            </div>
+          {item.type === "series" && (
+            <DropShowButton
+              isDropped={isDropped}
+              loading={droppedLoading}
+              onToggle={() => void handleToggleDrop()}
+            />
           )}
           </div>
         </div>
