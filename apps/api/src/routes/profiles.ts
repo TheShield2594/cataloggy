@@ -19,7 +19,19 @@ const PIN_LOCKOUT_MS = 5 * 60 * 1000;
 
 const pinAttempts = new Map<string, { count: number; lockedUntil: number }>();
 
+// Only purge entries whose lockout has fully expired (lockedUntil > 0 acts as
+// the "is/was locked" marker). Entries below MAX_PIN_ATTEMPTS default to
+// lockedUntil 0, and 0 <= Date.now() is always true, so checking lockedUntil
+// alone would wipe in-progress failed-attempt counters on every call.
+const pruneExpiredPinLockouts = (): void => {
+  const now = Date.now();
+  for (const [profileId, entry] of pinAttempts) {
+    if (entry.lockedUntil > 0 && entry.lockedUntil <= now) pinAttempts.delete(profileId);
+  }
+};
+
 const getPinLockout = (profileId: string): { locked: boolean; retryAfterSec: number } => {
+  pruneExpiredPinLockouts();
   const entry = pinAttempts.get(profileId);
   if (!entry || entry.lockedUntil <= Date.now()) return { locked: false, retryAfterSec: 0 };
   return { locked: true, retryAfterSec: Math.ceil((entry.lockedUntil - Date.now()) / 1000) };

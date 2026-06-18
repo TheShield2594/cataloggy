@@ -146,8 +146,12 @@ const start = async () => {
     setInterval(() => {
       void (async () => {
         const profileId = await getDefaultProfileId();
-        await pollTraktHistory(app.log, profileId);
-        await syncTraktWatchlist(app.log, profileId);
+        await pollTraktHistory(app.log, profileId).catch((error) => {
+          app.log.error(error, "Scheduled Trakt history poll failed");
+        });
+        await syncTraktWatchlist(app.log, profileId).catch((error) => {
+          app.log.error(error, "Scheduled Trakt watchlist sync failed");
+        });
       })().catch((error) => {
         app.log.error(error, "Scheduled Trakt poll failed");
       });

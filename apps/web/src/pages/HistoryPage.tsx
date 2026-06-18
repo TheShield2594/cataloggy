@@ -55,6 +55,7 @@ export function HistoryPage() {
     try {
       await api.deleteWatchEvent(eventId);
       setEvents((prev) => prev.filter((e) => e.id !== eventId));
+      setOffset((prev) => prev - 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete watch event");
     } finally {

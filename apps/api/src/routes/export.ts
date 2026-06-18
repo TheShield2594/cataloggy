@@ -1,4 +1,4 @@
-import { ListItemType, ListKind, WatchEventType } from "@prisma/client";
+import { ListItemType, ListKind, Prisma, WatchEventType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { resolveProfile } from "../lib/profile.js";
@@ -133,7 +133,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
 
     const summary = { lists: 0, listItems: 0, watchEvents: 0, seriesProgress: 0, ratings: 0 };
 
-    for (const list of body.lists ?? []) {
+    for (const list of Array.isArray(body.lists) ? body.lists : []) {
       if (!isString(list.name) || !Object.values(ListKind).includes(list.kind)) continue;
 
       const targetList =
@@ -150,7 +150,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
               });
             })();
 
-      for (const item of list.items ?? []) {
+      for (const item of Array.isArray(list.items) ? list.items : []) {
         if (!Object.values(ListItemType).includes(item.type) || !isString(item.imdbId)) continue;
         const addedAt = parseDate(item.addedAt) ?? new Date();
 
@@ -159,13 +159,13 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
             data: { listId: targetList.id, type: item.type, imdbId: item.imdbId.trim(), addedAt },
           });
           summary.listItems += 1;
-        } catch {
-          // already exists — idempotent import, skip
+        } catch (error) {
+          if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
         }
       }
     }
 
-    for (const event of body.watchEvents ?? []) {
+    for (const event of Array.isArray(body.watchEvents) ? body.watchEvents : []) {
       if (!Object.values(WatchEventType).includes(event.type) || !isString(event.imdbId)) continue;
       const watchedAt = parseDate(event.watchedAt);
       if (!watchedAt) continue;
@@ -174,6 +174,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       const episode = isFiniteNumber(event.episode) ? event.episode : null;
       const seriesImdbId = isString(event.seriesImdbId) ? event.seriesImdbId.trim() : null;
       const imdbId = event.imdbId.trim();
+      const matchImdbId = event.type === WatchEventType.episode ? seriesImdbId ?? imdbId : imdbId;
 
       const dayStart = new Date(watchedAt);
       dayStart.setUTCHours(0, 0, 0, 0);
@@ -181,13 +182,22 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       dayEnd.setUTCHours(23, 59, 59, 999);
 
       const existing = await prisma.watchEvent.findFirst({
-        where: { profileId, imdbId, season, episode, watchedAt: { gte: dayStart, lte: dayEnd } },
+        where: {
+          profileId,
+          type: event.type,
+          ...(event.type === WatchEventType.episode
+            ? { seriesImdbId: matchImdbId }
+            : { imdbId: matchImdbId }),
+          season,
+          episode,
+          watchedAt: { gte: dayStart, lte: dayEnd },
+        },
       });
 
       if (existing) {
         await prisma.watchEvent.update({
           where: { id: existing.id },
-          data: { plays: existing.plays + (isFiniteNumber(event.plays) ? event.plays : 1) },
+          data: { plays: { increment: isFiniteNumber(event.plays) ? event.plays : 1 } },
         });
       } else {
         await prisma.watchEvent.create({
@@ -206,7 +216,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       summary.watchEvents += 1;
     }
 
-    for (const sp of body.seriesProgress ?? []) {
+    for (const sp of Array.isArray(body.seriesProgress) ? body.seriesProgress : []) {
       if (!isString(sp.seriesImdbId) || !isFiniteNumber(sp.lastSeason) || !isFiniteNumber(sp.lastEpisode)) {
         continue;
       }
@@ -221,7 +231,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       summary.seriesProgress += 1;
     }
 
-    for (const rating of body.ratings ?? []) {
+    for (const rating of Array.isArray(body.ratings) ? body.ratings : []) {
       if (
         !isString(rating.imdbId) ||
         (rating.type !== "movie" && rating.type !== "series") ||
@@ -303,6 +313,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       const existing = await prisma.watchEvent.findFirst({
         where: {
           profileId,
+          type,
           imdbId,
           season: Number.isFinite(season) ? season : null,
           episode: Number.isFinite(episode) ? episode : null,
@@ -311,7 +322,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       });
 
       if (existing) {
-        await prisma.watchEvent.update({ where: { id: existing.id }, data: { plays: existing.plays + 1 } });
+        await prisma.watchEvent.update({ where: { id: existing.id }, data: { plays: { increment: 1 } } });
       } else {
         await prisma.watchEvent.create({
           data: {
