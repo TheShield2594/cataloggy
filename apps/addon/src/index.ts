@@ -1,16 +1,6 @@
 import Fastify, { type FastifyRequest, type FastifyReply, type RawRequestDefaultExpression } from "fastify";
 import rateLimit from "@fastify/rate-limit";
-
-const parseProxyPathPrefixes = (raw: string | undefined, fallback: readonly string[]) => {
-  const parsed = (raw ?? "")
-    .split(",")
-    .map((prefix) => prefix.trim())
-    .filter(Boolean)
-    .map((prefix) => (prefix.startsWith("/") ? prefix : `/${prefix}`))
-    .map((prefix) => (prefix.length > 1 ? prefix.replace(/\/+$/, "") : prefix));
-
-  return parsed.length > 0 ? parsed : [...fallback];
-};
+import { parseProxyPathPrefixes, normalizeProxyPath, parseTrustProxy } from "@cataloggy/shared";
 
 const CATALOGGY_API_BASE = process.env.CATALOGGY_API_BASE ?? "http://api:7000";
 const CATALOGGY_API_TOKEN = process.env.CATALOGGY_API_TOKEN;
@@ -18,44 +8,10 @@ const ADDON_PUBLIC_BASE = process.env.ADDON_PUBLIC_BASE;
 const WEB_PUBLIC_BASE = process.env.CATALOGGY_WEB_PUBLIC ?? process.env.WEB_PUBLIC_BASE;
 const PROXY_PATH_PREFIXES = parseProxyPathPrefixes(process.env.PROXY_PATH_PREFIXES, ["/addon"] as const);
 
-const stripProxyPrefix = (url: string, prefix: string) => {
-  if (url === prefix) {
-    return "/";
-  }
-
-  if (!url.startsWith(`${prefix}/`)) {
-    return null;
-  }
-
-  return url.slice(prefix.length) || "/";
-};
-
-const normalizeProxyPath = (rawUrl: string) => {
-  for (const prefix of PROXY_PATH_PREFIXES) {
-    const stripped = stripProxyPrefix(rawUrl, prefix);
-    if (stripped) {
-      return stripped;
-    }
-  }
-
-  return rawUrl;
-};
-
-// Only trust X-Forwarded-* headers from explicitly configured proxies, so
-// request.ip (used as the rate-limit key) can't be spoofed by clients when
-// there's no reverse proxy in front of this service.
-const parseTrustProxy = (raw: string | undefined): boolean | string[] | undefined => {
-  if (!raw) return undefined;
-  const trimmed = raw.trim();
-  if (trimmed === "true") return true;
-  if (trimmed === "false") return false;
-  return trimmed.split(",").map((entry) => entry.trim()).filter(Boolean);
-};
-
 const app = Fastify({
   logger: true,
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
-  rewriteUrl: (request: RawRequestDefaultExpression) => normalizeProxyPath(request.url ?? "/")
+  rewriteUrl: (request: RawRequestDefaultExpression) => normalizeProxyPath(request.url ?? "/", PROXY_PATH_PREFIXES)
 });
 
 // ─── Rate limiting ───
