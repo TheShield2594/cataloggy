@@ -202,12 +202,27 @@ export const syncTraktWatchlist = async (
   const localItems = await prisma.listItem.findMany({ where: { listId: watchlist.id } });
   const localByKey = new Map(localItems.map((item) => [`${item.type}:${item.imdbId}`, item]));
 
+  // Keys that were on Trakt and locally last sync, are still on Trakt now, but
+  // are no longer present locally: a local removal whose push to Trakt must
+  // have failed. Without this check, the loop below would treat them as new
+  // Trakt-side adds and silently resurrect the item the user just removed.
+  const pendingRemovalRetryKeys = previousSnapshot
+    ? new Set([...previousSnapshot].filter((key) => traktKeys.has(key) && !localByKey.has(key)))
+    : new Set<string>();
+
   let addedLocally = 0;
   let removedLocally = 0;
   let pushedToTrakt = 0;
 
   for (const item of traktItems) {
-    if (localByKey.has(watchlistSnapshotKey(item))) continue;
+    const key = watchlistSnapshotKey(item);
+    if (localByKey.has(key)) continue;
+
+    if (pendingRemovalRetryKeys.has(key)) {
+      await pushTraktWatchlistChange("remove", item, logger);
+      pushedToTrakt += 1;
+      continue;
+    }
 
     const itemType = item.type === "movie" ? ItemType.movie : ItemType.series;
     await prisma.item.upsert({

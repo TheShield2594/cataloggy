@@ -223,7 +223,8 @@ export class TraktClient {
 
     try {
       return (await response.json()) as TraktScrobbleResponse;
-    } catch {
+    } catch (error) {
+      logger.warn({ error, path }, "Failed to parse Trakt scrobble response as JSON");
       return {};
     }
   }
