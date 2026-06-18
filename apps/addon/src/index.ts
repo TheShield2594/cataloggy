@@ -626,6 +626,11 @@ const MINIMAL_SRT = `1
 Marked as watched on Cataloggy
 `;
 
+const SERIES_NO_EPISODE_SRT = `1
+00:00:00,000 --> 00:00:03,000
+Cannot mark a series as watched — select a specific episode first
+`;
+
 app.get<{ Params: { type: string; imdbId: string } }>("/mark-watched/:type/:imdbId.srt", async (request, reply) => {
   reply.header("Access-Control-Allow-Origin", "*");
   reply.header("Content-Type", "text/srt; charset=utf-8");
@@ -635,9 +640,12 @@ app.get<{ Params: { type: string; imdbId: string } }>("/mark-watched/:type/:imdb
   try {
     if (type === "movie") {
       await apiPost("/watch", { type: "movie", imdbId });
+      request.log.info({ type, imdbId }, "Marked as watched from Stremio");
+    } else {
+      // For series without episode info, return honest feedback instead of a silent no-op
+      request.log.info({ type, imdbId }, "Series mark-watched requested without episode info — no-op");
+      return reply.send(SERIES_NO_EPISODE_SRT);
     }
-    // For series without episode info, just log it
-    request.log.info({ type, imdbId }, "Marked as watched from Stremio");
   } catch (error) {
     request.log.error(error, "Failed to mark as watched");
   }

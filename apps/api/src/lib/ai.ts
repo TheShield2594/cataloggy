@@ -47,8 +47,9 @@ export const shouldRefreshAiRecs = async (): Promise<boolean> => {
   return hoursSinceLastGen >= 6;
 };
 
-export const buildTasteProfile = async () => {
+export const buildTasteProfile = async (profileId?: string) => {
   const recentEvents = await prisma.watchEvent.findMany({
+    where: profileId ? { profileId } : undefined,
     orderBy: { watchedAt: "desc" },
     take: 50,
     distinct: ["imdbId"],
@@ -176,9 +177,10 @@ const parseRecsFromContent = (content: string): AiRecItem[] => {
 
 export const getAiRecommendations = async (
   type: "movie" | "series",
-  limit = 10
+  limit = 10,
+  profileId?: string
 ): Promise<{ metas: StremioMetaPreview[]; reasons: Record<string, string> } | null> => {
-  const cacheKey = `ai-recs:${type}:${limit}`;
+  const cacheKey = `ai-recs:${type}:${limit}${profileId ? `:${profileId}` : ""}`;
   const cached = trendingCacheGet(cacheKey);
   if (cached) return { metas: cached.data, reasons: cached.reasons ?? {} };
 
@@ -186,7 +188,7 @@ export const getAiRecommendations = async (
   if (!config) return null;
 
   try {
-    const profile = await buildTasteProfile();
+    const profile = await buildTasteProfile(profileId);
     const avgRatingStr = profile.avgRating !== null ? `${profile.avgRating}/10` : "unrated";
     const typeLabel = type === "movie" ? "movies" : "TV series";
 
