@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "pnpm -r --parallel dev",
     "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm --filter @cataloggy/shared build && pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "test": "pnpm -r --if-present test",
     "smoke": "tsx scripts/smoke.ts"
