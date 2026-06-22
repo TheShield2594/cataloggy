@@ -117,35 +117,39 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
     return reply.code(201).send({ profile: { id: profile.id, name: profile.name, hasPin: pinHash != null } });
   });
 
-  app.post<{ Params: { id: string }; Body: unknown }>("/profiles/:id/verify", async (request, reply) => {
-    if (!UUID_V4_PATTERN.test(request.params.id)) {
-      return reply.code(400).send({ error: "id must be a valid UUID" });
-    }
+  app.post<{ Params: { id: string }; Body: unknown }>(
+    "/profiles/:id/verify",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      if (!UUID_V4_PATTERN.test(request.params.id)) {
+        return reply.code(400).send({ error: "id must be a valid UUID" });
+      }
 
-    const profile = await prisma.profile.findUnique({ where: { id: request.params.id } });
-    if (!profile) return reply.code(404).send({ error: "Profile not found" });
+      const profile = await prisma.profile.findUnique({ where: { id: request.params.id } });
+      if (!profile) return reply.code(404).send({ error: "Profile not found" });
 
-    if (!profile.pinHash) {
+      if (!profile.pinHash) {
+        return reply.code(200).send({ id: profile.id, name: profile.name });
+      }
+
+      const lockout = await getPinLockout(profile.id);
+      if (lockout.locked) {
+        return reply
+          .code(429)
+          .send({ error: "Too many incorrect attempts. Try again later.", retryAfterSec: lockout.retryAfterSec });
+      }
+
+      const body = (request.body ?? {}) as { pin?: unknown };
+      const pin = typeof body.pin === "string" ? body.pin.trim() : "";
+      if (!pin || !pinMatches(pin, profile.pinHash)) {
+        await recordPinFailure(profile.id);
+        return reply.code(401).send({ error: "Incorrect PIN" });
+      }
+
+      await clearPinAttempts(profile.id);
       return reply.code(200).send({ id: profile.id, name: profile.name });
-    }
-
-    const lockout = await getPinLockout(profile.id);
-    if (lockout.locked) {
-      return reply
-        .code(429)
-        .send({ error: "Too many incorrect attempts. Try again later.", retryAfterSec: lockout.retryAfterSec });
-    }
-
-    const body = (request.body ?? {}) as { pin?: unknown };
-    const pin = typeof body.pin === "string" ? body.pin.trim() : "";
-    if (!pin || !pinMatches(pin, profile.pinHash)) {
-      await recordPinFailure(profile.id);
-      return reply.code(401).send({ error: "Incorrect PIN" });
-    }
-
-    await clearPinAttempts(profile.id);
-    return reply.code(200).send({ id: profile.id, name: profile.name });
-  });
+    },
+  );
 
   app.delete<{ Params: { id: string } }>("/profiles/:id", async (request, reply) => {
     if (!UUID_V4_PATTERN.test(request.params.id)) {
