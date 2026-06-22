@@ -181,6 +181,7 @@ Cataloggy is designed for self-hosting on a trusted local network (LAN), not for
 
 - The web client stores its API bearer token in `localStorage`. Any JavaScript running on the page (e.g. via an XSS vulnerability in a dependency) could read this token. Since the token only grants access to your own local API, this is an acceptable tradeoff for a LAN-only app, but it is not suitable for an internet-facing deployment without further hardening (e.g. a Content-Security-Policy header, or migrating to httpOnly session cookies backed by a session store).
 - If you do expose Cataloggy beyond your LAN, put it behind a reverse proxy with TLS and consider implementing a proper session-based auth flow.
+- The Plex/Jellyfin webhook endpoints (`/webhooks/plex`, `/webhooks/jellyfin`) authenticate with a single shared secret (`WEBHOOK_SECRET`) sent as a query param or header — neither Plex nor Jellyfin support signing outgoing webhooks, so this is the strongest verification available. Treat `WEBHOOK_SECRET` like a password and **do not expose these endpoints to the public internet**; keep them reachable only from your LAN/reverse-proxy-internal network, where Plex/Jellyfin themselves run.
 
 ## Useful Commands
 
