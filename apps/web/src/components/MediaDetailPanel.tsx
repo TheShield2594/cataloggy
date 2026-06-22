@@ -13,6 +13,7 @@ import { CheckInBlock } from "./media-detail/CheckInBlock";
 import { WatchHistorySection } from "./media-detail/WatchHistorySection";
 import { DropShowButton } from "./media-detail/DropShowButton";
 import { formatRuntime, statusColor, WatchLogTarget } from "./media-detail/detailPanelUtils";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 
 export { StarRating };
 
@@ -36,6 +37,7 @@ export function DetailPanel({
   onHistoryChange: (events: WatchEvent[]) => void;
 }) {
   const listNames = item.lists.map((id) => listMap.get(id)?.name).filter(Boolean) as string[];
+  const dialogRef = useFocusTrap<HTMLDivElement>();
 
   // Lock background scroll while the panel is open
   useEffect(() => {
@@ -43,6 +45,12 @@ export function DetailPanel({
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previousOverflow; };
   }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
 
   // Cast
   const [cast, setCast] = useState<CastMember[]>([]);
@@ -198,9 +206,11 @@ export function DetailPanel({
         onClick={onClose}
       >
         <div
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-label={item.name}
+          tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
           className="relative flex h-full w-full max-h-screen flex-col overflow-hidden bg-cream-50 shadow-feature sm:h-auto sm:max-h-[85vh] sm:max-w-4xl sm:flex-row sm:rounded-3xl sm:border sm:border-ink-100 lg:max-w-5xl"
         >

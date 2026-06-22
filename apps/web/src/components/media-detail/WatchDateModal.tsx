@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { WatchLogTarget } from "./detailPanelUtils";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 
 export function WatchDateModal({
   target,
@@ -15,6 +16,7 @@ export function WatchDateModal({
   const [customDate, setCustomDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dialogRef = useFocusTrap<HTMLDivElement>();
 
   // For episode mode: let user pick season+episode
   const [season, setSeason] = useState(target.kind === "episode" ? target.season : 1);
@@ -41,9 +43,11 @@ export function WatchDateModal({
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="watch-date-modal-title"
+        tabIndex={-1}
         className="w-full max-w-sm rounded-2xl border border-ink-100 bg-cream-50 p-6 shadow-md"
         onClick={(e) => e.stopPropagation()}
       >

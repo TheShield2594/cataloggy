@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Film, FolderOpen, Plus, Search, Trash2, Tv, X } from "lucide-react";
 import { api, CatalogList, ListItemWithMeta, MediaType, SearchResult } from "../api";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 
 function AddItemModal({
   listId,
@@ -21,15 +22,10 @@ function AddItemModal({
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const dialogRef = useFocusTrap<HTMLDivElement>();
 
   useEffect(() => {
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
     inputRef.current?.focus();
-    return () => {
-      previousFocusRef.current?.focus();
-    };
   }, []);
 
   useEffect(() => {
@@ -85,9 +81,11 @@ function AddItemModal({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm pt-[10vh]" onClick={onClose}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-item-modal-title"
+        tabIndex={-1}
         className="w-full max-w-lg rounded-2xl border border-ink-100 bg-white shadow-sm"
         onClick={(e) => e.stopPropagation()}
       >
@@ -262,13 +260,13 @@ export function ListsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
+    <div className="flex flex-col gap-6 md:flex-row md:gap-8">
       {/* Sidebar */}
-      <aside className="w-full shrink-0 lg:w-64">
+      <aside className="w-full shrink-0 md:w-56 lg:w-64">
         {/* Mobile: horizontal scrollable tabs */}
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide lg:flex-col lg:overflow-x-visible lg:pb-0">
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide md:flex-col md:overflow-x-visible md:pb-0">
           {lists.map((list) => (
-            <div key={list.id} className="relative flex-none lg:w-full">
+            <div key={list.id} className="relative flex-none md:w-full">
               {confirmDeleteId === list.id && list.kind === "custom" ? (
                 <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3">
                   <div className="flex items-center gap-2 mb-2">
@@ -295,7 +293,7 @@ export function ListsPage() {
                   </div>
                 </div>
               ) : (
-                <div className={`group flex items-center rounded-xl border transition-all lg:w-full ${
+                <div className={`group flex items-center rounded-xl border transition-all md:w-full ${
                   selectedListId === list.id
                     ? "border-claw-500/40 bg-claw-100/60"
                     : "border-ink-100 bg-white hover:border-ink-200 hover:bg-cream-50"
