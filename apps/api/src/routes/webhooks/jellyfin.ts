@@ -3,7 +3,7 @@ import { recordWatchEvent } from "../../lib/watch-event.js";
 import { verifyWebhookSecret } from "../../lib/webhook-auth.js";
 
 const jellyfinWebhookRoutes: FastifyPluginAsync = async (app) => {
-  app.post("/webhooks/jellyfin", async (request, reply) => {
+  app.post("/webhooks/jellyfin", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (request, reply) => {
     if (!verifyWebhookSecret(request)) {
       return reply.code(403).send({ error: "Invalid webhook secret" });
     }

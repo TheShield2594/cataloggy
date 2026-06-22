@@ -32,7 +32,7 @@ const plexWebhookRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
-  app.post("/webhooks/plex", async (request, reply) => {
+  app.post("/webhooks/plex", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (request, reply) => {
     if (!verifyWebhookSecret(request)) {
       return reply.code(403).send({ error: "Invalid webhook secret" });
     }
