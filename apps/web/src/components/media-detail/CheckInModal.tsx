@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Radio, X } from "lucide-react";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 
 export function CheckInModal({
   seriesName,
@@ -18,6 +19,7 @@ export function CheckInModal({
   const [episode, setEpisode] = useState(String(defaultEpisode));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dialogRef = useFocusTrap<HTMLDivElement>();
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -43,9 +45,11 @@ export function CheckInModal({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="checkin-modal-title"
+        tabIndex={-1}
         className="w-full max-w-sm rounded-2xl border border-ink-100 bg-cream-50 shadow-md"
         onClick={(e) => e.stopPropagation()}
       >

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { BarChart3, Clapperboard, Film, List, Search, Settings, Tv } from "lucide-react";
 import { api, SearchResult } from "../api";
 import { Poster } from "./Poster";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 
 type Action = {
   id: string;
@@ -40,6 +41,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const dialogRef = useFocusTrap<HTMLDivElement>(open);
 
   useEffect(() => {
     if (open) {
@@ -133,6 +135,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     >
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         className="relative w-full max-w-lg overflow-hidden rounded-2xl shadow-feature"
         style={{ background: "var(--bg-0)", border: "1px solid var(--border-strong)" }}
         onClick={(e) => e.stopPropagation()}

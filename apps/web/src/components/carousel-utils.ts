@@ -68,7 +68,8 @@ export function useHorizontalScroll() {
     const el = ref.current;
     if (!el) return;
     const amount = el.clientWidth * 0.75;
-    el.scrollBy({ left: direction === "left" ? -amount : amount, behavior: "smooth" });
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollBy({ left: direction === "left" ? -amount : amount, behavior: reduceMotion ? "auto" : "smooth" });
   }, []);
 
   return { ref: setRef, canScrollLeft, canScrollRight, scroll, checkScroll };
