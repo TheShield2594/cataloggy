@@ -75,7 +75,19 @@ export function MediaList({ title, items, count, onSeeAll, onAddItem }: Props) {
       ) : (
         <div
           ref={ref}
-          className="flex overflow-x-auto gap-4 pb-2 scroll-smooth scrollbar-hide"
+          tabIndex={0}
+          role="group"
+          aria-label={`${title} carousel`}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowRight") {
+              e.preventDefault();
+              scroll("right");
+            } else if (e.key === "ArrowLeft") {
+              e.preventDefault();
+              scroll("left");
+            }
+          }}
+          className="flex overflow-x-auto gap-4 pb-2 scroll-smooth scrollbar-hide focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 rounded-xl"
         >
           {items.map((item) => (
             <div

@@ -377,7 +377,7 @@ export function SearchPage() {
 
         {/* Advanced filters panel */}
         {filtersOpen && (
-          <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl border border-ink-100 bg-cream-50 p-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl border border-ink-100 bg-cream-50 p-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {/* Genre */}
             <FilterSelect
               label="Genre"
@@ -664,6 +664,8 @@ function ResultCard({
           }}
           className="absolute bottom-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-claw-500 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shadow-lg transition-all duration-300 hover:bg-claw-600 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-300 focus-visible:ring-offset-2"
           aria-label={`Add ${result.name} to a list`}
+          aria-haspopup="menu"
+          aria-expanded={isOpen}
         >
           <Plus className="h-4 w-4" strokeWidth={3} />
         </button>
@@ -679,7 +681,7 @@ function ResultCard({
       {/* Quick-add dropdown */}
       {isOpen && (
         <div ref={dropdownRef} className="relative z-30 mt-1">
-          <div className="absolute left-0 right-0 overflow-hidden rounded-xl border border-ink-100 bg-white shadow-lg">
+          <div role="menu" aria-label={`Add ${result.name} to a list`} className="absolute left-0 right-0 overflow-hidden rounded-xl border border-ink-100 bg-white shadow-lg">
             <p className="border-b border-ink-100 px-3 py-2.5 text-2xs font-semibold uppercase tracking-wider text-ink-500">
               Add to list
             </p>
@@ -691,6 +693,7 @@ function ResultCard({
                 <button
                   key={list.id}
                   type="button"
+                  role="menuitem"
                   disabled={already || pending}
                   onClick={(e) => {
                     e.stopPropagation();
