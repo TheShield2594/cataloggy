@@ -40,6 +40,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const dialogRef = useFocusTrap<HTMLDivElement>(open);
 
@@ -56,9 +57,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     if (!query.trim()) {
       setResults([]);
       setSearching(false);
+      setSearchError(false);
       return;
     }
     setSearching(true);
+    setSearchError(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       void (async () => {
@@ -76,6 +79,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           setResults(merged.slice(0, 8));
         } catch {
           setResults([]);
+          setSearchError(true);
         } finally {
           setSearching(false);
         }
@@ -164,6 +168,16 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         <div className="max-h-[60vh] overflow-y-auto py-2">
           {searching && (
             <p className="px-4 py-3 text-xs" style={{ color: "var(--text-dim)" }}>Searching...</p>
+          )}
+
+          {!searching && searchError && (
+            <p className="px-4 py-3 text-xs" style={{ color: "var(--text-dim)" }}>
+              Search is unavailable right now. Check your TMDB configuration in Settings.
+            </p>
+          )}
+
+          {!searching && !searchError && query.trim() && results.length === 0 && visibleActions.length === 0 && (
+            <p className="px-4 py-3 text-xs" style={{ color: "var(--text-dim)" }}>No results for "{query}".</p>
           )}
 
           {!searching && results.length > 0 && (
