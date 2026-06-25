@@ -116,11 +116,12 @@ type DiscoveryItem = {
   type?: string;
 };
 
-function DiscoveryCard({ item, badge, reason, onSelect }: {
+function DiscoveryCard({ item, badge, reason, onSelect, eager }: {
   item: DiscoveryItem;
   badge?: React.ReactNode;
   reason?: string;
   onSelect?: (item: DiscoveryItem) => void;
+  eager?: boolean;
 }) {
   return (
     <div
@@ -136,7 +137,7 @@ function DiscoveryCard({ item, badge, reason, onSelect }: {
         className="relative aspect-poster overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:scale-[1.03] group-hover:shadow-card-hover"
         style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
       >
-        <Poster src={item.poster} alt={item.name} className="h-full w-full" />
+        <Poster src={item.poster} alt={item.name} className="h-full w-full" eager={eager} />
         {item.rating != null && item.rating > 0 && (
           <div
             className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm"
@@ -597,7 +598,7 @@ export function DashboardPage() {
           </div>
         ) : (
           <div ref={continueScroll.ref} className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide">
-            {progress.map((s) => {
+            {progress.map((s, index) => {
               const isMarking = markingNext.has(s.imdbId);
               const isDone = markedDone.has(s.imdbId);
               const progressPct =
@@ -610,7 +611,7 @@ export function DashboardPage() {
                     className="relative aspect-poster overflow-hidden rounded-2xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
                     style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
                   >
-                    <Poster src={s.poster} alt={s.name} className="h-full w-full" />
+                    <Poster src={s.poster} alt={s.name} className="h-full w-full" eager={index < 5} />
                     <button
                       type="button"
                       className="absolute inset-0 cursor-pointer"
@@ -693,10 +694,11 @@ export function DashboardPage() {
           </div>
         ) : (
           <div ref={trendingScroll.ref} className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide">
-            {trendingMovies.map((item) => (
+            {trendingMovies.map((item, index) => (
               <DiscoveryCard
                 key={item.id}
                 item={item}
+                eager={index < 5}
                 onSelect={(i) => setSelectedItem(toSearchResult(i.id, (i.type ?? "movie") as "movie" | "series", i.name, { poster: i.poster, year: i.year, description: item.description, genres: i.genres, rating: i.rating }))}
               />
             ))}

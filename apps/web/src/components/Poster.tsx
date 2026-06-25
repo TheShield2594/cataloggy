@@ -5,10 +5,12 @@ export function Poster({
   src,
   alt,
   className = "",
+  eager = false,
 }: {
   src?: string;
   alt: string | null | undefined;
   className?: string;
+  eager?: boolean;
 }) {
   const [loadFailed, setLoadFailed] = useState(false);
 
@@ -29,7 +31,7 @@ export function Poster({
       src={src}
       alt={alt ?? "Poster"}
       className={`object-cover ${className}`}
-      loading="lazy"
+      loading={eager ? "eager" : "lazy"}
       onError={() => setLoadFailed(true)}
     />
   );
