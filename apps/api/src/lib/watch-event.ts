@@ -6,7 +6,7 @@ import { syncWatchEventToTrakt } from "./trakt-client.js";
 import type { RecordWatchParams } from "./types.js";
 
 export const recordWatchEvent = async (params: RecordWatchParams) => {
-  const { type, imdbId, seriesImdbId, season, episode, watchedAt, source, request: req } = params;
+  const { type, imdbId, seriesImdbId, season, episode, watchedAt, dateUnknown, source, request: req } = params;
   const profileId = req.profileId!;
 
   const dayStart = new Date(watchedAt);
@@ -32,7 +32,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
       if (existing) {
         const updated = await tx.watchEvent.update({
           where: { id: existing.id },
-          data: { plays: { increment: 1 }, watchedAt },
+          data: { plays: { increment: 1 }, watchedAt, dateUnknown: dateUnknown ?? false },
         });
         req.log.info(
           { imdbId: resolvedSeriesImdbId, season, episode, plays: updated.plays },
@@ -49,6 +49,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
           season: season ?? null,
           episode: episode ?? null,
           watchedAt,
+          dateUnknown: dateUnknown ?? false,
           profileId,
         },
       });
@@ -95,14 +96,14 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
     if (existing) {
       const updated = await tx.watchEvent.update({
         where: { id: existing.id },
-        data: { plays: { increment: 1 }, watchedAt },
+        data: { plays: { increment: 1 }, watchedAt, dateUnknown: dateUnknown ?? false },
       });
       req.log.info({ imdbId, plays: updated.plays }, `${source} scrobble: movie play incremented`);
       return { watchEvent: updated, wasCreated: false };
     }
 
     const created = await tx.watchEvent.create({
-      data: { type: "movie", imdbId, watchedAt, profileId },
+      data: { type: "movie", imdbId, watchedAt, dateUnknown: dateUnknown ?? false, profileId },
     });
     req.log.info({ imdbId }, `${source} scrobble: movie recorded`);
     return { watchEvent: created, wasCreated: true };

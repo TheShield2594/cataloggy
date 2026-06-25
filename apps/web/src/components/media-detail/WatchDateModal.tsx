@@ -9,7 +9,7 @@ export function WatchDateModal({
   onClose,
 }: {
   target: WatchLogTarget;
-  onLog: (date: string, episode?: { season: number; episode: number }) => Promise<void>;
+  onLog: (date: string, episode?: { season: number; episode: number }, dateUnknown?: boolean) => Promise<void>;
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<"quick" | "custom">("quick");
@@ -22,12 +22,12 @@ export function WatchDateModal({
   const [season, setSeason] = useState(target.kind === "episode" ? target.season : 1);
   const [episode, setEpisode] = useState(target.kind === "episode" ? target.episode : 1);
 
-  const submit = async (dateIso: string) => {
+  const submit = async (dateIso: string, dateUnknown?: boolean) => {
     setSaving(true);
     setError(null);
     try {
       const episodeInfo = target.kind === "episode" ? { season, episode } : undefined;
-      await onLog(dateIso, episodeInfo);
+      await onLog(dateIso, episodeInfo, dateUnknown);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to log watch");
@@ -116,11 +116,13 @@ export function WatchDateModal({
             <button
               type="button"
               disabled={saving}
-              onClick={() => void submit(new Date("2000-01-01T12:00:00.000Z").toISOString())}
-              className="rounded-xl px-4 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)] disabled:opacity-50"
+              onClick={() => void submit(new Date().toISOString(), true)}
+              title="Logs this watch without a specific date"
+              className="flex flex-col items-start gap-0.5 rounded-xl px-4 py-3 text-left transition-colors hover:bg-[var(--surface-strong)] disabled:opacity-50"
               style={{ background: "var(--surface)", color: "var(--text)" }}
             >
-              Unknown date
+              <span className="text-sm font-semibold">Unknown date</span>
+              <span className="text-2xs" style={{ color: "var(--text-mute)" }}>Logs without a specific date</span>
             </button>
             <button
               type="button"
