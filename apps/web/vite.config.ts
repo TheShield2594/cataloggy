@@ -32,8 +32,8 @@ export default defineConfig({
         short_name: "Cataloggy",
         start_url: "/",
         display: "standalone",
-        background_color: "#0f172a",
-        theme_color: "#0ea5e9",
+        background_color: "#0d0b0a",
+        theme_color: "#d97742",
         icons: [
           {
             src: "/icons/icon-192.png",

@@ -7,6 +7,7 @@ import { InstallButton } from "./components/InstallButton";
 import { Sidebar } from "./components/Sidebar";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useTheme } from "./hooks/useTheme";
+import { ToastProvider } from "./hooks/useToast";
 import { DashboardPage } from "./pages/DashboardPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { ListsPage } from "./pages/ListsPage";
@@ -49,6 +50,7 @@ export function App() {
   }
 
   return (
+    <ToastProvider>
     <div className="min-h-screen w-full">
       <Sidebar />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
@@ -135,5 +137,6 @@ export function App() {
         Cataloggy &middot; Personal Media Tracker
       </footer>
     </div>
+    </ToastProvider>
   );
 }

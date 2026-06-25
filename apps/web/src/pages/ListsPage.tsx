@@ -1,7 +1,33 @@
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Film, FolderOpen, Plus, Search, Trash2, Tv, X } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, Check, Film, FolderOpen, Pencil, Plus, Search, Trash2, Tv, X } from "lucide-react";
 import { api, CatalogList, ListItemWithMeta, MediaType, SearchResult } from "../api";
+import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useToast } from "../hooks/useToast";
+
+type SortOption = "added" | "name" | "year" | "rating";
+
+const SORT_LABELS: Record<SortOption, string> = {
+  added: "Date Added",
+  name: "Name",
+  year: "Year",
+  rating: "Rating",
+};
+
+function toSearchResult(item: ListItemWithMeta): SearchResult {
+  return {
+    imdbId: item.imdbId,
+    type: item.type,
+    name: item.metadata?.name ?? item.imdbId,
+    year: item.metadata?.year ?? null,
+    poster: item.metadata?.poster ?? null,
+    description: null,
+    genres: item.metadata?.genres ?? [],
+    rating: item.metadata?.rating ?? null,
+    inWatchlist: false,
+    lists: [],
+  };
+}
 
 function AddItemModal({
   listId,
@@ -177,6 +203,12 @@ export function ListsPage() {
   const [removingIds, setRemovingIds] = useState<Record<string, boolean>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingListId, setDeletingListId] = useState<string | null>(null);
+  const [renamingListId, setRenamingListId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("added");
+  const [filterQuery, setFilterQuery] = useState("");
+  const { showToast } = useToast();
+  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
 
   const loadLists = useCallback(async () => {
     try {
@@ -245,6 +277,46 @@ export function ListsPage() {
       setDeletingListId(null);
     }
   };
+
+  const handleRenameList = async (listId: string) => {
+    const name = renameValue.trim();
+    if (!name) {
+      setRenamingListId(null);
+      return;
+    }
+    try {
+      await api.renameList(listId, name);
+      setRenamingListId(null);
+      await loadLists();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to rename list", "error");
+    }
+  };
+
+  const displayedItems = useMemo(() => {
+    let result = items;
+    const q = filterQuery.trim().toLowerCase();
+    if (q) {
+      result = result.filter((item) => (item.metadata?.name ?? item.imdbId).toLowerCase().includes(q));
+    }
+    const sorted = [...result];
+    switch (sortBy) {
+      case "name":
+        sorted.sort((a, b) => (a.metadata?.name ?? a.imdbId).localeCompare(b.metadata?.name ?? b.imdbId));
+        break;
+      case "year":
+        sorted.sort((a, b) => (b.metadata?.year ?? 0) - (a.metadata?.year ?? 0));
+        break;
+      case "rating":
+        sorted.sort((a, b) => (b.metadata?.rating ?? 0) - (a.metadata?.rating ?? 0));
+        break;
+      case "added":
+      default:
+        sorted.sort((a, b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime());
+        break;
+    }
+    return sorted;
+  }, [items, filterQuery, sortBy]);
 
   const handleRemove = async (item: ListItemWithMeta) => {
     if (!selectedListId || removingIds[item.imdbId]) return;
@@ -360,8 +432,36 @@ export function ListsPage() {
           <>
             {/* List header */}
             <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-ink-900">{selectedList.name}</h2>
+              <div className="min-w-0 flex-1">
+                {renamingListId === selectedList.id ? (
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); void handleRenameList(selectedList.id); }}
+                    className="flex items-center gap-2"
+                  >
+                    <input
+                      autoFocus
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onBlur={() => void handleRenameList(selectedList.id)}
+                      className="min-w-0 flex-1 rounded-lg border border-ink-100 bg-white px-3 py-1.5 text-2xl font-bold text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                    />
+                    <button type="submit" aria-label="Save name" className="rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-500/10">
+                      <Check className="h-5 w-5" />
+                    </button>
+                  </form>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <h2 className="truncate text-2xl font-bold text-ink-900">{selectedList.name}</h2>
+                    <button
+                      type="button"
+                      onClick={() => { setRenamingListId(selectedList.id); setRenameValue(selectedList.name); }}
+                      aria-label="Rename list"
+                      className="rounded-lg p-1.5 text-ink-400 hover:bg-ink-100 hover:text-ink-700 transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
                 <p className="mt-0.5 text-sm text-ink-500">
                   {items.length} {items.length === 1 ? "item" : "items"}
                 </p>
@@ -369,12 +469,38 @@ export function ListsPage() {
               <button
                 type="button"
                 onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 transition-colors"
+                className="ml-3 flex flex-none items-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 transition-colors"
               >
                 <Plus className="h-4 w-4" />
                 Add
               </button>
             </div>
+
+            {/* Sort & filter controls */}
+            {items.length > 0 && (
+              <div className="mb-5 flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[180px]">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
+                  <input
+                    value={filterQuery}
+                    onChange={(e) => setFilterQuery(e.target.value)}
+                    placeholder="Search this list..."
+                    aria-label="Search within list"
+                    className="w-full rounded-full border border-ink-100 bg-white py-2 pl-9 pr-3 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                  />
+                </div>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortOption)}
+                  aria-label="Sort items"
+                  className="rounded-full border border-ink-100 bg-white px-3.5 py-2 text-sm text-ink-700 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                >
+                  {Object.entries(SORT_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>Sort: {label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Items grid */}
             {loadingItems ? (
@@ -397,16 +523,30 @@ export function ListsPage() {
                   Click <span className="font-semibold text-claw-600">+ Add</span> to search and add titles.
                 </p>
               </div>
+            ) : displayedItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-ink-100 ring-1 ring-ink-100">
+                  <Search className="h-10 w-10 text-ink-400" />
+                </div>
+                <p className="mt-4 text-lg font-semibold text-ink-700">No matches</p>
+                <p className="mt-1 text-sm text-ink-500">Try a different search term.</p>
+              </div>
             ) : (
               <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                {items.map((item, index) => {
+                {displayedItems.map((item, index) => {
                   const name = item.metadata?.name ?? item.imdbId;
                   const poster = item.metadata?.poster;
                   const year = item.metadata?.year;
                   return (
-                    <div key={`${item.type}:${item.imdbId}`} className="group">
+                    <div key={`${item.type}:${item.imdbId}`} className="group relative">
                       {/* Poster */}
-                      <div className="card-lift relative overflow-hidden rounded-xl bg-ink-100 ring-1 ring-ink-100" style={{ aspectRatio: "2/3" }}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedItem(toSearchResult(item))}
+                        className="card-lift relative block w-full overflow-hidden rounded-xl bg-ink-100 text-left ring-1 ring-ink-100"
+                        style={{ aspectRatio: "2/3" }}
+                        aria-label={`Open details for ${name}`}
+                      >
                         {poster ? (
                           <img src={poster} alt={name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" loading={index < 5 ? "eager" : "lazy"} />
                         ) : (
@@ -424,17 +564,17 @@ export function ListsPage() {
                         </span>
                         {/* Hover overlay with gradient */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                        {/* Remove button on hover */}
-                        <button
-                          type="button"
-                          disabled={removingIds[item.imdbId]}
-                          onClick={() => handleRemove(item)}
-                          className="absolute top-2.5 right-2.5 rounded-full bg-black/60 p-2 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-all duration-200 hover:bg-rose-500 hover:text-white disabled:opacity-50 backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2"
-                          aria-label="Remove from list"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
+                      </button>
+                      {/* Remove button on hover */}
+                      <button
+                        type="button"
+                        disabled={removingIds[item.imdbId]}
+                        onClick={() => handleRemove(item)}
+                        className="absolute top-2.5 right-2.5 z-10 rounded-full bg-black/60 p-2 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-all duration-200 hover:bg-rose-500 hover:text-white disabled:opacity-50 backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2"
+                        aria-label="Remove from list"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                       {/* Title & year */}
                       <p className="mt-2.5 truncate text-sm font-semibold text-ink-900">{name}</p>
                       <p className="text-xs text-ink-500">{year ?? "Unknown year"}</p>
@@ -454,6 +594,19 @@ export function ListsPage() {
           listName={selectedList.name}
           onClose={() => setShowAddModal(false)}
           onAdded={() => void loadItems(selectedListId)}
+        />
+      )}
+
+      {/* Detail panel */}
+      {selectedItem && (
+        <DetailPanel
+          item={selectedItem}
+          history={panelHistory}
+          historyLoading={panelHistoryLoading}
+          listMap={new Map(lists.map((l) => [l.id, l]))}
+          onClose={() => setSelectedItem(null)}
+          onShowToast={showToast}
+          onHistoryChange={(events) => setPanelHistory(events)}
         />
       )}
     </div>
