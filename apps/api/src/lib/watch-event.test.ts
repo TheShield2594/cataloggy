@@ -82,7 +82,7 @@ describe("recordWatchEvent", () => {
       expect(txMock.watchEvent.create).not.toHaveBeenCalled();
       expect(txMock.watchEvent.update).toHaveBeenCalledWith({
         where: { id: "we-existing" },
-        data: { plays: { increment: 1 }, watchedAt: expect.any(Date) },
+        data: { plays: { increment: 1 }, watchedAt: expect.any(Date), dateUnknown: false },
       });
     });
 
@@ -167,7 +167,7 @@ describe("recordWatchEvent", () => {
       expect(txMock.watchEvent.create).not.toHaveBeenCalled();
       expect(txMock.watchEvent.update).toHaveBeenCalledWith({
         where: { id: "we-movie-existing" },
-        data: { plays: { increment: 1 }, watchedAt: expect.any(Date) },
+        data: { plays: { increment: 1 }, watchedAt: expect.any(Date), dateUnknown: false },
       });
     });
 

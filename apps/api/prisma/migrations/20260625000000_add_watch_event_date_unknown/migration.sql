@@ -1,0 +1,1 @@
+ALTER TABLE "WatchEvent" ADD COLUMN "dateUnknown" BOOLEAN NOT NULL DEFAULT false;
