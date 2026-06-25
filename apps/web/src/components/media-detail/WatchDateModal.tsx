@@ -2,6 +2,8 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { WatchLogTarget } from "./detailPanelUtils";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useScrollLock } from "../../hooks/useScrollLock";
+import { useEscapeKey } from "../../hooks/useEscapeKey";
 
 export function WatchDateModal({
   target,
@@ -17,6 +19,9 @@ export function WatchDateModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useFocusTrap<HTMLDivElement>();
+
+  useScrollLock();
+  useEscapeKey(onClose);
 
   // For episode mode: let user pick season+episode
   const [season, setSeason] = useState(target.kind === "episode" ? target.season : 1);
