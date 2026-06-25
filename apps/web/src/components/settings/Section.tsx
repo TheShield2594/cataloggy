@@ -1,13 +1,40 @@
 import { ReactNode, useEffect, useId, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
-export function Section({ title, icon, defaultOpen, children }: { title: string; icon: ReactNode; defaultOpen?: boolean; children: ReactNode }) {
-  const [open, setOpen] = useState(defaultOpen ?? false);
+const STORAGE_PREFIX = "cataloggy:settings-section:";
+
+function readStoredOpen(storageKey: string, fallback: boolean): boolean {
+  try {
+    const stored = localStorage.getItem(STORAGE_PREFIX + storageKey);
+    return stored === null ? fallback : stored === "1";
+  } catch {
+    return fallback;
+  }
+}
+
+export function Section({
+  title,
+  icon,
+  defaultOpen,
+  storageKey,
+  children,
+}: {
+  title: string;
+  icon: ReactNode;
+  defaultOpen?: boolean;
+  storageKey: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(() => readStoredOpen(storageKey, defaultOpen ?? true));
   const contentRef = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState<number | undefined>(defaultOpen ? undefined : 0);
+  const [height, setHeight] = useState<number | undefined>(open ? undefined : 0);
   const id = useId();
   const buttonId = `${id}-toggle`;
   const panelId = `${id}-panel`;
+
+  useEffect(() => {
+    if (contentRef.current) contentRef.current.inert = !open;
+  }, [open]);
 
   useEffect(() => {
     if (!contentRef.current) return;
@@ -21,6 +48,18 @@ export function Section({ title, icon, defaultOpen, children }: { title: string;
     }
   }, [open]);
 
+  const toggle = () => {
+    setOpen((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(STORAGE_PREFIX + storageKey, next ? "1" : "0");
+      } catch {
+        // ignore storage errors (e.g. private browsing)
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="rounded-2xl border border-ink-100 bg-cream-50 shadow-sm overflow-hidden">
       <button
@@ -28,7 +67,7 @@ export function Section({ title, icon, defaultOpen, children }: { title: string;
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={toggle}
         className="flex w-full items-center gap-3 px-5 py-[1.125rem] text-left transition-colors hover:bg-ink-100/40"
       >
         <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink-100 text-ink-500">{icon}</span>
