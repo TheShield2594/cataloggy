@@ -274,7 +274,7 @@ export function SearchPage() {
             placeholder="Search movies & TV shows..."
             className="w-full rounded-full py-3.5 pl-14 pr-12 text-base placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15 transition-all"
             style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", background: "var(--bg-0)", color: "var(--text)" }}
-            autoFocus={typeof window !== "undefined" && !("ontouchstart" in window)}
+            autoFocus={typeof window !== "undefined" && !window.matchMedia("(pointer: coarse)").matches}
           />
           {filters.query && (
             <button
@@ -791,20 +791,24 @@ function WhereToWatchBadge({ type, imdbId }: { type: SearchResult["type"]; imdbI
     if (!node) return;
 
     let cancelled = false;
+    const controller = new AbortController();
     const fetchProviders = () => {
       api
-        .getWatchProviders(type, imdbId)
+        .getWatchProviders(type, imdbId, controller.signal)
         .then((r) => {
           const merged = [...r.providers.flatrate, ...r.providers.free];
           const deduped = merged.filter((p, i) => merged.findIndex((q) => q.id === p.id) === i);
           providerCache.set(cacheKey, deduped);
           if (!cancelled) setProviders(deduped);
         })
-        .catch(() => { if (!cancelled) setFailed(true); });
+        .catch((err) => {
+          if (err instanceof DOMException && err.name === "AbortError") return;
+          if (!cancelled) setFailed(true);
+        });
     };
 
     const unobserve = observeOnce(node, fetchProviders);
-    return () => { cancelled = true; unobserve(); };
+    return () => { cancelled = true; unobserve(); controller.abort(); };
   }, [type, imdbId, cacheKey]);
 
   if (failed) {

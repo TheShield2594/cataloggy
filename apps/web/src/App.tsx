@@ -188,7 +188,7 @@ function AppShell({
 
       {/* Main content */}
       <main className={`mx-auto max-w-[1400px] px-6 pb-24 pt-[76px] sm:pb-10 transition-[padding] duration-200 ${sidebarPad}`}>
-        <Routes key={profile?.id ?? "default"}>
+        <Routes key={profile?.id ?? runtimeConfig.getProfileId() ?? "default"}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/lists/*" element={<ListsPage />} />

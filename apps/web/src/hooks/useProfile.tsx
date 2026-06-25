@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useCallback, useContext, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useMemo, useState } from "react";
 import { Profile, runtimeConfig } from "../api";
 
 type ProfileContextValue = {
@@ -30,11 +30,12 @@ export function ProfileProvider({
   const openSwitcher = useCallback(() => setSwitcherOpen(true), []);
   const closeSwitcher = useCallback(() => setSwitcherOpen(false), []);
 
-  return (
-    <ProfileContext.Provider value={{ profile, setProfile, switcherOpen, openSwitcher, closeSwitcher }}>
-      {children}
-    </ProfileContext.Provider>
+  const value = useMemo(
+    () => ({ profile, setProfile, switcherOpen, openSwitcher, closeSwitcher }),
+    [profile, setProfile, switcherOpen, openSwitcher, closeSwitcher]
   );
+
+  return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }
 
 export function useProfile() {
