@@ -14,7 +14,7 @@ export function ProvidersSection({ providers, loading }: { providers: WatchProvi
 
   return (
     <div>
-      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-500">
+      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
         <MonitorPlay className="h-3.5 w-3.5" /> Where to Watch
       </h3>
       <div className="flex flex-wrap gap-2">
@@ -22,12 +22,13 @@ export function ProvidersSection({ providers, loading }: { providers: WatchProvi
           <span
             key={p.id}
             title={p.name}
-            className="flex items-center gap-1.5 rounded-full bg-ink-100 px-2.5 py-1 text-xs text-ink-700"
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs"
+            style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
           >
             {p.logo ? (
               <img src={p.logo} alt="" className="h-4 w-4 rounded" />
             ) : (
-              <MonitorPlay className="h-3.5 w-3.5 text-ink-500" />
+              <MonitorPlay className="h-3.5 w-3.5" style={{ color: "var(--text-mute)" }} />
             )}
             {p.name}
           </span>
