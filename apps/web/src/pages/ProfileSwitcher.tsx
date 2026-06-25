@@ -1,8 +1,54 @@
 import { FormEvent, useEffect, useState } from "react";
-import { AlertCircle, ArrowRight, Clapperboard, Loader2, Lock, Plus, User } from "lucide-react";
+import { AlertCircle, ArrowRight, Clapperboard, Loader2, Lock, Plus, User, X } from "lucide-react";
 import { api, ApiError, Profile, runtimeConfig } from "../api";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
+  const dialogRef = useFocusTrap<HTMLDivElement>(!!onClose);
+
+  useEffect(() => {
+    if (!onClose) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  if (onClose) {
+    return (
+      <div
+        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 px-6 py-12"
+        onClick={onClose}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Switch profile"
+      >
+        <div ref={dialogRef} tabIndex={-1} className="w-full max-w-md space-y-6" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-center gap-2.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-claw-500">
+              <Clapperboard className="h-6 w-6 text-white" />
+            </div>
+            <span className="text-2xl font-bold" style={{ color: "var(--text)" }}>Cataloggy</span>
+          </div>
+
+          <div className="relative rounded-2xl border p-6 shadow-sm" style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
+              style={{ color: "var(--text-mute)" }}
+            >
+              <X className="h-4 w-4" />
+            </button>
+            {children}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-md space-y-6">
@@ -222,7 +268,7 @@ function ProfilePicker({
   );
 }
 
-export function ProfileSwitcher({ onSelected }: { onSelected: (profile: Profile) => void }) {
+export function ProfileSwitcher({ onSelected, onClose }: { onSelected: (profile: Profile) => void; onClose?: () => void }) {
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -265,7 +311,7 @@ export function ProfileSwitcher({ onSelected }: { onSelected: (profile: Profile)
 
   if (loading) {
     return (
-      <Shell>
+      <Shell onClose={onClose}>
         <div className="flex items-center justify-center gap-2 py-6 text-sm" style={{ color: "var(--text-mute)" }}>
           <Loader2 size={16} className="animate-spin" /> Loading profiles...
         </div>
@@ -275,14 +321,14 @@ export function ProfileSwitcher({ onSelected }: { onSelected: (profile: Profile)
 
   if (error) {
     return (
-      <Shell>
+      <Shell onClose={onClose}>
         <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>
       </Shell>
     );
   }
 
   return (
-    <Shell>
+    <Shell onClose={onClose}>
       {mode === "picker" && (
         <ProfilePicker profiles={profiles} onSelect={selectProfile} onCreateNew={() => setMode("create")} />
       )}
