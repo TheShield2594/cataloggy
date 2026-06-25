@@ -627,7 +627,7 @@ function ResultCard({
         </span>
 
         {/* Hover gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 transition-opacity duration-300 sm:opacity-0 sm:group-hover:opacity-100" />
 
         {/* Quick-add button (bottom-right on hover) */}
         <button

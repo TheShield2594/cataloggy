@@ -386,7 +386,7 @@ export function ListsPage() {
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(list.id); }}
-                      className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg text-ink-400 opacity-0 group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-500 transition-all focus:opacity-100"
+                      className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg text-ink-400 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-500 transition-all focus:opacity-100"
                       aria-label={`Delete list ${list.name}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -563,7 +563,7 @@ export function ListsPage() {
                           {item.type === "movie" ? "Movie" : "Series"}
                         </span>
                         {/* Hover overlay with gradient */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 transition-opacity duration-300 sm:opacity-0 sm:group-hover:opacity-100" />
                       </button>
                       {/* Remove button on hover */}
                       <button
