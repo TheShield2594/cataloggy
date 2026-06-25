@@ -99,7 +99,7 @@ export type ListItem = {
 };
 
 export type ListItemWithMeta = ListItem & {
-  metadata: { name: string; poster: string | null; year: number | null } | null;
+  metadata: { name: string; poster: string | null; year: number | null; genres: string[]; rating: number | null } | null;
 };
 
 export type CatalogList = {
@@ -363,6 +363,12 @@ export const api = {
   },
   deleteList(listId: string) {
     return request<void>(`/lists/${encodeURIComponent(listId)}`, { method: "DELETE" });
+  },
+  renameList(listId: string, name: string) {
+    return request<{ list: CatalogList }>(`/lists/${encodeURIComponent(listId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    });
   },
   addToList(listId: string, payload: { type: MediaType; imdbId: string; title: string }) {
     const encodedListId = encodeURIComponent(listId);

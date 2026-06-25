@@ -30,6 +30,7 @@ import { useHorizontalScroll } from "../components/carousel-utils";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { Poster } from "../components/Poster";
 import { TicketTile } from "../components/TicketTile";
+import { useToast } from "../hooks/useToast";
 import { timeAgo } from "../utils/timeAgo";
 
 /* ─── Collectible stat strip: a row of distinct "ticket" tiles, demoted below the fold ─── */
@@ -274,6 +275,7 @@ export function DashboardPage() {
   const seriesRecsScroll = useHorizontalScroll();
 
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
+  const { showToast } = useToast();
 
   const toSearchResult = useCallback((imdbId: string, type: "movie" | "series", name: string, opts?: {
     poster?: string; year?: number | null; description?: string | null; genres?: string[]; rating?: number | null;
@@ -855,7 +857,7 @@ export function DashboardPage() {
           historyLoading={panelHistoryLoading}
           listMap={emptyListMap}
           onClose={() => setSelectedItem(null)}
-          onShowToast={() => {}}
+          onShowToast={showToast}
           onHistoryChange={(events) => setPanelHistory(events)}
         />
       )}
