@@ -112,8 +112,8 @@ function AddItemModal({
         aria-modal="true"
         aria-labelledby="add-item-modal-title"
         tabIndex={-1}
-        className="w-full max-w-lg rounded-2xl border bg-white shadow-sm"
-        style={{ borderColor: "var(--border)" }}
+        className="w-full max-w-lg rounded-2xl border shadow-sm"
+        style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -134,8 +134,8 @@ function AddItemModal({
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search movies & series..."
               aria-label="Search movies and series"
-              className="w-full rounded-full border bg-cream-50 py-2.5 pl-9 pr-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
-              style={{ borderColor: "var(--border)", color: "var(--text)" }}
+              className="w-full rounded-full border py-2.5 pl-9 pr-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+              style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)" }}
             />
           </div>
           <div className="relative inline-flex rounded-full p-0.5 border" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)" }}>

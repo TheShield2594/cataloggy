@@ -13,7 +13,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           <span className="text-2xl font-bold" style={{ color: "var(--text)" }}>Cataloggy</span>
         </div>
 
-        <div className="rounded-2xl border bg-white p-6 shadow-sm" style={{ borderColor: "var(--border)" }}>
+        <div className="rounded-2xl border p-6 shadow-sm" style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}>
           {children}
         </div>
       </div>

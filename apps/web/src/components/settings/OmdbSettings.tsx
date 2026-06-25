@@ -80,8 +80,7 @@ export function OmdbSettings() {
           <button
             type="button"
             onClick={disconnect}
-            className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-rose-600 hover:text-white border"
-            style={{ color: "var(--text-dim)", borderColor: "var(--border)" }}
+            className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-0)] px-4 py-2.5 text-sm font-semibold text-[var(--text-dim)] transition-colors hover:bg-rose-600 hover:text-white"
           >
             <Unplug size={16} /> Remove Key
           </button>

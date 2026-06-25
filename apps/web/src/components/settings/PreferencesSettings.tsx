@@ -96,8 +96,7 @@ export function PreferencesSettings() {
           id="pref-language"
           value={language}
           onChange={(e) => { setLanguage(e.target.value); setSaved(false); }}
-          className="w-full rounded-xl border bg-white px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
-          style={{ borderColor: "var(--border)", color: "var(--text)" }}
+          className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-0)] px-4 py-3 text-sm text-[var(--text)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         >
           {!COMMON_LANGUAGES.some((l) => l.code === language) && (
             <option value={language}>{language}</option>
@@ -118,8 +117,7 @@ export function PreferencesSettings() {
           id="pref-region"
           value={region}
           onChange={(e) => { setRegion(e.target.value); setSaved(false); }}
-          className="w-full rounded-xl border bg-white px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
-          style={{ borderColor: "var(--border)", color: "var(--text)" }}
+          className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-0)] px-4 py-3 text-sm text-[var(--text)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         >
           {!COMMON_REGIONS.includes(region) && (
             <option value={region}>{region}</option>
@@ -134,14 +132,13 @@ export function PreferencesSettings() {
       </div>
 
       {/* Spoiler Protection */}
-      <label htmlFor="pref-spoiler" className="flex items-start gap-3 rounded-xl border bg-cream-50 px-4 py-3.5 cursor-pointer transition-colors hover:bg-[var(--surface-strong)]" style={{ borderColor: "var(--border)" }}>
+      <label htmlFor="pref-spoiler" className="flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 cursor-pointer transition-colors hover:bg-[var(--surface-strong)]">
         <input
           id="pref-spoiler"
           type="checkbox"
           checked={spoilerProtection}
           onChange={(e) => { setSpoilerProtection(e.target.checked); setSaved(false); }}
-          className="mt-0.5 h-4 w-4 rounded bg-white text-claw-500 focus:ring-claw-500/30"
-          style={{ borderColor: "var(--border-strong)" }}
+          className="mt-0.5 h-4 w-4 rounded border-[var(--border-strong)] bg-[var(--bg-0)] text-claw-500 focus:ring-claw-500/30"
         />
         <div>
           <span className="text-sm font-medium flex items-center gap-2" style={{ color: "var(--text)" }}>

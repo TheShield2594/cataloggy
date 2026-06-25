@@ -86,14 +86,12 @@ function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => vo
           value={token}
           onChange={(e) => setToken(e.target.value)}
           placeholder="Paste your API token"
-          className="w-full rounded-xl px-4 py-3 pr-12 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
-          style={{ border: "1px solid var(--border-strong)", backgroundColor: "var(--bg-0)", color: "var(--text)" }}
+          className="w-full rounded-xl border border-[var(--border-strong)] bg-[var(--bg-0)] px-4 py-3 pr-12 text-sm text-[var(--text)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         />
         <button
           type="button"
           onClick={() => setShowToken((p) => !p)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 transition-colors hover:bg-[var(--surface-strong)] hover:text-[var(--text)]"
-          style={{ color: "var(--text-mute)" }}
+          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-[var(--text-mute)] transition-colors hover:bg-[var(--surface-strong)] hover:text-[var(--text)]"
           aria-label={showToken ? "Hide token" : "Show token"}
         >
           {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
