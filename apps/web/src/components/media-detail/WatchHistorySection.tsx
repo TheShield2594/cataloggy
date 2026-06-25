@@ -62,8 +62,7 @@ export function WatchHistorySection({
               <button
                 type="button"
                 onClick={() => onDeleteEvent(event.id)}
-                className="shrink-0 rounded p-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-rose-500/10 hover:text-rose-500 transition-all"
-                style={{ color: "var(--text-mute)" }}
+                className="shrink-0 rounded p-1 text-[var(--text-mute)] opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-rose-500/10 hover:text-rose-500 transition-all"
                 aria-label="Remove watch event"
               >
                 <Trash2 className="h-3.5 w-3.5" />
