@@ -185,6 +185,22 @@ body {
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+    background-color: color-mix(in srgb, #f97316 18%, var(--surface));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.6s ease-out;
+}
+
 /* Toast slide-in animation */
 @keyframes toast-in {
   from {

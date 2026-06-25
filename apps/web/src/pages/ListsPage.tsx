@@ -399,7 +399,7 @@ export function ListsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                {items.map((item) => {
+                {items.map((item, index) => {
                   const name = item.metadata?.name ?? item.imdbId;
                   const poster = item.metadata?.poster;
                   const year = item.metadata?.year;
@@ -408,7 +408,7 @@ export function ListsPage() {
                       {/* Poster */}
                       <div className="card-lift relative overflow-hidden rounded-xl bg-ink-100 ring-1 ring-ink-100" style={{ aspectRatio: "2/3" }}>
                         {poster ? (
-                          <img src={poster} alt={name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
+                          <img src={poster} alt={name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" loading={index < 5 ? "eager" : "lazy"} />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ink-100 to-ink-200">
                             <Film className="h-10 w-10 text-ink-400" />
