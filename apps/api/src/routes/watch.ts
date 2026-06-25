@@ -143,14 +143,18 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.get<{ Querystring: { limit?: string; offset?: string } }>(
+  app.get<{ Querystring: { limit?: string; offset?: string; imdbId?: string } }>(
     "/watch/history",
     async (request) => {
       const limit = Math.min(Math.max(Number(request.query.limit) || 50, 1), 200);
       const offset = Math.max(Number(request.query.offset) || 0, 0);
+      const imdbId = request.query.imdbId?.trim();
 
       const events = await prisma.watchEvent.findMany({
-        where: { profileId: request.profileId! },
+        where: {
+          profileId: request.profileId!,
+          ...(imdbId ? { OR: [{ imdbId }, { seriesImdbId: imdbId }] } : {}),
+        },
         orderBy: { watchedAt: "desc" },
         take: limit,
         skip: offset,

@@ -310,8 +310,17 @@ export function DashboardPage() {
     }
   }, []);
 
+  const profileId = runtimeConfig.getProfileId();
+
   useEffect(() => {
     let mounted = true;
+
+    setDetailedLoading(true);
+    setTrendingLoading(true);
+    setRecsLoading(true);
+    setSeriesRecsLoading(true);
+    setCalendarLoading(true);
+
     void (async () => {
       try {
         const res = await api.getDetailedStats();
@@ -331,29 +340,40 @@ export function DashboardPage() {
     void (async () => {
       try {
         const configRes = await api.getAiConfig();
-        if (mounted) setAiActive(configRes.configured);
-      } catch (err) { console.error("Failed to fetch AI config:", err); }
-    })();
-    void (async () => {
-      try {
-        const res = await api.getAiRecommendations("movie", 20);
-        if (mounted) {
-          setRecommendations(res.metas ?? []);
-          setMovieReasons(res.reasons ?? {});
+        if (!mounted) return;
+        setAiActive(configRes.configured);
+
+        if (!configRes.configured) {
+          setRecsLoading(false);
+          setSeriesRecsLoading(false);
+          return;
         }
-      } catch (err) { console.error("Failed to fetch movie recommendations:", err); } finally {
-        if (mounted) setRecsLoading(false);
-      }
-    })();
-    void (async () => {
-      try {
-        const res = await api.getAiRecommendations("series", 20);
-        if (mounted) {
-          setSeriesRecs(res.metas ?? []);
-          setSeriesReasons(res.reasons ?? {});
-        }
-      } catch (err) { console.error("Failed to fetch series recommendations:", err); } finally {
-        if (mounted) setSeriesRecsLoading(false);
+
+        void (async () => {
+          try {
+            const res = await api.getAiRecommendations("movie", 20);
+            if (mounted) {
+              setRecommendations(res.metas ?? []);
+              setMovieReasons(res.reasons ?? {});
+            }
+          } catch (err) { console.error("Failed to fetch movie recommendations:", err); } finally {
+            if (mounted) setRecsLoading(false);
+          }
+        })();
+        void (async () => {
+          try {
+            const res = await api.getAiRecommendations("series", 20);
+            if (mounted) {
+              setSeriesRecs(res.metas ?? []);
+              setSeriesReasons(res.reasons ?? {});
+            }
+          } catch (err) { console.error("Failed to fetch series recommendations:", err); } finally {
+            if (mounted) setSeriesRecsLoading(false);
+          }
+        })();
+      } catch (err) {
+        console.error("Failed to fetch AI config:", err);
+        if (mounted) { setRecsLoading(false); setSeriesRecsLoading(false); }
       }
     })();
     void (async () => {
@@ -365,9 +385,9 @@ export function DashboardPage() {
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [profileId]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [load, profileId]);
 
   useEffect(() => {
     if (loading) return;
