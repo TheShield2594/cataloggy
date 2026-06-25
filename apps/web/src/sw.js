@@ -1,6 +1,12 @@
 import { precacheAndRoute } from "workbox-precaching";
+import { registerRoute } from "workbox-routing";
+import { NetworkOnly } from "workbox-strategies";
 
 precacheAndRoute(self.__WB_MANIFEST);
+
+// Injected at container startup with the live VITE_API_BASE value — must
+// never be served from cache, or env var changes won't reach the browser.
+registerRoute(({ url }) => url.pathname === "/config.js", new NetworkOnly());
 
 self.addEventListener("push", (event) => {
   let payload = { title: "Cataloggy", body: "", url: "/" };
