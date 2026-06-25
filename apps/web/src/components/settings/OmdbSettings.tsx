@@ -58,13 +58,13 @@ export function OmdbSettings() {
   };
 
   if (loading) {
-    return <div className="flex items-center gap-2 text-sm text-ink-600"><Loader2 size={16} className="animate-spin" /> Checking OMDB status...</div>;
+    return <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-dim)" }}><Loader2 size={16} className="animate-spin" /> Checking OMDB status...</div>;
   }
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-ink-600 leading-relaxed">
-        OMDB provides ratings from <strong className="text-ink-700">IMDb</strong>, <strong className="text-ink-700">Rotten Tomatoes</strong>, and <strong className="text-ink-700">Metacritic</strong> for every movie and show in your detail panels.
+      <p className="text-sm leading-relaxed" style={{ color: "var(--text-dim)" }}>
+        OMDB provides ratings from <strong style={{ color: "var(--text)" }}>IMDb</strong>, <strong style={{ color: "var(--text)" }}>Rotten Tomatoes</strong>, and <strong style={{ color: "var(--text)" }}>Metacritic</strong> for every movie and show in your detail panels.
         Get a free API key at{" "}
         <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" rel="noopener noreferrer" className="text-claw-600 underline hover:text-claw-500">
           omdbapi.com
@@ -80,7 +80,8 @@ export function OmdbSettings() {
           <button
             type="button"
             onClick={disconnect}
-            className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 transition-colors hover:bg-rose-600 hover:text-white border border-ink-200"
+            className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-rose-600 hover:text-white border"
+            style={{ color: "var(--text-dim)", borderColor: "var(--border)" }}
           >
             <Unplug size={16} /> Remove Key
           </button>
@@ -93,12 +94,14 @@ export function OmdbSettings() {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="Paste your OMDB API key"
-              className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 pr-20 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+              className="w-full rounded-xl border bg-white px-4 py-3 pr-20 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+              style={{ borderColor: "var(--border)", color: "var(--text)" }}
             />
             <button
               type="button"
               onClick={() => setShowKey((p) => !p)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-700"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 transition-colors hover:bg-[var(--surface-strong)] hover:text-[var(--text-dim)]"
+              style={{ color: "var(--text-mute)" }}
               aria-label={showKey ? "Hide key" : "Show key"}
             >
               {showKey ? <EyeOff size={16} /> : <Eye size={16} />}

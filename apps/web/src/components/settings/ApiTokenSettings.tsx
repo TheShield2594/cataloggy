@@ -22,7 +22,7 @@ export function ApiTokenSettings() {
 
   return (
     <form onSubmit={save} className="space-y-4">
-      <p className="text-sm text-ink-600 leading-relaxed">
+      <p className="text-sm leading-relaxed" style={{ color: "var(--text-dim)" }}>
         The API token authenticates requests to your Cataloggy server. It is stored in localStorage.
       </p>
       <div className="relative">
@@ -31,12 +31,14 @@ export function ApiTokenSettings() {
           value={token}
           onChange={(e) => setToken(e.target.value)}
           placeholder="Paste your API token"
-          className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 pr-20 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+          className="w-full rounded-xl border px-4 py-3 pr-20 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+          style={{ borderColor: "var(--border)", backgroundColor: "var(--bg-0)", color: "var(--text)" }}
         />
         <button
           type="button"
           onClick={() => setShowToken((p) => !p)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-700"
+          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 transition-colors hover:bg-[var(--surface-strong)] hover:text-[var(--text-dim)]"
+          style={{ color: "var(--text-mute)" }}
           aria-label={showToken ? "Hide token" : "Show token"}
         >
           {showToken ? <EyeOff size={16} /> : <Eye size={16} />}

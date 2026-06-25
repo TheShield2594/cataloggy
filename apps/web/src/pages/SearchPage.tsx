@@ -263,22 +263,25 @@ export function SearchPage() {
       {/* Search bar */}
       <form
         onSubmit={submitSearch}
-        className="sticky top-[76px] z-40 rounded-2xl border border-ink-100 bg-cream-50/90 p-4 backdrop-blur-xl shadow-sm"
+        className="sticky top-[76px] z-40 rounded-2xl bg-cream-50/90 p-4 backdrop-blur-xl shadow-sm"
+        style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }}
       >
         <div className="relative">
-          <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-400" />
+          <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2" style={{ color: "var(--text-mute)" }} />
           <input
             value={filters.query}
             onChange={(e) => setFilters({ query: e.target.value })}
             placeholder="Search movies & TV shows..."
-            className="w-full rounded-full border border-ink-200 bg-white py-3.5 pl-14 pr-12 text-base text-ink-900 placeholder:text-ink-400 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15 transition-all"
+            className="w-full rounded-full bg-white py-3.5 pl-14 pr-12 text-base placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15 transition-all"
+            style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", color: "var(--text)" }}
             autoFocus
           />
           {filters.query && (
             <button
               type="button"
               onClick={() => { setFilters({ query: "" }); setRawResults(null); }}
-              className="absolute right-4 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full bg-ink-200 text-xs font-bold text-ink-900 hover:bg-ink-300 transition-colors"
+              className="absolute right-4 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold hover:bg-[var(--border-strong)] transition-colors"
+              style={{ backgroundColor: "var(--border)", color: "var(--text)" }}
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -287,7 +290,7 @@ export function SearchPage() {
 
         {/* Filter pills + advanced toggle */}
         <div className="mt-3 flex items-center gap-2 flex-wrap">
-          <div className="flex rounded-full border border-ink-200 bg-ink-100/60 p-1">
+          <div className="flex rounded-full bg-[var(--surface)] p-1" style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)" }}>
             {filterOptions.map((opt) => {
               const Icon = opt.icon;
               const active = filters.filter === opt.value;
@@ -299,7 +302,7 @@ export function SearchPage() {
                   className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
                     active
                       ? "bg-claw-500 text-white shadow-sm"
-                      : "text-ink-500 hover:text-ink-900"
+                      : "text-[var(--text-mute)] hover:text-[var(--text)]"
                   }`}
                 >
                   {Icon && <Icon className="h-3.5 w-3.5" />}
@@ -316,7 +319,7 @@ export function SearchPage() {
             className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all ${
               hasActiveFilters
                 ? "border-claw-500/50 bg-claw-500/10 text-claw-600"
-                : "border-ink-200 bg-ink-100/60 text-ink-500 hover:text-ink-900"
+                : "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-mute)] hover:text-[var(--text)]"
             }`}
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -333,7 +336,7 @@ export function SearchPage() {
             <button
               type="button"
               onClick={clearFilters}
-              className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm text-ink-500 hover:text-ink-900 transition-colors"
+              className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm text-[var(--text-mute)] hover:text-[var(--text)] transition-colors"
             >
               <X className="h-3 w-3" />
               Clear
@@ -341,7 +344,7 @@ export function SearchPage() {
           )}
 
           {isSearching && (
-            <span className="ml-auto flex items-center gap-2 text-sm text-ink-500">
+            <span className="ml-auto flex items-center gap-2 text-sm" style={{ color: "var(--text-mute)" }}>
               <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-claw-500 border-t-transparent" />
               Searching...
             </span>
@@ -350,7 +353,7 @@ export function SearchPage() {
 
         {/* Advanced filters panel */}
         {filtersOpen && (
-          <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl border border-ink-100 bg-cream-50 p-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+          <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl bg-cream-50 p-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6" style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }}>
             {/* Genre */}
             <FilterSelect
               label="Genre"
@@ -361,7 +364,7 @@ export function SearchPage() {
 
             {/* Year range */}
             <div className="flex flex-col gap-1">
-              <label className="text-2xs font-medium uppercase tracking-wider text-ink-500">Year</label>
+              <label className="text-2xs font-medium uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Year</label>
               <div className="flex gap-1.5">
                 <input
                   type="number"
@@ -371,7 +374,8 @@ export function SearchPage() {
                   max="2030"
                   value={filters.yearMin}
                   onChange={(e) => setFilters({ yearMin: e.target.value })}
-                  className="w-full rounded-lg border border-ink-200 bg-white px-2.5 py-2 text-sm text-ink-900 placeholder:text-ink-400 focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
+                  className="w-full rounded-lg bg-white px-2.5 py-2 text-sm placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
+                  style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", color: "var(--text)" }}
                 />
                 <input
                   type="number"
@@ -381,7 +385,8 @@ export function SearchPage() {
                   max="2030"
                   value={filters.yearMax}
                   onChange={(e) => setFilters({ yearMax: e.target.value })}
-                  className="w-full rounded-lg border border-ink-200 bg-white px-2.5 py-2 text-sm text-ink-900 placeholder:text-ink-400 focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
+                  className="w-full rounded-lg bg-white px-2.5 py-2 text-sm placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
+                  style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", color: "var(--text)" }}
                 />
               </div>
             </div>
@@ -415,11 +420,11 @@ export function SearchPage() {
       {/* Empty state – no search yet */}
       {!hasSearched && !isSearching && (
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="flex h-28 w-28 items-center justify-center rounded-full bg-ink-100 ring-1 ring-ink-200">
-            <Search className="h-14 w-14 text-ink-400" />
+          <div className="flex h-28 w-28 items-center justify-center rounded-full ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border-strong)" } as React.CSSProperties}>
+            <Search className="h-14 w-14" style={{ color: "var(--text-mute)" }} />
           </div>
-          <p className="mt-6 text-2xl font-bold text-ink-900">Discover your next favorite</p>
-          <p className="mt-2 max-w-sm text-ink-500">
+          <p className="mt-6 text-2xl font-bold" style={{ color: "var(--text)" }}>Discover your next favorite</p>
+          <p className="mt-2 max-w-sm" style={{ color: "var(--text-mute)" }}>
             Search for movies and series to add them to your lists and track what you watch.
           </p>
         </div>
@@ -428,11 +433,11 @@ export function SearchPage() {
       {/* No results */}
       {noResults && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="flex h-24 w-24 items-center justify-center rounded-full bg-ink-100 ring-1 ring-ink-200">
-            <Filter className="h-12 w-12 text-ink-400" />
+          <div className="flex h-24 w-24 items-center justify-center rounded-full ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border-strong)" } as React.CSSProperties}>
+            <Filter className="h-12 w-12" style={{ color: "var(--text-mute)" }} />
           </div>
-          <p className="mt-5 text-lg font-semibold text-ink-700">No results found</p>
-          <p className="mt-1 text-sm text-ink-500">
+          <p className="mt-5 text-lg font-semibold" style={{ color: "var(--text-dim)" }}>No results found</p>
+          <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>
             {hasActiveFilters
               ? "Try adjusting your filters or search term."
               : "Try a different search term or filter."}
@@ -440,7 +445,8 @@ export function SearchPage() {
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="mt-3 rounded-full border border-ink-200 px-4 py-2 text-sm font-medium text-ink-700 hover:bg-ink-100 transition-colors"
+              className="mt-3 rounded-full px-4 py-2 text-sm font-medium hover:bg-[var(--surface)] transition-colors"
+              style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", color: "var(--text-dim)" }}
             >
               Clear all filters
             </button>
@@ -452,15 +458,15 @@ export function SearchPage() {
       {hasSearched && results !== null && results.length > 0 && (
         <>
           <div className="flex items-center justify-between">
-            <p className="text-sm text-ink-500">
+            <p className="text-sm" style={{ color: "var(--text-mute)" }}>
               {results.length} result{results.length !== 1 ? "s" : ""}
               {rawResults && results.length !== rawResults.length && (
-                <span className="text-ink-400"> (filtered from {rawResults.length})</span>
+                <span style={{ color: "var(--text-mute)" }}> (filtered from {rawResults.length})</span>
               )}
             </p>
             {/* Inline sort shortcut on desktop */}
             <div className="hidden sm:flex items-center gap-2">
-              <span className="text-2xs text-ink-500">Sort:</span>
+              <span className="text-2xs" style={{ color: "var(--text-mute)" }}>Sort:</span>
               {(["relevance", "rating", "year_desc", "title"] as const).map((s) => (
                 <button
                   key={s}
@@ -468,9 +474,10 @@ export function SearchPage() {
                   onClick={() => setFilters({ sort: s })}
                   className={`rounded-full px-2.5 py-1 text-2xs font-medium transition-all ${
                     filters.sort === s
-                      ? "bg-ink-700 text-white"
-                      : "text-ink-500 hover:text-ink-900"
+                      ? "text-white"
+                      : "hover:text-[var(--text)]"
                   }`}
+                  style={filters.sort === s ? { backgroundColor: "var(--text-dim)" } : { color: "var(--text-mute)" }}
                 >
                   {SORT_LABELS[s]}
                 </button>
@@ -532,18 +539,22 @@ function FilterSelect({
   const id = useId();
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-2xs font-medium uppercase tracking-wider text-ink-400">{label}</label>
+      <label htmlFor={id} className="text-2xs font-medium uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>{label}</label>
       <select
         id={id}
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-ink-200 bg-white px-2.5 py-2 text-sm text-ink-800 focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30 appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        className="rounded-lg bg-white px-2.5 py-2 text-sm focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30 appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238f8475' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
           backgroundRepeat: "no-repeat",
           backgroundPosition: "right 10px center",
           paddingRight: "2rem",
+          borderWidth: 1,
+          borderStyle: "solid",
+          borderColor: "var(--border-strong)",
+          color: "var(--text-dim)",
         }}
       >
         {options.map((opt) => (
@@ -609,8 +620,8 @@ function ResultCard({
             loading={eager ? "eager" : "lazy"}
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ink-100 to-ink-200">
-            <Film className="h-12 w-12 text-ink-400" />
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br" style={{ "--tw-gradient-from": "var(--surface)", "--tw-gradient-to": "var(--surface-strong)" } as React.CSSProperties}>
+            <Film className="h-12 w-12" style={{ color: "var(--text-mute)" }} />
           </div>
         )}
 
@@ -655,8 +666,8 @@ function ResultCard({
       {/* Quick-add dropdown */}
       {isOpen && (
         <div ref={dropdownRef} className="relative z-30 mt-1">
-          <div role="menu" aria-label={`Add ${result.name} to a list`} className="absolute left-0 right-0 overflow-hidden rounded-xl border border-ink-100 bg-white shadow-lg">
-            <p className="border-b border-ink-100 px-3 py-2.5 text-2xs font-semibold uppercase tracking-wider text-ink-500">
+          <div role="menu" aria-label={`Add ${result.name} to a list`} className="absolute left-0 right-0 overflow-hidden rounded-xl bg-white shadow-lg" style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }}>
+            <p className="px-3 py-2.5 text-2xs font-semibold uppercase tracking-wider" style={{ borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: "var(--border)", color: "var(--text-mute)" }}>
               Add to list
             </p>
             {lists.map((list) => {
@@ -673,15 +684,15 @@ function ResultCard({
                     e.stopPropagation();
                     void onAdd(list.id, result);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-ink-100 disabled:opacity-50"
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-[var(--surface)] disabled:opacity-50"
                 >
                   {already ? (
                     <Check className="h-3.5 w-3.5 text-emerald-600" />
                   ) : (
-                    <Plus className="h-3.5 w-3.5 text-ink-500" />
+                    <Plus className="h-3.5 w-3.5" style={{ color: "var(--text-mute)" }} />
                   )}
-                  <span className={already ? "text-ink-400" : "text-ink-800"}>{list.name}</span>
-                  {already && <span className="ml-auto text-2xs text-ink-400">Added</span>}
+                  <span style={{ color: already ? "var(--text-mute)" : "var(--text-dim)" }}>{list.name}</span>
+                  {already && <span className="ml-auto text-2xs" style={{ color: "var(--text-mute)" }}>Added</span>}
                   {pending && (
                     <span className="ml-auto inline-block h-3 w-3 animate-spin rounded-full border border-claw-500 border-t-transparent" />
                   )}
@@ -694,9 +705,9 @@ function ResultCard({
 
       {/* Title & metadata */}
       <div className="mt-3">
-        <p className="truncate text-sm font-semibold text-ink-900">{result.name}</p>
+        <p className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>{result.name}</p>
         <div className="mt-0.5 flex items-center gap-2">
-          <span className="text-xs text-ink-500">{result.year ?? "Unknown year"}</span>
+          <span className="text-xs" style={{ color: "var(--text-mute)" }}>{result.year ?? "Unknown year"}</span>
           {result.rating != null && result.rating > 0 && (
             <span className="flex items-center gap-0.5 text-xs text-amber-600">
               <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
@@ -704,7 +715,7 @@ function ResultCard({
             </span>
           )}
           {listNames.length > 0 && (
-            <span className="rounded bg-ink-100 px-1.5 py-0.5 text-2xs font-medium text-ink-600" title={listNames.join(", ")}>
+            <span className="rounded px-1.5 py-0.5 text-2xs font-medium" style={{ backgroundColor: "var(--surface)", color: "var(--text-dim)" }} title={listNames.join(", ")}>
               In {listNames.join(", ")}
             </span>
           )}
@@ -712,7 +723,7 @@ function ResultCard({
         {result.genres.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {result.genres.slice(0, 3).map((g) => (
-              <span key={g} className="rounded bg-ink-100 px-1.5 py-0.5 text-2xs text-ink-600">{g}</span>
+              <span key={g} className="rounded px-1.5 py-0.5 text-2xs" style={{ backgroundColor: "var(--surface)", color: "var(--text-dim)" }}>{g}</span>
             ))}
           </div>
         )}
@@ -760,7 +771,7 @@ function WhereToWatchBadge({ type, imdbId }: { type: SearchResult["type"]; imdbI
         p.logo ? (
           <img key={p.id} src={p.logo} alt={p.name} className="h-4 w-4 rounded" />
         ) : (
-          <MonitorPlay key={p.id} className="h-3.5 w-3.5 text-ink-400" />
+          <MonitorPlay key={p.id} className="h-3.5 w-3.5" style={{ color: "var(--text-mute)" }} />
         )
       ))}
     </div>
