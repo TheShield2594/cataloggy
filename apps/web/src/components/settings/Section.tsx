@@ -61,20 +61,21 @@ export function Section({
   };
 
   return (
-    <div className="rounded-2xl border border-ink-100 bg-cream-50 shadow-sm overflow-hidden">
+    <div className="rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
       <button
         id={buttonId}
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
         onClick={toggle}
-        className="flex w-full items-center gap-3 px-5 py-[1.125rem] text-left transition-colors hover:bg-ink-100/40"
+        className="flex w-full items-center gap-3 px-5 py-[1.125rem] text-left transition-colors hover:bg-[var(--surface)]"
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink-100 text-ink-500">{icon}</span>
-        <span className="flex-1 text-base font-semibold text-ink-900">{title}</span>
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: "var(--surface-strong)", color: "var(--text-mute)" }}>{icon}</span>
+        <span className="flex-1 text-base font-semibold" style={{ color: "var(--text)" }}>{title}</span>
         <ChevronDown
           size={18}
-          className={`text-ink-500 transition-transform duration-300 ${open ? "rotate-180" : ""}`}
+          className={`transition-transform duration-300 ${open ? "rotate-180" : ""}`}
+          style={{ color: "var(--text-mute)" }}
         />
       </button>
       <div
@@ -85,7 +86,7 @@ export function Section({
         style={{ height: height !== undefined ? `${height}px` : "auto" }}
         className="overflow-hidden transition-[height] duration-300 ease-in-out"
       >
-        <div className="border-t border-ink-100 px-5 py-5">{children}</div>
+        <div className="border-t px-5 py-5" style={{ borderColor: "var(--border)" }}>{children}</div>
       </div>
     </div>
   );

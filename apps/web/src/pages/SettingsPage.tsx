@@ -42,7 +42,10 @@ export function SettingsPage() {
     <div className="mx-auto max-w-2xl space-y-4">
       <h2 className="text-2xl font-bold">Settings</h2>
 
-      <div className="flex rounded-full border border-ink-200 bg-ink-100/60 p-1">
+      <div
+        className="flex rounded-full p-1"
+        style={{ border: "1px solid var(--border)", backgroundColor: "var(--surface)" }}
+      >
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -51,7 +54,7 @@ export function SettingsPage() {
             className={`flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
               tab === t.id
                 ? "bg-claw-500 text-white shadow-lg shadow-claw-500/25"
-                : "text-ink-600 hover:text-ink-900"
+                : "text-[var(--text-dim)] hover:text-[var(--text)]"
             }`}
           >
             {t.label}
@@ -74,8 +77,8 @@ export function SettingsPage() {
           </Section>
 
           <Section title="About" icon={<Info size={20} />} storageKey="about">
-            <div className="space-y-2 text-sm text-ink-600">
-              <p className="text-base font-semibold text-ink-900">Cataloggy <span className="font-mono text-claw-600">v{APP_VERSION}</span></p>
+            <div className="space-y-2 text-sm" style={{ color: "var(--text-dim)" }}>
+              <p className="text-base font-semibold" style={{ color: "var(--text)" }}>Cataloggy <span className="font-mono text-claw-600">v{APP_VERSION}</span></p>
               <p className="text-sm">A personal media catalog and watchlist manager.</p>
             </div>
           </Section>

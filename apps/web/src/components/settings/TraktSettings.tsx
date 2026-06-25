@@ -59,7 +59,7 @@ export function TraktSettings() {
   };
 
   if (loading) {
-    return <div className="flex items-center gap-2 text-sm text-ink-600"><Loader2 size={16} className="animate-spin" /> Checking Trakt status...</div>;
+    return <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-dim)" }}><Loader2 size={16} className="animate-spin" /> Checking Trakt status...</div>;
   }
 
   return (
@@ -72,12 +72,12 @@ export function TraktSettings() {
       </div>
 
       {status?.redirectUri && !status.connected && status.configured && (
-        <div className="rounded-xl border border-ink-100 bg-cream-100 px-4 py-3 space-y-1">
-          <p className="text-xs text-ink-600">
-            Your Trakt app's <strong className="text-ink-700">Redirect URI</strong> must be set to:
+        <div className="rounded-xl bg-cream-100 px-4 py-3 space-y-1" style={{ border: "1px solid var(--border)" }}>
+          <p className="text-xs" style={{ color: "var(--text-dim)" }}>
+            Your Trakt app's <strong style={{ color: "var(--text-dim)" }}>Redirect URI</strong> must be set to:
           </p>
           <code className="block text-sm text-claw-600 break-all select-all">{status.redirectUri}</code>
-          <p className="text-xs text-ink-600">
+          <p className="text-xs" style={{ color: "var(--text-dim)" }}>
             Set this at trakt.tv under Settings &gt; Your API Apps &gt; Edit. A mismatch causes an OAuth error.
           </p>
         </div>
@@ -107,14 +107,16 @@ export function TraktSettings() {
             <button
               type="button"
               onClick={disconnect}
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 transition-colors hover:bg-rose-600 hover:text-white border border-ink-200"
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-rose-600 hover:text-white border border-[var(--border-strong)]"
+              style={{ color: "var(--text-dim)" }}
             >
               <Unplug size={16} /> Disconnect
             </button>
             <button
               type="button"
               onClick={fetchStatus}
-              className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 transition-colors hover:bg-ink-100 border border-ink-200"
+              className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)] border border-[var(--border-strong)]"
+              style={{ color: "var(--text-dim)" }}
             >
               Refresh
             </button>

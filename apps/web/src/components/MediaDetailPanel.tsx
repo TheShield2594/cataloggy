@@ -221,7 +221,8 @@ export function DetailPanel({
           {/* Close */}
           <button
             type="button" onClick={onClose}
-            className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-ink-900/80 text-cream-50 shadow-lg backdrop-blur hover:bg-ink-900 hover:text-white transition-colors"
+            className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full shadow-lg backdrop-blur transition-colors hover:text-white"
+            style={{ background: "color-mix(in srgb, var(--bg-0) 80%, transparent)", color: "var(--bg-2)" }}
             aria-label="Close detail panel"
           >
             <X className="h-4 w-4" />
@@ -232,11 +233,11 @@ export function DetailPanel({
             {item.poster ? (
               <img src={item.poster} alt={item.name} className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ink-800 to-ink-900">
-                <Film className="h-20 w-20 text-ink-600" />
+              <div className="flex h-full w-full items-center justify-center" style={{ background: "linear-gradient(to bottom right, var(--bg-1), var(--bg-0))" }}>
+                <Film className="h-20 w-20" style={{ color: "var(--border-strong)" }} />
               </div>
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-ink-900 via-ink-900/20 to-transparent sm:hidden" />
+            <div className="absolute inset-0 sm:hidden" style={{ background: "linear-gradient(to top, var(--bg-0), color-mix(in srgb, var(--bg-0) 20%, transparent), transparent)" }} />
           </div>
 
           {/* Content */}

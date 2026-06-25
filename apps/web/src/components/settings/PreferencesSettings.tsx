@@ -79,24 +79,24 @@ export function PreferencesSettings() {
   };
 
   if (loading) {
-    return <div className="flex items-center gap-2 text-sm text-ink-600"><Loader2 size={16} className="animate-spin" /> Loading preferences...</div>;
+    return <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-dim)" }}><Loader2 size={16} className="animate-spin" /> Loading preferences...</div>;
   }
 
   return (
     <div className="space-y-5">
-      <p className="text-sm text-ink-600 leading-relaxed">
+      <p className="text-sm leading-relaxed" style={{ color: "var(--text-dim)" }}>
         Configure metadata language, streaming region, and spoiler protection.
         Changes affect TMDB metadata fetching and Stremio catalog content.
       </p>
 
       {/* Language */}
       <div>
-        <label htmlFor="pref-language" className="mb-1.5 block text-sm font-medium text-ink-700">Metadata Language</label>
+        <label htmlFor="pref-language" className="mb-1.5 block text-sm font-medium" style={{ color: "var(--text-dim)" }}>Metadata Language</label>
         <select
           id="pref-language"
           value={language}
           onChange={(e) => { setLanguage(e.target.value); setSaved(false); }}
-          className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+          className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-0)] px-4 py-3 text-sm text-[var(--text)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         >
           {!COMMON_LANGUAGES.some((l) => l.code === language) && (
             <option value={language}>{language}</option>
@@ -105,19 +105,19 @@ export function PreferencesSettings() {
             <option key={l.code} value={l.code}>{l.label} ({l.code})</option>
           ))}
         </select>
-        <p className="mt-1 text-xs text-ink-500">
+        <p className="mt-1 text-xs" style={{ color: "var(--text-mute)" }}>
           Titles, descriptions, and metadata will be fetched in this language from TMDB.
         </p>
       </div>
 
       {/* Region */}
       <div>
-        <label htmlFor="pref-region" className="mb-1.5 block text-sm font-medium text-ink-700">Streaming Region</label>
+        <label htmlFor="pref-region" className="mb-1.5 block text-sm font-medium" style={{ color: "var(--text-dim)" }}>Streaming Region</label>
         <select
           id="pref-region"
           value={region}
           onChange={(e) => { setRegion(e.target.value); setSaved(false); }}
-          className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+          className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-0)] px-4 py-3 text-sm text-[var(--text)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         >
           {!COMMON_REGIONS.includes(region) && (
             <option value={region}>{region}</option>
@@ -126,26 +126,26 @@ export function PreferencesSettings() {
             <option key={r} value={r}>{r}</option>
           ))}
         </select>
-        <p className="mt-1 text-xs text-ink-500">
+        <p className="mt-1 text-xs" style={{ color: "var(--text-mute)" }}>
           Streaming service catalogs (Netflix, Disney+, etc.) show content available in this region.
         </p>
       </div>
 
       {/* Spoiler Protection */}
-      <label htmlFor="pref-spoiler" className="flex items-start gap-3 rounded-xl border border-ink-100 bg-cream-50 px-4 py-3.5 cursor-pointer transition-colors hover:bg-ink-100/40">
+      <label htmlFor="pref-spoiler" className="flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 cursor-pointer transition-colors hover:bg-[var(--surface-strong)]">
         <input
           id="pref-spoiler"
           type="checkbox"
           checked={spoilerProtection}
           onChange={(e) => { setSpoilerProtection(e.target.checked); setSaved(false); }}
-          className="mt-0.5 h-4 w-4 rounded border-ink-300 bg-white text-claw-500 focus:ring-claw-500/30"
+          className="mt-0.5 h-4 w-4 rounded border-[var(--border-strong)] bg-[var(--bg-0)] text-claw-500 focus:ring-claw-500/30"
         />
         <div>
-          <span className="text-sm font-medium text-ink-800 flex items-center gap-2">
+          <span className="text-sm font-medium flex items-center gap-2" style={{ color: "var(--text)" }}>
             <Shield size={14} className="text-plum-500" />
             Spoiler Protection
           </span>
-          <p className="mt-0.5 text-xs text-ink-500">
+          <p className="mt-0.5 text-xs" style={{ color: "var(--text-mute)" }}>
             Hides series descriptions in Stremio for shows you haven't finished watching yet.
           </p>
         </div>

@@ -4,7 +4,7 @@ import { BarChart3, Clapperboard, History, Search, List, Settings } from "lucide
 import { runtimeConfig } from "./api";
 import { CommandPalette, useCommandPalette } from "./components/CommandPalette";
 import { InstallButton } from "./components/InstallButton";
-import { Sidebar } from "./components/Sidebar";
+import { Sidebar, PIN_KEY } from "./components/Sidebar";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useTheme } from "./hooks/useTheme";
 import { ToastProvider } from "./hooks/useToast";
@@ -32,6 +32,8 @@ export function App() {
   const [needsProfile, setNeedsProfile] = useState(() => !runtimeConfig.getProfileId());
   const { theme, setTheme } = useTheme();
   const { open: paletteOpen, setOpen: setPaletteOpen } = useCommandPalette();
+  const [sidebarPinned, setSidebarPinned] = useState(() => localStorage.getItem(PIN_KEY) === "1");
+  const sidebarPad = sidebarPinned ? "sm:pl-[15rem]" : "sm:pl-16";
 
   if (needsSetup) {
     return (
@@ -51,12 +53,12 @@ export function App() {
   return (
     <ToastProvider>
     <div className="min-h-screen w-full">
-      <Sidebar />
+      <Sidebar pinned={sidebarPinned} onPinnedChange={setSidebarPinned} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
 
       {/* Slim top bar */}
       <header
-        className="fixed top-0 left-0 right-0 z-30 backdrop-blur-xl sm:pl-16"
+        className={`fixed top-0 left-0 right-0 z-30 backdrop-blur-xl transition-[padding] duration-200 ${sidebarPad}`}
         style={{ borderBottom: "1px solid var(--border)", backgroundColor: "color-mix(in srgb, var(--bg-0) 90%, transparent)" }}
       >
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-6 py-3">
@@ -100,7 +102,7 @@ export function App() {
       </header>
 
       {/* Main content */}
-      <main className="mx-auto max-w-[1400px] px-6 pb-24 pt-[76px] sm:pb-10 sm:pl-[5rem]">
+      <main className={`mx-auto max-w-[1400px] px-6 pb-24 pt-[76px] sm:pb-10 transition-[padding] duration-200 ${sidebarPad}`}>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/search" element={<SearchPage />} />
@@ -141,7 +143,7 @@ export function App() {
 
       {/* Footer */}
       <footer
-        className="py-8 text-center text-sm sm:pl-16"
+        className={`py-8 text-center text-sm transition-[padding] duration-200 ${sidebarPad}`}
         style={{ borderTop: "1px solid var(--border)", color: "var(--text-mute)" }}
       >
         Cataloggy &middot; Personal Media Tracker

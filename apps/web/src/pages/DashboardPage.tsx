@@ -148,7 +148,7 @@ function DiscoveryCard({ item, badge, reason, onSelect, eager }: {
           </div>
         )}
         {badge && <div className="absolute top-2 right-2">{badge}</div>}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/55 to-transparent px-3 pb-2.5 pt-10 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/55 to-transparent px-3 pb-2.5 pt-10 opacity-100 transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100">
           <p className="truncate text-xs font-semibold text-white">{item.name}</p>
         </div>
       </div>
@@ -642,7 +642,7 @@ export function DashboardPage() {
                         {isDone ? (
                           <><Check className="h-3.5 w-3.5" /> Marked</>
                         ) : isMarking ? (
-                          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-ink-400 border-t-transparent" />
+                          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: "rgba(255,255,255,0.4)", borderTopColor: "transparent" }} />
                         ) : (
                           <><ChevronRight className="h-3.5 w-3.5" /> Mark S{s.nextSeason}:E{s.nextEpisode}</>
                         )}
@@ -908,9 +908,9 @@ export function DashboardPage() {
                             ? "bg-claw-500/15 text-claw-400"
                             : isTomorrow
                               ? "bg-amber-500/15 text-amber-400"
-                              : "text-ink-600"
+                              : ""
                         }`}
-                        style={!isToday && !isTomorrow ? { background: "var(--surface-strong)" } : undefined}
+                        style={!isToday && !isTomorrow ? { background: "var(--surface-strong)", color: "var(--text-dim)" } : undefined}
                       >
                         {dateLabel}
                       </span>
