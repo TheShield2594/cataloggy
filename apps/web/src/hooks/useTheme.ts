@@ -1,19 +1,30 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type Theme = "light" | "dark";
+export type Theme = "light" | "dark" | "glass" | "midnight" | "letterboxd";
+
+export const THEMES: { id: Theme; label: string }[] = [
+  { id: "light", label: "Light" },
+  { id: "dark", label: "Dark" },
+  { id: "glass", label: "Glass" },
+  { id: "midnight", label: "Midnight Cinema" },
+  { id: "letterboxd", label: "Letterboxd" },
+];
 
 const STORAGE_KEY = "cataloggy:theme";
+
+function isTheme(value: string | null): value is Theme {
+  return THEMES.some((t) => t.id === value);
+}
 
 function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "light";
   const stored = window.localStorage.getItem(STORAGE_KEY);
-  if (stored === "light" || stored === "dark") return stored;
-  return "light";
+  return isTheme(stored) ? stored : "light";
 }
 
 function applyTheme(theme: Theme) {
   document.documentElement.setAttribute("data-theme", theme);
-  document.documentElement.style.colorScheme = theme;
+  document.documentElement.style.colorScheme = theme === "light" ? "light" : "dark";
 }
 
 export function useTheme() {
@@ -25,9 +36,6 @@ export function useTheme() {
   }, [theme]);
 
   const setTheme = useCallback((next: Theme) => setThemeState(next), []);
-  const toggleTheme = useCallback(() => {
-    setThemeState((prev) => (prev === "light" ? "dark" : "light"));
-  }, []);
 
-  return { theme, setTheme, toggleTheme };
+  return { theme, setTheme };
 }

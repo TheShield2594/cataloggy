@@ -1,59 +1,59 @@
-import { Theme } from "../hooks/useTheme";
+import { useEffect, useRef, useState } from "react";
+import { Check, Palette } from "lucide-react";
+import { Theme, THEMES } from "../hooks/useTheme";
 
-/**
- * Sun/moon slider toggle. All motion is a direct response to the state
- * change (CSS transition), never an idle/looping animation — clouds and
- * star-twinkle keyframes were deliberately dropped to match the app's
- * "fast and purposeful, never decorative" motion rule.
- */
-export function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }) {
-  const dark = theme === "dark";
+export function ThemeToggle({ theme, onChange }: { theme: Theme; onChange: (next: Theme) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
 
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={dark}
-      aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-      onClick={onToggle}
-      className="relative h-9 w-16 flex-none rounded-full transition-colors duration-200 active:scale-95"
-      style={{
-        border: "1px solid var(--border-strong)",
-        background: dark ? "#1c2333" : "#bfe3ff",
-      }}
-    >
-      {/* static stars, only visible in dark mode — no twinkle loop */}
-      <span
-        className="absolute left-2.5 top-2 h-[3px] w-[3px] rounded-full bg-white transition-opacity duration-200"
-        style={{ opacity: dark ? 0.9 : 0 }}
-      />
-      <span
-        className="absolute left-4 top-4.5 h-[2px] w-[2px] rounded-full bg-white transition-opacity duration-200"
-        style={{ opacity: dark ? 0.7 : 0 }}
-      />
-      <span
-        className="absolute left-2 top-6 h-[2px] w-[2px] rounded-full bg-white transition-opacity duration-200"
-        style={{ opacity: dark ? 0.5 : 0 }}
-      />
-
-      {/* sliding sun/moon knob */}
-      <span
-        className="absolute top-1 left-1 flex h-6 w-6 items-center justify-center rounded-full shadow-sm transition-transform duration-200"
-        style={{
-          transform: dark ? "translateX(28px)" : "translateX(0)",
-          background: dark ? "#e2e8f0" : "#fbbf24",
-        }}
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Choose theme"
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors active:scale-95"
+        style={{ border: "1px solid var(--border-strong)", background: "var(--surface)", color: "var(--text)" }}
       >
-        {/* moon craters fade in/out with the knob, no separate animation */}
-        <span
-          className="absolute h-1.5 w-1.5 rounded-full bg-slate-400 transition-opacity duration-200"
-          style={{ opacity: dark ? 0.8 : 0, top: "3px", left: "3px" }}
-        />
-        <span
-          className="absolute h-1 w-1 rounded-full bg-slate-400 transition-opacity duration-200"
-          style={{ opacity: dark ? 0.6 : 0, bottom: "4px", right: "4px" }}
-        />
-      </span>
-    </button>
+        <Palette className="h-4 w-4" />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          className="absolute right-0 top-11 z-40 w-44 overflow-hidden rounded-xl py-1 shadow-lg"
+          style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)" }}
+        >
+          {THEMES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="option"
+              aria-selected={theme === t.id}
+              onClick={() => {
+                onChange(t.id);
+                setOpen(false);
+              }}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--surface-strong)]"
+              style={{ color: "var(--text)" }}
+            >
+              {t.label}
+              {theme === t.id && <Check className="h-3.5 w-3.5" style={{ color: "var(--accent)" }} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
