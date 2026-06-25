@@ -15,7 +15,7 @@ export function WatchHistorySection({
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-500">
+        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
           <Clock className="h-3.5 w-3.5" /> Watch History
         </h3>
         <button
@@ -30,24 +30,31 @@ export function WatchHistorySection({
       {loading ? (
         <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="skeleton h-11 rounded-lg" />)}</div>
       ) : history.length === 0 ? (
-        <p className="rounded-xl bg-cream-50 border border-ink-100 py-5 text-center text-sm text-ink-500">
+        <p
+          className="rounded-xl border py-5 text-center text-sm"
+          style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-mute)" }}
+        >
           No watch history yet
         </p>
       ) : (
         <div className="space-y-1.5">
           {history.map((event) => (
-            <div key={event.id} className="group flex items-center gap-3 rounded-lg bg-cream-50 border border-ink-100 px-3 py-2.5">
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-ink-400" />
+            <div
+              key={event.id}
+              className="group flex items-center gap-3 rounded-lg border px-3 py-2.5"
+              style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+            >
+              <ChevronRight className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--text-mute)" }} />
               <div className="min-w-0 flex-1">
                 {event.season != null && event.episode != null ? (
-                  <span className="text-sm text-ink-900">
+                  <span className="text-sm" style={{ color: "var(--text)" }}>
                     S{String(event.season).padStart(2, "0")}:E{String(event.episode).padStart(2, "0")}
                   </span>
                 ) : (
-                  <span className="text-sm text-ink-900">Watched</span>
+                  <span className="text-sm" style={{ color: "var(--text)" }}>Watched</span>
                 )}
               </div>
-              <time className="shrink-0 text-2xs text-ink-500">
+              <time className="shrink-0 text-2xs" style={{ color: "var(--text-mute)" }}>
                 {new Date(event.watchedAt).toISOString().slice(0, 10) === "2000-01-01"
                   ? "Unknown date"
                   : new Date(event.watchedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
@@ -55,7 +62,8 @@ export function WatchHistorySection({
               <button
                 type="button"
                 onClick={() => onDeleteEvent(event.id)}
-                className="shrink-0 rounded p-1 text-ink-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-rose-500/10 hover:text-rose-500 transition-all"
+                className="shrink-0 rounded p-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-rose-500/10 hover:text-rose-500 transition-all"
+                style={{ color: "var(--text-mute)" }}
                 aria-label="Remove watch event"
               >
                 <Trash2 className="h-3.5 w-3.5" />

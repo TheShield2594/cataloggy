@@ -212,7 +212,8 @@ export function DetailPanel({
           aria-label={item.name}
           tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
-          className="relative flex h-full w-full max-h-screen flex-col overflow-hidden bg-cream-50 shadow-feature sm:h-auto sm:max-h-[85vh] sm:max-w-4xl sm:flex-row sm:rounded-3xl sm:border sm:border-ink-100 lg:max-w-5xl"
+          className="relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-feature sm:h-auto sm:max-h-[85vh] sm:max-w-4xl sm:flex-row sm:rounded-3xl sm:border lg:max-w-5xl"
+          style={{ background: "var(--bg-0)", borderColor: "var(--border)" }}
         >
           {/* Close */}
           <button
@@ -245,9 +246,12 @@ export function DetailPanel({
                 {item.type === "movie" ? <Film className="h-3 w-3" /> : <Tv className="h-3 w-3" />}
                 {item.type === "movie" ? "Movie" : "Series"}
               </span>
-              {item.year && <span className="text-sm text-ink-500">{item.year}</span>}
+              {item.year && <span className="text-sm" style={{ color: "var(--text-mute)" }}>{item.year}</span>}
               {item.certification && (
-                <span className="rounded-md border border-ink-200 px-2 py-0.5 text-xs font-semibold text-ink-600">
+                <span
+                  className="rounded-md border px-2 py-0.5 text-xs font-semibold"
+                  style={{ borderColor: "var(--border-strong)", color: "var(--text-dim)" }}
+                >
                   {item.certification}
                 </span>
               )}
@@ -257,7 +261,7 @@ export function DetailPanel({
                 </span>
               )}
             </div>
-            <h2 className="mt-3 text-2xl font-bold text-ink-900">{item.name}</h2>
+            <h2 className="mt-3 text-2xl font-bold" style={{ color: "var(--text)" }}>{item.name}</h2>
 
             {/* Meta row: rating, runtime, network, genres */}
             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -267,17 +271,29 @@ export function DetailPanel({
                 </span>
               )}
               {item.runtime != null && item.runtime > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-ink-100 px-2.5 py-1 text-xs text-ink-600">
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs"
+                  style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
+                >
                   <Clock className="h-3 w-3" />{formatRuntime(item.runtime)}
                 </span>
               )}
               {item.network && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-ink-100 px-2.5 py-1 text-xs text-ink-600">
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs"
+                  style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
+                >
                   <TvMinimalPlay className="h-3 w-3" />{item.network}
                 </span>
               )}
               {item.genres.slice(0, 3).map((g) => (
-                <span key={g} className="rounded-full bg-ink-100 px-2.5 py-1 text-xs text-ink-600">{g}</span>
+                <span
+                  key={g}
+                  className="rounded-full px-2.5 py-1 text-xs"
+                  style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
+                >
+                  {g}
+                </span>
               ))}
             </div>
           </div>
@@ -312,8 +328,8 @@ export function DetailPanel({
           {/* Description */}
           {item.description && (
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-500">Overview</h3>
-              <p className="text-sm leading-relaxed text-ink-700">{item.description}</p>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Overview</h3>
+              <p className="text-sm leading-relaxed" style={{ color: "var(--text-dim)" }}>{item.description}</p>
             </div>
           )}
 
