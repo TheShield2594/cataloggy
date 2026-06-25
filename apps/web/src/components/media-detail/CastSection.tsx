@@ -10,7 +10,7 @@ export function CastSection({ cast, loading }: { cast: CastMember[]; loading: bo
   if (loading) {
     return (
       <div>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-500">Cast</h3>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Cast</h3>
         <div className="flex gap-3 overflow-hidden">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="flex-none w-16 space-y-1">
@@ -27,7 +27,7 @@ export function CastSection({ cast, loading }: { cast: CastMember[]; loading: bo
 
   return (
     <div>
-      <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-500">
+      <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
         <User className="h-3.5 w-3.5" /> Cast
       </h3>
       <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
@@ -37,16 +37,20 @@ export function CastSection({ cast, loading }: { cast: CastMember[]; loading: bo
               <img
                 src={member.photo}
                 alt={member.name}
-                className="h-16 w-16 rounded-full object-cover ring-1 ring-ink-100 mx-auto"
+                className="h-16 w-16 rounded-full object-cover mx-auto"
+                style={{ boxShadow: "0 0 0 1px var(--border)" }}
                 loading="lazy"
               />
             ) : (
-              <div className="h-16 w-16 rounded-full bg-ink-100 flex items-center justify-center mx-auto ring-1 ring-ink-100">
-                <User className="h-6 w-6 text-ink-400" />
+              <div
+                className="h-16 w-16 rounded-full flex items-center justify-center mx-auto"
+                style={{ background: "var(--surface-strong)", boxShadow: "0 0 0 1px var(--border)" }}
+              >
+                <User className="h-6 w-6" style={{ color: "var(--text-mute)" }} />
               </div>
             )}
-            <p className="mt-1.5 text-2xs font-medium text-ink-700 leading-tight truncate">{member.name}</p>
-            <p className="text-2xs text-ink-500 truncate">{member.character}</p>
+            <p className="mt-1.5 text-2xs font-medium leading-tight truncate" style={{ color: "var(--text-dim)" }}>{member.name}</p>
+            <p className="text-2xs truncate" style={{ color: "var(--text-mute)" }}>{member.character}</p>
           </div>
         ))}
       </div>

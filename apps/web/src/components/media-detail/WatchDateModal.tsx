@@ -48,12 +48,13 @@ export function WatchDateModal({
         aria-modal="true"
         aria-labelledby="watch-date-modal-title"
         tabIndex={-1}
-        className="w-full max-w-sm rounded-2xl border border-ink-100 bg-cream-50 p-6 shadow-md"
+        className="w-full max-w-sm rounded-2xl border p-6 shadow-md"
+        style={{ borderColor: "var(--border)", background: "var(--bg-0)" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between">
-          <h3 id="watch-date-modal-title" className="text-base font-semibold text-ink-900">When did you watch this?</h3>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-ink-500 hover:text-ink-900">
+          <h3 id="watch-date-modal-title" className="text-base font-semibold" style={{ color: "var(--text)" }}>When did you watch this?</h3>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1 hover:opacity-80" style={{ color: "var(--text-mute)" }}>
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -62,25 +63,27 @@ export function WatchDateModal({
         {target.kind === "episode" && (
           <div className="mb-4 flex gap-3">
             <div className="flex-1">
-              <label htmlFor="watch-date-season" className="mb-1 block text-xs text-ink-500">Season</label>
+              <label htmlFor="watch-date-season" className="mb-1 block text-xs" style={{ color: "var(--text-mute)" }}>Season</label>
               <input
                 id="watch-date-season"
                 type="number"
                 min={1}
                 value={season}
                 onChange={(e) => setSeason(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-claw-500/30"
+                className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-claw-500/30"
+                style={{ borderColor: "var(--border-strong)", background: "var(--surface)", color: "var(--text)" }}
               />
             </div>
             <div className="flex-1">
-              <label htmlFor="watch-date-episode" className="mb-1 block text-xs text-ink-500">Episode</label>
+              <label htmlFor="watch-date-episode" className="mb-1 block text-xs" style={{ color: "var(--text-mute)" }}>Episode</label>
               <input
                 id="watch-date-episode"
                 type="number"
                 min={1}
                 value={episode}
                 onChange={(e) => setEpisode(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-claw-500/30"
+                className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-claw-500/30"
+                style={{ borderColor: "var(--border-strong)", background: "var(--surface)", color: "var(--text)" }}
               />
             </div>
           </div>
@@ -104,7 +107,8 @@ export function WatchDateModal({
                   const [y, m, d] = releaseDate.split("-").map(Number);
                   void submit(new Date(Date.UTC(y, m - 1, d, 12)).toISOString());
                 }}
-                className="rounded-xl bg-ink-100 px-4 py-3 text-sm font-semibold text-ink-900 hover:bg-ink-200 disabled:opacity-50 transition-colors"
+                className="rounded-xl px-4 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)] disabled:opacity-50"
+                style={{ background: "var(--surface)", color: "var(--text)" }}
               >
                 Release date
               </button>
@@ -113,14 +117,16 @@ export function WatchDateModal({
               type="button"
               disabled={saving}
               onClick={() => void submit(new Date("2000-01-01T12:00:00.000Z").toISOString())}
-              className="rounded-xl bg-ink-100 px-4 py-3 text-sm font-semibold text-ink-900 hover:bg-ink-200 disabled:opacity-50 transition-colors"
+              className="rounded-xl px-4 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)] disabled:opacity-50"
+              style={{ background: "var(--surface)", color: "var(--text)" }}
             >
               Unknown date
             </button>
             <button
               type="button"
               onClick={() => setMode("custom")}
-              className="rounded-xl bg-ink-100 px-4 py-3 text-sm font-semibold text-ink-900 hover:bg-ink-200 transition-colors"
+              className="rounded-xl px-4 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
+              style={{ background: "var(--surface)", color: "var(--text)" }}
             >
               Other date
             </button>
@@ -132,13 +138,15 @@ export function WatchDateModal({
               value={customDate}
               max={new Date().toISOString().slice(0, 10)}
               onChange={(e) => setCustomDate(e.target.value)}
-              className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-claw-500/30"
+              className="w-full rounded-xl border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-claw-500/30"
+              style={{ borderColor: "var(--border-strong)", background: "var(--surface)", color: "var(--text)" }}
             />
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setMode("quick")}
-                className="flex-1 rounded-xl bg-ink-100 px-4 py-2.5 text-sm font-medium text-ink-700 hover:bg-ink-200 transition-colors"
+                className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)]"
+                style={{ background: "var(--surface)", color: "var(--text-dim)" }}
               >
                 Back
               </button>

@@ -13,13 +13,13 @@ export function ExternalRatings({
   if (imdbRating == null && rtScore == null && mcScore == null) return null;
   return (
     <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-500">Ratings</h3>
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Ratings</h3>
       <div className="flex flex-wrap items-center gap-4">
         {imdbRating != null && (
           <div className="flex items-center gap-1.5">
             <ImdbLogo />
-            <span className="text-sm font-semibold text-ink-900">{imdbRating.toFixed(1)}</span>
-            <span className="text-xs text-ink-500">/10</span>
+            <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{imdbRating.toFixed(1)}</span>
+            <span className="text-xs" style={{ color: "var(--text-mute)" }}>/10</span>
           </div>
         )}
         {rtScore != null && (
@@ -31,8 +31,8 @@ export function ExternalRatings({
         {mcScore != null && (
           <div className="flex items-center gap-1.5">
             <McIcon score={mcScore} />
-            <span className="text-sm font-semibold text-ink-900">{mcScore}</span>
-            <span className="text-xs text-ink-500">/100</span>
+            <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{mcScore}</span>
+            <span className="text-xs" style={{ color: "var(--text-mute)" }}>/100</span>
           </div>
         )}
       </div>
@@ -108,7 +108,7 @@ export function StarRating({
   const displayRating = hoverRating ?? userRating ?? 0;
   return (
     <div>
-      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-500">
+      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
         <Star className="h-3.5 w-3.5" /> Your Rating
       </h3>
       <div className="flex items-center gap-1">
@@ -128,7 +128,8 @@ export function StarRating({
             >
               <span className="relative grid h-5 w-5 place-items-center">
                 <Star
-                  className={`absolute h-5 w-5 transition-colors duration-300 ${isPreview ? "text-amber-400" : "text-ink-300"}`}
+                  className={`absolute h-5 w-5 transition-colors duration-300 ${isPreview ? "text-amber-400" : ""}`}
+                  style={isPreview ? undefined : { color: "var(--text-mute)" }}
                 />
                 <Star
                   className={`star-shake-target absolute h-5 w-5 fill-amber-400 text-amber-400 transition-opacity duration-300 ${isFilled ? "star-pop opacity-100" : "opacity-0"}`}
