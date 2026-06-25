@@ -241,14 +241,14 @@ export function StatsPage() {
             <Star className="h-5 w-5 text-amber-400" /> Top Rated Watched
           </h3>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
-            {detailed.topRated.map((item) => (
+            {detailed.topRated.map((item, index) => (
               <div key={item.imdbId} className="group">
                 <div
                   className="relative overflow-hidden rounded-xl transition-transform duration-300 group-hover:scale-[1.03]"
                   style={{ aspectRatio: "2/3", boxShadow: "inset 0 0 0 1px var(--border)" }}
                 >
                   {item.poster ? (
-                    <img src={item.poster} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
+                    <img src={item.poster} alt={item.name} className="h-full w-full object-cover" loading={index < 5 ? "eager" : "lazy"} />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center" style={{ background: "var(--surface-strong)" }}>
                       <Film className="h-8 w-8" style={{ color: "var(--text-mute)" }} />

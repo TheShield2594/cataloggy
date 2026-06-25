@@ -505,10 +505,11 @@ export function SearchPage() {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {results.map((result) => (
+            {results.map((result, index) => (
               <ResultCard
                 key={`${result.type}:${result.imdbId}`}
                 result={result}
+                eager={index < 5}
                 lists={lists}
                 listMap={listMap}
                 pendingAdds={pendingAdds}
@@ -586,6 +587,7 @@ function FilterSelect({
 
 function ResultCard({
   result,
+  eager = false,
   lists,
   listMap,
   pendingAdds,
@@ -596,6 +598,7 @@ function ResultCard({
   onSelect,
 }: {
   result: SearchResult;
+  eager?: boolean;
   lists: CatalogList[];
   listMap: Map<string, CatalogList>;
   pendingAdds: Record<string, boolean>;
@@ -632,7 +635,7 @@ function ResultCard({
             src={result.poster}
             alt={result.name}
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-            loading="lazy"
+            loading={eager ? "eager" : "lazy"}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ink-100 to-ink-200">
