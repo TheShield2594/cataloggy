@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Route, Routes, useLocation } from "react-router-dom";
-import { BarChart3, Clapperboard, History, Search, List, Settings } from "lucide-react";
-import { runtimeConfig } from "./api";
+import { BarChart3, Clapperboard, History, Search, List, Settings, User } from "lucide-react";
+import { api, Profile, runtimeConfig } from "./api";
 import { CommandPalette, useCommandPalette } from "./components/CommandPalette";
 import { InstallButton } from "./components/InstallButton";
 import { Sidebar, PIN_KEY } from "./components/Sidebar";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useTheme } from "./hooks/useTheme";
 import { ToastProvider } from "./hooks/useToast";
+import { ProfileProvider, useProfile } from "./hooks/useProfile";
 import { DashboardPage } from "./pages/DashboardPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { ListsPage } from "./pages/ListsPage";
@@ -47,14 +48,88 @@ export function App() {
   }
 
   if (needsProfile) {
-    return <ProfileSwitcher onSelected={() => setNeedsProfile(false)} />;
+    return (
+      <ProfileSwitcher
+        onSelected={(profile) => {
+          runtimeConfig.setProfileId(profile.id);
+          setNeedsProfile(false);
+        }}
+      />
+    );
   }
 
   return (
     <ToastProvider>
+    <ProfileProvider initialProfile={null}>
+      <AppShell
+        sidebarPinned={sidebarPinned}
+        setSidebarPinned={setSidebarPinned}
+        sidebarPad={sidebarPad}
+        paletteOpen={paletteOpen}
+        setPaletteOpen={setPaletteOpen}
+        theme={theme}
+        setTheme={setTheme}
+        location={location}
+      />
+    </ProfileProvider>
+    </ToastProvider>
+  );
+}
+
+function AppShell({
+  sidebarPinned,
+  setSidebarPinned,
+  sidebarPad,
+  paletteOpen,
+  setPaletteOpen,
+  theme,
+  setTheme,
+  location,
+}: {
+  sidebarPinned: boolean;
+  setSidebarPinned: (pinned: boolean) => void;
+  sidebarPad: string;
+  paletteOpen: boolean;
+  setPaletteOpen: (open: boolean) => void;
+  theme: ReturnType<typeof useTheme>["theme"];
+  setTheme: ReturnType<typeof useTheme>["setTheme"];
+  location: ReturnType<typeof useLocation>;
+}) {
+  const { profile, setProfile, switcherOpen, openSwitcher, closeSwitcher } = useProfile();
+
+  useEffect(() => {
+    let cancelled = false;
+    const currentId = runtimeConfig.getProfileId();
+    if (!currentId) return;
+    void (async () => {
+      try {
+        const { profiles } = await api.getProfiles();
+        if (cancelled) return;
+        const current = profiles.find((p) => p.id === currentId);
+        if (current) setProfile(current);
+      } catch {
+        // best-effort; profile indicator just won't show a name
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [setProfile]);
+
+  const handleProfileSelected = (next: Profile) => {
+    setProfile(next);
+  };
+
+  return (
     <div className="min-h-screen w-full">
-      <Sidebar pinned={sidebarPinned} onPinnedChange={setSidebarPinned} />
+      <Sidebar
+        pinned={sidebarPinned}
+        onPinnedChange={setSidebarPinned}
+        profile={profile}
+        onSwitchProfile={openSwitcher}
+      />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      {switcherOpen && (
+        <ProfileSwitcher onSelected={handleProfileSelected} onClose={closeSwitcher} />
+      )}
 
       {/* Slim top bar */}
       <header
@@ -89,10 +164,20 @@ export function App() {
           <div className="flex items-center gap-3">
             <ThemeToggle theme={theme} onChange={setTheme} />
             <InstallButton />
+            <button
+              type="button"
+              onClick={openSwitcher}
+              aria-label={profile ? `Switch profile (currently ${profile.name})` : "Switch profile"}
+              title={profile?.name}
+              className="flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2 sm:hidden"
+              style={{ color: "var(--text-mute)" }}
+            >
+              <User className="h-5 w-5" />
+            </button>
             <Link
               to="/settings"
               aria-label="Settings"
-              className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] sm:hidden ${location.pathname.startsWith("/settings") ? "text-claw-600" : ""}`}
+              className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2 sm:hidden ${location.pathname.startsWith("/settings") ? "text-claw-600" : ""}`}
               style={location.pathname.startsWith("/settings") ? {} : { color: "var(--text-mute)" }}
             >
               <Settings className="h-5 w-5" />
@@ -103,7 +188,7 @@ export function App() {
 
       {/* Main content */}
       <main className={`mx-auto max-w-[1400px] px-6 pb-24 pt-[76px] sm:pb-10 transition-[padding] duration-200 ${sidebarPad}`}>
-        <Routes>
+        <Routes key={profile?.id ?? "default"}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/lists/*" element={<ListsPage />} />
@@ -128,7 +213,7 @@ export function App() {
             <Link
               key={item.to}
               to={item.to}
-              className={`relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-2xs font-medium transition-colors ${isActive ? "text-claw-600" : ""}`}
+              className={`relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-2xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2 ${isActive ? "text-claw-600" : ""}`}
               style={isActive ? {} : { color: "var(--text-dim)" }}
             >
               {isActive && (
@@ -149,6 +234,5 @@ export function App() {
         Cataloggy &middot; Personal Media Tracker
       </footer>
     </div>
-    </ToastProvider>
   );
 }
