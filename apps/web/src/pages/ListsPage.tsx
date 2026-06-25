@@ -4,6 +4,8 @@ import { api, CatalogList, ListItemWithMeta, MediaType, SearchResult } from "../
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useToast } from "../hooks/useToast";
+import { useScrollLock } from "../hooks/useScrollLock";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 type SortOption = "added" | "name" | "year" | "rating";
 
@@ -54,13 +56,8 @@ function AddItemModal({
     inputRef.current?.focus();
   }, []);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
+  useScrollLock();
+  useEscapeKey(onClose);
 
   const doSearch = useCallback(async (q: string, t: MediaType) => {
     if (!q.trim()) {

@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Radio, X } from "lucide-react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useScrollLock } from "../../hooks/useScrollLock";
+import { useEscapeKey } from "../../hooks/useEscapeKey";
 
 export function CheckInModal({
   seriesName,
@@ -21,11 +23,8 @@ export function CheckInModal({
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useFocusTrap<HTMLDivElement>();
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
+  useScrollLock();
+  useEscapeKey(onClose);
 
   const submit = async () => {
     const s = parseInt(season, 10);
