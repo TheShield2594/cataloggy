@@ -1,15 +1,30 @@
 import { FormEvent, useEffect, useState } from "react";
 import { AlertCircle, ArrowRight, Clapperboard, Loader2, Lock, Plus, User, X } from "lucide-react";
 import { api, ApiError, Profile, runtimeConfig } from "../api";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 
 function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
+  const dialogRef = useFocusTrap<HTMLDivElement>(!!onClose);
+
+  useEffect(() => {
+    if (!onClose) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
   if (onClose) {
     return (
       <div
         className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 px-6 py-12"
         onClick={onClose}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Switch profile"
       >
-        <div className="w-full max-w-md space-y-6" onClick={(e) => e.stopPropagation()}>
+        <div ref={dialogRef} tabIndex={-1} className="w-full max-w-md space-y-6" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-center gap-2.5">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-claw-500">
               <Clapperboard className="h-6 w-6 text-white" />
