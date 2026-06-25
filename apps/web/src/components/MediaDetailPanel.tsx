@@ -78,20 +78,22 @@ export function DetailPanel({
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     setCast([]); setCastLoading(true);
     setSeasons([]); setSeasonsLoading(item.type === "series");
     setIsDropped(false); setDroppedLoading(item.type === "series");
     setActiveCheckin(null); setCheckinLoading(true);
     setProviders(null); setProvidersLoading(true);
 
+    const { signal } = controller;
     const loads: Promise<void>[] = [
-      api.getCast(item.type, item.imdbId).then((r) => {
+      api.getCast(item.type, item.imdbId, signal).then((r) => {
         if (!cancelled) { setCast(r.cast); setCastLoading(false); }
       }).catch(() => { if (!cancelled) setCastLoading(false); }),
-      api.getWatchProviders(item.type, item.imdbId).then((r) => {
+      api.getWatchProviders(item.type, item.imdbId, signal).then((r) => {
         if (!cancelled) { setProviders(r.providers); setProvidersLoading(false); }
       }).catch(() => { if (!cancelled) setProvidersLoading(false); }),
-      api.getCheckin().then((r) => {
+      api.getCheckin(signal).then((r) => {
         if (!cancelled) {
           const c = r.checkin;
           const isThisItem = c && (c.imdbId === item.imdbId || c.seriesImdbId === item.imdbId);
@@ -103,17 +105,17 @@ export function DetailPanel({
 
     if (item.type === "series") {
       loads.push(
-        api.getSeasons(item.imdbId).then((r) => {
+        api.getSeasons(item.imdbId, signal).then((r) => {
           if (!cancelled) { setSeasons(r.seasons); setSeasonsLoading(false); }
         }).catch(() => { if (!cancelled) setSeasonsLoading(false); }),
-        api.getDropped(item.imdbId).then((r) => {
+        api.getDropped(item.imdbId, signal).then((r) => {
           if (!cancelled) { setIsDropped(r.dropped); setDroppedLoading(false); }
         }).catch(() => { if (!cancelled) setDroppedLoading(false); }),
       );
     }
 
     void Promise.all(loads);
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
   }, [item.imdbId, item.type]);
 
   const handleDeleteEvent = async (eventId: string) => {
@@ -157,8 +159,8 @@ export function DetailPanel({
     if (logWatch) {
       onShowToast("Watch logged!", "success");
       try {
-        const updated = await api.getWatchHistory(50);
-        onHistoryChange(updated.filter((e) => (e.seriesImdbId ?? e.imdbId) === item.imdbId || e.imdbId === item.imdbId));
+        const updated = await api.getWatchHistory(50, 0, { imdbId: item.imdbId });
+        onHistoryChange(updated);
       } catch { /* best-effort */ }
     } else {
       onShowToast("Checked out", "info");
@@ -182,8 +184,8 @@ export function DetailPanel({
     onShowToast("Watch logged!", "success");
     // Refresh history via parent
     try {
-      const updated = await api.getWatchHistory(50);
-      onHistoryChange(updated.filter((e) => (e.seriesImdbId ?? e.imdbId) === item.imdbId || e.imdbId === item.imdbId));
+      const updated = await api.getWatchHistory(50, 0, { imdbId: item.imdbId });
+      onHistoryChange(updated);
     } catch { /* best-effort */ }
   };
 
@@ -389,6 +391,9 @@ export function DetailPanel({
 
 /* ─── Hook: open panel with history + meta loading ────────── */
 
+const META_CACHE_TTL_MS = 60_000;
+const metaCache = new Map<string, { at: number; meta: Awaited<ReturnType<typeof api.getItemMeta>> }>();
+
 export function useDetailPanel() {
   const [selectedItem, setSelectedItem] = useState<SearchResult | null>(null);
   const [panelHistory, setPanelHistory] = useState<WatchEvent[]>([]);
@@ -403,6 +408,7 @@ export function useDetailPanel() {
   useEffect(() => {
     if (!selectedItem) return;
     let cancelled = false;
+    const controller = new AbortController();
     const active = selectedItem;
 
     const needsMeta = !active.description && active.genres.length === 0 && active.rating == null;
@@ -410,47 +416,54 @@ export function useDetailPanel() {
     const needsDetail = active.runtime === undefined;
 
     if (needsMeta || needsOmdb || needsDetail) {
-      void (async () => {
-        try {
-          const meta = await api.getItemMeta(active.type, active.imdbId);
-          if (!cancelled) {
-            setSelectedItem((prev) => {
-              if (!prev || prev.imdbId !== active.imdbId) return prev;
-              return {
-                ...prev,
-                description: meta.description ?? prev.description,
-                genres: meta.genres.length > 0 ? meta.genres : prev.genres,
-                rating: meta.rating ?? prev.rating,
-                poster: meta.poster ?? prev.poster,
-                imdbRating: meta.imdbRating !== undefined ? meta.imdbRating : prev.imdbRating,
-                rtScore: meta.rtScore !== undefined ? meta.rtScore : prev.rtScore,
-                mcScore: meta.mcScore !== undefined ? meta.mcScore : prev.mcScore,
-                runtime: meta.runtime !== undefined ? meta.runtime : prev.runtime,
-                certification: meta.certification !== undefined ? meta.certification : prev.certification,
-                status: meta.status !== undefined ? meta.status : prev.status,
-                network: meta.network !== undefined ? meta.network : prev.network,
-                releaseDate: meta.releaseDate !== undefined ? meta.releaseDate : prev.releaseDate,
-              };
-            });
-          }
-        } catch { /* best-effort */ }
-      })();
+      const cacheKey = `${active.type}:${active.imdbId}`;
+      const cached = metaCache.get(cacheKey);
+      const applyMeta = (meta: Awaited<ReturnType<typeof api.getItemMeta>>) => {
+        setSelectedItem((prev) => {
+          if (!prev || prev.imdbId !== active.imdbId) return prev;
+          return {
+            ...prev,
+            description: meta.description ?? prev.description,
+            genres: meta.genres.length > 0 ? meta.genres : prev.genres,
+            rating: meta.rating ?? prev.rating,
+            poster: meta.poster ?? prev.poster,
+            imdbRating: meta.imdbRating !== undefined ? meta.imdbRating : prev.imdbRating,
+            rtScore: meta.rtScore !== undefined ? meta.rtScore : prev.rtScore,
+            mcScore: meta.mcScore !== undefined ? meta.mcScore : prev.mcScore,
+            runtime: meta.runtime !== undefined ? meta.runtime : prev.runtime,
+            certification: meta.certification !== undefined ? meta.certification : prev.certification,
+            status: meta.status !== undefined ? meta.status : prev.status,
+            network: meta.network !== undefined ? meta.network : prev.network,
+            releaseDate: meta.releaseDate !== undefined ? meta.releaseDate : prev.releaseDate,
+          };
+        });
+      };
+
+      if (cached && Date.now() - cached.at < META_CACHE_TTL_MS) {
+        applyMeta(cached.meta);
+      } else {
+        void (async () => {
+          try {
+            const meta = await api.getItemMeta(active.type, active.imdbId, controller.signal);
+            metaCache.set(cacheKey, { at: Date.now(), meta });
+            if (!cancelled) applyMeta(meta);
+          } catch { /* best-effort */ }
+        })();
+      }
     }
 
     setPanelHistoryLoading(true);
     void (async () => {
       try {
-        const history = await api.getWatchHistory(50);
-        if (!cancelled) {
-          setPanelHistory(history.filter((e) => (e.seriesImdbId ?? e.imdbId) === active.imdbId || e.imdbId === active.imdbId));
-        }
+        const history = await api.getWatchHistory(50, 0, { imdbId: active.imdbId, signal: controller.signal });
+        if (!cancelled) setPanelHistory(history);
       } catch {
         if (!cancelled) setPanelHistory([]);
       } finally {
         if (!cancelled) setPanelHistoryLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
   }, [selectedItem]);
 
   return {
