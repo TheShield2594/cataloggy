@@ -220,14 +220,14 @@ export function DetailPanel({
           {/* Close */}
           <button
             type="button" onClick={onClose}
-            className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-ink-900/80 text-cream-50 backdrop-blur hover:bg-ink-900 hover:text-white transition-colors"
+            className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-ink-900/80 text-cream-50 shadow-lg backdrop-blur hover:bg-ink-900 hover:text-white transition-colors"
             aria-label="Close detail panel"
           >
             <X className="h-4 w-4" />
           </button>
 
           {/* Poster */}
-          <div className="relative z-0 w-full flex-none overflow-hidden aspect-[2/3] max-h-[38vh] sm:aspect-auto sm:h-full sm:max-h-none sm:w-[38%]">
+          <div className="relative z-0 w-full flex-none overflow-hidden aspect-[2/3] max-h-[38vh] sm:aspect-[2/3] sm:max-h-none sm:w-[38%]">
             {item.poster ? (
               <img src={item.poster} alt={item.name} className="h-full w-full object-cover" />
             ) : (
@@ -239,7 +239,7 @@ export function DetailPanel({
           </div>
 
           {/* Content */}
-          <div className="-mt-10 relative z-20 min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-10 sm:mt-0 sm:p-8">
+          <div className="-mt-10 relative z-20 min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-10 sm:mt-0 sm:max-w-2xl sm:p-8">
 
           {/* Title + badges */}
           <div>
