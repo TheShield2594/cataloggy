@@ -98,6 +98,11 @@ export function SearchPage() {
     })();
   }, [showToast]);
 
+  // Abort any in-flight search when the page unmounts
+  useEffect(() => {
+    return () => abortRef.current?.abort();
+  }, []);
+
   // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -180,6 +185,7 @@ export function SearchPage() {
       ++requestIdRef.current;
       abortRef.current?.abort();
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      lastSearchRef.current = { filter: filters.filter, query: "" };
       setRawResults(null);
       setIsSearching(false);
       return;

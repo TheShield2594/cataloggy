@@ -108,7 +108,7 @@ body {
   @apply m-0 min-h-screen;
   background-color: var(--bg-0);
   color: var(--text);
-  font-family: 'Outfit', Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Plus Jakarta Sans Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   line-height: 1.5;
 }
 
