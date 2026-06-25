@@ -24,12 +24,16 @@ function WizardShell({ step, children }: { step: Step; children: React.ReactNode
           {steps.map((s, i) => (
             <span
               key={s}
-              className={`h-1.5 w-8 rounded-full transition-colors ${i <= index ? "bg-claw-500" : "bg-ink-100"}`}
+              className={`h-1.5 w-8 rounded-full transition-colors ${i <= index ? "bg-claw-500" : ""}`}
+              style={i <= index ? undefined : { backgroundColor: "var(--surface)" }}
             />
           ))}
         </div>
 
-        <div className="rounded-2xl border border-ink-100 bg-white p-6 shadow-sm">
+        <div
+          className="rounded-2xl p-6 shadow-sm"
+          style={{ border: "1px solid var(--border)", backgroundColor: "var(--bg-0)" }}
+        >
           {children}
         </div>
       </div>
@@ -71,7 +75,7 @@ function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => vo
     <form onSubmit={submit} className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold">Welcome to Cataloggy</h2>
-        <p className="mt-1 text-sm text-ink-500 leading-relaxed">
+        <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
           Enter the API token configured on your Cataloggy server to get started.
         </p>
       </div>
@@ -82,12 +86,12 @@ function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => vo
           value={token}
           onChange={(e) => setToken(e.target.value)}
           placeholder="Paste your API token"
-          className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 pr-12 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+          className="w-full rounded-xl border border-[var(--border-strong)] bg-[var(--bg-0)] px-4 py-3 pr-12 text-sm text-[var(--text)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         />
         <button
           type="button"
           onClick={() => setShowToken((p) => !p)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-900"
+          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-[var(--text-mute)] transition-colors hover:bg-[var(--surface-strong)] hover:text-[var(--text)]"
           aria-label={showToken ? "Hide token" : "Show token"}
         >
           {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -112,7 +116,7 @@ function TmdbStep({ configured, onContinue }: { configured: boolean; onContinue:
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold">TMDB Metadata</h2>
-        <p className="mt-1 text-sm text-ink-500 leading-relaxed">
+        <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
           Cataloggy uses TMDB to fetch posters, ratings, and details for movies and shows.
         </p>
       </div>
@@ -123,7 +127,7 @@ function TmdbStep({ configured, onContinue }: { configured: boolean; onContinue:
 
       {!configured && (
         <p className="text-sm text-amber-600 leading-relaxed">
-          The server is missing a TMDB API key. Set the <code className="text-ink-700">TMDB_API_KEY</code>{" "}
+          The server is missing a TMDB API key. Set the <code style={{ color: "var(--text-dim)" }}>TMDB_API_KEY</code>{" "}
           environment variable on your Cataloggy server and restart it. You can continue setup now and
           come back to this later.
         </p>
@@ -145,7 +149,7 @@ function TraktStep({ onContinue }: { onContinue: () => void }) {
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold">Connect Trakt (optional)</h2>
-        <p className="mt-1 text-sm text-ink-500 leading-relaxed">
+        <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
           Sync your watch history and watchlist from Trakt. You can also do this later in Settings.
         </p>
       </div>
@@ -155,7 +159,8 @@ function TraktStep({ onContinue }: { onContinue: () => void }) {
       <button
         type="button"
         onClick={onContinue}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink-100 px-5 py-3 text-sm font-semibold text-ink-800 transition-colors hover:bg-ink-200 border border-ink-200"
+        className="flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
+        style={{ backgroundColor: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }}
       >
         Continue <ArrowRight size={16} />
       </button>
@@ -171,7 +176,7 @@ function DoneStep({ onFinish }: { onFinish: () => void }) {
       </div>
       <div>
         <h2 className="text-lg font-semibold">You're all set</h2>
-        <p className="mt-1 text-sm text-ink-500 leading-relaxed">
+        <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
           Start searching for movies and shows to build your catalog.
         </p>
       </div>

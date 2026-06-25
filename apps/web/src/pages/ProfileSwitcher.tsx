@@ -10,10 +10,10 @@ function Shell({ children }: { children: React.ReactNode }) {
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-claw-500">
             <Clapperboard className="h-6 w-6 text-white" />
           </div>
-          <span className="text-2xl font-bold text-ink-900">Cataloggy</span>
+          <span className="text-2xl font-bold" style={{ color: "var(--text)" }}>Cataloggy</span>
         </div>
 
-        <div className="rounded-2xl border border-ink-100 bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border p-6 shadow-sm" style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}>
           {children}
         </div>
       </div>
@@ -60,8 +60,8 @@ function CreateProfileForm({
   return (
     <form onSubmit={submit} className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold text-ink-900">{title}</h2>
-        <p className="mt-1 text-sm text-ink-500 leading-relaxed">{subtitle}</p>
+        <h2 className="text-lg font-semibold" style={{ color: "var(--text)" }}>{title}</h2>
+        <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>{subtitle}</p>
       </div>
       <input
         autoFocus
@@ -69,7 +69,8 @@ function CreateProfileForm({
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Profile name"
-        className="w-full rounded-xl border border-ink-100 bg-cream-50 px-4 py-3 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+        className="w-full rounded-xl border bg-cream-50 px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+        style={{ borderColor: "var(--border)", color: "var(--text)" }}
       />
       <input
         type="password"
@@ -77,7 +78,8 @@ function CreateProfileForm({
         value={pin}
         onChange={(e) => setPin(e.target.value)}
         placeholder="PIN (optional)"
-        className="w-full rounded-xl border border-ink-100 bg-cream-50 px-4 py-3 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+        className="w-full rounded-xl border bg-cream-50 px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+        style={{ borderColor: "var(--border)", color: "var(--text)" }}
       />
       {error && (
         <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>
@@ -87,7 +89,8 @@ function CreateProfileForm({
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-xl border border-ink-100 bg-white px-5 py-3 text-sm font-semibold text-ink-700 transition-colors hover:bg-ink-100"
+            className="flex-1 rounded-xl border bg-white px-5 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
+            style={{ borderColor: "var(--border)", color: "var(--text-dim)" }}
           >
             Cancel
           </button>
@@ -138,8 +141,8 @@ function PinPrompt({
   return (
     <form onSubmit={submit} className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold text-ink-900">Enter PIN for {profile.name}</h2>
-        <p className="mt-1 text-sm text-ink-500 leading-relaxed">This profile is PIN-protected.</p>
+        <h2 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Enter PIN for {profile.name}</h2>
+        <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>This profile is PIN-protected.</p>
       </div>
       <input
         autoFocus
@@ -148,7 +151,8 @@ function PinPrompt({
         value={pin}
         onChange={(e) => setPin(e.target.value)}
         placeholder="PIN"
-        className="w-full rounded-xl border border-ink-100 bg-cream-50 px-4 py-3 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+        className="w-full rounded-xl border bg-cream-50 px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+        style={{ borderColor: "var(--border)", color: "var(--text)" }}
       />
       {error && (
         <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>
@@ -157,7 +161,8 @@ function PinPrompt({
         <button
           type="button"
           onClick={onBack}
-          className="flex-1 rounded-xl border border-ink-100 bg-white px-5 py-3 text-sm font-semibold text-ink-700 transition-colors hover:bg-ink-100"
+          className="flex-1 rounded-xl border bg-white px-5 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
+          style={{ borderColor: "var(--border)", color: "var(--text-dim)" }}
         >
           Back
         </button>
@@ -185,8 +190,8 @@ function ProfilePicker({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold text-ink-900">Who's watching?</h2>
-        <p className="mt-1 text-sm text-ink-500 leading-relaxed">Choose a profile to continue.</p>
+        <h2 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Who's watching?</h2>
+        <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>Choose a profile to continue.</p>
       </div>
       <div className="space-y-2">
         {profiles.map((profile) => (
@@ -194,20 +199,22 @@ function ProfilePicker({
             key={profile.id}
             type="button"
             onClick={() => onSelect(profile)}
-            className="flex w-full items-center gap-3 rounded-xl border border-ink-100 bg-white px-4 py-3 text-left text-sm font-medium text-ink-900 transition-colors hover:border-claw-500/60 hover:bg-cream-50"
+            className="flex w-full items-center gap-3 rounded-xl border bg-white px-4 py-3 text-left text-sm font-medium transition-colors hover:border-claw-500/60 hover:bg-cream-50"
+            style={{ borderColor: "var(--border)", color: "var(--text)" }}
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-100">
-              <User className="h-4 w-4 text-ink-600" />
+            <span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ backgroundColor: "var(--surface)" }}>
+              <User className="h-4 w-4" style={{ color: "var(--text-dim)" }} />
             </span>
             <span className="flex-1">{profile.name}</span>
-            {profile.hasPin && <Lock className="h-4 w-4 text-ink-400" />}
+            {profile.hasPin && <Lock className="h-4 w-4" style={{ color: "var(--text-mute)" }} />}
           </button>
         ))}
       </div>
       <button
         type="button"
         onClick={onCreateNew}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-ink-100 bg-white px-5 py-3 text-sm font-semibold text-ink-700 transition-colors hover:bg-ink-100"
+        className="flex w-full items-center justify-center gap-2 rounded-xl border bg-white px-5 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
+        style={{ borderColor: "var(--border)", color: "var(--text-dim)" }}
       >
         <Plus size={16} /> New Profile
       </button>
@@ -259,7 +266,7 @@ export function ProfileSwitcher({ onSelected }: { onSelected: (profile: Profile)
   if (loading) {
     return (
       <Shell>
-        <div className="flex items-center justify-center gap-2 py-6 text-sm text-ink-500">
+        <div className="flex items-center justify-center gap-2 py-6 text-sm" style={{ color: "var(--text-mute)" }}>
           <Loader2 size={16} className="animate-spin" /> Loading profiles...
         </div>
       </Shell>

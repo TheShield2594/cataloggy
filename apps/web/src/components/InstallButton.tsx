@@ -89,7 +89,7 @@ export function InstallButton() {
             void onInstall();
           }}
           aria-label={label === "Install" ? "Install Cataloggy" : label}
-          className="flex items-center gap-1.5 rounded-full border border-ink-200 bg-white px-3.5 py-2 text-xs font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900 transition-all"
+          className="flex items-center gap-1.5 rounded-full border border-[var(--border-strong)] bg-[var(--bg-0)] px-3.5 py-2 text-xs font-medium text-[var(--text-dim)] transition-all hover:bg-[var(--surface-strong)] hover:text-[var(--text)]"
         >
           <Download className="h-3.5 w-3.5" />
           <span className="hidden sm:inline" aria-hidden="true">{label}</span>
@@ -98,13 +98,13 @@ export function InstallButton() {
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss install prompt"
-          className="flex items-center justify-center rounded-full border border-ink-200 bg-white p-2 text-ink-400 hover:bg-ink-100 hover:text-ink-700 transition-all"
+          className="flex items-center justify-center rounded-full border border-[var(--border-strong)] bg-[var(--bg-0)] p-2 text-[var(--text-mute)] transition-all hover:bg-[var(--surface-strong)] hover:text-[var(--text-dim)]"
         >
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
       {showManualHint && (
-        <p className="max-w-xs text-right text-xs text-ink-500">
+        <p className="max-w-xs text-right text-xs" style={{ color: "var(--text-mute)" }}>
           {isIOS
             ? "Safari: tap Share, then Add to Home Screen."
             : "Use your browser menu and choose Install app / Add to Home Screen."}

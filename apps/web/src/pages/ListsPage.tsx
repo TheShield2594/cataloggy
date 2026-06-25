@@ -112,31 +112,33 @@ function AddItemModal({
         aria-modal="true"
         aria-labelledby="add-item-modal-title"
         tabIndex={-1}
-        className="w-full max-w-lg rounded-2xl border border-ink-100 bg-white shadow-sm"
+        className="w-full max-w-lg rounded-2xl border shadow-sm"
+        style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
-          <h3 id="add-item-modal-title" className="text-lg font-bold text-ink-900">Add to {listName}</h3>
-          <button onClick={onClose} aria-label="Close dialog" className="rounded-lg p-1.5 text-ink-500 hover:bg-ink-100 hover:text-ink-900">
+        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
+          <h3 id="add-item-modal-title" className="text-lg font-bold" style={{ color: "var(--text)" }}>Add to {listName}</h3>
+          <button onClick={onClose} aria-label="Close dialog" className="rounded-lg p-1.5 hover:bg-[var(--surface)] hover:text-[var(--text)]" style={{ color: "var(--text-mute)" }}>
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Search input */}
-        <div className="flex gap-2 border-b border-ink-100 px-5 py-3">
+        <div className="flex gap-2 border-b px-5 py-3" style={{ borderColor: "var(--border)" }}>
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--text-mute)" }} />
             <input
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search movies & series..."
               aria-label="Search movies and series"
-              className="w-full rounded-full border border-ink-100 bg-cream-50 py-2.5 pl-9 pr-3 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+              className="w-full rounded-full border py-2.5 pl-9 pr-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+              style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)" }}
             />
           </div>
-          <div className="relative inline-flex rounded-full bg-ink-100 p-0.5 border border-ink-100">
+          <div className="relative inline-flex rounded-full p-0.5 border" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)" }}>
             <div
               className="absolute top-0.5 h-[calc(100%-0.25rem)] w-[calc(50%-0.125rem)] rounded-full bg-claw-500 transition-transform duration-200"
               style={{ transform: type === "series" ? "translateX(100%)" : "translateX(0)" }}
@@ -146,7 +148,8 @@ function AddItemModal({
                 key={opt}
                 type="button"
                 onClick={() => setType(opt)}
-                className={`relative z-10 flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium ${type === opt ? "text-white" : "text-ink-600"}`}
+                className="relative z-10 flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium"
+                style={{ color: type === opt ? "#fff" : "var(--text-dim)" }}
               >
                 {opt === "movie" ? <Film className="h-3 w-3" /> : <Tv className="h-3 w-3" />}
                 {opt === "movie" ? "Movie" : "Series"}
@@ -158,9 +161,9 @@ function AddItemModal({
         {/* Results */}
         <div className="max-h-[50vh] overflow-y-auto px-5 py-3">
           {error && <p className="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-600">{error}</p>}
-          {searching && <p className="py-6 text-center text-sm text-ink-500">Searching...</p>}
+          {searching && <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>Searching...</p>}
           {!searching && query.trim() && results.length === 0 && (
-            <p className="py-6 text-center text-sm text-ink-500">No results found.</p>
+            <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>No results found.</p>
           )}
           <div className="space-y-1">
             {results.map((r) => (
@@ -169,18 +172,18 @@ function AddItemModal({
                 type="button"
                 disabled={adding[r.imdbId]}
                 onClick={() => handleAdd(r)}
-                className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-ink-100 disabled:opacity-50 transition-colors"
+                className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-[var(--surface)] disabled:opacity-50 transition-colors"
               >
-                <div className="h-14 w-10 flex-none overflow-hidden rounded-lg bg-ink-100 ring-1 ring-ink-100">
+                <div className="h-14 w-10 flex-none overflow-hidden rounded-lg ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border)" } as React.CSSProperties}>
                   {r.poster ? (
                     <img src={r.poster} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center"><Film className="h-4 w-4 text-ink-500" /></div>
+                    <div className="flex h-full w-full items-center justify-center"><Film className="h-4 w-4" style={{ color: "var(--text-mute)" }} /></div>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-ink-900">{r.name}</p>
-                  <p className="text-xs text-ink-500">{r.year ?? "Unknown"} &middot; {r.type}</p>
+                  <p className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>{r.name}</p>
+                  <p className="text-xs" style={{ color: "var(--text-mute)" }}>{r.year ?? "Unknown"} &middot; {r.type}</p>
                 </div>
                 <Plus className="h-4 w-4 flex-none text-claw-600" />
               </button>
@@ -345,7 +348,7 @@ export function ListsPage() {
                     <AlertTriangle className="h-4 w-4 flex-none text-rose-500" />
                     <p className="text-xs font-semibold text-rose-600">Delete "{list.name}"?</p>
                   </div>
-                  <p className="text-xs text-ink-500 mb-3">This will remove the list and all its items.</p>
+                  <p className="text-xs mb-3" style={{ color: "var(--text-mute)" }}>This will remove the list and all its items.</p>
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -358,7 +361,8 @@ export function ListsPage() {
                     <button
                       type="button"
                       onClick={() => setConfirmDeleteId(null)}
-                      className="flex-1 rounded-lg border border-ink-100 bg-cream-50 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-100 transition-colors"
+                      className="flex-1 rounded-lg border bg-cream-50 px-3 py-1.5 text-xs font-semibold hover:bg-[var(--surface)] transition-colors"
+                      style={{ borderColor: "var(--border)", color: "var(--text-dim)" }}
                     >
                       Cancel
                     </button>
@@ -368,17 +372,20 @@ export function ListsPage() {
                 <div className={`group flex items-center rounded-xl border transition-all md:w-full ${
                   selectedListId === list.id
                     ? "border-claw-500/40 bg-claw-100/60"
-                    : "border-ink-100 bg-white hover:border-ink-200 hover:bg-cream-50"
-                }`}>
+                    : "bg-white hover:bg-cream-50 hover:border-[var(--border-strong)]"
+                }`}
+                style={selectedListId === list.id ? undefined : { borderColor: "var(--border)" }}
+                >
                   <button
                     type="button"
                     onClick={() => setSelectedListId(list.id)}
                     className={`min-w-0 flex-1 px-4 py-3.5 text-left text-sm font-medium ${
-                      selectedListId === list.id ? "text-claw-600" : "text-ink-700"
+                      selectedListId === list.id ? "text-claw-600" : ""
                     }`}
+                    style={selectedListId === list.id ? undefined : { color: "var(--text-dim)" }}
                   >
-                    <p className="truncate font-semibold text-ink-900">{list.name}</p>
-                    <p className="mt-0.5 text-xs text-ink-500">
+                    <p className="truncate font-semibold" style={{ color: "var(--text)" }}>{list.name}</p>
+                    <p className="mt-0.5 text-xs" style={{ color: "var(--text-mute)" }}>
                       {list.itemCount} {list.itemCount === 1 ? "item" : "items"}
                     </p>
                   </button>
@@ -386,7 +393,8 @@ export function ListsPage() {
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(list.id); }}
-                      className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg text-ink-400 opacity-0 group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-500 transition-all focus:opacity-100"
+                      className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-500 transition-all focus:opacity-100"
+                      style={{ color: "var(--text-mute)" }}
                       aria-label={`Delete list ${list.name}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -403,7 +411,8 @@ export function ListsPage() {
             value={newListName}
             onChange={(e) => setNewListName(e.target.value)}
             placeholder="New list name..."
-            className="min-w-0 flex-1 rounded-xl border border-ink-100 bg-white px-3.5 py-2.5 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+            className="min-w-0 flex-1 rounded-xl border bg-white px-3.5 py-2.5 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+            style={{ borderColor: "var(--border)", color: "var(--text)" }}
           />
           <button
             type="submit"
@@ -422,11 +431,11 @@ export function ListsPage() {
 
         {!selectedList ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-ink-100 ring-1 ring-ink-100">
-              <FolderOpen className="h-10 w-10 text-ink-400" />
+            <div className="flex h-20 w-20 items-center justify-center rounded-full ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border)" } as React.CSSProperties}>
+              <FolderOpen className="h-10 w-10" style={{ color: "var(--text-mute)" }} />
             </div>
-            <p className="mt-4 text-lg font-semibold text-ink-700">No list selected</p>
-            <p className="mt-1 text-sm text-ink-500">Select a list from the sidebar or create a new one.</p>
+            <p className="mt-4 text-lg font-semibold" style={{ color: "var(--text-dim)" }}>No list selected</p>
+            <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>Select a list from the sidebar or create a new one.</p>
           </div>
         ) : (
           <>
@@ -443,7 +452,8 @@ export function ListsPage() {
                       value={renameValue}
                       onChange={(e) => setRenameValue(e.target.value)}
                       onBlur={() => void handleRenameList(selectedList.id)}
-                      className="min-w-0 flex-1 rounded-lg border border-ink-100 bg-white px-3 py-1.5 text-2xl font-bold text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                      className="min-w-0 flex-1 rounded-lg border bg-white px-3 py-1.5 text-2xl font-bold focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                      style={{ borderColor: "var(--border)", color: "var(--text)" }}
                     />
                     <button type="submit" aria-label="Save name" className="rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-500/10">
                       <Check className="h-5 w-5" />
@@ -451,18 +461,19 @@ export function ListsPage() {
                   </form>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <h2 className="truncate text-2xl font-bold text-ink-900">{selectedList.name}</h2>
+                    <h2 className="truncate text-2xl font-bold" style={{ color: "var(--text)" }}>{selectedList.name}</h2>
                     <button
                       type="button"
                       onClick={() => { setRenamingListId(selectedList.id); setRenameValue(selectedList.name); }}
                       aria-label="Rename list"
-                      className="rounded-lg p-1.5 text-ink-400 hover:bg-ink-100 hover:text-ink-700 transition-colors"
+                      className="rounded-lg p-1.5 hover:bg-[var(--surface)] hover:text-[var(--text-dim)] transition-colors"
+                      style={{ color: "var(--text-mute)" }}
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 )}
-                <p className="mt-0.5 text-sm text-ink-500">
+                <p className="mt-0.5 text-sm" style={{ color: "var(--text-mute)" }}>
                   {items.length} {items.length === 1 ? "item" : "items"}
                 </p>
               </div>
@@ -480,20 +491,22 @@ export function ListsPage() {
             {items.length > 0 && (
               <div className="mb-5 flex flex-wrap items-center gap-3">
                 <div className="relative flex-1 min-w-[180px]">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--text-mute)" }} />
                   <input
                     value={filterQuery}
                     onChange={(e) => setFilterQuery(e.target.value)}
                     placeholder="Search this list..."
                     aria-label="Search within list"
-                    className="w-full rounded-full border border-ink-100 bg-white py-2 pl-9 pr-3 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                    className="w-full rounded-full border bg-white py-2 pl-9 pr-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                    style={{ borderColor: "var(--border)", color: "var(--text)" }}
                   />
                 </div>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as SortOption)}
                   aria-label="Sort items"
-                  className="rounded-full border border-ink-100 bg-white px-3.5 py-2 text-sm text-ink-700 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                  className="rounded-full border bg-white px-3.5 py-2 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                  style={{ borderColor: "var(--border)", color: "var(--text-dim)" }}
                 >
                   {Object.entries(SORT_LABELS).map(([value, label]) => (
                     <option key={value} value={value}>Sort: {label}</option>
@@ -515,21 +528,21 @@ export function ListsPage() {
               </div>
             ) : items.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-ink-100 ring-1 ring-ink-100">
-                  <FolderOpen className="h-10 w-10 text-ink-400" />
+                <div className="flex h-20 w-20 items-center justify-center rounded-full ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border)" } as React.CSSProperties}>
+                  <FolderOpen className="h-10 w-10" style={{ color: "var(--text-mute)" }} />
                 </div>
-                <p className="mt-4 text-lg font-semibold text-ink-700">This list is empty</p>
-                <p className="mt-1 text-sm text-ink-500">
+                <p className="mt-4 text-lg font-semibold" style={{ color: "var(--text-dim)" }}>This list is empty</p>
+                <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>
                   Click <span className="font-semibold text-claw-600">+ Add</span> to search and add titles.
                 </p>
               </div>
             ) : displayedItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-ink-100 ring-1 ring-ink-100">
-                  <Search className="h-10 w-10 text-ink-400" />
+                <div className="flex h-20 w-20 items-center justify-center rounded-full ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border)" } as React.CSSProperties}>
+                  <Search className="h-10 w-10" style={{ color: "var(--text-mute)" }} />
                 </div>
-                <p className="mt-4 text-lg font-semibold text-ink-700">No matches</p>
-                <p className="mt-1 text-sm text-ink-500">Try a different search term.</p>
+                <p className="mt-4 text-lg font-semibold" style={{ color: "var(--text-dim)" }}>No matches</p>
+                <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>Try a different search term.</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
@@ -543,15 +556,15 @@ export function ListsPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedItem(toSearchResult(item))}
-                        className="card-lift relative block w-full overflow-hidden rounded-xl bg-ink-100 text-left ring-1 ring-ink-100"
-                        style={{ aspectRatio: "2/3" }}
+                        className="card-lift relative block w-full overflow-hidden rounded-xl text-left ring-1"
+                        style={{ aspectRatio: "2/3", backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border)" } as React.CSSProperties}
                         aria-label={`Open details for ${name}`}
                       >
                         {poster ? (
                           <img src={poster} alt={name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" loading={index < 5 ? "eager" : "lazy"} />
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ink-100 to-ink-200">
-                            <Film className="h-10 w-10 text-ink-400" />
+                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[var(--surface)] to-[var(--surface-strong)]">
+                            <Film className="h-10 w-10" style={{ color: "var(--text-mute)" }} />
                           </div>
                         )}
                         {/* Type badge */}
@@ -563,7 +576,7 @@ export function ListsPage() {
                           {item.type === "movie" ? "Movie" : "Series"}
                         </span>
                         {/* Hover overlay with gradient */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 transition-opacity duration-300 sm:opacity-0 sm:group-hover:opacity-100" />
                       </button>
                       {/* Remove button on hover */}
                       <button
@@ -576,8 +589,8 @@ export function ListsPage() {
                         <Trash2 className="h-4 w-4" />
                       </button>
                       {/* Title & year */}
-                      <p className="mt-2.5 truncate text-sm font-semibold text-ink-900">{name}</p>
-                      <p className="text-xs text-ink-500">{year ?? "Unknown year"}</p>
+                      <p className="mt-2.5 truncate text-sm font-semibold" style={{ color: "var(--text)" }}>{name}</p>
+                      <p className="text-xs" style={{ color: "var(--text-mute)" }}>{year ?? "Unknown year"}</p>
                     </div>
                   );
                 })}
