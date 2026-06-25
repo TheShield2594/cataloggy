@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
-import { BarChart3, Clapperboard, History, Pin, PinOff, Search, List, Settings } from "lucide-react";
+import { BarChart3, Clapperboard, History, Pin, PinOff, Search, List, Settings, User } from "lucide-react";
+import { Profile } from "../api";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: Clapperboard, end: true },
@@ -14,7 +15,17 @@ const navItems = [
 export const PIN_KEY = "cataloggy:sidebar-pinned";
 const HOVER_DELAY_MS = 200;
 
-export function Sidebar({ pinned, onPinnedChange }: { pinned: boolean; onPinnedChange: (pinned: boolean) => void }) {
+export function Sidebar({
+  pinned,
+  onPinnedChange,
+  profile,
+  onSwitchProfile,
+}: {
+  pinned: boolean;
+  onPinnedChange: (pinned: boolean) => void;
+  profile?: Profile | null;
+  onSwitchProfile?: () => void;
+}) {
   const [hovered, setHovered] = useState(false);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const expanded = pinned || hovered;
@@ -71,7 +82,7 @@ export function Sidebar({ pinned, onPinnedChange }: { pinned: boolean; onPinnedC
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
-                `group relative flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors ${
+                `group relative flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2 ${
                   isActive ? "" : "hover:bg-[var(--surface-strong)]"
                 }`
               }
@@ -93,10 +104,26 @@ export function Sidebar({ pinned, onPinnedChange }: { pinned: boolean; onPinnedC
         </nav>
 
         <div className="px-2.5">
+          {onSwitchProfile && (
+            <button
+              type="button"
+              onClick={onSwitchProfile}
+              className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
+              style={{ color: "var(--text-dim)" }}
+              aria-label={profile ? `Switch profile (currently ${profile.name})` : "Switch profile"}
+            >
+              <span className="flex h-[1.1rem] w-[1.1rem] flex-none items-center justify-center rounded-full" style={{ background: "var(--surface-strong)" }}>
+                <User className="h-3 w-3" />
+              </span>
+              <span className="truncate whitespace-nowrap" style={{ opacity: expanded ? 1 : 0 }}>
+                {profile?.name ?? "Switch profile"}
+              </span>
+            </button>
+          )}
           <button
             type="button"
             onClick={togglePin}
-            className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)]"
+            className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
             style={{ color: "var(--text-dim)" }}
             aria-label={pinned ? "Unpin sidebar" : "Pin sidebar open"}
           >

@@ -274,7 +274,7 @@ export function SearchPage() {
             placeholder="Search movies & TV shows..."
             className="w-full rounded-full py-3.5 pl-14 pr-12 text-base placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15 transition-all"
             style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", background: "var(--bg-0)", color: "var(--text)" }}
-            autoFocus
+            autoFocus={typeof window !== "undefined" && !("ontouchstart" in window)}
           />
           {filters.query && (
             <button
@@ -735,33 +735,85 @@ function ResultCard({
 
 /* ─── Where to Watch Badge ────────────────────────────────── */
 
+// Module-level cache so repeated searches (and re-mounted cards) skip the network call entirely.
+const providerCache = new Map<string, WatchProvider[]>();
+
+// A single shared IntersectionObserver is far cheaper than one per card when a search
+// returns 10-20 results.
+type IntersectionCallback = (entry: IntersectionObserverEntry) => void;
+let sharedObserver: IntersectionObserver | null = null;
+const observerCallbacks = new WeakMap<Element, IntersectionCallback>();
+
+function getSharedObserver(): IntersectionObserver {
+  if (!sharedObserver) {
+    sharedObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          observerCallbacks.get(entry.target)?.(entry);
+        }
+      },
+      { rootMargin: "200px" }
+    );
+  }
+  return sharedObserver;
+}
+
+function observeOnce(node: Element, callback: IntersectionCallback) {
+  const observer = getSharedObserver();
+  observerCallbacks.set(node, (entry) => {
+    observer.unobserve(node);
+    observerCallbacks.delete(node);
+    callback(entry);
+  });
+  observer.observe(node);
+  return () => {
+    observer.unobserve(node);
+    observerCallbacks.delete(node);
+  };
+}
+
 function WhereToWatchBadge({ type, imdbId }: { type: SearchResult["type"]; imdbId: string }) {
-  const [providers, setProviders] = useState<WatchProvider[] | null>(null);
+  const cacheKey = `${type}:${imdbId}`;
+  const [providers, setProviders] = useState<WatchProvider[] | null>(providerCache.get(cacheKey) ?? null);
+  const [failed, setFailed] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setFailed(false);
+    const cached = providerCache.get(cacheKey);
+    if (cached) {
+      setProviders(cached);
+      return;
+    }
+
     const node = ref.current;
     if (!node) return;
 
     let cancelled = false;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries[0]?.isIntersecting) return;
-        observer.disconnect();
-        api
-          .getWatchProviders(type, imdbId)
-          .then((r) => {
-            const merged = [...r.providers.flatrate, ...r.providers.free];
-            const deduped = merged.filter((p, i) => merged.findIndex((q) => q.id === p.id) === i);
-            if (!cancelled) setProviders(deduped);
-          })
-          .catch(() => { if (!cancelled) setProviders([]); });
-      },
-      { rootMargin: "200px" }
+    const fetchProviders = () => {
+      api
+        .getWatchProviders(type, imdbId)
+        .then((r) => {
+          const merged = [...r.providers.flatrate, ...r.providers.free];
+          const deduped = merged.filter((p, i) => merged.findIndex((q) => q.id === p.id) === i);
+          providerCache.set(cacheKey, deduped);
+          if (!cancelled) setProviders(deduped);
+        })
+        .catch(() => { if (!cancelled) setFailed(true); });
+    };
+
+    const unobserve = observeOnce(node, fetchProviders);
+    return () => { cancelled = true; unobserve(); };
+  }, [type, imdbId, cacheKey]);
+
+  if (failed) {
+    return (
+      <div ref={ref} className="mt-1.5 text-2xs" style={{ color: "var(--text-mute)" }} title="Failed to load streaming providers">
+        Providers unavailable
+      </div>
     );
-    observer.observe(node);
-    return () => { cancelled = true; observer.disconnect(); };
-  }, [type, imdbId]);
+  }
 
   if (!providers || providers.length === 0) return <div ref={ref} />;
 

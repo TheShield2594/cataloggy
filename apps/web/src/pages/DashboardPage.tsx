@@ -128,7 +128,7 @@ function DiscoveryCard({ item, badge, reason, onSelect, eager }: {
     <div
       role="button"
       tabIndex={0}
-      className="flex-none group cursor-pointer"
+      className="flex-none group cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
       style={{ width: "11rem" }}
       onClick={() => onSelect?.(item)}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect?.(item); } }}
@@ -190,7 +190,7 @@ function ScrollArrows({
         type="button"
         onClick={() => onScroll("left")}
         disabled={!canScrollLeft}
-        className="flex h-8 w-8 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95"
+        className="flex h-8 w-8 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
         style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
         aria-label="Scroll left"
       >
@@ -200,7 +200,7 @@ function ScrollArrows({
         type="button"
         onClick={() => onScroll("right")}
         disabled={!canScrollRight}
-        className="flex h-8 w-8 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95"
+        className="flex h-8 w-8 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
         style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
         aria-label="Scroll right"
       >
@@ -635,7 +635,7 @@ export function DashboardPage() {
                         disabled={isMarking || isDone}
                         onClick={() => void handleMarkNext(s.imdbId)}
                         aria-label={isMarking ? "Marking" : isDone ? "Marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
-                        className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all active:scale-[0.98] ${
+                        className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2 ${
                           isMarking ? "bg-white/10 text-white/50" : isDone ? "bg-emerald-500/20 text-emerald-400" : "bg-white/15 text-white backdrop-blur-sm hover:bg-white/25"
                         }`}
                       >
@@ -807,7 +807,7 @@ export function DashboardPage() {
                 key={event.id}
                 role="button"
                 tabIndex={0}
-                className="flex-none group cursor-pointer"
+                className="flex-none group cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
                 style={{ width: "11rem" }}
                 onClick={() => setSelectedItem(toSearchResult(event.imdbId, event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster }))}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedItem(toSearchResult(event.imdbId, event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster })); } }}
