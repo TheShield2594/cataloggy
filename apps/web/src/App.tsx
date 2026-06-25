@@ -10,6 +10,7 @@ import { useTheme } from "./hooks/useTheme";
 import { DashboardPage } from "./pages/DashboardPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { ListsPage } from "./pages/ListsPage";
+import { NotFoundPage } from "./pages/NotFoundPage";
 import { ProfileSwitcher } from "./pages/ProfileSwitcher";
 import { SearchPage } from "./pages/SearchPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -98,6 +99,7 @@ export function App() {
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
 
