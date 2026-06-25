@@ -14,6 +14,8 @@ import { WatchHistorySection } from "./media-detail/WatchHistorySection";
 import { DropShowButton } from "./media-detail/DropShowButton";
 import { formatRuntime, statusColor, WatchLogTarget } from "./media-detail/detailPanelUtils";
 import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useScrollLock } from "../hooks/useScrollLock";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 export { StarRating };
 
@@ -39,18 +41,8 @@ export function DetailPanel({
   const listNames = item.lists.map((id) => listMap.get(id)?.name).filter(Boolean) as string[];
   const dialogRef = useFocusTrap<HTMLDivElement>();
 
-  // Lock background scroll while the panel is open
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = previousOverflow; };
-  }, []);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
+  useScrollLock();
+  useEscapeKey(onClose);
 
   // Cast
   const [cast, setCast] = useState<CastMember[]>([]);
@@ -400,12 +392,6 @@ export function useDetailPanel() {
   const [selectedItem, setSelectedItem] = useState<SearchResult | null>(null);
   const [panelHistory, setPanelHistory] = useState<WatchEvent[]>([]);
   const [panelHistoryLoading, setPanelHistoryLoading] = useState(false);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setSelectedItem(null); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, []);
 
   useEffect(() => {
     if (!selectedItem) return;

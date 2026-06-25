@@ -232,6 +232,30 @@ body {
   animation: toast-out 0.3s ease forwards;
 }
 
+@media (max-width: 640px) {
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateX(50px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes toast-out {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(50px);
+    }
+  }
+}
+
 /* Star rating pop-in + shake animation */
 @keyframes star-pop-in {
   0% {
