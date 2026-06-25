@@ -141,6 +141,7 @@ export type WatchEvent = {
   season?: number;
   episode?: number;
   watchedAt: string;
+  dateUnknown: boolean;
 };
 
 export type WatchStats = {
@@ -555,7 +556,7 @@ export const api = {
   deleteWatchEvent(eventId: string) {
     return request<void>(`/watch/${encodeURIComponent(eventId)}`, { method: "DELETE" });
   },
-  logWatch(payload: { type: "movie" | "episode"; imdbId: string; seriesImdbId?: string; season?: number; episode?: number; watchedAt: string }) {
+  logWatch(payload: { type: "movie" | "episode"; imdbId: string; seriesImdbId?: string; season?: number; episode?: number; watchedAt: string; dateUnknown?: boolean }) {
     return request<{ watchEvent: { id: string } }>("/watch", { method: "POST", body: JSON.stringify(payload) });
   },
   // Check-in

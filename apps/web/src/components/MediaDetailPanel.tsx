@@ -167,10 +167,10 @@ export function DetailPanel({
     }
   };
 
-  const handleLog = async (dateIso: string, episodeInfo?: { season: number; episode: number }) => {
+  const handleLog = async (dateIso: string, episodeInfo?: { season: number; episode: number }, dateUnknown?: boolean) => {
     if (!watchTarget) return;
     if (watchTarget.kind === "movie") {
-      await api.logWatch({ type: "movie", imdbId: watchTarget.imdbId, watchedAt: dateIso });
+      await api.logWatch({ type: "movie", imdbId: watchTarget.imdbId, watchedAt: dateIso, dateUnknown });
     } else {
       await api.logWatch({
         type: "episode",
@@ -179,6 +179,7 @@ export function DetailPanel({
         season: episodeInfo?.season ?? watchTarget.season,
         episode: episodeInfo?.episode ?? watchTarget.episode,
         watchedAt: dateIso,
+        dateUnknown,
       });
     }
     onShowToast("Watch logged!", "success");
