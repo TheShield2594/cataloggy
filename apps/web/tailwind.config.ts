@@ -53,8 +53,8 @@ export default {
         },
       },
       fontFamily: {
-        heading: ["Outfit", '"Plus Jakarta Sans Variable"', "Inter", "system-ui", "sans-serif"],
-        sans: ["Outfit", "Inter", "system-ui", "-apple-system", "BlinkMacSystemFont", '"Segoe UI"', "sans-serif"],
+        heading: ['"Plus Jakarta Sans Variable"', "system-ui", "sans-serif"],
+        sans: ['"Plus Jakarta Sans Variable"', "system-ui", "-apple-system", "BlinkMacSystemFont", '"Segoe UI"', "sans-serif"],
       },
       fontSize: {
         "2xs": ["0.6875rem", { lineHeight: "1rem" }],

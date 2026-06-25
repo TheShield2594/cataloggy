@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { registerSW } from "virtual:pwa-register";
 import { App } from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import "@fontsource-variable/plus-jakarta-sans";
 import "./index.css";
 
 registerSW({ immediate: true });

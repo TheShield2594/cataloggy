@@ -83,6 +83,7 @@ export function SearchPage() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const lastSearchRef = useRef<{ filter: FilterType; query: string }>({ filter: "all", query: "" });
   const requestIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Load lists + providers on mount
   useEffect(() => {
@@ -96,6 +97,11 @@ export function SearchPage() {
       }
     })();
   }, [showToast]);
+
+  // Abort any in-flight search when the page unmounts
+  useEffect(() => {
+    return () => abortRef.current?.abort();
+  }, []);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -117,6 +123,11 @@ export function SearchPage() {
   const doSearch = useCallback(
     async (searchFilter: FilterType, searchQuery: string) => {
       if (!searchQuery.trim()) return;
+
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       const requestId = ++requestIdRef.current;
       setIsSearching(true);
       lastSearchRef.current = { filter: searchFilter, query: searchQuery };
@@ -124,8 +135,8 @@ export function SearchPage() {
       try {
         if (searchFilter === "all") {
           const [movies, series] = await Promise.all([
-            api.search("movie", searchQuery),
-            api.search("series", searchQuery),
+            api.search("movie", searchQuery, controller.signal),
+            api.search("series", searchQuery, controller.signal),
           ]);
           if (requestIdRef.current !== requestId) return;
           const merged: SearchResult[] = [];
@@ -136,12 +147,13 @@ export function SearchPage() {
           }
           setRawResults(merged);
         } else {
-          const response = await api.search(searchFilter, searchQuery);
+          const response = await api.search(searchFilter, searchQuery, controller.signal);
           if (requestIdRef.current !== requestId) return;
           setRawResults(response);
         }
       } catch (err) {
         if (requestIdRef.current !== requestId) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
         setRawResults([]);
         showToast(err instanceof Error ? err.message : "Search failed", "error");
       } finally {
@@ -168,17 +180,19 @@ export function SearchPage() {
 
   // Debounced auto-search on query/filter change
   useEffect(() => {
-    // Invalidate any in-flight request so its response is discarded
-    ++requestIdRef.current;
-
     if (!filters.query.trim()) {
+      // Invalidate any in-flight request so its response is discarded
+      ++requestIdRef.current;
+      abortRef.current?.abort();
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      lastSearchRef.current = { filter: filters.filter, query: "" };
       setRawResults(null);
       setIsSearching(false);
       return;
     }
-    // Only re-search if query or media type filter changed
+    // Only re-search if query or media type filter actually changed
     const last = lastSearchRef.current;
-    if (last.query === filters.query && last.filter === filters.filter && rawResults !== null) return;
+    if (last.query === filters.query && last.filter === filters.filter) return;
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {

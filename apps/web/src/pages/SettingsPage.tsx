@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Key, Link, Database, Info, Clapperboard, Image, Globe, Star, Sparkles, Bell, Users } from "lucide-react";
 import { Section } from "../components/settings/Section";
 import { ApiTokenSettings } from "../components/settings/ApiTokenSettings";
@@ -17,8 +17,21 @@ const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "
 
 type SettingsTab = "preferences" | "integrations";
 
+function isSettingsTab(value: string | null): value is SettingsTab {
+  return value === "preferences" || value === "integrations";
+}
+
 export function SettingsPage() {
-  const [tab, setTab] = useState<SettingsTab>("preferences");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab: SettingsTab = isSettingsTab(searchParams.get("tab")) ? (searchParams.get("tab") as SettingsTab) : "preferences";
+
+  const setTab = (next: SettingsTab) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      params.set("tab", next);
+      return params;
+    });
+  };
 
   const tabs: { id: SettingsTab; label: string }[] = [
     { id: "preferences", label: "Preferences" },
@@ -48,19 +61,19 @@ export function SettingsPage() {
 
       {tab === "preferences" && (
         <div className="space-y-4">
-          <Section title="Preferences" icon={<Globe size={20} />} defaultOpen>
+          <Section title="Preferences" icon={<Globe size={20} />} storageKey="preferences">
             <PreferencesSettings />
           </Section>
 
-          <Section title="Profile" icon={<Users size={20} />}>
+          <Section title="Profile" icon={<Users size={20} />} storageKey="profile">
             <ProfileSettings />
           </Section>
 
-          <Section title="Notifications" icon={<Bell size={20} />}>
+          <Section title="Notifications" icon={<Bell size={20} />} storageKey="notifications">
             <PushSettings />
           </Section>
 
-          <Section title="About" icon={<Info size={20} />}>
+          <Section title="About" icon={<Info size={20} />} storageKey="about">
             <div className="space-y-2 text-sm text-ink-600">
               <p className="text-base font-semibold text-ink-900">Cataloggy <span className="font-mono text-claw-600">v{APP_VERSION}</span></p>
               <p className="text-sm">A personal media catalog and watchlist manager.</p>
@@ -71,31 +84,31 @@ export function SettingsPage() {
 
       {tab === "integrations" && (
         <div className="space-y-4">
-          <Section title="API Token" icon={<Key size={20} />} defaultOpen>
+          <Section title="API Token" icon={<Key size={20} />} storageKey="api-token">
             <ApiTokenSettings />
           </Section>
 
-          <Section title="Trakt Integration" icon={<Link size={20} />}>
+          <Section title="Trakt Integration" icon={<Link size={20} />} storageKey="trakt">
             <TraktSettings />
           </Section>
 
-          <Section title="Stremio Addon" icon={<Clapperboard size={20} />}>
+          <Section title="Stremio Addon" icon={<Clapperboard size={20} />} storageKey="addon">
             <AddonSettings />
           </Section>
 
-          <Section title="OMDB Ratings" icon={<Star size={20} />}>
+          <Section title="OMDB Ratings" icon={<Star size={20} />} storageKey="omdb">
             <OmdbSettings />
           </Section>
 
-          <Section title="RPDB Posters" icon={<Image size={20} />}>
+          <Section title="RPDB Posters" icon={<Image size={20} />} storageKey="rpdb">
             <RpdbSettings />
           </Section>
 
-          <Section title="AI Recommendations" icon={<Sparkles size={20} />}>
+          <Section title="AI Recommendations" icon={<Sparkles size={20} />} storageKey="ai">
             <AiSettings />
           </Section>
 
-          <Section title="Data" icon={<Database size={20} />}>
+          <Section title="Data" icon={<Database size={20} />} storageKey="data">
             <DataSettings />
           </Section>
         </div>
