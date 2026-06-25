@@ -48,7 +48,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const dialogRef = useFocusTrap<HTMLDivElement>(open);
   const { showToast } = useToast();
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
-  const listMap = new Map(lists.map((l) => [l.id, l]));
+  const listMap = new Map<string, CatalogList>(lists.map((l) => [l.id, l]));
 
   useEffect(() => {
     if (!open) return;

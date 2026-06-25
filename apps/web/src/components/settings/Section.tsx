@@ -61,7 +61,7 @@ export function Section({
   };
 
   return (
-    <div className="rounded-2xl border bg-cream-50 shadow-sm overflow-hidden" style={{ borderColor: "var(--border)" }}>
+    <div className="rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
       <button
         id={buttonId}
         type="button"

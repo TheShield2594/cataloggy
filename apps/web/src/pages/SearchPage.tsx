@@ -263,8 +263,8 @@ export function SearchPage() {
       {/* Search bar */}
       <form
         onSubmit={submitSearch}
-        className="sticky top-[76px] z-40 rounded-2xl bg-cream-50/90 p-4 backdrop-blur-xl shadow-sm"
-        style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }}
+        className="sticky top-[76px] z-40 rounded-2xl p-4 backdrop-blur-xl shadow-sm"
+        style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)", background: "color-mix(in srgb, var(--bg-1) 90%, transparent)" }}
       >
         <div className="relative">
           <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2" style={{ color: "var(--text-mute)" }} />
@@ -272,8 +272,8 @@ export function SearchPage() {
             value={filters.query}
             onChange={(e) => setFilters({ query: e.target.value })}
             placeholder="Search movies & TV shows..."
-            className="w-full rounded-full bg-white py-3.5 pl-14 pr-12 text-base placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15 transition-all"
-            style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", color: "var(--text)" }}
+            className="w-full rounded-full py-3.5 pl-14 pr-12 text-base placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15 transition-all"
+            style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", background: "var(--bg-0)", color: "var(--text)" }}
             autoFocus
           />
           {filters.query && (
@@ -353,7 +353,7 @@ export function SearchPage() {
 
         {/* Advanced filters panel */}
         {filtersOpen && (
-          <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl bg-cream-50 p-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6" style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }}>
+          <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl p-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6" style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)", background: "var(--surface)" }}>
             {/* Genre */}
             <FilterSelect
               label="Genre"
@@ -374,8 +374,8 @@ export function SearchPage() {
                   max="2030"
                   value={filters.yearMin}
                   onChange={(e) => setFilters({ yearMin: e.target.value })}
-                  className="w-full rounded-lg bg-white px-2.5 py-2 text-sm placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
-                  style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", color: "var(--text)" }}
+                  className="w-full rounded-lg px-2.5 py-2 text-sm placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
+                  style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", background: "var(--bg-0)", color: "var(--text)" }}
                 />
                 <input
                   type="number"
@@ -385,8 +385,8 @@ export function SearchPage() {
                   max="2030"
                   value={filters.yearMax}
                   onChange={(e) => setFilters({ yearMax: e.target.value })}
-                  className="w-full rounded-lg bg-white px-2.5 py-2 text-sm placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
-                  style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", color: "var(--text)" }}
+                  className="w-full rounded-lg px-2.5 py-2 text-sm placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
+                  style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", background: "var(--bg-0)", color: "var(--text)" }}
                 />
               </div>
             </div>
@@ -540,27 +540,27 @@ function FilterSelect({
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={id} className="text-2xs font-medium uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>{label}</label>
-      <select
-        id={id}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg bg-white px-2.5 py-2 text-sm focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30 appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238f8475' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
-          backgroundRepeat: "no-repeat",
-          backgroundPosition: "right 10px center",
-          paddingRight: "2rem",
-          borderWidth: 1,
-          borderStyle: "solid",
-          borderColor: "var(--border-strong)",
-          color: "var(--text-dim)",
-        }}
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>{opt.label}</option>
-        ))}
-      </select>
+      <div className="relative">
+        <select
+          id={id}
+          value={value}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded-lg px-2.5 py-2 pr-7 text-sm focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30 appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{
+            borderWidth: 1,
+            borderStyle: "solid",
+            borderColor: "var(--border-strong)",
+            background: "var(--bg-0)",
+            color: "var(--text-dim)",
+          }}
+        >
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: "var(--text-mute)" }} />
+      </div>
     </div>
   );
 }
@@ -666,7 +666,7 @@ function ResultCard({
       {/* Quick-add dropdown */}
       {isOpen && (
         <div ref={dropdownRef} className="relative z-30 mt-1">
-          <div role="menu" aria-label={`Add ${result.name} to a list`} className="absolute left-0 right-0 overflow-hidden rounded-xl bg-white shadow-lg" style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }}>
+          <div role="menu" aria-label={`Add ${result.name} to a list`} className="absolute left-0 right-0 overflow-hidden rounded-xl shadow-lg" style={{ background: "var(--bg-0)", borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }}>
             <p className="px-3 py-2.5 text-2xs font-semibold uppercase tracking-wider" style={{ borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: "var(--border)", color: "var(--text-mute)" }}>
               Add to list
             </p>

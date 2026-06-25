@@ -54,9 +54,8 @@ export function SettingsPage() {
             className={`flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
               tab === t.id
                 ? "bg-claw-500 text-white shadow-lg shadow-claw-500/25"
-                : "hover:text-[var(--text)]"
+                : "text-[var(--text-dim)] hover:text-[var(--text)]"
             }`}
-            style={tab === t.id ? undefined : { color: "var(--text-dim)" }}
           >
             {t.label}
           </button>
