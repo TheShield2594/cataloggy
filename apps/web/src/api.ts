@@ -300,9 +300,14 @@ const authHeaders = (hasBody: boolean) => {
   return headers;
 };
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  const timeoutMs = init?.timeoutMs ?? 30000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  if (init?.signal) {
+    if (init.signal.aborted) controller.abort();
+    else init.signal.addEventListener("abort", () => controller.abort());
+  }
 
   let response: Response;
   try {
@@ -344,8 +349,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  search(type: MediaType, query: string) {
-    return request<SearchResult[]>(`/search?type=${type}&query=${encodeURIComponent(query)}`);
+  search(type: MediaType, query: string, signal?: AbortSignal) {
+    return request<SearchResult[]>(`/search?type=${type}&query=${encodeURIComponent(query)}`, { signal, timeoutMs: 15000 });
   },
   getLists() {
     return request<{ lists: CatalogList[] }>("/lists");
@@ -389,8 +394,10 @@ export const api = {
     const res = await request<{ progress: SeriesProgress[] }>("/series/progress");
     return res.progress;
   },
-  async getWatchHistory(limit = 10, offset = 0) {
-    const res = await request<{ history: WatchEvent[] }>(`/watch/history?limit=${limit}&offset=${offset}`);
+  async getWatchHistory(limit = 10, offset = 0, opts?: { imdbId?: string; signal?: AbortSignal }) {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (opts?.imdbId) params.set("imdbId", opts.imdbId);
+    const res = await request<{ history: WatchEvent[] }>(`/watch/history?${params}`, { signal: opts?.signal });
     return res.history;
   },
   getWatchStats() {
@@ -408,13 +415,13 @@ export const api = {
     return request<{ url: string }>("/trakt/oauth/authorize");
   },
   traktImport() {
-    return request<{ imported: Record<string, number> }>("/trakt/import", { method: "POST" });
+    return request<{ imported: Record<string, number> }>("/trakt/import", { method: "POST", timeoutMs: 120000 });
   },
   traktDisconnect() {
     return request<{ disconnected: boolean }>("/trakt/disconnect", { method: "POST" });
   },
   refreshAllMetadata() {
-    return request<{ refreshed: number; total: number }>("/metadata/refresh-all", { method: "POST" });
+    return request<{ refreshed: number; total: number }>("/metadata/refresh-all", { method: "POST", timeoutMs: 120000 });
   },
   getRpdbStatus() {
     return request<{ configured: boolean; hasKey: boolean }>("/rpdb/status");
@@ -506,32 +513,32 @@ export const api = {
   getAnimeCatalog(type: MediaType) {
     return request<{ metas: TrendingMeta[] }>(`/anime?type=${type}`);
   },
-  getItemMeta(type: MediaType, imdbId: string) {
+  getItemMeta(type: MediaType, imdbId: string, signal?: AbortSignal) {
     return request<{
       imdbId: string; type: string; name: string; year: number | null; poster: string | null;
       description: string | null; genres: string[]; rating: number | null;
       imdbRating: number | null; rtScore: number | null; mcScore: number | null;
       runtime: number | null; certification: string | null;
       status: string | null; network: string | null; releaseDate: string | null;
-    }>(`/meta/${type}/${encodeURIComponent(imdbId)}`);
+    }>(`/meta/${type}/${encodeURIComponent(imdbId)}`, { signal });
   },
-  getCast(type: MediaType, imdbId: string) {
+  getCast(type: MediaType, imdbId: string, signal?: AbortSignal) {
     return request<{ cast: Array<{ name: string; character: string; photo: string | null; order: number }> }>(
-      `/meta/${type}/${encodeURIComponent(imdbId)}/cast`
+      `/meta/${type}/${encodeURIComponent(imdbId)}/cast`, { signal }
     );
   },
-  getSeasons(imdbId: string) {
+  getSeasons(imdbId: string, signal?: AbortSignal) {
     return request<{ seasons: Array<{ seasonNumber: number; name: string; episodeCount: number; airYear: number | null; poster: string | null }> }>(
-      `/meta/series/${encodeURIComponent(imdbId)}/seasons`
+      `/meta/series/${encodeURIComponent(imdbId)}/seasons`, { signal }
     );
   },
-  getWatchProviders(type: MediaType, imdbId: string) {
+  getWatchProviders(type: MediaType, imdbId: string, signal?: AbortSignal) {
     return request<{ providers: WatchProviders }>(
-      `/meta/${type}/${encodeURIComponent(imdbId)}/providers`
+      `/meta/${type}/${encodeURIComponent(imdbId)}/providers`, { signal }
     );
   },
-  getDropped(imdbId: string) {
-    return request<{ dropped: boolean }>(`/show/${encodeURIComponent(imdbId)}/dropped`);
+  getDropped(imdbId: string, signal?: AbortSignal) {
+    return request<{ dropped: boolean }>(`/show/${encodeURIComponent(imdbId)}/dropped`, { signal });
   },
   dropShow(imdbId: string) {
     return request<{ dropped: boolean }>(`/show/${encodeURIComponent(imdbId)}/drop`, { method: "POST" });
@@ -546,8 +553,8 @@ export const api = {
     return request<{ watchEvent: { id: string } }>("/watch", { method: "POST", body: JSON.stringify(payload) });
   },
   // Check-in
-  getCheckin() {
-    return request<{ checkin: CheckIn | null }>("/checkin");
+  getCheckin(signal?: AbortSignal) {
+    return request<{ checkin: CheckIn | null }>("/checkin", { signal });
   },
   startCheckin(payload: { type: "movie" | "episode"; imdbId: string; seriesImdbId?: string; name: string; poster?: string; season?: number; episode?: number; runtime?: number | null }) {
     return request<{ checkin: CheckIn }>("/checkin", {
@@ -588,7 +595,7 @@ export const api = {
     });
   },
   refreshAiRecs() {
-    return request<{ movie: number; series: number }>("/recommendations/ai/refresh", { method: "POST" });
+    return request<{ movie: number; series: number }>("/recommendations/ai/refresh", { method: "POST", timeoutMs: 60000 });
   },
   getAiRecommendations(type: MediaType, limit = 20) {
     return request<{ metas: TrendingMeta[]; reasons?: Record<string, string> }>(`/recommendations/ai?type=${type}&limit=${limit}`);
@@ -634,18 +641,20 @@ export const api = {
   },
   // Data export / import
   exportData() {
-    return request<ExportPayload>("/export");
+    return request<ExportPayload>("/export", { timeoutMs: 60000 });
   },
   importData(payload: ExportPayload) {
     return request<{ status: string; summary: ImportSummary }>("/import", {
       method: "POST",
       body: JSON.stringify(payload),
+      timeoutMs: 60000,
     });
   },
   importCsv(csv: string) {
     return request<{ status: string; summary: { imported: number; skipped: number } }>("/import/csv", {
       method: "POST",
       body: JSON.stringify({ csv }),
+      timeoutMs: 60000,
     });
   },
 };
