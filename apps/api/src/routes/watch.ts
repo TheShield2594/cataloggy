@@ -23,6 +23,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
       season?: unknown;
       episode?: unknown;
       watchedAt?: unknown;
+      dateUnknown?: unknown;
     };
 
     if (!Object.values(WatchEventType).includes(body.type as WatchEventType)) {
@@ -72,6 +73,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     const seriesImdbId = body.seriesImdbId ? (body.seriesImdbId as string).trim() : undefined;
     const season = (body.season as number | undefined) ?? null;
     const episode = (body.episode as number | undefined) ?? null;
+    const dateUnknown = body.dateUnknown === true;
 
     const { watchEvent, wasCreated } = await recordWatchEvent({
       type,
@@ -80,6 +82,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
       season,
       episode,
       watchedAt,
+      dateUnknown,
       source: "manual",
       request,
     });

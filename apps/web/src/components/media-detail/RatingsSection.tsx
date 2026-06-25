@@ -106,43 +106,52 @@ export function StarRating({
   if (!loaded) return <div className="skeleton h-8 w-40 rounded-lg" />;
 
   const displayRating = hoverRating ?? userRating ?? 0;
+  const groups: number[][] = [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]];
   return (
     <div>
       <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
-        <Star className="h-3.5 w-3.5" /> Your Rating
+        <Star className="h-3.5 w-3.5" /> Your Rating <span className="font-normal">(1-10)</span>
       </h3>
-      <div className="flex items-center gap-1">
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => {
-          const isFilled = userRating !== null && star <= userRating;
-          const isPreview = star <= displayRating;
-          return (
-            <button
-              key={star} type="button" disabled={saving}
-              onClick={() => void handleRate(star)}
-              onMouseEnter={() => setHoverRating(star)}
-              onMouseLeave={() => setHoverRating(null)}
-              onFocus={() => setHoverRating(star)}
-              onBlur={() => setHoverRating(null)}
-              className="flex flex-col items-center gap-0.5 p-0.5 disabled:opacity-50"
-              aria-label={`Rate ${star} out of 10`}
-            >
-              <span className="relative grid h-5 w-5 place-items-center">
-                <Star
-                  className={`absolute h-5 w-5 transition-colors duration-300 ${isPreview ? "text-amber-400" : ""}`}
-                  style={isPreview ? undefined : { color: "var(--text-mute)" }}
-                />
-                <Star
-                  className={`star-shake-target absolute h-5 w-5 fill-amber-400 text-amber-400 transition-opacity duration-300 ${isFilled ? "star-pop opacity-100" : "opacity-0"}`}
-                />
-              </span>
-              <span
-                className={`h-1 w-4 rounded-full bg-amber-500/30 blur-[2px] transition-opacity duration-300 ${isPreview || isFilled ? "opacity-60" : "opacity-0"}`}
-              />
-            </button>
-          );
-        })}
-        {userRating !== null && <span className="ml-2 text-sm font-semibold text-amber-500">{userRating}/10</span>}
+      <div className="flex items-center gap-1.5">
+        {groups.map((group, groupIndex) => (
+          <div key={groupIndex} className="flex items-center gap-0.5">
+            {group.map((star) => {
+              const isFilled = userRating !== null && star <= userRating;
+              const isPreview = star <= displayRating;
+              const isCurrentRating = userRating === star;
+              return (
+                <button
+                  key={star} type="button" disabled={saving}
+                  onClick={() => void handleRate(star)}
+                  onMouseEnter={() => setHoverRating(star)}
+                  onMouseLeave={() => setHoverRating(null)}
+                  onFocus={() => setHoverRating(star)}
+                  onBlur={() => setHoverRating(null)}
+                  className="flex flex-col items-center gap-0.5 p-1 disabled:opacity-50"
+                  aria-label={`Rate ${star} out of 10`}
+                  title={isCurrentRating ? "Click again to remove your rating" : undefined}
+                >
+                  <span className="relative grid h-7 w-7 place-items-center">
+                    <Star
+                      className={`absolute h-7 w-7 transition-colors duration-300 ${isPreview ? "text-amber-400" : ""}`}
+                      style={isPreview ? undefined : { color: "var(--text-mute)" }}
+                    />
+                    <Star
+                      className={`star-shake-target absolute h-7 w-7 fill-amber-400 text-amber-400 transition-opacity duration-300 ${isFilled ? "star-pop opacity-100" : "opacity-0"}`}
+                    />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
+        <span className="ml-1 text-sm font-semibold text-amber-500">
+          {hoverRating != null ? `Rating: ${hoverRating}/10` : userRating !== null ? `${userRating}/10` : ""}
+        </span>
       </div>
+      {userRating !== null && (
+        <p className="mt-1 text-2xs" style={{ color: "var(--text-mute)" }}>Click your current rating again to remove it.</p>
+      )}
       {loadError && (
         <p className="mt-1 flex items-center gap-2 text-xs text-rose-400">
           {loadError}

@@ -71,7 +71,7 @@ export function WatchHistorySection({
                 )}
               </div>
               <time className="shrink-0 text-2xs" style={{ color: "var(--text-mute)" }}>
-                {new Date(event.watchedAt).toISOString().slice(0, 10) === "2000-01-01"
+                {event.dateUnknown
                   ? "Unknown date"
                   : new Date(event.watchedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
               </time>

@@ -24,7 +24,6 @@ const mobileNavItems = [
   { to: "/lists", label: "Lists", icon: List, end: false },
   { to: "/history", label: "History", icon: History, end: false },
   { to: "/stats", label: "Stats", icon: BarChart3, end: false },
-  { to: "/settings", label: "Settings", icon: Settings, end: false },
 ] as const;
 
 export function App() {
@@ -88,6 +87,14 @@ export function App() {
           <div className="flex items-center gap-3">
             <ThemeToggle theme={theme} onChange={setTheme} />
             <InstallButton />
+            <Link
+              to="/settings"
+              aria-label="Settings"
+              className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] sm:hidden ${location.pathname.startsWith("/settings") ? "text-claw-600" : ""}`}
+              style={location.pathname.startsWith("/settings") ? {} : { color: "var(--text-mute)" }}
+            >
+              <Settings className="h-5 w-5" />
+            </Link>
           </div>
         </div>
       </header>
@@ -119,10 +126,13 @@ export function App() {
             <Link
               key={item.to}
               to={item.to}
-              className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-2xs font-medium transition-colors ${isActive ? "text-claw-600" : ""}`}
+              className={`relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-2xs font-medium transition-colors ${isActive ? "text-claw-600" : ""}`}
               style={isActive ? {} : { color: "var(--text-dim)" }}
             >
-              <Icon className="h-5 w-5" />
+              {isActive && (
+                <span className="absolute top-0 h-0.5 w-8 rounded-full bg-claw-500" aria-hidden="true" />
+              )}
+              <Icon className={`h-5 w-5 ${isActive ? "fill-claw-500/20" : ""}`} />
               <span>{item.label}</span>
             </Link>
           );

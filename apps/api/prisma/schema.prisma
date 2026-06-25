@@ -106,6 +106,7 @@ model WatchEvent {
   season         Int?
   episode        Int?
   watchedAt      DateTime       @db.Timestamptz(6)
+  dateUnknown    Boolean        @default(false)
   plays          Int            @default(1)
   traktHistoryId BigInt?        @unique
 
