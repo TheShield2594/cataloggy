@@ -61,16 +61,16 @@ export function PushSettings() {
   };
 
   if (!supported) {
-    return <p className="text-sm text-ink-600">Push notifications aren't supported in this browser.</p>;
+    return <p className="text-sm" style={{ color: "var(--text-dim)" }}>Push notifications aren't supported in this browser.</p>;
   }
 
   if (loading) {
-    return <div className="flex items-center gap-2 text-sm text-ink-600"><Loader2 size={16} className="animate-spin" /> Checking notification status...</div>;
+    return <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-dim)" }}><Loader2 size={16} className="animate-spin" /> Checking notification status...</div>;
   }
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-ink-600 leading-relaxed">
+      <p className="text-sm leading-relaxed" style={{ color: "var(--text-dim)" }}>
         Get a push notification when the next episode of a series you're tracking airs.
       </p>
 
@@ -84,9 +84,10 @@ export function PushSettings() {
         disabled={busy}
         className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all disabled:opacity-50 ${
           subscribed
-            ? "bg-ink-100 border border-ink-200 text-ink-700 hover:bg-rose-600 hover:text-white"
+            ? "border hover:bg-rose-600 hover:text-white"
             : "bg-claw-500 text-white hover:bg-claw-600 shadow-lg shadow-claw-500/20"
         }`}
+        style={subscribed ? { backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--text-dim)" } : undefined}
       >
         {busy ? (
           <><Loader2 size={16} className="animate-spin" /> {subscribed ? "Disabling..." : "Enabling..."}</>

@@ -86,7 +86,7 @@ export function DataSettings() {
   return (
     <div className="space-y-6">
       <div className="space-y-4">
-        <p className="text-sm text-ink-600 leading-relaxed">Re-fetch metadata (posters, descriptions, etc.) for all tracked items from TMDB.</p>
+        <p className="text-sm leading-relaxed" style={{ color: "var(--text-dim)" }}>Re-fetch metadata (posters, descriptions, etc.) for all tracked items from TMDB.</p>
         <button
           type="button"
           onClick={refreshAll}
@@ -99,25 +99,26 @@ export function DataSettings() {
         {error && <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>}
       </div>
 
-      <div className="space-y-4 border-t border-ink-100 pt-5">
+      <div className="space-y-4 pt-5" style={{ borderTop: "1px solid var(--border)" }}>
         <div>
-          <p className="text-sm font-semibold text-ink-700">Export your data</p>
-          <p className="text-sm text-ink-600 leading-relaxed">Download a JSON file with your lists, watch history, series progress, and ratings.</p>
+          <p className="text-sm font-semibold" style={{ color: "var(--text-dim)" }}>Export your data</p>
+          <p className="text-sm leading-relaxed" style={{ color: "var(--text-dim)" }}>Download a JSON file with your lists, watch history, series progress, and ratings.</p>
         </div>
         <button
           type="button"
           onClick={handleExport}
           disabled={exporting}
-          className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-cream-50 px-5 py-2.5 text-sm font-semibold text-ink-700 transition-colors hover:bg-ink-100 disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-xl bg-cream-50 px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface)] disabled:opacity-60"
+          style={{ border: "1px solid var(--border)", color: "var(--text-dim)" }}
         >
           {exporting ? <><Loader2 size={16} className="animate-spin" /> Exporting...</> : <><Download size={16} /> Download export</>}
         </button>
       </div>
 
-      <div className="space-y-4 border-t border-ink-100 pt-5">
+      <div className="space-y-4 pt-5" style={{ borderTop: "1px solid var(--border)" }}>
         <div>
-          <p className="text-sm font-semibold text-ink-700">Import data</p>
-          <p className="text-sm text-ink-600 leading-relaxed">
+          <p className="text-sm font-semibold" style={{ color: "var(--text-dim)" }}>Import data</p>
+          <p className="text-sm leading-relaxed" style={{ color: "var(--text-dim)" }}>
             Restore from a Cataloggy JSON export, or import watch history from a CSV file with columns <code>imdbId,type,season,episode,watchedAt</code>.
           </p>
         </div>
@@ -137,7 +138,8 @@ export function DataSettings() {
             type="button"
             onClick={() => jsonFileInputRef.current?.click()}
             disabled={importingJson}
-            className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-cream-50 px-5 py-2.5 text-sm font-semibold text-ink-700 transition-colors hover:bg-ink-100 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-xl bg-cream-50 px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface)] disabled:opacity-60"
+            style={{ border: "1px solid var(--border)", color: "var(--text-dim)" }}
           >
             {importingJson ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : <><Upload size={16} /> Import JSON export</>}
           </button>
@@ -157,7 +159,8 @@ export function DataSettings() {
             type="button"
             onClick={() => csvFileInputRef.current?.click()}
             disabled={importingCsv}
-            className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-cream-50 px-5 py-2.5 text-sm font-semibold text-ink-700 transition-colors hover:bg-ink-100 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-xl bg-cream-50 px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface)] disabled:opacity-60"
+            style={{ border: "1px solid var(--border)", color: "var(--text-dim)" }}
           >
             {importingCsv ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : <><Upload size={16} /> Import CSV history</>}
           </button>

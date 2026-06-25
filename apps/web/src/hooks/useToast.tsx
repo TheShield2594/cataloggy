@@ -33,7 +33,7 @@ function ToastContainer({ toasts }: { toasts: Toast[] }) {
           ) : (
             <Heart aria-hidden="true" className="h-5 w-5 flex-none text-claw-600" />
           )}
-          <span className="text-sm font-medium text-ink-900">{toast.message}</span>
+          <span className="text-sm font-medium" style={{ color: "var(--text)" }}>{toast.message}</span>
         </div>
       ))}
     </div>

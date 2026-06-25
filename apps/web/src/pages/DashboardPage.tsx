@@ -642,7 +642,7 @@ export function DashboardPage() {
                         {isDone ? (
                           <><Check className="h-3.5 w-3.5" /> Marked</>
                         ) : isMarking ? (
-                          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-ink-400 border-t-transparent" />
+                          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: "rgba(255,255,255,0.4)", borderTopColor: "transparent" }} />
                         ) : (
                           <><ChevronRight className="h-3.5 w-3.5" /> Mark S{s.nextSeason}:E{s.nextEpisode}</>
                         )}
@@ -908,9 +908,9 @@ export function DashboardPage() {
                             ? "bg-claw-500/15 text-claw-400"
                             : isTomorrow
                               ? "bg-amber-500/15 text-amber-400"
-                              : "text-ink-600"
+                              : ""
                         }`}
-                        style={!isToday && !isTomorrow ? { background: "var(--surface-strong)" } : undefined}
+                        style={!isToday && !isTomorrow ? { background: "var(--surface-strong)", color: "var(--text-dim)" } : undefined}
                       >
                         {dateLabel}
                       </span>
