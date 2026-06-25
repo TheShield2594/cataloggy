@@ -43,13 +43,13 @@ function AddonManifestUrl() {
   };
 
   return (
-    <div className="rounded-xl border border-ink-200 bg-cream-100 p-4 space-y-3">
-      <p className="text-sm font-medium text-ink-700">Manifest URL</p>
-      <p className="text-xs text-ink-600 leading-relaxed">
-        Copy this URL and paste it into Stremio under <strong className="text-ink-700">Add-ons &rarr; Install from URL</strong>.
+    <div className="rounded-xl border bg-cream-100 p-4 space-y-3" style={{ borderColor: "var(--border)" }}>
+      <p className="text-sm font-medium" style={{ color: "var(--text-dim)" }}>Manifest URL</p>
+      <p className="text-xs leading-relaxed" style={{ color: "var(--text-mute)" }}>
+        Copy this URL and paste it into Stremio under <strong style={{ color: "var(--text-dim)" }}>Add-ons &rarr; Install from URL</strong>.
       </p>
       <div className="flex items-center gap-2">
-        <code className="flex-1 overflow-x-auto rounded-lg bg-white border border-ink-200 px-3 py-2 text-xs text-claw-600 select-all whitespace-nowrap scrollbar-hide">
+        <code className="flex-1 overflow-x-auto rounded-lg bg-white border px-3 py-2 text-xs text-claw-600 select-all whitespace-nowrap scrollbar-hide" style={{ borderColor: "var(--border)" }}>
           {manifestUrl}
         </code>
         <button
@@ -60,8 +60,9 @@ function AddonManifestUrl() {
               ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/20"
               : copyError
                 ? "bg-rose-500/15 text-rose-600 ring-1 ring-rose-500/20"
-                : "bg-white text-ink-700 hover:bg-ink-100 border border-ink-200"
+                : "bg-white hover:bg-[var(--surface-strong)] border"
           }`}
+          style={!copied && !copyError ? { color: "var(--text-dim)", borderColor: "var(--border)" } : undefined}
           aria-label="Copy manifest URL"
         >
           {copied ? <><Check size={13} /> Copied</> : copyError ? <>Failed</> : <><Copy size={13} /> Copy</>}
@@ -70,13 +71,14 @@ function AddonManifestUrl() {
           href={manifestUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-none inline-flex items-center gap-1.5 rounded-lg bg-white border border-ink-200 px-3 py-2 text-xs font-semibold text-ink-700 hover:bg-ink-100 transition-colors"
+          className="flex-none inline-flex items-center gap-1.5 rounded-lg bg-white border px-3 py-2 text-xs font-semibold hover:bg-[var(--surface-strong)] transition-colors"
+          style={{ color: "var(--text-dim)", borderColor: "var(--border)" }}
           aria-label="Open manifest URL"
         >
           <ExternalLink size={13} />
         </a>
       </div>
-      <p className="text-xs text-ink-600">
+      <p className="text-xs" style={{ color: "var(--text-mute)" }}>
         The URL points to your local API server. Stremio must be able to reach it on your network.
       </p>
     </div>
@@ -131,13 +133,13 @@ export function AddonSettings() {
   };
 
   if (loading) {
-    return <div className="flex items-center gap-2 text-sm text-ink-600"><Loader2 size={16} className="animate-spin" /> Loading configuration...</div>;
+    return <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-mute)" }}><Loader2 size={16} className="animate-spin" /> Loading configuration...</div>;
   }
 
   return (
     <div className="space-y-4">
       <AddonManifestUrl />
-      <p className="text-sm text-ink-600 leading-relaxed">
+      <p className="text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
         Choose which catalogs appear in Stremio. Changes take effect after the manifest cache refreshes (~60s).
       </p>
 
@@ -151,7 +153,7 @@ export function AddonSettings() {
               className={`flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-colors ${
                 isAiCatalog
                   ? "border-plum-500/30 bg-plum-500/5 hover:bg-plum-500/10"
-                  : "border-ink-100 bg-cream-50 hover:bg-ink-100/40"
+                  : "bg-cream-50 hover:bg-[var(--surface-strong)] border-[var(--border)]"
               } ${isAiCatalog && !aiConfigured ? "opacity-50" : ""}`}
             >
               <input
@@ -159,9 +161,9 @@ export function AddonSettings() {
                 checked={enabled.includes(catalog)}
                 onChange={() => toggle(catalog)}
                 disabled={isAiCatalog && !aiConfigured}
-                className="h-4 w-4 rounded border-ink-300 bg-white text-claw-500 focus:ring-claw-500/30"
+                className="h-4 w-4 rounded bg-white text-claw-500 focus:ring-claw-500/30 border-[var(--border-strong)]"
               />
-              <span className="flex-1 text-sm font-medium text-ink-800">{CATALOG_LABELS[catalog] ?? catalog}</span>
+              <span className="flex-1 text-sm font-medium" style={{ color: "var(--text)" }}>{CATALOG_LABELS[catalog] ?? catalog}</span>
               {isAiCatalog && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-plum-500/80 px-1.5 py-0.5 text-2xs font-semibold text-white">
                   <Sparkles className="h-2.5 w-2.5" /> AI
@@ -172,28 +174,28 @@ export function AddonSettings() {
         })}
       </div>
       {available.some((c) => AI_CATALOGS.has(c)) && !aiConfigured && (
-        <p className="text-xs text-ink-600 italic">Configure AI Recommendations to enable the AI Picks catalogs.</p>
+        <p className="text-xs italic" style={{ color: "var(--text-mute)" }}>Configure AI Recommendations to enable the AI Picks catalogs.</p>
       )}
 
       {/* User lists */}
       {availableLists.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-ink-500 pt-1">My Lists</p>
-          <p className="text-xs text-ink-600">Each list adds separate Movies and Series catalogs to Stremio.</p>
+          <p className="text-xs font-semibold uppercase tracking-wider pt-1" style={{ color: "var(--text-mute)" }}>My Lists</p>
+          <p className="text-xs" style={{ color: "var(--text-mute)" }}>Each list adds separate Movies and Series catalogs to Stremio.</p>
           {availableLists.map((list) => {
             const catalogId = `list:${list.id}`;
             return (
               <label
                 key={list.id}
-                className="flex items-center gap-3 rounded-xl border border-ink-100 bg-cream-50 px-4 py-3 cursor-pointer transition-colors hover:bg-ink-100/40"
+                className="flex items-center gap-3 rounded-xl border bg-cream-50 px-4 py-3 cursor-pointer transition-colors hover:bg-[var(--surface-strong)] border-[var(--border)]"
               >
                 <input
                   type="checkbox"
                   checked={enabled.includes(catalogId)}
                   onChange={() => toggle(catalogId)}
-                  className="h-4 w-4 rounded border-ink-300 bg-white text-claw-500 focus:ring-claw-500/30"
+                  className="h-4 w-4 rounded bg-white text-claw-500 focus:ring-claw-500/30 border-[var(--border-strong)]"
                 />
-                <span className="text-sm font-medium text-ink-800">{list.name}</span>
+                <span className="text-sm font-medium" style={{ color: "var(--text)" }}>{list.name}</span>
               </label>
             );
           })}

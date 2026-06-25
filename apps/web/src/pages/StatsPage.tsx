@@ -147,14 +147,23 @@ export function StatsPage() {
               </span>
             )}
           </div>
-          <div className="flex items-end gap-1.5 sm:gap-2" style={{ height: "180px" }}>
-            {detailed.monthly.map((m) => {
+          <div
+            className="flex items-end gap-1.5 sm:gap-2"
+            style={{ height: "180px" }}
+            role="img"
+            aria-label={`Monthly activity chart for ${detailed.monthly
+              .map((m) => `${new Date(m.month + "-15").toLocaleDateString(undefined, { month: "long", year: "numeric" })}: ${m.movies} movies, ${m.episodes} episodes`)
+              .join("; ")}`}
+          >
+            {detailed.monthly.map((m, idx) => {
               const total = m.movies + m.episodes;
               const height = total > 0 ? Math.max((total / maxMonthlyTotal) * 100, 4) : 2;
               const movieHeight = total > 0 ? (m.movies / total) * height : 0;
               const episodeHeight = height - movieHeight;
               const label = new Date(m.month + "-15").toLocaleDateString(undefined, { month: "short" });
               const isHovered = hoveredMonth === m.month;
+              const isFirst = idx === 0;
+              const isLast = idx === detailed.monthly.length - 1;
               return (
                 <div
                   key={m.month}
@@ -162,10 +171,14 @@ export function StatsPage() {
                   onMouseEnter={() => setHoveredMonth(m.month)}
                   onMouseLeave={() => setHoveredMonth(null)}
                   onTouchStart={() => setHoveredMonth(m.month)}
+                  onTouchEnd={() => setHoveredMonth(null)}
+                  onTouchCancel={() => setHoveredMonth(null)}
                 >
                   {isHovered && (
                     <div
-                      className="absolute bottom-full z-10 mb-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-2xs shadow-lg"
+                      className={`absolute bottom-full z-10 mb-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-2xs shadow-lg ${
+                        isFirst ? "left-0" : isLast ? "right-0" : "left-1/2 -translate-x-1/2"
+                      }`}
                       style={{ border: "1px solid var(--border)", background: "var(--bg-2)" }}
                     >
                       <p className="font-semibold" style={{ color: "var(--bg-0)" }}>
@@ -190,7 +203,10 @@ export function StatsPage() {
                       />
                     )}
                     {total === 0 && (
-                      <div className="w-full rounded" style={{ height: "2%", background: "var(--surface-strong)" }} />
+                      <div
+                        className="w-full rounded border border-dashed"
+                        style={{ height: "4%", background: "var(--surface-strong)", borderColor: "var(--border-strong)" }}
+                      />
                     )}
                   </div>
                   <span className="text-2xs" style={{ color: "var(--text-mute)" }}>{label}</span>

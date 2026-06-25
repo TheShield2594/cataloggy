@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BarChart3, Clapperboard, Film, List, Search, Settings, Tv } from "lucide-react";
-import { api, SearchResult } from "../api";
+import { api, CatalogList, SearchResult } from "../api";
 import { Poster } from "./Poster";
+import { DetailPanel, useDetailPanel } from "./MediaDetailPanel";
 import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useToast } from "../hooks/useToast";
 
 type Action = {
   id: string;
@@ -42,7 +44,16 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [lists, setLists] = useState<CatalogList[]>([]);
   const dialogRef = useFocusTrap<HTMLDivElement>(open);
+  const { showToast } = useToast();
+  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
+  const listMap = new Map(lists.map((l) => [l.id, l]));
+
+  useEffect(() => {
+    if (!open) return;
+    void api.getLists().then(({ lists: loaded }) => setLists(loaded)).catch(() => {});
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -93,6 +104,10 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     navigate(`/search?q=${encodeURIComponent(q)}`);
   }, [navigate, onClose]);
 
+  const openDetail = useCallback((r: SearchResult) => {
+    setSelectedItem(r);
+  }, [setSelectedItem]);
+
   const actions: Action[] = [
     { id: "nav-dashboard", label: "Go to Dashboard", icon: Clapperboard, run: () => { onClose(); navigate("/"); } },
     { id: "nav-search", label: "Go to Search", icon: Search, run: () => { onClose(); navigate("/search"); } },
@@ -118,7 +133,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       e.preventDefault();
       if (activeIndex < results.length) {
         const r = results[activeIndex];
-        if (r) goToSearch(r.name);
+        if (r) openDetail(r);
       } else {
         const action = visibleActions[activeIndex - results.length];
         if (action) action.run();
@@ -126,6 +141,22 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       }
     }
   };
+
+  if (!open && !selectedItem) return null;
+
+  if (selectedItem) {
+    return (
+      <DetailPanel
+        item={selectedItem}
+        history={panelHistory}
+        historyLoading={panelHistoryLoading}
+        listMap={listMap}
+        onClose={() => { setSelectedItem(null); onClose(); }}
+        onShowToast={showToast}
+        onHistoryChange={(events) => setPanelHistory(events)}
+      />
+    );
+  }
 
   if (!open) return null;
 
@@ -189,7 +220,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                 <button
                   key={r.imdbId}
                   type="button"
-                  onClick={() => goToSearch(r.name)}
+                  onClick={() => openDetail(r)}
                   onMouseEnter={() => setActiveIndex(i)}
                   className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors"
                   style={{ background: activeIndex === i ? "var(--surface-strong)" : "transparent" }}

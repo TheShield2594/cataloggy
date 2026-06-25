@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { BarChart3, Clapperboard, History, Pin, PinOff, Search, List, Settings } from "lucide-react";
 
@@ -11,24 +11,37 @@ const navItems = [
   { to: "/settings", label: "Settings", icon: Settings, end: false },
 ] as const;
 
-const PIN_KEY = "cataloggy:sidebar-pinned";
+export const PIN_KEY = "cataloggy:sidebar-pinned";
+const HOVER_DELAY_MS = 200;
 
-export function Sidebar() {
-  const [pinned, setPinned] = useState(() => localStorage.getItem(PIN_KEY) === "1");
+export function Sidebar({ pinned, onPinnedChange }: { pinned: boolean; onPinnedChange: (pinned: boolean) => void }) {
   const [hovered, setHovered] = useState(false);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const expanded = pinned || hovered;
+
+  useEffect(() => () => clearTimeout(hoverTimerRef.current), []);
+
+  const handleMouseEnter = () => {
+    clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => setHovered(true), HOVER_DELAY_MS);
+  };
+
+  const handleMouseLeave = () => {
+    clearTimeout(hoverTimerRef.current);
+    setHovered(false);
+  };
 
   const togglePin = () => {
     const next = !pinned;
-    setPinned(next);
+    onPinnedChange(next);
     localStorage.setItem(PIN_KEY, next ? "1" : "0");
   };
 
   return (
     <aside
       className="fixed inset-y-0 left-0 z-40 hidden sm:flex"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       <div
         className="flex h-full flex-col py-4 transition-[width] duration-200 ease-out overflow-hidden"
@@ -36,7 +49,7 @@ export function Sidebar() {
           width: expanded ? "15rem" : "4rem",
           background: "var(--bg-1)",
           borderRight: "1px solid var(--border)",
-          boxShadow: expanded ? "8px 0 24px rgba(0,0,0,0.12)" : "none",
+          boxShadow: expanded && !pinned ? "8px 0 24px rgba(0,0,0,0.12)" : "none",
         }}
       >
         <div className="flex items-center gap-2.5 px-4 pb-5">
