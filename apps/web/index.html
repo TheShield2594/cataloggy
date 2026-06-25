@@ -19,12 +19,12 @@
     <script>
       (function () {
         try {
+          // Keep in sync with THEMES in apps/web/src/hooks/useTheme.ts
+          var knownThemes = ["light", "dark", "glass", "midnight", "letterboxd"];
           var stored = localStorage.getItem("cataloggy:theme");
-          var theme = stored === "light" || stored === "dark"
-            ? stored
-            : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+          var theme = knownThemes.indexOf(stored) !== -1 ? stored : "light";
           document.documentElement.setAttribute("data-theme", theme);
-          document.documentElement.style.colorScheme = theme;
+          document.documentElement.style.colorScheme = theme === "light" ? "light" : "dark";
         } catch (e) {}
       })();
     </script>

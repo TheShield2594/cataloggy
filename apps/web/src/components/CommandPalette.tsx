@@ -141,7 +141,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="relative w-full max-w-lg overflow-hidden rounded-2xl shadow-feature"
+        className="glass-surface relative w-full max-w-lg overflow-hidden rounded-2xl shadow-feature"
         style={{ background: "var(--bg-0)", border: "1px solid var(--border-strong)" }}
         onClick={(e) => e.stopPropagation()}
       >

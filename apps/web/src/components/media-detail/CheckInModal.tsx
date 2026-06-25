@@ -50,37 +50,40 @@ export function CheckInModal({
         aria-modal="true"
         aria-labelledby="checkin-modal-title"
         tabIndex={-1}
-        className="w-full max-w-sm rounded-2xl border border-ink-100 bg-cream-50 shadow-md"
+        className="w-full max-w-sm rounded-2xl border shadow-md"
+        style={{ borderColor: "var(--border)", background: "var(--bg-0)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
+        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <div className="flex items-center gap-2">
             <Radio className="h-4 w-4 text-claw-600" />
-            <h3 id="checkin-modal-title" className="text-base font-bold text-ink-900">Check In</h3>
+            <h3 id="checkin-modal-title" className="text-base font-bold" style={{ color: "var(--text)" }}>Check In</h3>
           </div>
-          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-ink-500 hover:bg-ink-100 hover:text-ink-900">
+          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 hover:bg-[var(--surface-strong)]" style={{ color: "var(--text-mute)" }}>
             <X className="h-4 w-4" />
           </button>
         </div>
         <div className="px-5 py-4 space-y-4">
-          <p className="text-sm text-ink-600">Which episode of <span className="font-semibold text-ink-900">{seriesName}</span> are you watching?</p>
+          <p className="text-sm" style={{ color: "var(--text-dim)" }}>Which episode of <span className="font-semibold" style={{ color: "var(--text)" }}>{seriesName}</span> are you watching?</p>
           <div className="flex gap-3">
             <div className="flex-1">
-              <label htmlFor="checkin-season" className="mb-1.5 block text-xs font-medium text-ink-500">Season</label>
+              <label htmlFor="checkin-season" className="mb-1.5 block text-xs font-medium" style={{ color: "var(--text-mute)" }}>Season</label>
               <input
                 id="checkin-season"
                 type="number" min="1" value={season}
                 onChange={(e) => setSeason(e.target.value)}
-                className="w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                className="w-full rounded-xl border px-3 py-2.5 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                style={{ borderColor: "var(--border-strong)", background: "var(--surface)", color: "var(--text)" }}
               />
             </div>
             <div className="flex-1">
-              <label htmlFor="checkin-episode" className="mb-1.5 block text-xs font-medium text-ink-500">Episode</label>
+              <label htmlFor="checkin-episode" className="mb-1.5 block text-xs font-medium" style={{ color: "var(--text-mute)" }}>Episode</label>
               <input
                 id="checkin-episode"
                 type="number" min="1" value={episode}
                 onChange={(e) => setEpisode(e.target.value)}
-                className="w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm text-ink-900 focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                className="w-full rounded-xl border px-3 py-2.5 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                style={{ borderColor: "var(--border-strong)", background: "var(--surface)", color: "var(--text)" }}
               />
             </div>
           </div>
@@ -88,7 +91,8 @@ export function CheckInModal({
           <div className="flex gap-3 pt-1">
             <button
               type="button" onClick={onClose}
-              className="flex-1 rounded-xl bg-ink-100 px-4 py-2.5 text-sm font-medium text-ink-700 hover:bg-ink-200 transition-colors"
+              className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)]"
+              style={{ background: "var(--surface)", color: "var(--text-dim)" }}
             >
               Cancel
             </button>
