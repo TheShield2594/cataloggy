@@ -29,7 +29,7 @@ export function App() {
   const location = useLocation();
   const [needsSetup, setNeedsSetup] = useState(() => !runtimeConfig.getToken());
   const [needsProfile, setNeedsProfile] = useState(() => !runtimeConfig.getProfileId());
-  const { theme, toggleTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const { open: paletteOpen, setOpen: setPaletteOpen } = useCommandPalette();
 
   if (needsSetup) {
@@ -83,7 +83,7 @@ export function App() {
           </button>
 
           <div className="flex items-center gap-3">
-            <ThemeToggle theme={theme} onToggle={toggleTheme} />
+            <ThemeToggle theme={theme} onChange={setTheme} />
             <InstallButton />
           </div>
         </div>

@@ -43,12 +43,90 @@
   --accent-3: #34d399;
 }
 
+[data-theme="glass"] {
+  color-scheme: dark;
+  --poster-ratio: 2 / 3;
+
+  /* Apple TV-inspired frosted glass over a deep ambient backdrop */
+  --bg-0: #0b0d12;
+  --bg-1: #11141b;
+  --bg-2: #f5f6f8;
+  --surface: rgba(255,255,255,0.06);
+  --surface-strong: rgba(255,255,255,0.10);
+  --border: rgba(255,255,255,0.10);
+  --border-strong: rgba(255,255,255,0.20);
+  --text: #f5f6f8;
+  --text-dim: #b7bcc6;
+  --text-mute: #80869a;
+  --accent: #0a84ff;
+  --accent-2: #5e9eff;
+  --accent-3: #30d158;
+  --glass-blur: 24px;
+}
+
+[data-theme="midnight"] {
+  color-scheme: dark;
+  --poster-ratio: 2 / 3;
+
+  /* Midnight Cinema — near-black navy with a marquee-red accent */
+  --bg-0: #07080d;
+  --bg-1: #0e1018;
+  --bg-2: #f4f1ea;
+  --surface: rgba(244,241,234,0.04);
+  --surface-strong: rgba(244,241,234,0.08);
+  --border: rgba(244,241,234,0.08);
+  --border-strong: rgba(244,241,234,0.16);
+  --text: #f4f1ea;
+  --text-dim: #a3a6b8;
+  --text-mute: #6f7286;
+  --accent: #e02f44;
+  --accent-2: #ff5a6e;
+  --accent-3: #f0c419;
+}
+
+[data-theme="letterboxd"] {
+  color-scheme: dark;
+  --poster-ratio: 2 / 3;
+
+  /* Letterboxd-ish — charcoal canvas, signature orange/green/blue accents */
+  --bg-0: #14181c;
+  --bg-1: #1c2228;
+  --bg-2: #ffffff;
+  --surface: rgba(255,255,255,0.04);
+  --surface-strong: rgba(255,255,255,0.08);
+  --border: rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.16);
+  --text: #ffffff;
+  --text-dim: #9ab;
+  --text-mute: #678;
+  --accent: #ff8000;
+  --accent-2: #00e054;
+  --accent-3: #40bcf4;
+}
+
 body {
   @apply m-0 min-h-screen;
   background-color: var(--bg-0);
   color: var(--text);
   font-family: 'Outfit', Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   line-height: 1.5;
+}
+
+/* Ambient glow behind frosted surfaces — gives backdrop-filter: blur()
+   something colorful to actually blur, like tvOS's focus-light effect. */
+[data-theme="glass"] body {
+  background-image:
+    radial-gradient(60vw 60vh at 12% -5%, rgba(10,132,255,0.20), transparent 60%),
+    radial-gradient(50vw 50vh at 100% 20%, rgba(48,209,88,0.14), transparent 60%),
+    radial-gradient(45vw 45vh at 30% 110%, rgba(94,158,255,0.12), transparent 60%);
+  background-attachment: fixed;
+}
+
+[data-theme="glass"] .glass-surface,
+[data-theme="glass"] header {
+  background: rgba(17,20,27,0.55) !important;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 @layer base {
