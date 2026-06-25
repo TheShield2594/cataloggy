@@ -86,9 +86,9 @@ export function ThemeToggle({ theme, onChange }: { theme: Theme; onChange: (next
               key={t.id}
               ref={(el) => { itemRefs.current[i] = el; }}
               type="button"
-              role="menuitem"
+              role="menuitemradio"
               tabIndex={activeIndex === i ? 0 : -1}
-              aria-current={theme === t.id ? "true" : undefined}
+              aria-checked={theme === t.id}
               onClick={() => {
                 onChange(t.id);
                 closeAndFocusButton();
