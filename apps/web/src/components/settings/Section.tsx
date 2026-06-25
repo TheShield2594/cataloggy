@@ -33,6 +33,10 @@ export function Section({
   const panelId = `${id}-panel`;
 
   useEffect(() => {
+    if (contentRef.current) contentRef.current.inert = !open;
+  }, [open]);
+
+  useEffect(() => {
     if (!contentRef.current) return;
     if (open) {
       setHeight(contentRef.current.scrollHeight);

@@ -15,8 +15,20 @@ const SNOOZE_KEY = "cataloggy:install-snooze-until";
 const SNOOZE_DAYS = 14;
 
 function isSnoozed() {
-  const until = Number(localStorage.getItem(SNOOZE_KEY) ?? 0);
-  return Date.now() < until;
+  try {
+    const until = Number(localStorage.getItem(SNOOZE_KEY) ?? 0);
+    return Date.now() < until;
+  } catch {
+    return false;
+  }
+}
+
+function snoozeInstallPrompt() {
+  try {
+    localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_DAYS * 24 * 60 * 60 * 1000));
+  } catch {
+    // ignore storage errors (e.g. private browsing)
+  }
 }
 
 export function InstallButton() {
@@ -47,9 +59,14 @@ export function InstallButton() {
 
   const onInstall = async () => {
     if (deferredPrompt) {
-      await deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
-      setDeferredPrompt(null);
+      try {
+        await deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setDeferredPrompt(null);
+      }
       return;
     }
 
@@ -57,7 +74,7 @@ export function InstallButton() {
   };
 
   const onDismiss = () => {
-    localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_DAYS * 24 * 60 * 60 * 1000));
+    snoozeInstallPrompt();
     setSnoozed(true);
   };
 
