@@ -246,10 +246,13 @@ const fetchEnabledCatalogs = async (): Promise<string[] | null> => {
   }
 };
 
+// Stremio's UI only renders a filter dropdown for the "genre" extra, so
+// alphabetical sorting (which Stremio has no native concept of) is exposed
+// as pseudo-genre options alongside the real content genres.
+const SORT_OPTIONS = ["A-Z", "Z-A"];
+
 const buildManifest = (lists: CataloggyList[], genres: string[], enabledCatalogs: string[] | null) => {
-  const genreExtra = genres.length > 0
-    ? [{ name: "genre", options: genres, isRequired: false }]
-    : [];
+  const genreExtra = [{ name: "genre", options: [...SORT_OPTIONS, ...genres], isRequired: false }];
 
   const listCatalogs = lists.flatMap((list) => [
     {
@@ -372,6 +375,13 @@ const applyExtraFilters = (metas: StremioMetaPreview[], extraParams: Record<stri
   if (extraParams.search) {
     const query = extraParams.search.toLowerCase();
     filtered = filtered.filter((m) => m.name.toLowerCase().includes(query));
+  }
+
+  if (extraParams.genre === "A-Z") {
+    return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+  }
+  if (extraParams.genre === "Z-A") {
+    return [...filtered].sort((a, b) => b.name.localeCompare(a.name));
   }
 
   if (extraParams.genre) {
