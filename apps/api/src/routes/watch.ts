@@ -354,8 +354,11 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Params: { year: string } }>("/watch/stats/year/:year", async (request, reply) => {
     const profileId = request.profileId!;
+    if (!/^\d{4}$/.test(request.params.year)) {
+      return reply.code(400).send({ error: "year must be a valid 4-digit year" });
+    }
     const year = Number(request.params.year);
-    if (!Number.isInteger(year) || year < 1900 || year > 9999) {
+    if (year < 1900) {
       return reply.code(400).send({ error: "year must be a valid 4-digit year" });
     }
 

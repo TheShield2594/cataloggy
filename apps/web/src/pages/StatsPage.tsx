@@ -66,6 +66,7 @@ export function StatsPage() {
   useEffect(() => {
     let cancelled = false;
     setYearError(null);
+    setYearReview(null);
     api.getYearInReview(year)
       .then((data) => { if (!cancelled) setYearReview(data); })
       .catch((err) => { if (!cancelled) setYearError(err instanceof Error ? err.message : "Failed to load year in review"); });

@@ -125,6 +125,9 @@ export const toAbsoluteEpisodeNumbering = (
   const totalEpisodes = anime.episodes ?? 0;
   return {
     totalEpisodes,
-    absoluteEpisode: (n: number) => Math.min(Math.max(n, 1), totalEpisodes || n),
+    absoluteEpisode: (n: number) => {
+      const normalized = Math.max(n, 1);
+      return totalEpisodes > 0 ? Math.min(normalized, totalEpisodes) : normalized;
+    },
   };
 };
