@@ -2,8 +2,6 @@
 
 Cataloggy is your own personal Netflix-style home page for everything you watch. It pulls together what's on your watchlist, what you're currently binging, and what's trending, and gives you one clean dashboard instead of jumping between five different apps.
 
-![Cataloggy dashboard](docs/images/screenshot.png)
-
 Self-host it on your home server, open it on your phone or Apple TV, and keep track of your shows and movies the way you actually want to.
 
 ## Why you might like it
