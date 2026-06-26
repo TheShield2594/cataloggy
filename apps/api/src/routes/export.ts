@@ -27,6 +27,7 @@ interface ExportWatchEvent {
   episode: number | null;
   watchedAt: string;
   plays: number;
+  note?: string | null;
 }
 
 interface ExportSeriesProgress {
@@ -39,7 +40,10 @@ interface ExportSeriesProgress {
 interface ExportRating {
   imdbId: string;
   type: string;
+  season?: number;
+  episode?: number;
   rating: number;
+  note?: string | null;
   ratedAt: string;
 }
 
@@ -83,7 +87,10 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
     const ratings: ExportRating[] = ratingRows.map((row) => ({
       imdbId: row.imdbId,
       type: row.type,
+      season: row.type === "episode" ? row.season : undefined,
+      episode: row.type === "episode" ? row.episode : undefined,
       rating: row.rating,
+      note: row.note,
       ratedAt: row.ratedAt.toISOString(),
     }));
 
@@ -108,6 +115,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
         episode: event.episode,
         watchedAt: event.watchedAt.toISOString(),
         plays: event.plays,
+        note: event.note,
       })),
       seriesProgress: seriesProgress.map((sp) => ({
         seriesImdbId: sp.seriesImdbId,
@@ -207,6 +215,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
             episode,
             watchedAt,
             plays: isFiniteNumber(event.plays) ? event.plays : 1,
+            note: isString(event.note) ? event.note : null,
             profileId,
           },
         });
@@ -232,7 +241,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
     for (const rating of Array.isArray(body.ratings) ? body.ratings : []) {
       if (
         !isString(rating.imdbId) ||
-        (rating.type !== "movie" && rating.type !== "series") ||
+        (rating.type !== "movie" && rating.type !== "series" && rating.type !== "episode") ||
         !isFiniteNumber(rating.rating)
       ) {
         continue;
@@ -240,11 +249,14 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       const ratedAt = parseDate(rating.ratedAt) ?? new Date();
       const imdbId = rating.imdbId.trim();
       const type = rating.type as MetadataType;
+      const season = type === "episode" && isFiniteNumber(rating.season) ? rating.season : 0;
+      const episode = type === "episode" && isFiniteNumber(rating.episode) ? rating.episode : 0;
+      const note = isString(rating.note) ? rating.note : null;
 
       await prisma.rating.upsert({
-        where: { profileId_type_imdbId: { profileId, type, imdbId } },
-        create: { profileId, type, imdbId, rating: rating.rating, ratedAt },
-        update: { rating: rating.rating, ratedAt },
+        where: { profileId_type_imdbId_season_episode: { profileId, type, imdbId, season, episode } },
+        create: { profileId, type, imdbId, season, episode, rating: rating.rating, ratedAt, note },
+        update: { rating: rating.rating, ratedAt, note },
       });
       summary.ratings += 1;
     }
@@ -336,7 +348,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
   });
 };
 
-function parseCsv(input: string): string[][] {
+export function parseCsv(input: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";

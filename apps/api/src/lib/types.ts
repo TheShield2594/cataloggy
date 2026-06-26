@@ -58,6 +58,7 @@ export type RecordWatchParams = {
   episode?: number | null;
   watchedAt: Date;
   dateUnknown?: boolean;
+  note?: string | null;
   source: string;
   request: FastifyRequest;
 };

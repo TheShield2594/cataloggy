@@ -664,4 +664,33 @@ export const api = {
       timeoutMs: 60000,
     });
   },
+  // Tags
+  getItemTags(type: "movie" | "series" | "episode", imdbId: string) {
+    return request<{ tags: { id: string; name: string; createdAt: string }[] }>(
+      `/tags?type=${type}&imdbId=${encodeURIComponent(imdbId)}`
+    );
+  },
+  assignTag(tagName: string, type: "movie" | "series" | "episode", imdbId: string) {
+    return request<{ tag: { id: string; name: string; createdAt: string } }>("/tags/assign", {
+      method: "POST",
+      body: JSON.stringify({ tagName, type, imdbId }),
+    });
+  },
+  removeTag(tagId: string, type: "movie" | "series" | "episode", imdbId: string) {
+    return request<void>("/tags/assign", {
+      method: "DELETE",
+      body: JSON.stringify({ tagId, type, imdbId }),
+    });
+  },
+  importExternal(format: "letterboxd-diary" | "letterboxd-ratings" | "imdb-ratings" | "simkl", csv: string) {
+    return request<{
+      status: string;
+      format: string;
+      summary: { imported: number; ratingsImported: number; skipped: number };
+    }>("/import/external", {
+      method: "POST",
+      body: JSON.stringify({ format, csv }),
+      timeoutMs: 120000,
+    });
+  },
 };

@@ -15,7 +15,8 @@ export type UpcomingEpisode = {
 export const getUpcomingEpisodes = async (
   profileId: string,
   daysAhead: number,
-  limit: number | null = 30
+  limit: number | null = 30,
+  spoilerProtection = false
 ): Promise<UpcomingEpisode[]> => {
   const progressRows = await prisma.seriesProgress.findMany({
     where: { profileId },
@@ -69,9 +70,9 @@ export const getUpcomingEpisodes = async (
           poster: meta.poster,
           season: ep.season_number,
           episode: ep.episode_number,
-          episodeName: ep.name,
+          episodeName: spoilerProtection ? `Episode ${ep.episode_number}` : ep.name,
           airDate: ep.air_date,
-          overview: ep.overview ?? null,
+          overview: spoilerProtection ? null : (ep.overview ?? null),
         }];
       })
     );

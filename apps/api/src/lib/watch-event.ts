@@ -6,7 +6,7 @@ import { syncWatchEventToTrakt } from "./trakt-client.js";
 import type { RecordWatchParams } from "./types.js";
 
 export const recordWatchEvent = async (params: RecordWatchParams) => {
-  const { type, imdbId, seriesImdbId, season, episode, watchedAt, dateUnknown, source, request: req } = params;
+  const { type, imdbId, seriesImdbId, season, episode, watchedAt, dateUnknown, note, source, request: req } = params;
   const profileId = req.profileId!;
 
   const dayStart = new Date(watchedAt);
@@ -32,7 +32,12 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
       if (existing) {
         const updated = await tx.watchEvent.update({
           where: { id: existing.id },
-          data: { plays: { increment: 1 }, watchedAt, dateUnknown: dateUnknown ?? false },
+          data: {
+            plays: { increment: 1 },
+            watchedAt,
+            dateUnknown: dateUnknown ?? false,
+            ...(note !== undefined ? { note } : {}),
+          },
         });
         req.log.info(
           { imdbId: resolvedSeriesImdbId, season, episode, plays: updated.plays },
@@ -50,6 +55,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
           episode: episode ?? null,
           watchedAt,
           dateUnknown: dateUnknown ?? false,
+          note: note ?? null,
           profileId,
         },
       });
@@ -96,14 +102,19 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
     if (existing) {
       const updated = await tx.watchEvent.update({
         where: { id: existing.id },
-        data: { plays: { increment: 1 }, watchedAt, dateUnknown: dateUnknown ?? false },
+        data: {
+          plays: { increment: 1 },
+          watchedAt,
+          dateUnknown: dateUnknown ?? false,
+          ...(note !== undefined ? { note } : {}),
+        },
       });
       req.log.info({ imdbId, plays: updated.plays }, `${source} scrobble: movie play incremented`);
       return { watchEvent: updated, wasCreated: false };
     }
 
     const created = await tx.watchEvent.create({
-      data: { type: "movie", imdbId, watchedAt, dateUnknown: dateUnknown ?? false, profileId },
+      data: { type: "movie", imdbId, watchedAt, dateUnknown: dateUnknown ?? false, note: note ?? null, profileId },
     });
     req.log.info({ imdbId }, `${source} scrobble: movie recorded`);
     return { watchEvent: created, wasCreated: true };

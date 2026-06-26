@@ -6,6 +6,7 @@ import { api, CatalogList, CheckIn, SearchResult, WatchEvent, WatchProviders } f
 import { WatchDateModal } from "./media-detail/WatchDateModal";
 import { CheckInModal } from "./media-detail/CheckInModal";
 import { ExternalRatings, StarRating } from "./media-detail/RatingsSection";
+import { TagsSection } from "./media-detail/TagsSection";
 import { CastSection, CastMember } from "./media-detail/CastSection";
 import { SeasonsSection, SeasonInfo } from "./media-detail/SeasonsSection";
 import { ProvidersSection } from "./media-detail/ProvidersSection";
@@ -310,6 +311,9 @@ export function DetailPanel({
 
           {/* User Rating */}
           <StarRating imdbId={item.imdbId} type={item.type} onError={(msg) => onShowToast(msg, "error")} />
+
+          {/* Tags */}
+          <TagsSection imdbId={item.imdbId} type={item.type} onError={(msg) => onShowToast(msg, "error")} />
 
           {/* Check-in / Now Watching */}
           <CheckInBlock
