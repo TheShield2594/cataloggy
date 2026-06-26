@@ -1,8 +1,29 @@
-# Cataloggy Monorepo
+# Cataloggy
+
+Cataloggy is your own personal Netflix-style home page for everything you watch. It pulls together what's on your watchlist, what you're currently binging, and what's trending, and gives you one clean dashboard instead of jumping between five different apps.
+
+Self-host it on your home server, open it on your phone or Apple TV, and keep track of your shows and movies the way you actually want to.
+
+## Why you might like it
+
+- **One home screen for everything** — continue watching, recently watched, and upcoming episodes, all in one place
+- **Works with the tools you already use** — pairs with Plex, Jellyfin, Trakt, and Stremio/Omni add-ons
+- **Yours, not the cloud's** — runs on your own hardware, your data stays on your network
+- **Phone and TV friendly** — installs as an app on your phone (PWA) and works great on Apple TV and Android TV
+
+## Getting Started
+
+The fastest way to try Cataloggy is with Docker Compose — see [Docker Compose install](#docker-compose-install-recommended) below. If you'd rather poke around the code first, jump to [Local development without Docker](#local-development-without-docker).
+
+---
+
+## For the technically curious
+
+The rest of this README covers setup, configuration, and the moving parts under the hood.
 
 Cataloggy is a Node.js monorepo set up with `pnpm` workspaces.
 
-## Structure
+### Structure
 
 ```text
 cataloggy/
@@ -15,7 +36,7 @@ cataloggy/
   README.md
 ```
 
-## Requirements
+### Requirements
 
 - Node.js 20+
 - pnpm 9+
