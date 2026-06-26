@@ -30,6 +30,7 @@ function toSearchResult(event: WatchEvent): SearchResult {
     genres: [],
     rating: null,
     inWatchlist: false,
+    inCollection: false,
     lists: [],
   };
 }
