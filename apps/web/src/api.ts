@@ -78,6 +78,7 @@ export type SearchResult = {
   genres: string[];
   rating: number | null;
   inWatchlist: boolean;
+  inCollection: boolean;
   lists: string[];
   // OMDB ratings — undefined = not yet fetched, null = fetched but unavailable
   imdbRating?: number | null;
@@ -105,7 +106,7 @@ export type ListItemWithMeta = ListItem & {
 export type CatalogList = {
   id: string;
   name: string;
-  kind: "watchlist" | "custom";
+  kind: "watchlist" | "custom" | "collection";
   itemCount: number;
 };
 
@@ -156,6 +157,17 @@ export type DetailedWatchStats = {
   currentStreak: number;
   longestStreak: number;
   topRated: { imdbId: string; name: string; type: string; rating: number | null; poster: string | null }[];
+};
+
+export type YearInReviewStats = {
+  year: number;
+  totalMovies: number;
+  totalEpisodes: number;
+  totalRuntimeMinutes: number;
+  topGenres: { genre: string; count: number }[];
+  topRated: { imdbId: string; name: string | null; type: string; rating: number; poster: string | null }[];
+  busiestMonth: number | null;
+  busiestMonthCount: number;
 };
 
 export type AddonConfig = {
@@ -257,7 +269,7 @@ export type ExportPayload = {
   profile: { name: string };
   lists: Array<{
     name: string;
-    kind: "watchlist" | "custom";
+    kind: "watchlist" | "custom" | "collection";
     items: Array<{ type: "movie" | "series"; imdbId: string; addedAt: string }>;
   }>;
   watchEvents: Array<{
@@ -459,6 +471,9 @@ export const api = {
   },
   getDetailedStats() {
     return request<DetailedWatchStats>("/watch/stats/detailed");
+  },
+  getYearInReview(year: number) {
+    return request<YearInReviewStats>(`/watch/stats/year/${year}`);
   },
   getAddonConfig() {
     return request<{ config: AddonConfig; availableCatalogs: string[]; availableLists: { id: string; name: string }[] }>("/addon/config");

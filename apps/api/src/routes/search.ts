@@ -57,15 +57,16 @@ const searchRoutes: FastifyPluginAsync = async (app) => {
       ]);
 
       const listInfoKey = (imdbId: string, mediaType: string) => `${mediaType}:${imdbId}`;
-      const listInfoByKey = new Map<string, { inWatchlist: boolean; lists: string[] }>();
+      const listInfoByKey = new Map<string, { inWatchlist: boolean; inCollection: boolean; lists: string[] }>();
       for (const item of listItems) {
         const key = listInfoKey(item.imdbId, item.type);
         let info = listInfoByKey.get(key);
         if (!info) {
-          info = { inWatchlist: false, lists: [] };
+          info = { inWatchlist: false, inCollection: false, lists: [] };
           listInfoByKey.set(key, info);
         }
         if (item.list.kind === ListKind.watchlist) info.inWatchlist = true;
+        if (item.list.kind === ListKind.collection) info.inCollection = true;
         info.lists.push(item.list.id);
       }
 
@@ -81,6 +82,7 @@ const searchRoutes: FastifyPluginAsync = async (app) => {
           genres: result.genres,
           rating: result.rating,
           inWatchlist: info?.inWatchlist ?? false,
+          inCollection: info?.inCollection ?? false,
           lists: info?.lists ?? [],
         };
       });

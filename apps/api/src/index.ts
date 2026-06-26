@@ -8,6 +8,7 @@ import { getAiRecommendations, isAiConfigured } from "./lib/ai.js";
 import { trendingCacheDeletePrefix } from "./lib/cache.js";
 import { pollTraktHistory, syncTraktWatchlist } from "./lib/trakt-client.js";
 import { ensureDefaultWatchlist } from "./lib/watchlist.js";
+import { ensureDefaultCollection } from "./lib/collection.js";
 import { getDefaultProfileId } from "./lib/profile.js";
 import { checkUpcomingEpisodesAndNotify } from "./lib/notify-episodes.js";
 import { cleanupStaleSessions, SCROBBLE_CLEANUP_INTERVAL_MS } from "./routes/scrobble.js";
@@ -130,6 +131,7 @@ const start = async () => {
   }
 
   await ensureDefaultWatchlist();
+  await ensureDefaultCollection();
 
   if (TRAKT_POLL_INTERVAL_SEC > 0) {
     setInterval(() => {

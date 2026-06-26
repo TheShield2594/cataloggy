@@ -27,6 +27,7 @@ function toSearchResult(item: ListItemWithMeta): SearchResult {
     genres: item.metadata?.genres ?? [],
     rating: item.metadata?.rating ?? null,
     inWatchlist: false,
+    inCollection: false,
     lists: [],
   };
 }
