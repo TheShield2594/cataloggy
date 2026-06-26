@@ -49,7 +49,7 @@ function AddonManifestUrl() {
         Copy this URL and paste it into Stremio under <strong style={{ color: "var(--text-dim)" }}>Add-ons &rarr; Install from URL</strong>.
       </p>
       <div className="flex items-center gap-2">
-        <code className="flex-1 overflow-x-auto rounded-lg border px-3 py-2 text-xs text-claw-600 select-all whitespace-nowrap scrollbar-hide" style={{ borderColor: "var(--border)", background: "var(--bg-0)" }}>
+        <code className="flex-1 overflow-x-auto rounded-lg border px-3 py-2 text-xs select-all whitespace-nowrap scrollbar-hide" style={{ borderColor: "var(--border)", background: "var(--bg-0)", color: "var(--text-dim)" }}>
           {manifestUrl}
         </code>
         <button
