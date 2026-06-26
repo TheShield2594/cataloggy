@@ -73,7 +73,7 @@ model Item {
 }
 
 // Partial unique indexes on kind = 'watchlist' (migration 20260617120000) and
-// kind = 'collection' (migration 20260626130000) enforce that at most one default
+// kind = 'collection' (migration 20260626130001) enforce that at most one default
 // watchlist and one default collection exist. Prisma's schema DSL has no syntax for
 // partial unique indexes, so they aren't declared here — don't let `prisma migrate dev`
 // generate a migration that drops them.
