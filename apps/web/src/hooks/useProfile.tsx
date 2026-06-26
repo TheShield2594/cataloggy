@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useCallback, useContext, useMemo, useState } from "react";
-import { Profile, runtimeConfig } from "../api";
+import { Profile, runtimeConfig, notifyServiceWorkerToInvalidateApiCache } from "../api";
 
 type ProfileContextValue = {
   profile: Profile | null;
@@ -25,6 +25,9 @@ export function ProfileProvider({
     runtimeConfig.setProfileId(next.id);
     setProfileState(next);
     setSwitcherOpen(false);
+    // Cached responses are keyed by profile id, but flush eagerly anyway so
+    // a stale entry from before this profile existed can't be served.
+    notifyServiceWorkerToInvalidateApiCache();
   }, []);
 
   const openSwitcher = useCallback(() => setSwitcherOpen(true), []);

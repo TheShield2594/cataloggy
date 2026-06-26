@@ -313,6 +313,10 @@ const authHeaders = (hasBody: boolean) => {
   return headers;
 };
 
+export function notifyServiceWorkerToInvalidateApiCache() {
+  navigator.serviceWorker?.controller?.postMessage({ type: "INVALIDATE_API_CACHE" });
+}
+
 async function request<T>(path: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const controller = new AbortController();
   const timeoutMs = init?.timeoutMs ?? 30000;
@@ -344,6 +348,11 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
   if (!response.ok) {
     const message = await response.text();
     throw new ApiError(message || `Request failed: ${response.status}`, response.status);
+  }
+
+  const method = (init?.method ?? "GET").toUpperCase();
+  if (method !== "GET") {
+    notifyServiceWorkerToInvalidateApiCache();
   }
 
   if (response.status === 204) {
