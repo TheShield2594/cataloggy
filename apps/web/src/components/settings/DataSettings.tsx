@@ -13,8 +13,16 @@ export function DataSettings() {
   const [importResult, setImportResult] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
+  const [externalFormat, setExternalFormat] = useState<
+    "letterboxd-diary" | "letterboxd-ratings" | "imdb-ratings" | "simkl"
+  >("letterboxd-diary");
+  const [importingExternal, setImportingExternal] = useState(false);
+  const [externalResult, setExternalResult] = useState<string | null>(null);
+  const [externalError, setExternalError] = useState<string | null>(null);
+
   const jsonFileInputRef = useRef<HTMLInputElement>(null);
   const csvFileInputRef = useRef<HTMLInputElement>(null);
+  const externalFileInputRef = useRef<HTMLInputElement>(null);
 
   const refreshAll = async () => {
     setSyncing(true);
@@ -80,6 +88,23 @@ export function DataSettings() {
       setImportError(err instanceof Error ? err.message : "CSV import failed");
     } finally {
       setImportingCsv(false);
+    }
+  };
+
+  const handleImportExternalFile = async (file: File) => {
+    setImportingExternal(true);
+    setExternalResult(null);
+    setExternalError(null);
+    try {
+      const csv = await file.text();
+      const res = await api.importExternal(externalFormat, csv);
+      setExternalResult(
+        `Imported ${res.summary.imported} watch events, ${res.summary.ratingsImported} ratings (${res.summary.skipped} rows skipped)`
+      );
+    } catch (err) {
+      setExternalError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImportingExternal(false);
     }
   };
 
@@ -167,6 +192,50 @@ export function DataSettings() {
         </div>
         {importResult && <p className="flex items-center gap-2 text-sm text-emerald-600"><Check size={16} /> {importResult}</p>}
         {importError && <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {importError}</p>}
+      </div>
+
+      <div className="space-y-4 pt-5" style={{ borderTop: "1px solid var(--border)" }}>
+        <div>
+          <p className="text-sm font-semibold" style={{ color: "var(--text-dim)" }}>Import from another tracker</p>
+          <p className="text-sm leading-relaxed" style={{ color: "var(--text-dim)" }}>
+            Migrate watch history and ratings from a Letterboxd, IMDb, or Simkl export.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={externalFormat}
+            onChange={(e) => setExternalFormat(e.target.value as typeof externalFormat)}
+            className="rounded-xl px-4 py-2.5 text-sm font-medium"
+            style={{ background: "var(--surface-strong)", border: "1px solid var(--border)", color: "var(--text)" }}
+          >
+            <option value="letterboxd-diary">Letterboxd diary export</option>
+            <option value="letterboxd-ratings">Letterboxd ratings export</option>
+            <option value="imdb-ratings">IMDb ratings export</option>
+            <option value="simkl">Simkl export</option>
+          </select>
+          <input
+            ref={externalFileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleImportExternalFile(file);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => externalFileInputRef.current?.click()}
+            disabled={importingExternal}
+            className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface)] disabled:opacity-60"
+            style={{ background: "var(--surface-strong)", border: "1px solid var(--border)", color: "var(--text-dim)" }}
+          >
+            {importingExternal ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : <><Upload size={16} /> Import CSV</>}
+          </button>
+        </div>
+        {externalResult && <p className="flex items-center gap-2 text-sm text-emerald-600"><Check size={16} /> {externalResult}</p>}
+        {externalError && <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {externalError}</p>}
       </div>
     </div>
   );

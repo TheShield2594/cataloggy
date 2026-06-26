@@ -31,6 +31,7 @@ enum WatchEventType {
 enum MetadataType {
   movie
   series
+  episode
 }
 
 enum ScrobbleStatus {
@@ -52,6 +53,7 @@ model Profile {
   scrobbleSessions  ScrobbleSession[]
   pushSubscriptions PushSubscription[]
   ratings           Rating[]
+  tags              Tag[]
   checkIn           CheckIn?
 }
 
@@ -108,6 +110,7 @@ model WatchEvent {
   watchedAt      DateTime       @db.Timestamptz(6)
   dateUnknown    Boolean        @default(false)
   plays          Int            @default(1)
+  note           String?        @db.Text
   traktHistoryId BigInt?        @unique
 
   profileId String  @db.Uuid
@@ -139,14 +142,17 @@ model KV {
 model Rating {
   imdbId    String
   type      MetadataType
+  season    Int          @default(0)
+  episode   Int          @default(0)
   rating    Float
+  note      String?      @db.Text
   ratedAt   DateTime     @db.Timestamptz(6)
   updatedAt DateTime     @updatedAt @db.Timestamptz(6)
 
   profileId String  @db.Uuid
   profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
-  @@id([profileId, type, imdbId])
+  @@id([profileId, type, imdbId, season, episode])
   @@index([profileId])
 }
 
@@ -218,6 +224,31 @@ model ScrobbleSession {
 
   @@index([imdbId, season, episode, status])
   @@index([profileId])
+}
+
+model Tag {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  items     ItemTag[]
+
+  profileId String  @db.Uuid
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, name])
+  @@index([profileId])
+}
+
+model ItemTag {
+  tagId     String   @db.Uuid
+  type      ItemType
+  imdbId    String
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+
+  tag Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([tagId, type, imdbId])
+  @@index([type, imdbId])
 }
 
 model Metadata {

@@ -24,6 +24,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
       episode?: unknown;
       watchedAt?: unknown;
       dateUnknown?: unknown;
+      note?: unknown;
     };
 
     if (!Object.values(WatchEventType).includes(body.type as WatchEventType)) {
@@ -75,6 +76,11 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     const episode = (body.episode as number | undefined) ?? null;
     const dateUnknown = body.dateUnknown === true;
 
+    if (body.note !== undefined && body.note !== null && typeof body.note !== "string") {
+      return reply.code(400).send({ error: "note must be a string when provided" });
+    }
+    const note = typeof body.note === "string" ? body.note.trim() || null : undefined;
+
     const { watchEvent, wasCreated } = await recordWatchEvent({
       type,
       imdbId,
@@ -83,11 +89,28 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
       episode,
       watchedAt,
       dateUnknown,
+      note,
       source: "manual",
       request,
     });
 
     return reply.code(wasCreated ? 201 : 200).send({ watchEvent: serializeWatchEvent(watchEvent) });
+  });
+
+  app.patch<{ Params: { eventId: string }; Body: unknown }>("/watch/:eventId", async (request, reply) => {
+    const { eventId } = request.params;
+    const profileId = request.profileId!;
+    const body = request.body as { note?: unknown } | null;
+    if (!body || (body.note !== null && typeof body.note !== "string")) {
+      return reply.code(400).send({ error: "note must be a string or null" });
+    }
+
+    const event = await prisma.watchEvent.findFirst({ where: { id: eventId, profileId } });
+    if (!event) return reply.code(404).send({ error: "Watch event not found" });
+
+    const note = typeof body.note === "string" ? body.note.trim() || null : null;
+    const updated = await prisma.watchEvent.update({ where: { id: eventId }, data: { note } });
+    return { watchEvent: serializeWatchEvent(updated) };
   });
 
   app.delete<{ Params: { eventId: string } }>("/watch/:eventId", async (request, reply) => {
