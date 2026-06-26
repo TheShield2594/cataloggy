@@ -7,6 +7,7 @@ import { getRpdbApiKey, withRpdbPoster } from "../lib/rpdb.js";
 import { getMetadataType } from "../lib/types.js";
 import { castCache, seasonsCache, watchProvidersCache } from "../lib/cache.js";
 import { getRegionSetting } from "../lib/settings.js";
+import { searchAnime } from "../lib/anilist-client.js";
 
 const metadataRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { type: string; imdbId: string } }>(
@@ -258,6 +259,21 @@ const metadataRoutes: FastifyPluginAsync = async (app) => {
     }
 
     return reply.send({ refreshed, total: allMetadata.length, limit });
+  });
+
+  app.get<{ Querystring: { q?: string } }>("/metadata/anime-search", async (request, reply) => {
+    const q = request.query.q?.trim();
+    if (!q) {
+      return reply.code(400).send({ error: "q is required" });
+    }
+
+    try {
+      const results = await searchAnime(q);
+      return { results };
+    } catch (error) {
+      request.log.error(error, "AniList search failed");
+      return reply.code(502).send({ error: "AniList search failed" });
+    }
   });
 
   app.get("/genres", async () => {
