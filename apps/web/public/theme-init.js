@@ -19,4 +19,7 @@
   document.documentElement.setAttribute("data-theme", theme);
   document.documentElement.style.colorScheme = theme === "light" ? "light" : "dark";
   document.documentElement.style.backgroundColor = themeBg[theme];
+
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", themeBg[theme]);
 })();
