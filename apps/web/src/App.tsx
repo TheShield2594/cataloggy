@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, Route, Routes, useLocation } from "react-router-dom";
-import { BarChart3, Clapperboard, History, Search, List, Settings, User } from "lucide-react";
+import { BarChart3, Clapperboard, History, Loader2, Search, List, Settings, User } from "lucide-react";
 import { api, Profile, runtimeConfig } from "./api";
 import { CommandPalette, useCommandPalette } from "./components/CommandPalette";
 import { InstallButton } from "./components/InstallButton";
@@ -10,14 +10,15 @@ import { useTheme } from "./hooks/useTheme";
 import { ToastProvider } from "./hooks/useToast";
 import { ProfileProvider, useProfile } from "./hooks/useProfile";
 import { DashboardPage } from "./pages/DashboardPage";
-import { HistoryPage } from "./pages/HistoryPage";
-import { ListsPage } from "./pages/ListsPage";
-import { NotFoundPage } from "./pages/NotFoundPage";
 import { ProfileSwitcher } from "./pages/ProfileSwitcher";
-import { SearchPage } from "./pages/SearchPage";
-import { SettingsPage } from "./pages/SettingsPage";
 import { SetupWizard } from "./pages/SetupWizard";
-import { StatsPage } from "./pages/StatsPage";
+
+const HistoryPage = lazy(() => import("./pages/HistoryPage").then((m) => ({ default: m.HistoryPage })));
+const ListsPage = lazy(() => import("./pages/ListsPage").then((m) => ({ default: m.ListsPage })));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })));
+const SearchPage = lazy(() => import("./pages/SearchPage").then((m) => ({ default: m.SearchPage })));
+const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
+const StatsPage = lazy(() => import("./pages/StatsPage").then((m) => ({ default: m.StatsPage })));
 
 const mobileNavItems = [
   { to: "/", label: "Dashboard", icon: Clapperboard, end: true },
@@ -187,22 +188,34 @@ function AppShell({
       </header>
 
       {/* Main content */}
-      <main className={`mx-auto max-w-[1400px] px-6 pb-24 pt-[76px] sm:pb-10 transition-[padding] duration-200 ${sidebarPad}`}>
-        <Routes key={profile?.id ?? runtimeConfig.getProfileId() ?? "default"}>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/search" element={<SearchPage />} />
-          <Route path="/lists/*" element={<ListsPage />} />
-          <Route path="/history" element={<HistoryPage />} />
-          <Route path="/stats" element={<StatsPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
+      <main className={`mx-auto max-w-[1400px] px-6 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[76px] sm:pb-10 transition-[padding] duration-200 ${sidebarPad}`}>
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center py-24" style={{ color: "var(--text-dim)" }}>
+              <Loader2 size={24} className="animate-spin" />
+            </div>
+          }
+        >
+          <Routes key={profile?.id ?? runtimeConfig.getProfileId() ?? "default"}>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/search" element={<SearchPage />} />
+            <Route path="/lists/*" element={<ListsPage />} />
+            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/stats" element={<StatsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </Suspense>
       </main>
 
       {/* Mobile bottom tab bar */}
       <nav
         className="fixed bottom-0 left-0 right-0 z-40 flex sm:hidden backdrop-blur-xl"
-        style={{ borderTop: "1px solid var(--border)", backgroundColor: "color-mix(in srgb, var(--bg-0) 96%, transparent)" }}
+        style={{
+          borderTop: "1px solid var(--border)",
+          backgroundColor: "color-mix(in srgb, var(--bg-0) 96%, transparent)",
+          paddingBottom: "env(safe-area-inset-bottom)"
+        }}
       >
         {mobileNavItems.map((item) => {
           const Icon = item.icon;
