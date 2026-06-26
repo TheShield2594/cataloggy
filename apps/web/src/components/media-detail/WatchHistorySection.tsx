@@ -47,7 +47,7 @@ export function WatchHistorySection({
             >
               <div className="h-10 w-7 shrink-0 overflow-hidden rounded-md" style={{ background: "var(--surface-strong)" }}>
                 {event.poster ? (
-                  <Poster src={event.poster} alt={event.name} className="h-full w-full" />
+                  <Poster src={event.poster} alt={event.name} className="h-full w-full" sizes="28px" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center">
                     {event.type === "episode" ? (

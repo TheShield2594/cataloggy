@@ -313,11 +313,21 @@ const authHeaders = (hasBody: boolean) => {
   return headers;
 };
 
-export function notifyServiceWorkerToInvalidateApiCache() {
-  navigator.serviceWorker?.controller?.postMessage({ type: "INVALIDATE_API_CACHE" });
+export function notifyServiceWorkerToInvalidateApiCache(): Promise<void> {
+  const sw = navigator.serviceWorker?.controller;
+  if (!sw) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => resolve();
+    sw.postMessage({ type: "INVALIDATE_API_CACHE" }, [channel.port2]);
+    // Don't block the caller forever if an old SW (pre-dating the ack) is in control.
+    setTimeout(resolve, 1000);
+  });
 }
 
 async function request<T>(path: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
   const controller = new AbortController();
   const timeoutMs = init?.timeoutMs ?? 30000;
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -328,31 +338,34 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
 
   let response: Response;
   try {
-    response = await fetch(`${runtimeConfig.getApiBase()}${path}`, {
-      ...init,
-      signal: controller.signal,
-      headers: {
-        ...authHeaders(init?.body != null),
-        ...(init?.headers ?? {})
+    try {
+      response = await fetch(`${runtimeConfig.getApiBase()}${path}`, {
+        ...init,
+        signal: controller.signal,
+        headers: {
+          ...authHeaders(init?.body != null),
+          ...(init?.headers ?? {})
+        }
+      });
+    } catch {
+      if (controller.signal.aborted) {
+        throw new Error(`Request timed out – is the API server running at ${runtimeConfig.getApiBase()}?`);
       }
-    });
-  } catch {
-    clearTimeout(timeoutId);
-    if (controller.signal.aborted) {
-      throw new Error(`Request timed out – is the API server running at ${runtimeConfig.getApiBase()}?`);
+      throw new Error(`Network error – cannot reach ${runtimeConfig.getApiBase()}. Check that the API server is running and the URL is correct.`);
     }
-    throw new Error(`Network error – cannot reach ${runtimeConfig.getApiBase()}. Check that the API server is running and the URL is correct.`);
+  } finally {
+    // Clear stale cache entries for attempted mutations even if the request
+    // itself failed or timed out below — a half-failed write can still have
+    // landed server-side, and we'd rather over-invalidate than serve stale data.
+    clearTimeout(timeoutId);
+    if (method !== "GET") {
+      await notifyServiceWorkerToInvalidateApiCache();
+    }
   }
-  clearTimeout(timeoutId);
 
   if (!response.ok) {
     const message = await response.text();
     throw new ApiError(message || `Request failed: ${response.status}`, response.status);
-  }
-
-  const method = (init?.method ?? "GET").toUpperCase();
-  if (method !== "GET") {
-    notifyServiceWorkerToInvalidateApiCache();
   }
 
   if (response.status === 204) {
