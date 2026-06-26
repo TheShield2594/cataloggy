@@ -351,6 +351,101 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
       })),
     };
   });
+
+  app.get<{ Params: { year: string } }>("/watch/stats/year/:year", async (request, reply) => {
+    const profileId = request.profileId!;
+    const year = Number(request.params.year);
+    if (!Number.isInteger(year) || year < 1900 || year > 9999) {
+      return reply.code(400).send({ error: "year must be a valid 4-digit year" });
+    }
+
+    const yearStart = new Date(Date.UTC(year, 0, 1));
+    const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
+
+    const [events, topRatings] = await Promise.all([
+      prisma.watchEvent.findMany({
+        where: { profileId, watchedAt: { gte: yearStart, lt: yearEnd } },
+        select: { type: true, imdbId: true, seriesImdbId: true, watchedAt: true, plays: true },
+      }),
+      prisma.rating.findMany({
+        where: { profileId, ratedAt: { gte: yearStart, lt: yearEnd }, type: { in: ["movie", "series"] } },
+        orderBy: { rating: "desc" },
+        take: 10,
+        select: { imdbId: true, type: true, rating: true },
+      }),
+    ]);
+
+    const totalMovies = events.filter((e) => e.type === "movie").reduce((sum, e) => sum + e.plays, 0);
+    const totalEpisodes = events.filter((e) => e.type === "episode").reduce((sum, e) => sum + e.plays, 0);
+
+    const movieImdbIds = events.filter((e) => e.type === "movie").map((e) => e.imdbId);
+    const seriesImdbIds = events
+      .filter((e) => e.type === "episode" && e.seriesImdbId)
+      .map((e) => e.seriesImdbId!);
+    const ratingImdbIds = topRatings.map((r) => r.imdbId);
+    const allMetadataIds = [...new Set([...movieImdbIds, ...seriesImdbIds, ...ratingImdbIds])];
+
+    const metadata =
+      allMetadataIds.length > 0
+        ? await prisma.metadata.findMany({
+            where: { imdbId: { in: allMetadataIds } },
+            select: { imdbId: true, name: true, type: true, poster: true, genres: true, runtime: true },
+          })
+        : [];
+    const metadataByImdbId = new Map(metadata.map((m) => [m.imdbId, m]));
+
+    let totalRuntimeMinutes = 0;
+    const genreCounts = new Map<string, number>();
+    for (const event of events) {
+      const lookupId = event.type === "episode" && event.seriesImdbId ? event.seriesImdbId : event.imdbId;
+      const meta = metadataByImdbId.get(lookupId);
+      if (!meta) continue;
+      if (meta.runtime) totalRuntimeMinutes += meta.runtime * event.plays;
+      for (const genre of meta.genres) {
+        genreCounts.set(genre, (genreCounts.get(genre) ?? 0) + event.plays);
+      }
+    }
+    const topGenres = [...genreCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([genre, count]) => ({ genre, count }));
+
+    const monthCounts = new Map<number, number>();
+    for (const event of events) {
+      const month = event.watchedAt.getUTCMonth();
+      monthCounts.set(month, (monthCounts.get(month) ?? 0) + event.plays);
+    }
+    let busiestMonth: number | null = null;
+    let busiestMonthCount = 0;
+    for (const [month, count] of monthCounts.entries()) {
+      if (count > busiestMonthCount) {
+        busiestMonth = month;
+        busiestMonthCount = count;
+      }
+    }
+
+    const topRated = topRatings.map((r) => {
+      const meta = metadataByImdbId.get(r.imdbId);
+      return {
+        imdbId: r.imdbId,
+        type: r.type,
+        name: meta?.name ?? null,
+        poster: meta?.poster ?? null,
+        rating: r.rating,
+      };
+    });
+
+    return {
+      year,
+      totalMovies,
+      totalEpisodes,
+      totalRuntimeMinutes,
+      topGenres,
+      topRated,
+      busiestMonth,
+      busiestMonthCount,
+    };
+  });
 };
 
 export default watchRoutes;
