@@ -279,7 +279,7 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
   // ─── Stremio Catalog Handler ───
 
   app.get<{ Params: { type: string; id: string }; Querystring: { skip?: string; profileId?: string } }>(
-    "/addon/stremio/:type/catalog/:id.json",
+    "/addon/stremio/catalog/:type/:id.json",
     { config: { rateLimit: PUBLIC_STREMIO_RATE_LIMIT } },
     async (request, reply) => {
       const { type: rawType, id: catalogId } = request.params;
