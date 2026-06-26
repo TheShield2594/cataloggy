@@ -130,5 +130,14 @@ describe("anilist-client", () => {
       expect(numbering.totalEpisodes).toBe(0);
       expect(numbering.absoluteEpisode(7)).toBe(7);
     });
+
+    it("clamps to 1 even when total episodes is unknown", async () => {
+      const { toAbsoluteEpisodeNumbering } = await import("./anilist-client.js");
+      const numbering = toAbsoluteEpisodeNumbering({
+        id: 1, title: "Test", episodes: null, coverImage: null, format: "TV",
+      });
+      expect(numbering.absoluteEpisode(0)).toBe(1);
+      expect(numbering.absoluteEpisode(-5)).toBe(1);
+    });
   });
 });

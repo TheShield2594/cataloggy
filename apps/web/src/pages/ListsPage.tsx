@@ -16,7 +16,7 @@ const SORT_LABELS: Record<SortOption, string> = {
   rating: "Rating",
 };
 
-function toSearchResult(item: ListItemWithMeta): SearchResult {
+function toSearchResult(item: ListItemWithMeta, list?: CatalogList): SearchResult {
   return {
     imdbId: item.imdbId,
     type: item.type,
@@ -26,9 +26,9 @@ function toSearchResult(item: ListItemWithMeta): SearchResult {
     description: null,
     genres: item.metadata?.genres ?? [],
     rating: item.metadata?.rating ?? null,
-    inWatchlist: false,
-    inCollection: false,
-    lists: [],
+    inWatchlist: list?.kind === "watchlist",
+    inCollection: list?.kind === "collection",
+    lists: list ? [list.id] : [],
   };
 }
 
@@ -553,7 +553,7 @@ export function ListsPage() {
                       {/* Poster */}
                       <button
                         type="button"
-                        onClick={() => setSelectedItem(toSearchResult(item))}
+                        onClick={() => setSelectedItem(toSearchResult(item, selectedList))}
                         className="card-lift relative block w-full overflow-hidden rounded-xl text-left ring-1"
                         style={{ aspectRatio: "2/3", backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border)" } as React.CSSProperties}
                         aria-label={`Open details for ${name}`}
