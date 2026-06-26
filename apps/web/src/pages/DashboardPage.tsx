@@ -138,7 +138,7 @@ function DiscoveryCard({ item, badge, reason, onSelect, eager }: {
         className="relative aspect-poster overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:scale-[1.03] group-hover:shadow-card-hover"
         style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
       >
-        <Poster src={item.poster} alt={item.name} className="h-full w-full" eager={eager} />
+        <Poster src={item.poster} alt={item.name} className="h-full w-full" eager={eager} sizes="176px" />
         {item.rating != null && item.rating > 0 && (
           <div
             className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm"
@@ -614,7 +614,7 @@ export function DashboardPage() {
                     className="relative aspect-poster overflow-hidden rounded-2xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
                     style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
                   >
-                    <Poster src={s.poster} alt={s.name} className="h-full w-full" eager={index < 5} />
+                    <Poster src={s.poster} alt={s.name} className="h-full w-full" eager={index < 5} sizes="208px" />
                     <button
                       type="button"
                       className="absolute inset-0 cursor-pointer"
@@ -818,7 +818,7 @@ export function DashboardPage() {
                   className="relative aspect-poster overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:scale-[1.03] group-hover:shadow-card-hover"
                   style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
                 >
-                  <Poster src={event.poster} alt={event.name} className="h-full w-full" />
+                  <Poster src={event.poster} alt={event.name} className="h-full w-full" sizes="176px" />
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent px-3 pb-3 pt-12">
                     {event.type === "episode" && event.season != null && event.episode != null ? (
                       <span className="inline-block rounded px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm" style={{ background: "var(--surface-strong)" }}>
@@ -892,7 +892,7 @@ export function DashboardPage() {
                     className="flex items-center gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 transition-all hover:border-[var(--border-strong)] hover:bg-[var(--surface-strong)]"
                   >
                     <div className="h-16 w-11 flex-none overflow-hidden rounded-lg" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
-                      <Poster src={entry.poster ?? undefined} alt={entry.seriesName} className="h-full w-full" />
+                      <Poster src={entry.poster ?? undefined} alt={entry.seriesName} className="h-full w-full" sizes="44px" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>

@@ -19,11 +19,14 @@ export function Poster({
   alt,
   className = "",
   eager = false,
+  sizes = "(min-width: 640px) 220px, 45vw",
 }: {
   src?: string;
   alt: string | null | undefined;
   className?: string;
   eager?: boolean;
+  /** `sizes` attribute matching this poster's actual rendered width, so the browser picks the right srcset entry. */
+  sizes?: string;
 }) {
   const [loadFailed, setLoadFailed] = useState(false);
 
@@ -45,7 +48,7 @@ export function Poster({
     <img
       src={src}
       srcSet={srcSet}
-      sizes={srcSet ? "(min-width: 640px) 220px, 45vw" : undefined}
+      sizes={srcSet ? sizes : undefined}
       alt={alt ?? "Poster"}
       className={`object-cover ${className}`}
       loading={eager ? "eager" : "lazy"}

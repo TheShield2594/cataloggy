@@ -27,7 +27,7 @@ export function ProfileProvider({
     setSwitcherOpen(false);
     // Cached responses are keyed by profile id, but flush eagerly anyway so
     // a stale entry from before this profile existed can't be served.
-    notifyServiceWorkerToInvalidateApiCache();
+    void notifyServiceWorkerToInvalidateApiCache();
   }, []);
 
   const openSwitcher = useCallback(() => setSwitcherOpen(true), []);

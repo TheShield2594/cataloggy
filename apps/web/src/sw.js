@@ -29,7 +29,7 @@ const CACHEABLE_API_PATH_RE = new RegExp(
       "lists(/.*)?",
       "meta(/.*)?",
       "calendar",
-      "streaming.*",
+      "streaming(/.*)?",
     ].join("|") +
     ")$"
 );
@@ -61,7 +61,15 @@ const scopedCacheKeyPlugin = {
 };
 
 registerRoute(
-  ({ url, request }) => request.method === "GET" && CACHEABLE_API_PATH_RE.test(url.pathname),
+  ({ url, request }) =>
+    request.method === "GET" &&
+    // Same-origin deployments can put the API under a path that collides
+    // with a frontend route (e.g. "/lists" is both an API endpoint and a
+    // React Router route) — only match actual fetch/XHR calls, never page
+    // navigations, or we'd cache HTML as if it were JSON.
+    request.mode !== "navigate" &&
+    request.destination === "" &&
+    CACHEABLE_API_PATH_RE.test(url.pathname),
   new StaleWhileRevalidate({
     cacheName: API_CACHE_NAME,
     plugins: [
@@ -79,7 +87,11 @@ registerRoute(
 // now-stale data, at the cost of a few extra refetches.
 self.addEventListener("message", (event) => {
   if (event.data?.type === "INVALIDATE_API_CACHE") {
-    event.waitUntil(caches.delete(API_CACHE_NAME));
+    const done = caches.delete(API_CACHE_NAME);
+    event.waitUntil(done);
+    // Ack on the reply port (if the caller sent one) so it can await
+    // completion instead of firing-and-forgetting the postMessage.
+    done.then(() => event.ports[0]?.postMessage({ done: true }));
   }
 });
 

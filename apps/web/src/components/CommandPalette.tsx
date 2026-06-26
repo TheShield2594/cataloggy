@@ -226,7 +226,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   style={{ background: activeIndex === i ? "var(--surface-strong)" : "transparent" }}
                 >
                   <div className="h-9 w-7 flex-none overflow-hidden rounded" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
-                    <Poster src={r.poster ?? undefined} alt={r.name} className="h-full w-full" />
+                    <Poster src={r.poster ?? undefined} alt={r.name} className="h-full w-full" sizes="28px" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>{r.name}</p>
