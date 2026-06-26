@@ -104,6 +104,13 @@
   --accent-3: #40bcf4;
 }
 
+html,
+body {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  max-width: 100%;
+}
+
 body {
   @apply m-0 min-h-screen;
   background-color: var(--bg-0);
