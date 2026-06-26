@@ -3,21 +3,35 @@ import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { resolveProfile } from "../lib/profile.js";
 
+const isValidType = (v: unknown): v is MetadataType => v === "movie" || v === "series" || v === "episode";
+
 const ratingsRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", resolveProfile);
 
   app.post<{ Body: unknown }>("/ratings", async (request, reply) => {
-    const body = request.body as { imdbId?: unknown; type?: unknown; rating?: unknown } | null;
+    const body = request.body as
+      | { imdbId?: unknown; type?: unknown; rating?: unknown; season?: unknown; episode?: unknown; note?: unknown }
+      | null;
     if (!body) return reply.code(400).send({ error: "Body is required" });
 
     const imdbId = typeof body.imdbId === "string" ? body.imdbId.trim() : "";
     if (!imdbId) return reply.code(400).send({ error: "imdbId is required" });
 
-    const rawType = typeof body.type === "string" ? body.type : "";
-    if (rawType !== "movie" && rawType !== "series") {
-      return reply.code(400).send({ error: "type must be one of: movie, series" });
+    if (!isValidType(body.type)) {
+      return reply.code(400).send({ error: "type must be one of: movie, series, episode" });
     }
-    const type = rawType as MetadataType;
+    const type = body.type;
+
+    if (type === "episode") {
+      if (!Number.isInteger(body.season) || (body.season as number) < 0) {
+        return reply.code(400).send({ error: "season must be a non-negative integer when type is episode" });
+      }
+      if (!Number.isInteger(body.episode) || (body.episode as number) < 0) {
+        return reply.code(400).send({ error: "episode must be a non-negative integer when type is episode" });
+      }
+    }
+    const season = type === "episode" ? (body.season as number) : 0;
+    const episode = type === "episode" ? (body.episode as number) : 0;
 
     const rating =
       typeof body.rating === "number" && Number.isFinite(body.rating) ? body.rating : null;
@@ -25,28 +39,37 @@ const ratingsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "rating must be a number between 1 and 10" });
     }
 
+    if (body.note !== undefined && body.note !== null && typeof body.note !== "string") {
+      return reply.code(400).send({ error: "note must be a string when provided" });
+    }
+    const note = typeof body.note === "string" ? body.note.trim() || null : undefined;
+
     const roundedRating = Math.round(rating * 10) / 10;
     const profileId = request.profileId!;
     const ratedAt = new Date();
     const row = await prisma.rating.upsert({
-      where: { profileId_type_imdbId: { profileId, type, imdbId } },
-      create: { profileId, type, imdbId, rating: roundedRating, ratedAt },
-      update: { rating: roundedRating, ratedAt },
+      where: { profileId_type_imdbId_season_episode: { profileId, type, imdbId, season, episode } },
+      create: { profileId, type, imdbId, season, episode, rating: roundedRating, ratedAt, note: note ?? null },
+      update: { rating: roundedRating, ratedAt, ...(note !== undefined ? { note } : {}) },
     });
 
     return reply.code(200).send({ rating: toRatingPayload(row) });
   });
 
-  app.get<{ Params: { type: string; imdbId: string } }>(
+  app.get<{ Params: { type: string; imdbId: string }; Querystring: { season?: string; episode?: string } }>(
     "/ratings/:type/:imdbId",
     async (request, reply) => {
       const { type, imdbId } = request.params;
-      if (type !== "movie" && type !== "series") {
-        return reply.code(400).send({ error: "type must be one of: movie, series" });
+      if (!isValidType(type)) {
+        return reply.code(400).send({ error: "type must be one of: movie, series, episode" });
       }
+      const season = type === "episode" ? Number(request.query.season) || 0 : 0;
+      const episode = type === "episode" ? Number(request.query.episode) || 0 : 0;
 
       const row = await prisma.rating.findUnique({
-        where: { profileId_type_imdbId: { profileId: request.profileId!, type, imdbId } },
+        where: {
+          profileId_type_imdbId_season_episode: { profileId: request.profileId!, type, imdbId, season, episode },
+        },
       });
       if (!row) return reply.code(404).send({ error: "No rating found" });
 
@@ -54,17 +77,21 @@ const ratingsRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
-  app.delete<{ Params: { type: string; imdbId: string } }>(
+  app.delete<{ Params: { type: string; imdbId: string }; Querystring: { season?: string; episode?: string } }>(
     "/ratings/:type/:imdbId",
     async (request, reply) => {
       const { type, imdbId } = request.params;
-      if (type !== "movie" && type !== "series") {
-        return reply.code(400).send({ error: "type must be one of: movie, series" });
+      if (!isValidType(type)) {
+        return reply.code(400).send({ error: "type must be one of: movie, series, episode" });
       }
+      const season = type === "episode" ? Number(request.query.season) || 0 : 0;
+      const episode = type === "episode" ? Number(request.query.episode) || 0 : 0;
 
       try {
         await prisma.rating.delete({
-          where: { profileId_type_imdbId: { profileId: request.profileId!, type, imdbId } },
+          where: {
+            profileId_type_imdbId_season_episode: { profileId: request.profileId!, type, imdbId, season, episode },
+          },
         });
       } catch { /* not found is fine */ }
 
@@ -74,8 +101,8 @@ const ratingsRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Querystring: { type?: string; limit?: string } }>("/ratings", async (request, reply) => {
     const typeFilter = request.query.type;
-    if (typeFilter && typeFilter !== "movie" && typeFilter !== "series") {
-      return reply.code(400).send({ error: "type must be one of: movie, series" });
+    if (typeFilter && !isValidType(typeFilter)) {
+      return reply.code(400).send({ error: "type must be one of: movie, series, episode" });
     }
     const limit = Math.min(Math.max(Number(request.query.limit) || 50, 1), 200);
 
@@ -92,10 +119,21 @@ const ratingsRoutes: FastifyPluginAsync = async (app) => {
   });
 };
 
-const toRatingPayload = (row: { imdbId: string; type: MetadataType; rating: number; ratedAt: Date }) => ({
+const toRatingPayload = (row: {
+  imdbId: string;
+  type: MetadataType;
+  season: number;
+  episode: number;
+  rating: number;
+  note: string | null;
+  ratedAt: Date;
+}) => ({
   imdbId: row.imdbId,
   type: row.type,
+  season: row.type === "episode" ? row.season : undefined,
+  episode: row.type === "episode" ? row.episode : undefined,
   rating: row.rating,
+  note: row.note,
   ratedAt: row.ratedAt.toISOString(),
 });
 
