@@ -287,6 +287,7 @@ export function DashboardPage() {
     genres: opts?.genres ?? [],
     rating: opts?.rating ?? null,
     inWatchlist: false,
+    inCollection: false,
     lists: [],
   }), []);
 

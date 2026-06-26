@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, Award, BarChart3, Film, Flame, Minus, Star, Trophy, TrendingDown, TrendingUp } from "lucide-react";
-import { api, DetailedWatchStats, WatchStats } from "../api";
+import { AlertCircle, Award, BarChart3, Calendar, Clock, Film, Flame, Minus, Star, Trophy, TrendingDown, TrendingUp } from "lucide-react";
+import { api, DetailedWatchStats, WatchStats, YearInReviewStats } from "../api";
 import { TicketTile } from "../components/TicketTile";
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
 
 type Milestone = { label: string; threshold: number; icon: typeof Film };
 
@@ -37,6 +42,9 @@ export function StatsPage() {
   const [stats, setStats] = useState<WatchStats | null>(null);
   const [detailed, setDetailed] = useState<DetailedWatchStats | null>(null);
   const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
+  const [year, setYear] = useState(() => new Date().getFullYear() - 1);
+  const [yearReview, setYearReview] = useState<YearInReviewStats | null>(null);
+  const [yearError, setYearError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -54,6 +62,16 @@ export function StatsPage() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setYearError(null);
+    setYearReview(null);
+    api.getYearInReview(year)
+      .then((data) => { if (!cancelled) setYearReview(data); })
+      .catch((err) => { if (!cancelled) setYearError(err instanceof Error ? err.message : "Failed to load year in review"); });
+    return () => { cancelled = true; };
+  }, [year]);
 
   if (error) {
     return (
@@ -283,6 +301,84 @@ export function StatsPage() {
           </div>
         </section>
       )}
+
+      {/* Year in Review */}
+      <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h3 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Year in Review</h3>
+          <select
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className="rounded-lg px-3 py-1.5 text-sm"
+            style={{ border: "1px solid var(--border)", background: "var(--surface-strong)", color: "var(--text)" }}
+          >
+            {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
+
+        {yearError && <p className="text-sm text-rose-500">{yearError}</p>}
+
+        {!yearError && yearReview && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <TicketTile icon={Film} label="Movies Watched" value={yearReview.totalMovies} />
+              <TicketTile icon={BarChart3} label="Episodes Watched" value={yearReview.totalEpisodes} />
+              <TicketTile icon={Clock} label="Hours Watched" value={Math.round(yearReview.totalRuntimeMinutes / 60)} />
+              <TicketTile icon={Calendar} label="Busiest Month" value={yearReview.busiestMonth !== null ? MONTH_NAMES[yearReview.busiestMonth] : "—"} />
+            </div>
+
+            {yearReview.topGenres.length > 0 && (
+              <div>
+                <h4 className="mb-2 text-sm font-semibold" style={{ color: "var(--text-dim)" }}>Top Genres</h4>
+                <div className="flex flex-wrap gap-2">
+                  {yearReview.topGenres.map((g) => (
+                    <span
+                      key={g.genre}
+                      className="rounded-full px-3 py-1 text-xs"
+                      style={{ border: "1px solid var(--border)", background: "var(--surface-strong)", color: "var(--text-dim)" }}
+                    >
+                      {g.genre} <span style={{ color: "var(--text-mute)" }}>{g.count}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {yearReview.topRated.length > 0 && (
+              <div>
+                <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-dim)" }}>
+                  <Star className="h-4 w-4 text-amber-400" /> Top Rated Picks
+                </h4>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+                  {yearReview.topRated.map((item) => (
+                    <div key={item.imdbId} className="group">
+                      <div
+                        className="relative overflow-hidden rounded-xl transition-transform duration-300 group-hover:scale-[1.03]"
+                        style={{ aspectRatio: "2/3", boxShadow: "inset 0 0 0 1px var(--border)" }}
+                      >
+                        {item.poster ? (
+                          <img src={item.poster} alt={item.name ?? ""} className="h-full w-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center" style={{ background: "var(--surface-strong)" }}>
+                            <Film className="h-8 w-8" style={{ color: "var(--text-mute)" }} />
+                          </div>
+                        )}
+                        <div className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
+                          <span className="text-2xs font-bold tabular-nums text-amber-400">{item.rating.toFixed(1)}</span>
+                        </div>
+                      </div>
+                      <p className="mt-1.5 truncate text-sm font-medium" style={{ color: "var(--text)" }}>{item.name ?? item.imdbId}</p>
+                      <p className="text-2xs capitalize" style={{ color: "var(--text-mute)" }}>{item.type}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

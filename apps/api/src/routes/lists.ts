@@ -20,7 +20,7 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     if (!Object.values(ListKind).includes(body.kind as ListKind)) {
-      return reply.code(400).send({ error: "kind must be one of: watchlist, custom" });
+      return reply.code(400).send({ error: "kind must be one of: watchlist, custom, collection" });
     }
 
     const list = await prisma.list.create({
