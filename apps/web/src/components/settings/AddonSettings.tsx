@@ -43,13 +43,13 @@ function AddonManifestUrl() {
   };
 
   return (
-    <div className="rounded-xl border bg-cream-100 p-4 space-y-3" style={{ borderColor: "var(--border)" }}>
+    <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
       <p className="text-sm font-medium" style={{ color: "var(--text-dim)" }}>Manifest URL</p>
       <p className="text-xs leading-relaxed" style={{ color: "var(--text-mute)" }}>
         Copy this URL and paste it into Stremio under <strong style={{ color: "var(--text-dim)" }}>Add-ons &rarr; Install from URL</strong>.
       </p>
       <div className="flex items-center gap-2">
-        <code className="flex-1 overflow-x-auto rounded-lg bg-white border px-3 py-2 text-xs text-claw-600 select-all whitespace-nowrap scrollbar-hide" style={{ borderColor: "var(--border)" }}>
+        <code className="flex-1 overflow-x-auto rounded-lg border px-3 py-2 text-xs select-all whitespace-nowrap scrollbar-hide" style={{ borderColor: "var(--border)", background: "var(--bg-0)", color: "var(--text-dim)" }}>
           {manifestUrl}
         </code>
         <button
@@ -60,9 +60,9 @@ function AddonManifestUrl() {
               ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/20"
               : copyError
                 ? "bg-rose-500/15 text-rose-600 ring-1 ring-rose-500/20"
-                : "bg-white hover:bg-[var(--surface-strong)] border"
+                : "hover:bg-[var(--surface-strong)] border"
           }`}
-          style={!copied && !copyError ? { color: "var(--text-dim)", borderColor: "var(--border)" } : undefined}
+          style={!copied && !copyError ? { color: "var(--text-dim)", borderColor: "var(--border)", background: "var(--bg-0)" } : undefined}
           aria-label="Copy manifest URL"
         >
           {copied ? <><Check size={13} /> Copied</> : copyError ? <>Failed</> : <><Copy size={13} /> Copy</>}
@@ -71,8 +71,8 @@ function AddonManifestUrl() {
           href={manifestUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-none inline-flex items-center gap-1.5 rounded-lg bg-white border px-3 py-2 text-xs font-semibold hover:bg-[var(--surface-strong)] transition-colors"
-          style={{ color: "var(--text-dim)", borderColor: "var(--border)" }}
+          className="flex-none inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold hover:bg-[var(--surface-strong)] transition-colors"
+          style={{ color: "var(--text-dim)", borderColor: "var(--border)", background: "var(--bg-0)" }}
           aria-label="Open manifest URL"
         >
           <ExternalLink size={13} />
@@ -153,15 +153,17 @@ export function AddonSettings() {
               className={`flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-colors ${
                 isAiCatalog
                   ? "border-plum-500/30 bg-plum-500/5 hover:bg-plum-500/10"
-                  : "bg-cream-50 hover:bg-[var(--surface-strong)] border-[var(--border)]"
+                  : "hover:bg-[var(--surface-strong)] border-[var(--border)]"
               } ${isAiCatalog && !aiConfigured ? "opacity-50" : ""}`}
+              style={isAiCatalog ? undefined : { background: "var(--surface)" }}
             >
               <input
                 type="checkbox"
                 checked={enabled.includes(catalog)}
                 onChange={() => toggle(catalog)}
                 disabled={isAiCatalog && !aiConfigured}
-                className="h-4 w-4 rounded bg-white text-claw-500 focus:ring-claw-500/30 border-[var(--border-strong)]"
+                className="h-4 w-4 rounded text-claw-500 focus:ring-claw-500/30 border-[var(--border-strong)]"
+                style={{ background: "var(--bg-0)" }}
               />
               <span className="flex-1 text-sm font-medium" style={{ color: "var(--text)" }}>{CATALOG_LABELS[catalog] ?? catalog}</span>
               {isAiCatalog && (
@@ -187,13 +189,15 @@ export function AddonSettings() {
             return (
               <label
                 key={list.id}
-                className="flex items-center gap-3 rounded-xl border bg-cream-50 px-4 py-3 cursor-pointer transition-colors hover:bg-[var(--surface-strong)] border-[var(--border)]"
+                className="flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-colors hover:bg-[var(--surface-strong)] border-[var(--border)]"
+                style={{ background: "var(--surface)" }}
               >
                 <input
                   type="checkbox"
                   checked={enabled.includes(catalogId)}
                   onChange={() => toggle(catalogId)}
-                  className="h-4 w-4 rounded bg-white text-claw-500 focus:ring-claw-500/30 border-[var(--border-strong)]"
+                  className="h-4 w-4 rounded text-claw-500 focus:ring-claw-500/30 border-[var(--border-strong)]"
+                  style={{ background: "var(--bg-0)" }}
                 />
                 <span className="text-sm font-medium" style={{ color: "var(--text)" }}>{list.name}</span>
               </label>
