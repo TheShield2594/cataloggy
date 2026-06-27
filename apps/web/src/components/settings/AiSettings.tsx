@@ -211,7 +211,9 @@ export function AiSettings() {
       setTestStatus(res.success ? "ok" : "error");
       setTestMessage(
         res.success
-          ? `Connected. Model replied: "${res.response}"`
+          ? res.response?.trim()
+            ? `Connected. Model replied: "${res.response.trim()}"`
+            : "Connected."
           : res.error ?? "Test failed",
       );
     } catch (err) {
