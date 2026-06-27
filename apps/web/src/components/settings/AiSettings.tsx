@@ -208,8 +208,12 @@ export function AiSettings() {
     setTestMessage(null);
     try {
       const res = await api.testAiConfig(config);
-      setTestStatus(res.ok ? "ok" : "error");
-      setTestMessage(res.message);
+      setTestStatus(res.success ? "ok" : "error");
+      setTestMessage(
+        res.success
+          ? `Connected. Model replied: "${res.response}"`
+          : res.error ?? "Test failed",
+      );
     } catch (err) {
       setTestStatus("error");
       setTestMessage(err instanceof Error ? err.message : "Test failed");
