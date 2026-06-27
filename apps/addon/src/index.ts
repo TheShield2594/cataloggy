@@ -369,6 +369,9 @@ const parseExtra = (extra: string): Record<string, string> => {
   return params;
 };
 
+const compareNames = (a: StremioMetaPreview, b: StremioMetaPreview): number =>
+  a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+
 const applyExtraFilters = (metas: StremioMetaPreview[], extraParams: Record<string, string>): StremioMetaPreview[] => {
   let filtered = metas;
 
@@ -378,10 +381,10 @@ const applyExtraFilters = (metas: StremioMetaPreview[], extraParams: Record<stri
   }
 
   if (extraParams.genre === "A-Z") {
-    return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+    return [...filtered].sort(compareNames);
   }
   if (extraParams.genre === "Z-A") {
-    return [...filtered].sort((a, b) => b.name.localeCompare(a.name));
+    return [...filtered].sort((a, b) => compareNames(b, a));
   }
 
   if (extraParams.genre) {
@@ -411,7 +414,8 @@ const handleCatalog = async (type: string, id: string, extra?: string) => {
   if (!parsed || type !== parsed.catalogType) return { metas: [] };
 
   const [items, rpdb] = await Promise.all([fetchListItems(parsed.listId), fetchRpdbConfig()]);
-  let metas = itemsToMetas(items, type);
+  // Default to alphabetical order; Z-A/genre extras (if selected) override below.
+  let metas = itemsToMetas(items, type).sort(compareNames);
   if (extra) {
     metas = applyExtraFilters(metas, parseExtra(extra));
   }
