@@ -633,13 +633,13 @@ export const api = {
     return request<{ configured: boolean }>("/ai/config", { method: "DELETE" });
   },
   testAiConfig(config: Record<string, unknown>) {
-    return request<{ ok: boolean; message: string }>("/ai/test", {
+    return request<{ success: boolean; response?: string; error?: string }>("/ai/test", {
       method: "POST",
       body: JSON.stringify({ config }),
     });
   },
   refreshAiRecs() {
-    return request<{ movie: number; series: number }>("/recommendations/ai/refresh", { method: "POST", timeoutMs: 60000 });
+    return request<{ refreshed: boolean }>("/recommendations/ai/refresh", { method: "POST", timeoutMs: 60000 });
   },
   getAiRecommendations(type: MediaType, limit = 20) {
     return request<{ metas: TrendingMeta[]; reasons?: Record<string, string> }>(`/recommendations/ai?type=${type}&limit=${limit}`);
