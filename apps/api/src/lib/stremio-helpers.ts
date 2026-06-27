@@ -43,21 +43,23 @@ export const buildMetasFromIds = async (
   });
 };
 
+const sortMetasByName = <T extends { name: string }>(metas: T[]): T[] =>
+  [...metas].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+
 export const getWatchlistMetas = async (type: StremioMetaType, limit: number, profileId: string) => {
   const watchlist = await getDefaultWatchlist(profileId);
   const listItemType = type === "movie" ? ListItemType.movie : ListItemType.series;
 
   const watchlistItems = await prisma.listItem.findMany({
     where: { listId: watchlist.id, type: listItemType },
-    orderBy: { addedAt: "desc" },
-    take: limit,
     select: { imdbId: true },
   });
 
-  return buildMetasFromIds(
+  const metas = await buildMetasFromIds(
     watchlistItems.map((item) => item.imdbId),
     type
   );
+  return sortMetasByName(metas).slice(0, limit);
 };
 
 export const getRecentMetas = async (type: StremioMetaType, limit: number, profileId: string) => {
@@ -129,13 +131,12 @@ export const getCustomListMetas = async (
   const listItemType = type === "movie" ? ListItemType.movie : ListItemType.series;
   const listItems = await prisma.listItem.findMany({
     where: { listId, type: listItemType },
-    orderBy: { addedAt: "desc" },
-    take: limit,
     select: { imdbId: true },
   });
 
-  return buildMetasFromIds(
+  const metas = await buildMetasFromIds(
     listItems.map((item) => item.imdbId),
     type
   );
+  return sortMetasByName(metas).slice(0, limit);
 };

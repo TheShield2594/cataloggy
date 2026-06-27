@@ -206,7 +206,7 @@ export function ListsPage() {
   const [deletingListId, setDeletingListId] = useState<string | null>(null);
   const [renamingListId, setRenamingListId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [sortBy, setSortBy] = useState<SortOption>("added");
+  const [sortBy, setSortBy] = useState<SortOption>("name");
   const [filterQuery, setFilterQuery] = useState("");
   const { showToast } = useToast();
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();

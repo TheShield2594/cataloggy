@@ -411,7 +411,8 @@ const handleCatalog = async (type: string, id: string, extra?: string) => {
   if (!parsed || type !== parsed.catalogType) return { metas: [] };
 
   const [items, rpdb] = await Promise.all([fetchListItems(parsed.listId), fetchRpdbConfig()]);
-  let metas = itemsToMetas(items, type);
+  // Default to alphabetical order; Z-A/genre extras (if selected) override below.
+  let metas = itemsToMetas(items, type).sort((a, b) => a.name.localeCompare(b.name));
   if (extra) {
     metas = applyExtraFilters(metas, parseExtra(extra));
   }
