@@ -5,6 +5,7 @@ import { getTmdb } from "../lib/tmdb-client.js";
 import { upsertMetadata } from "../lib/metadata.js";
 import { upsertSeriesProgressIfNewer } from "../lib/series-progress.js";
 import { resolveProfile } from "../lib/profile.js";
+import { computeNextEpisode } from "../lib/next-episode.js";
 
 const DROPPED_KEY = (profileId: string, imdbId: string) => `dropped:series:${profileId}:${imdbId}`;
 
@@ -44,7 +45,7 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
     const [metadata, episodeCounts] = await Promise.all([
       prisma.metadata.findMany({
         where: { imdbId: { in: imdbIds }, type: "series" },
-        select: { imdbId: true, name: true, poster: true, totalSeasons: true, totalEpisodes: true },
+        select: { imdbId: true, name: true, poster: true, totalSeasons: true, totalEpisodes: true, tmdbId: true },
       }),
       prisma.watchEvent.groupBy({
         by: ["seriesImdbId", "season", "episode"],
@@ -89,6 +90,7 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
               poster: result.value.poster,
               totalSeasons: result.value.totalSeasons,
               totalEpisodes: result.value.totalEpisodes,
+              tmdbId: result.value.tmdbId,
             });
           }
         }
@@ -106,24 +108,36 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
       } catch { /* TMDB unavailable – return what we have */ }
     }
 
-    const progress = progressRows.map((row) => {
-      const meta = metaByImdbId.get(row.seriesImdbId);
-      return {
-        imdbId: row.seriesImdbId,
-        seriesImdbId: row.seriesImdbId,
-        lastSeason: row.lastSeason,
-        lastEpisode: row.lastEpisode,
-        nextSeason: row.lastSeason,
-        nextEpisode: row.lastEpisode + 1,
-        lastWatchedAt: row.lastWatchedAt,
-        updatedAt: row.updatedAt,
-        name: meta?.name ?? row.seriesImdbId,
-        poster: meta?.poster ?? null,
-        totalSeasons: meta?.totalSeasons ?? null,
-        totalEpisodes: meta?.totalEpisodes ?? null,
-        watchedEpisodes: watchedBySeriesId.get(row.seriesImdbId) ?? null,
-      };
-    });
+    const progressWithNulls = await Promise.all(
+      progressRows.map(async (row) => {
+        const meta = metaByImdbId.get(row.seriesImdbId);
+        const next = await computeNextEpisode(
+          row.seriesImdbId,
+          meta?.tmdbId ?? null,
+          row.lastSeason,
+          row.lastEpisode
+        );
+        // Series is fully watched (no further season exists) — drop from Continue Watching.
+        if (!next) return null;
+        return {
+          imdbId: row.seriesImdbId,
+          seriesImdbId: row.seriesImdbId,
+          lastSeason: row.lastSeason,
+          lastEpisode: row.lastEpisode,
+          nextSeason: next.season,
+          nextEpisode: next.episode,
+          lastWatchedAt: row.lastWatchedAt,
+          updatedAt: row.updatedAt,
+          name: meta?.name ?? row.seriesImdbId,
+          poster: meta?.poster ?? null,
+          totalSeasons: meta?.totalSeasons ?? null,
+          totalEpisodes: meta?.totalEpisodes ?? null,
+          watchedEpisodes: watchedBySeriesId.get(row.seriesImdbId) ?? null,
+        };
+      })
+    );
+
+    const progress = progressWithNulls.filter((p): p is NonNullable<typeof p> => p !== null);
 
     return { progress };
   });
@@ -175,8 +189,16 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
       });
       if (!row) return reply.code(404).send({ error: "No progress found for this series" });
 
-      const nextEpisode = row.lastEpisode + 1;
-      const nextSeason = row.lastSeason;
+      const meta = await prisma.metadata.findUnique({
+        where: { imdbId_type: { imdbId, type: "series" } },
+        select: { tmdbId: true },
+      });
+
+      const next = await computeNextEpisode(imdbId, meta?.tmdbId ?? null, row.lastSeason, row.lastEpisode);
+      if (!next) return reply.code(409).send({ error: "Series already fully watched" });
+
+      const nextSeason = next.season;
+      const nextEpisode = next.episode;
       const watchedAt = new Date();
 
       await prisma.watchEvent.create({
