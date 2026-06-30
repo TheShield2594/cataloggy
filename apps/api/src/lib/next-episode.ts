@@ -43,7 +43,7 @@ export async function computeNextEpisode(
   }
 
   const nextSeason = seasons
-    .filter((s) => s.seasonNumber > lastSeason)
+    .filter((s) => s.seasonNumber > lastSeason && s.episodeCount > 0)
     .sort((a, b) => a.seasonNumber - b.seasonNumber)[0];
 
   if (!nextSeason) return null;
