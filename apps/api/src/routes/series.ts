@@ -108,7 +108,7 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
       } catch { /* TMDB unavailable – return what we have */ }
     }
 
-    const progress = await Promise.all(
+    const progressWithNulls = await Promise.all(
       progressRows.map(async (row) => {
         const meta = metaByImdbId.get(row.seriesImdbId);
         const next = await computeNextEpisode(
@@ -117,13 +117,15 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
           row.lastSeason,
           row.lastEpisode
         );
+        // Series is fully watched (no further season exists) — drop from Continue Watching.
+        if (!next) return null;
         return {
           imdbId: row.seriesImdbId,
           seriesImdbId: row.seriesImdbId,
           lastSeason: row.lastSeason,
           lastEpisode: row.lastEpisode,
-          nextSeason: next?.season ?? null,
-          nextEpisode: next?.episode ?? null,
+          nextSeason: next.season,
+          nextEpisode: next.episode,
           lastWatchedAt: row.lastWatchedAt,
           updatedAt: row.updatedAt,
           name: meta?.name ?? row.seriesImdbId,
@@ -134,6 +136,8 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
         };
       })
     );
+
+    const progress = progressWithNulls.filter((p): p is NonNullable<typeof p> => p !== null);
 
     return { progress };
   });
