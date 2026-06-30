@@ -195,11 +195,15 @@ export function DetailPanel({
         const currentSeason = seasons.find((s) => s.seasonNumber === lastEvent.season);
         if (currentSeason && (lastEvent.episode ?? 0) >= currentSeason.episodeCount) {
           const upcoming = seasons
-            .filter((s) => s.seasonNumber > (lastEvent.season ?? 0))
+            .filter((s) => s.seasonNumber > (lastEvent.season ?? 0) && s.episodeCount > 0)
             .sort((a, b) => a.seasonNumber - b.seasonNumber)[0];
           if (upcoming) {
             nextSeason = upcoming.seasonNumber;
             nextEpisode = 1;
+          } else {
+            // Fully watched, no further season — don't suggest a nonexistent episode.
+            nextSeason = currentSeason.seasonNumber;
+            nextEpisode = currentSeason.episodeCount;
           }
         }
       }
