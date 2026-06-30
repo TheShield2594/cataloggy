@@ -189,8 +189,20 @@ export function DetailPanel({
     } else {
       // Default to next episode after last watched, or S01E01
       const lastEvent = history.find((e) => e.season != null && e.episode != null);
-      const nextSeason = lastEvent?.season ?? 1;
-      const nextEpisode = lastEvent ? (lastEvent.episode ?? 0) + 1 : 1;
+      let nextSeason = lastEvent?.season ?? 1;
+      let nextEpisode = lastEvent ? (lastEvent.episode ?? 0) + 1 : 1;
+      if (lastEvent) {
+        const currentSeason = seasons.find((s) => s.seasonNumber === lastEvent.season);
+        if (currentSeason && (lastEvent.episode ?? 0) >= currentSeason.episodeCount) {
+          const upcoming = seasons
+            .filter((s) => s.seasonNumber > (lastEvent.season ?? 0))
+            .sort((a, b) => a.seasonNumber - b.seasonNumber)[0];
+          if (upcoming) {
+            nextSeason = upcoming.seasonNumber;
+            nextEpisode = 1;
+          }
+        }
+      }
       setWatchTarget({ kind: "episode", seriesImdbId: item.imdbId, season: nextSeason, episode: nextEpisode });
     }
   };
