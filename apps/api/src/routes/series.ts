@@ -6,8 +6,9 @@ import { upsertMetadata } from "../lib/metadata.js";
 import { upsertSeriesProgressIfNewer } from "../lib/series-progress.js";
 import { resolveProfile } from "../lib/profile.js";
 import { computeNextEpisode } from "../lib/next-episode.js";
+import { droppedSeriesKey, getDroppedSeriesIds } from "../lib/dropped-shows.js";
 
-const DROPPED_KEY = (profileId: string, imdbId: string) => `dropped:series:${profileId}:${imdbId}`;
+const DROPPED_KEY = droppedSeriesKey;
 
 const seriesRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", resolveProfile);
@@ -34,10 +35,18 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/series/progress", async (request) => {
     const profileId = request.profileId!;
-    const progressRows = await prisma.seriesProgress.findMany({
+    const allProgressRows = await prisma.seriesProgress.findMany({
       where: { profileId },
       orderBy: { lastWatchedAt: "desc" },
     });
+
+    if (allProgressRows.length === 0) return { progress: [] };
+
+    const droppedIds = await getDroppedSeriesIds(
+      profileId,
+      allProgressRows.map((p) => p.seriesImdbId)
+    );
+    const progressRows = allProgressRows.filter((p) => !droppedIds.has(p.seriesImdbId));
 
     if (progressRows.length === 0) return { progress: [] };
 
