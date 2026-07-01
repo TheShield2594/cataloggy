@@ -80,6 +80,7 @@ export function SettingsPage() {
             <div className="space-y-2 text-sm" style={{ color: "var(--text-dim)" }}>
               <p className="text-base font-semibold" style={{ color: "var(--text)" }}>Cataloggy <span className="font-mono text-claw-600">v{APP_VERSION}</span></p>
               <p className="text-sm">A personal media catalog and watchlist manager.</p>
+              <p className="text-2xs" style={{ color: "var(--text-mute)" }}>Cataloggy &middot; Personal Media Tracker</p>
             </div>
           </Section>
         </div>

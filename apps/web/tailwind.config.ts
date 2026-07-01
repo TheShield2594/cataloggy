@@ -57,7 +57,7 @@ export default {
         sans: ['"Plus Jakarta Sans Variable"', "system-ui", "-apple-system", "BlinkMacSystemFont", '"Segoe UI"', "sans-serif"],
       },
       fontSize: {
-        "2xs": ["0.6875rem", { lineHeight: "1rem" }],
+        "2xs": ["0.75rem", { lineHeight: "1rem" }],
       },
       aspectRatio: {
         poster: "2 / 3",
