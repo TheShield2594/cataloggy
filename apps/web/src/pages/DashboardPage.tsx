@@ -11,6 +11,7 @@ import {
   X,
   Flame,
   Trophy,
+  Clock,
 } from "lucide-react";
 import {
   api,
@@ -258,6 +259,7 @@ export function DashboardPage() {
   const [seriesRecs, setSeriesRecs] = useState<TrendingMeta[]>([]);
   const [seriesRecsLoading, setSeriesRecsLoading] = useState(true);
   const [aiActive, setAiActive] = useState(false);
+  const [aiLastGeneratedAt, setAiLastGeneratedAt] = useState<string | null>(null);
   const [movieReasons, setMovieReasons] = useState<Record<string, string>>({});
   const [seriesReasons, setSeriesReasons] = useState<Record<string, string>>({});
   const [calendarEntries, setCalendarEntries] = useState<CalendarEntry[]>([]);
@@ -346,6 +348,7 @@ export function DashboardPage() {
         const configRes = await api.getAiConfig();
         if (!mounted) return;
         setAiActive(configRes.configured);
+        setAiLastGeneratedAt(configRes.lastGeneratedAt ?? null);
 
         if (!configRes.configured) {
           setRecsLoading(false);
@@ -713,13 +716,25 @@ export function DashboardPage() {
       {(recsLoading || recommendations.length > 0) && (
         <section>
           <SectionHeader title={aiActive ? "AI Picks - Movies" : "Recommended For You"}>
-            {!recsLoading && recommendations.length > 0 && (
-              <ScrollArrows
-                canScrollLeft={recsScroll.canScrollLeft}
-                canScrollRight={recsScroll.canScrollRight}
-                onScroll={recsScroll.scroll}
-              />
-            )}
+            <div className="flex items-center gap-2">
+              {aiActive && aiLastGeneratedAt && (() => {
+                const nextRefresh = new Date(new Date(aiLastGeneratedAt).getTime() + 7 * 24 * 60 * 60 * 1000);
+                const label = nextRefresh <= new Date() ? "Refresh due" : `Refreshes ${timeAgo(nextRefresh.toISOString())}`;
+                return (
+                  <span title={`Next refresh: ${nextRefresh.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`} className="flex items-center gap-1 text-xs cursor-default" style={{ color: "var(--text-dim)" }}>
+                    <Clock size={12} />
+                    {label}
+                  </span>
+                );
+              })()}
+              {!recsLoading && recommendations.length > 0 && (
+                <ScrollArrows
+                  canScrollLeft={recsScroll.canScrollLeft}
+                  canScrollRight={recsScroll.canScrollRight}
+                  onScroll={recsScroll.scroll}
+                />
+              )}
+            </div>
           </SectionHeader>
           {recsLoading ? (
             aiActive
@@ -750,13 +765,25 @@ export function DashboardPage() {
       {(seriesRecsLoading || seriesRecs.length > 0) && (
         <section>
           <SectionHeader title={aiActive ? "AI Picks - Series" : "Recommended Series For You"}>
-            {!seriesRecsLoading && seriesRecs.length > 0 && (
-              <ScrollArrows
-                canScrollLeft={seriesRecsScroll.canScrollLeft}
-                canScrollRight={seriesRecsScroll.canScrollRight}
-                onScroll={seriesRecsScroll.scroll}
-              />
-            )}
+            <div className="flex items-center gap-2">
+              {aiActive && aiLastGeneratedAt && (() => {
+                const nextRefresh = new Date(new Date(aiLastGeneratedAt).getTime() + 7 * 24 * 60 * 60 * 1000);
+                const label = nextRefresh <= new Date() ? "Refresh due" : `Refreshes ${timeAgo(nextRefresh.toISOString())}`;
+                return (
+                  <span title={`Next refresh: ${nextRefresh.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`} className="flex items-center gap-1 text-xs cursor-default" style={{ color: "var(--text-dim)" }}>
+                    <Clock size={12} />
+                    {label}
+                  </span>
+                );
+              })()}
+              {!seriesRecsLoading && seriesRecs.length > 0 && (
+                <ScrollArrows
+                  canScrollLeft={seriesRecsScroll.canScrollLeft}
+                  canScrollRight={seriesRecsScroll.canScrollRight}
+                  onScroll={seriesRecsScroll.scroll}
+                />
+              )}
+            </div>
           </SectionHeader>
           {seriesRecsLoading ? (
             aiActive
