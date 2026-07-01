@@ -122,15 +122,23 @@ export const buildTasteProfile = async (profileId?: string) => {
   return { topGenres, topRated, recentTitles, watchedImdbIds, avgRating };
 };
 
-const callAiProvider = async (config: AiProviderConfig, prompt: string): Promise<string> => {
+const callAiProvider = async (
+  config: AiProviderConfig,
+  prompt: string,
+  minTokens = 0
+): Promise<string> => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 60_000);
 
+  const configuredMaxTokens = (config.payload.max_tokens as number | undefined) ?? 4096;
   const payload = {
     ...config.payload,
     messages: [{ role: "user", content: prompt }],
     stream: false,
-    max_tokens: (config.payload.max_tokens as number | undefined) ?? 4096,
+    // Never go below what the requested recommendation count needs, even if the
+    // user's saved config specifies a smaller value — a low max_tokens silently
+    // truncates the JSON array mid-response, which surfaces as a parse failure.
+    max_tokens: Math.max(configuredMaxTokens, minTokens),
   };
 
   let response: Response;
@@ -171,7 +179,17 @@ const parseRecsFromContent = (content: string): AiRecItem[] => {
   // Use bracket-matching to extract the first JSON array, avoiding greedy regex
   // overshoot when the AI appends trailing text containing "]"
   const start = content.indexOf("[");
-  if (start === -1) throw new Error("No JSON array in AI response");
+  if (start === -1) {
+    // An unterminated <think> block means generation was cut off by max_tokens
+    // while still reasoning, before it ever got to the JSON — the fix is more
+    // headroom, not better parsing.
+    if (/<think>/i.test(content)) {
+      throw new Error(
+        "AI response was truncated mid-reasoning before producing any output — increase max_tokens"
+      );
+    }
+    throw new Error("No JSON array in AI response");
+  }
 
   let depth = 0;
   let end = -1;
@@ -186,7 +204,11 @@ const parseRecsFromContent = (content: string): AiRecItem[] => {
     }
   }
 
-  if (end === -1) throw new Error("No JSON array in AI response");
+  if (end === -1) {
+    throw new Error(
+      "AI response was truncated before the JSON array closed — increase max_tokens or lower the recommendation limit"
+    );
+  }
 
   try {
     return JSON.parse(content.slice(start, end + 1)) as AiRecItem[];
@@ -233,7 +255,11 @@ Return ONLY a JSON array, no other text, no markdown:
   }
 ]`;
 
-    const content = await callAiProvider(config, prompt);
+    // Each recommendation is ~100-150 tokens once title/year/type/reason and JSON
+    // punctuation are accounted for; without this floor a low configured
+    // max_tokens truncates the array well before `limit` items are reached.
+    const minTokens = 400 + limit * 150;
+    const content = await callAiProvider(config, prompt, minTokens);
     const recs = parseRecsFromContent(content);
 
     const tmdb = await getTmdb();

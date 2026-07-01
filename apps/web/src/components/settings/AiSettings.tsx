@@ -107,7 +107,7 @@ export function AiSettings() {
   const [url, setUrl] = useState(PROVIDERS[0].url);
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState(PROVIDERS[0].model);
-  const [maxTokens, setMaxTokens] = useState(1024);
+  const [maxTokens, setMaxTokens] = useState(4096);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [advancedJson, setAdvancedJson] = useState("");
   const [advancedJsonError, setAdvancedJsonError] = useState<string | null>(
@@ -258,7 +258,7 @@ export function AiSettings() {
       setUrl(PROVIDERS[0].url);
       setApiKey("");
       setModel(PROVIDERS[0].model);
-      setMaxTokens(1024);
+      setMaxTokens(4096);
       setAdvancedJson("");
       setLastGeneratedAt(null);
       setTestStatus(null);
@@ -454,7 +454,7 @@ export function AiSettings() {
                 min={1}
                 value={maxTokens}
                 onChange={(e) => {
-                  setMaxTokens(Math.max(1, parseInt(e.target.value) || 1024));
+                  setMaxTokens(Math.max(1, parseInt(e.target.value) || 4096));
                   setSaved(false);
                   setTestStatus(null);
                 }}
@@ -464,6 +464,12 @@ export function AiSettings() {
                   color: "var(--text)",
                 }}
               />
+              <p
+                className="mt-1 text-xs"
+                style={{ color: "var(--text-mute)" }}
+              >
+                Too low truncates recommendations
+              </p>
             </div>
           </div>
         </div>
