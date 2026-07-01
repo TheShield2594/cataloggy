@@ -31,7 +31,7 @@ const PROVIDERS: {
     id: "gemini",
     label: "Google Gemini",
     url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-flash",
     helpUrl: "https://aistudio.google.com/app/apikey",
   },
   {
