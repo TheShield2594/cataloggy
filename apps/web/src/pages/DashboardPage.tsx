@@ -177,6 +177,12 @@ function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
 
 /* ─── Continue Watching card (used for every item after the hero) ─── */
 
+function computeProgressPct(s: SeriesProgress): number | null {
+  return typeof s.watchedEpisodes === "number" && s.totalEpisodes && s.totalEpisodes > 0
+    ? Math.min(Math.max((s.watchedEpisodes / s.totalEpisodes) * 100, 0), 100)
+    : null;
+}
+
 function ContinueWatchingCard({
   s,
   eager,
@@ -192,10 +198,7 @@ function ContinueWatchingCard({
   onMarkNext: () => void;
   onSelect: () => void;
 }) {
-  const progressPct =
-    typeof s.watchedEpisodes === "number" && s.totalEpisodes && s.totalEpisodes > 0
-      ? Math.min(Math.max((s.watchedEpisodes / s.totalEpisodes) * 100, 0), 100)
-      : null;
+  const progressPct = computeProgressPct(s);
   return (
     <div className="flex-none group" style={{ width: "13rem" }}>
       <div
@@ -270,10 +273,7 @@ function ContinueWatchingHero({
   onMarkNext: () => void;
   onSelect: () => void;
 }) {
-  const progressPct =
-    typeof s.watchedEpisodes === "number" && s.totalEpisodes && s.totalEpisodes > 0
-      ? Math.min(Math.max((s.watchedEpisodes / s.totalEpisodes) * 100, 0), 100)
-      : null;
+  const progressPct = computeProgressPct(s);
   return (
     <div
       className="relative mb-3 flex flex-col gap-4 overflow-hidden rounded-2xl p-4 sm:flex-row sm:items-center"
@@ -317,6 +317,7 @@ function ContinueWatchingHero({
             type="button"
             disabled={isMarking || isDone}
             onClick={onMarkNext}
+            aria-label={isMarking ? "Marking" : isDone ? "Marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
             className="flex items-center gap-1.5 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-white transition-all active:scale-[0.98] hover:bg-claw-600 disabled:opacity-60"
           >
             {isDone ? (
@@ -503,11 +504,6 @@ export function DashboardPage() {
 
   const emptyListMap = useMemo(() => new Map(), []);
 
-  const playsThisWeek = useMemo(() => {
-    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    return history.filter((event) => !event.dateUnknown && new Date(event.watchedAt).getTime() >= weekAgo).length;
-  }, [history]);
-
   const load = useCallback(async () => {
     try {
       const [progressRes, historyRes, statsRes, checkinRes, nowPlayingRes] = await Promise.all([
@@ -688,7 +684,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* ── Greeting strip ── */}
-      <GreetingStrip playsThisWeek={playsThisWeek} streak={detailedStats?.currentStreak ?? 0} loading={loading || detailedLoading} />
+      <GreetingStrip playsThisWeek={stats?.playsThisWeek ?? 0} streak={detailedStats?.currentStreak ?? 0} loading={loading || detailedLoading} />
 
       {/* ── Hero: Now Watching ── */}
       {activeCheckin && (

@@ -149,6 +149,7 @@ export type WatchStats = {
   totalMovies: number;
   totalEpisodes: number;
   totalPlays: number;
+  playsThisWeek: number;
 };
 
 export type DetailedWatchStats = {
