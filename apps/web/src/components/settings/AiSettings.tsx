@@ -145,7 +145,7 @@ export function AiSettings() {
           const auth = cfg.headers?.Authorization ?? "";
           setApiKey(auth.replace(/^Bearer\s+/i, ""));
           setModel(cfg.payload?.model ?? "");
-          setMaxTokens(cfg.payload?.max_tokens ?? 1024);
+          setMaxTokens(cfg.payload?.max_tokens ?? 4096);
           setAdvancedJson(JSON.stringify(res.config, null, 2));
         }
       } catch (err) {
