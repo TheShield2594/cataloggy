@@ -316,6 +316,13 @@ export function DashboardPage() {
     }
   }, []);
 
+  const refreshProgress = useCallback(async () => {
+    try {
+      const progressRes = await api.getSeriesProgress();
+      setProgress(progressRes ?? []);
+    } catch { /* keep showing the last known list */ }
+  }, []);
+
   const profileId = runtimeConfig.getProfileId();
 
   useEffect(() => {
@@ -884,7 +891,7 @@ export function DashboardPage() {
           history={panelHistory}
           historyLoading={panelHistoryLoading}
           listMap={emptyListMap}
-          onClose={() => setSelectedItem(null)}
+          onClose={() => { setSelectedItem(null); void refreshProgress(); }}
           onShowToast={showToast}
           onHistoryChange={(events) => setPanelHistory(events)}
         />
