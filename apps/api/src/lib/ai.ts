@@ -1,7 +1,7 @@
 import { MetadataType } from "@prisma/client";
 import type { FastifyBaseLogger } from "fastify";
 import { prisma } from "./prisma.js";
-import { trendingCacheGet, trendingCacheSet } from "./cache.js";
+import { trendingCacheGet, trendingCacheSet, trendingCacheDelete, watchedImdbIdsCache } from "./cache.js";
 import { getTmdb } from "./tmdb-client.js";
 import { getRpdbApiKey, withRpdbPoster } from "./rpdb.js";
 import { upsertMetadata } from "./metadata.js";
@@ -71,6 +71,10 @@ export const shouldRefreshAiRecs = async (): Promise<boolean> => {
 // to exclude already-watched titles from recommendations. Recommendation exclusion
 // needs completeness; the taste-profile signals below (genres/ratings/recency) don't.
 export const getWatchedImdbIds = async (profileId?: string): Promise<Set<string>> => {
+  const cacheKey = profileId ?? "__all__";
+  const cached = watchedImdbIdsCache.get(cacheKey);
+  if (cached) return cached;
+
   const [movies, episodes] = await Promise.all([
     prisma.watchEvent.findMany({
       where: { ...(profileId ? { profileId } : undefined), type: "movie" },
@@ -83,7 +87,9 @@ export const getWatchedImdbIds = async (profileId?: string): Promise<Set<string>
       select: { seriesImdbId: true },
     }),
   ]);
-  return new Set([...movies.map((m) => m.imdbId), ...episodes.map((e) => e.seriesImdbId!)]);
+  const ids = new Set([...movies.map((m) => m.imdbId), ...episodes.map((e) => e.seriesImdbId!)]);
+  watchedImdbIdsCache.set(cacheKey, ids);
+  return ids;
 };
 
 export const buildTasteProfile = async (profileId?: string) => {
@@ -258,6 +264,11 @@ const parseRecsFromContent = (content: string): AiRecItem[] => {
   }
 };
 
+// Guards against firing a duplicate background regeneration for the same cache
+// key while one is already in flight (e.g. concurrent movie/series page-load
+// requests both finding a just-filtered-short cached list).
+const regeneratingCacheKeys = new Set<string>();
+
 export const getAiRecommendations = async (
   type: "movie" | "series",
   limit = 10,
@@ -276,6 +287,18 @@ export const getAiRecommendations = async (
     const reasons = Object.fromEntries(
       Object.entries(cached.reasons ?? {}).filter(([id]) => !watchedIds.has(id))
     );
+
+    // Filtering can leave fewer than `limit` items with nothing to top up from —
+    // regenerate in the background (an LLM round trip is too slow to do inline)
+    // so the next request gets a full list again.
+    if (metas.length < limit && metas.length < cached.data.length && !regeneratingCacheKeys.has(cacheKey)) {
+      regeneratingCacheKeys.add(cacheKey);
+      trendingCacheDelete(cacheKey);
+      void getAiRecommendations(type, limit, profileId, logger)
+        .catch((error) => logger?.debug({ error }, "Background AI recs top-up failed"))
+        .finally(() => regeneratingCacheKeys.delete(cacheKey));
+    }
+
     return { metas, reasons };
   }
 
