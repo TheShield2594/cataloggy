@@ -101,7 +101,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       lists: lists.map((list) => ({
         name: list.name,
         kind: list.kind,
-        items: list.items.map((item) => ({
+        items: list.items.map((item: any) => ({
           type: item.type,
           imdbId: item.imdbId,
           addedAt: item.addedAt.toISOString(),
