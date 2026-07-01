@@ -15,6 +15,10 @@ export const AI_RECS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // keeps the persisted value itself from being set low enough to guarantee
 // truncation (e.g. the old UI default of 1024).
 export const MIN_AI_CONFIG_MAX_TOKENS = 2048;
+// Heuristic for the per-request token floor: a base allowance plus a
+// per-recommendation cost (title/year/type/reason text + JSON punctuation).
+const BASE_TOKENS = 400;
+const TOKENS_PER_RECOMMENDATION = 150;
 
 export const getAiConfig = async (): Promise<AiProviderConfig | null> => {
   const row = await prisma.kV.findUnique({ where: { key: AI_CONFIG_KEY } });
@@ -145,7 +149,10 @@ const callAiProvider = async (
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 60_000);
 
-  const configuredMaxTokens = (config.payload.max_tokens as number | undefined) ?? 4096;
+  const configuredMaxTokens = Math.max(
+    (config.payload.max_tokens as number | undefined) ?? 4096,
+    MIN_AI_CONFIG_MAX_TOKENS
+  );
   const payload = {
     ...config.payload,
     messages: [{ role: "user", content: prompt }],
@@ -270,10 +277,9 @@ Return ONLY a JSON array, no other text, no markdown:
   }
 ]`;
 
-    // Each recommendation is ~100-150 tokens once title/year/type/reason and JSON
-    // punctuation are accounted for; without this floor a low configured
-    // max_tokens truncates the array well before `limit` items are reached.
-    const minTokens = 400 + limit * 150;
+    // Without this floor a low configured max_tokens truncates the array well
+    // before `limit` items are reached.
+    const minTokens = BASE_TOKENS + limit * TOKENS_PER_RECOMMENDATION;
     const content = await callAiProvider(config, prompt, minTokens);
     const recs = parseRecsFromContent(content);
 

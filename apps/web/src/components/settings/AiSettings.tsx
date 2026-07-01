@@ -65,6 +65,12 @@ const PROVIDERS: {
   { id: "custom", label: "Custom", url: "", model: "", helpUrl: "" },
 ];
 
+// Mirrors MIN_AI_CONFIG_MAX_TOKENS in apps/api/src/lib/ai.ts — the server
+// clamps up to this floor regardless, so keep the input from suggesting a
+// lower value will actually be used.
+const MIN_MAX_TOKENS = 2048;
+const DEFAULT_MAX_TOKENS = 4096;
+
 const PLACEHOLDER_KEY_PATTERNS = [
   /your_key/i,
   /your-api-key/i,
@@ -107,7 +113,7 @@ export function AiSettings() {
   const [url, setUrl] = useState(PROVIDERS[0].url);
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState(PROVIDERS[0].model);
-  const [maxTokens, setMaxTokens] = useState(4096);
+  const [maxTokens, setMaxTokens] = useState(DEFAULT_MAX_TOKENS);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [advancedJson, setAdvancedJson] = useState("");
   const [advancedJsonError, setAdvancedJsonError] = useState<string | null>(
@@ -145,7 +151,7 @@ export function AiSettings() {
           const auth = cfg.headers?.Authorization ?? "";
           setApiKey(auth.replace(/^Bearer\s+/i, ""));
           setModel(cfg.payload?.model ?? "");
-          setMaxTokens(cfg.payload?.max_tokens ?? 4096);
+          setMaxTokens(cfg.payload?.max_tokens ?? DEFAULT_MAX_TOKENS);
           setAdvancedJson(JSON.stringify(res.config, null, 2));
         }
       } catch (err) {
@@ -258,7 +264,7 @@ export function AiSettings() {
       setUrl(PROVIDERS[0].url);
       setApiKey("");
       setModel(PROVIDERS[0].model);
-      setMaxTokens(4096);
+      setMaxTokens(DEFAULT_MAX_TOKENS);
       setAdvancedJson("");
       setLastGeneratedAt(null);
       setTestStatus(null);
@@ -451,10 +457,12 @@ export function AiSettings() {
               <input
                 id="ai-max-tokens"
                 type="number"
-                min={1}
+                min={MIN_MAX_TOKENS}
                 value={maxTokens}
                 onChange={(e) => {
-                  setMaxTokens(Math.max(1, parseInt(e.target.value) || 4096));
+                  setMaxTokens(
+                    Math.max(MIN_MAX_TOKENS, parseInt(e.target.value) || DEFAULT_MAX_TOKENS)
+                  );
                   setSaved(false);
                   setTestStatus(null);
                 }}
@@ -468,7 +476,7 @@ export function AiSettings() {
                 className="mt-1 text-xs"
                 style={{ color: "var(--text-mute)" }}
               >
-                Too low truncates recommendations
+                Minimum {MIN_MAX_TOKENS} — lower values are truncated and raised automatically
               </p>
             </div>
           </div>
