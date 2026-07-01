@@ -9,7 +9,7 @@ import type { AiProviderConfig, StremioMetaPreview } from "./types.js";
 
 export const AI_CONFIG_KEY = "ai:config";
 export const AI_LAST_RECS_GENERATED_AT_KEY = "ai:lastRecsGeneratedAt";
-export const AI_RECS_TTL_MS = 6 * 60 * 60 * 1000;
+export const AI_RECS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const getAiConfig = async (): Promise<AiProviderConfig | null> => {
   const row = await prisma.kV.findUnique({ where: { key: AI_CONFIG_KEY } });
@@ -44,8 +44,8 @@ export const shouldRefreshAiRecs = async (): Promise<boolean> => {
 
   const lastGen = new Date(lastGenRow.value);
   if (isNaN(lastGen.getTime())) return true;
-  const hoursSinceLastGen = (Date.now() - lastGen.getTime()) / (1000 * 60 * 60);
-  return hoursSinceLastGen >= 6;
+  const daysSinceLastGen = (Date.now() - lastGen.getTime()) / (1000 * 60 * 60 * 24);
+  return daysSinceLastGen >= 7;
 };
 
 export const buildTasteProfile = async (profileId?: string) => {
@@ -153,7 +153,7 @@ const callAiProvider = async (config: AiProviderConfig, prompt: string): Promise
   const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   let content = data.choices?.[0]?.message?.content ?? "";
 
-  content = content.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  content = content.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
   content = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 
   return content;
@@ -162,9 +162,37 @@ const callAiProvider = async (config: AiProviderConfig, prompt: string): Promise
 type AiRecItem = { title: string; year?: number; type: "movie" | "series"; reason: string };
 
 const parseRecsFromContent = (content: string): AiRecItem[] => {
-  const match = content.match(/\[[\s\S]*\]/);
-  if (!match) throw new Error("No JSON array in AI response");
-  return JSON.parse(match[0]) as AiRecItem[];
+  // Try direct parse first (ideal case: AI returned only JSON)
+  try {
+    const parsed = JSON.parse(content);
+    if (Array.isArray(parsed)) return parsed as AiRecItem[];
+  } catch { /* not valid JSON on its own — fall through to bracket-matching */ }
+
+  // Use bracket-matching to extract the first JSON array, avoiding greedy regex
+  // overshoot when the AI appends trailing text containing "]"
+  const start = content.indexOf("[");
+  if (start === -1) throw new Error("No JSON array in AI response");
+
+  let depth = 0;
+  let end = -1;
+  for (let i = start; i < content.length; i++) {
+    if (content[i] === "[") depth++;
+    else if (content[i] === "]") {
+      depth--;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+  }
+
+  if (end === -1) throw new Error("No JSON array in AI response");
+
+  try {
+    return JSON.parse(content.slice(start, end + 1)) as AiRecItem[];
+  } catch (e) {
+    throw new Error(`Failed to parse AI response as JSON: ${e}`);
+  }
 };
 
 export const getAiRecommendations = async (
