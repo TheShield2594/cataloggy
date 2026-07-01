@@ -6,6 +6,7 @@ import { StatusBadge } from "./StatusBadge";
 
 type Provider =
   | "openai"
+  | "gemini"
   | "groq"
   | "nvidia"
   | "ollama"
@@ -25,6 +26,13 @@ const PROVIDERS: {
     url: "https://api.openai.com/v1/chat/completions",
     model: "gpt-4o-mini",
     helpUrl: "https://platform.openai.com/api-keys",
+  },
+  {
+    id: "gemini",
+    label: "Google Gemini",
+    url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    model: "gemini-2.5-flash",
+    helpUrl: "https://aistudio.google.com/app/apikey",
   },
   {
     id: "groq",
