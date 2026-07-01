@@ -217,7 +217,8 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/watch/stats", async (request) => {
     const profileId = request.profileId!;
-    const [movieAgg, episodeAgg] = await Promise.all([
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [movieAgg, episodeAgg, playsThisWeek] = await Promise.all([
       prisma.watchEvent.aggregate({
         where: { profileId, type: "movie" },
         _count: true,
@@ -228,12 +229,16 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
         _count: true,
         _sum: { plays: true },
       }),
+      prisma.watchEvent.count({
+        where: { profileId, dateUnknown: false, watchedAt: { gte: weekAgo } },
+      }),
     ]);
 
     return {
       totalMovies: movieAgg._count,
       totalEpisodes: episodeAgg._count,
       totalPlays: (movieAgg._sum.plays ?? 0) + (episodeAgg._sum.plays ?? 0),
+      playsThisWeek,
     };
   });
 

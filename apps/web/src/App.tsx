@@ -148,12 +148,12 @@ function AppShell({
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
-            className="flex flex-1 max-w-sm items-center gap-2.5 rounded-full px-4 py-2 text-sm transition-colors hover:bg-[var(--surface-strong)]"
+            aria-label="Search (⌘K)"
+            className="flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] sm:h-auto sm:w-auto sm:flex-1 sm:max-w-sm sm:justify-start sm:gap-2.5 sm:px-4 sm:py-2 sm:text-sm"
             style={{ border: "1px solid var(--border-strong)", color: "var(--text-mute)", background: "var(--surface)" }}
           >
             <Search className="h-4 w-4" />
-            <span className="hidden sm:inline">Search everything...</span>
-            <span className="sm:hidden">Search</span>
+            <span className="hidden sm:inline">Search</span>
             <kbd
               className="ml-auto hidden rounded px-1.5 py-0.5 text-2xs font-medium sm:inline"
               style={{ background: "var(--surface-strong)", color: "var(--text-mute)" }}
@@ -238,14 +238,6 @@ function AppShell({
           );
         })}
       </nav>
-
-      {/* Footer */}
-      <footer
-        className={`py-8 text-center text-sm transition-[padding] duration-200 ${sidebarPad}`}
-        style={{ borderTop: "1px solid var(--border)", color: "var(--text-mute)" }}
-      >
-        Cataloggy &middot; Personal Media Tracker
-      </footer>
     </div>
   );
 }
