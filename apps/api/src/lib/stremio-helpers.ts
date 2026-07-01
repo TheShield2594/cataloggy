@@ -2,6 +2,7 @@ import { ItemType, ListItemType } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { getRpdbApiKey, withRpdbPoster } from "./rpdb.js";
 import { getDefaultWatchlist } from "./watchlist.js";
+import { getDroppedSeriesIds } from "./dropped-shows.js";
 import type { ContinueMetaPreview, StremioMetaPreview, StremioMetaType } from "./types.js";
 
 export const buildMetasFromIds = async (
@@ -90,12 +91,14 @@ export const getRecentMetas = async (type: StremioMetaType, limit: number, profi
 };
 
 export const getContinueMetas = async (limit: number, profileId: string): Promise<ContinueMetaPreview[]> => {
-  const seriesProgress = await prisma.seriesProgress.findMany({
+  const allProgress = await prisma.seriesProgress.findMany({
     where: { profileId },
     orderBy: { lastWatchedAt: "desc" },
-    take: limit,
     select: { seriesImdbId: true, lastSeason: true, lastEpisode: true, lastWatchedAt: true },
   });
+
+  const droppedIds = await getDroppedSeriesIds(profileId, allProgress.map((p) => p.seriesImdbId));
+  const seriesProgress = allProgress.filter((p) => !droppedIds.has(p.seriesImdbId)).slice(0, limit);
 
   const metas = await buildMetasFromIds(
     seriesProgress.map((p) => p.seriesImdbId),
