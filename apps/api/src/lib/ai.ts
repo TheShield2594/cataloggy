@@ -9,7 +9,7 @@ import type { AiProviderConfig, StremioMetaPreview } from "./types.js";
 
 export const AI_CONFIG_KEY = "ai:config";
 export const AI_LAST_RECS_GENERATED_AT_KEY = "ai:lastRecsGeneratedAt";
-export const AI_RECS_TTL_MS = 6 * 60 * 60 * 1000;
+export const AI_RECS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const getAiConfig = async (): Promise<AiProviderConfig | null> => {
   const row = await prisma.kV.findUnique({ where: { key: AI_CONFIG_KEY } });
@@ -44,8 +44,8 @@ export const shouldRefreshAiRecs = async (): Promise<boolean> => {
 
   const lastGen = new Date(lastGenRow.value);
   if (isNaN(lastGen.getTime())) return true;
-  const hoursSinceLastGen = (Date.now() - lastGen.getTime()) / (1000 * 60 * 60);
-  return hoursSinceLastGen >= 6;
+  const daysSinceLastGen = (Date.now() - lastGen.getTime()) / (1000 * 60 * 60 * 24);
+  return daysSinceLastGen >= 7;
 };
 
 export const buildTasteProfile = async (profileId?: string) => {
