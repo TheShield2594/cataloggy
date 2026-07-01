@@ -8,6 +8,7 @@ import { trendingCacheDeletePrefix, trendingCacheGet, trendingCacheSet } from ".
 import {
   AI_CONFIG_KEY,
   AI_LAST_RECS_GENERATED_AT_KEY,
+  MIN_AI_CONFIG_MAX_TOKENS,
   getAiConfig,
   isAiConfigured,
   redactAiConfig,
@@ -371,6 +372,18 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({
         error: "config.payload.model must be a non-empty string",
       });
+    }
+
+    if (payload.max_tokens !== undefined) {
+      const maxTokens = Number(payload.max_tokens);
+      if (!Number.isFinite(maxTokens) || maxTokens <= 0) {
+        return reply.code(400).send({
+          error: "config.payload.max_tokens must be a positive number",
+        });
+      }
+      // Clamp low values up rather than rejecting them — a value under this
+      // floor reliably truncates recommendation responses mid-JSON.
+      payload.max_tokens = Math.max(maxTokens, MIN_AI_CONFIG_MAX_TOKENS);
     }
 
     const validConfig = {

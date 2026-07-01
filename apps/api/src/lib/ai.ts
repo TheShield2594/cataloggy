@@ -10,6 +10,11 @@ import type { AiProviderConfig, StremioMetaPreview } from "./types.js";
 export const AI_CONFIG_KEY = "ai:config";
 export const AI_LAST_RECS_GENERATED_AT_KEY = "ai:lastRecsGeneratedAt";
 export const AI_RECS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// Floor for a *saved* config's max_tokens. The per-request generation path
+// already computes a higher floor scaled to the requested limit, but this
+// keeps the persisted value itself from being set low enough to guarantee
+// truncation (e.g. the old UI default of 1024).
+export const MIN_AI_CONFIG_MAX_TOKENS = 2048;
 
 export const getAiConfig = async (): Promise<AiProviderConfig | null> => {
   const row = await prisma.kV.findUnique({ where: { key: AI_CONFIG_KEY } });
@@ -34,6 +39,16 @@ export const redactAiConfig = (config: AiProviderConfig): AiProviderConfig => ({
       k.toLowerCase() === "authorization" ? "Bearer ****" : v,
     ])
   ),
+  payload: {
+    ...config.payload,
+    // Configs saved before MIN_AI_CONFIG_MAX_TOKENS existed may still have a
+    // truncation-prone value on disk; reflect the effective (clamped) value
+    // here so the settings UI doesn't show a stale number.
+    max_tokens:
+      typeof config.payload.max_tokens === "number"
+        ? Math.max(config.payload.max_tokens, MIN_AI_CONFIG_MAX_TOKENS)
+        : config.payload.max_tokens,
+  },
 });
 
 export const shouldRefreshAiRecs = async (): Promise<boolean> => {
