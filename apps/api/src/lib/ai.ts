@@ -67,6 +67,25 @@ export const shouldRefreshAiRecs = async (): Promise<boolean> => {
   return daysSinceLastGen >= 7;
 };
 
+// Full watch history (not windowed like buildTasteProfile's last-50 events), used
+// to exclude already-watched titles from recommendations. Recommendation exclusion
+// needs completeness; the taste-profile signals below (genres/ratings/recency) don't.
+export const getWatchedImdbIds = async (profileId?: string): Promise<Set<string>> => {
+  const [movies, episodes] = await Promise.all([
+    prisma.watchEvent.findMany({
+      where: { ...(profileId ? { profileId } : undefined), type: "movie" },
+      distinct: ["imdbId"],
+      select: { imdbId: true },
+    }),
+    prisma.watchEvent.findMany({
+      where: { ...(profileId ? { profileId } : undefined), type: "episode", seriesImdbId: { not: null } },
+      distinct: ["seriesImdbId"],
+      select: { seriesImdbId: true },
+    }),
+  ]);
+  return new Set([...movies.map((m) => m.imdbId), ...episodes.map((e) => e.seriesImdbId!)]);
+};
+
 export const buildTasteProfile = async (profileId?: string) => {
   const recentEvents = await prisma.watchEvent.findMany({
     where: profileId ? { profileId } : undefined,
@@ -131,7 +150,7 @@ export const buildTasteProfile = async (profileId?: string) => {
     })
     .filter((n): n is string => !!n);
 
-  const watchedImdbIds = new Set(allIds);
+  const watchedImdbIds = await getWatchedImdbIds(profileId);
 
   const avgRating =
     ratings.length > 0
@@ -247,7 +266,18 @@ export const getAiRecommendations = async (
 ): Promise<{ metas: StremioMetaPreview[]; reasons: Record<string, string> } | null> => {
   const cacheKey = `ai-recs:${type}:${limit}${profileId ? `:${profileId}` : ""}`;
   const cached = trendingCacheGet(cacheKey);
-  if (cached) return { metas: cached.data, reasons: cached.reasons ?? {} };
+  if (cached) {
+    // The cache lives up to AI_RECS_TTL_MS and isn't purged on every watch event
+    // (regeneration is rate-limited by shouldRefreshAiRecs), so titles watched
+    // since the cache was populated must be filtered out here rather than relying
+    // on the exclusion check at generation time.
+    const watchedIds = await getWatchedImdbIds(profileId);
+    const metas = cached.data.filter((m) => !watchedIds.has(m.id));
+    const reasons = Object.fromEntries(
+      Object.entries(cached.reasons ?? {}).filter(([id]) => !watchedIds.has(id))
+    );
+    return { metas, reasons };
+  }
 
   const config = await getAiConfig();
   if (!config) return null;
