@@ -1,4 +1,4 @@
-import { Component, type ReactNode } from "react";
+import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Sentry } from "../sentry";
 
@@ -12,9 +12,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: unknown) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error(error);
-    Sentry.captureException(error);
+    Sentry.captureException(error, { contexts: { react: { componentStack: errorInfo.componentStack } } });
   }
 
   resetErrorBoundary = () => {
