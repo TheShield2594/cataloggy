@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: postgres:16
@@ -14,6 +20,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    logging: *default-logging
     networks:
       - cataloggy
 
@@ -35,6 +42,9 @@ services:
       TRAKT_POLL_MAX_PAGES: ${TRAKT_POLL_MAX_PAGES:-20}
       TMDB_API_KEY: ${TMDB_API_KEY}
       AI_REFRESH_INTERVAL_SEC: ${AI_REFRESH_INTERVAL_SEC:-86400}
+      # Optional: report unhandled errors to a Sentry project. Leave unset
+      # to disable error tracking entirely (default).
+      SENTRY_DSN: ${SENTRY_DSN}
     ports:
       - "7000:7000"
     depends_on:
@@ -46,6 +56,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    logging: *default-logging
     networks:
       - cataloggy
 
@@ -56,6 +67,7 @@ services:
       CATALOGGY_API_BASE: http://api:7000
       CATALOGGY_API_TOKEN: ${API_TOKEN:?Set API_TOKEN in a .env file next to docker-compose.yml — see README.md}
       ADDON_PUBLIC_BASE: ${ADDON_PUBLIC_BASE:-http://192.168.1.25:7001}
+      SENTRY_DSN: ${SENTRY_DSN}
     ports:
       - "7001:7001"
     depends_on:
@@ -67,6 +79,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    logging: *default-logging
     networks:
       - cataloggy
 
@@ -78,6 +91,7 @@ services:
       # IPs/localhost (which are always allowed) — e.g. a domain proxied via
       # Nginx Proxy Manager. Leave unset for LAN-IP-only access.
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      SENTRY_DSN: ${SENTRY_DSN}
     ports:
       - "7002:7002"
     depends_on:
@@ -89,6 +103,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    logging: *default-logging
     networks:
       - cataloggy
 
