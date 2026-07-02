@@ -13,6 +13,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src"
   },
+  "dependencies": {
+    "@sentry/node": "^10.63.0"
+  },
   "devDependencies": {
     "typescript": "^5.7.2"
   }
