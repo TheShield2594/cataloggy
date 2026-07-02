@@ -1,4 +1,4 @@
-FROM node:20-alpine AS build
+FROM node:26-alpine AS build
 
 WORKDIR /app
 RUN corepack enable
@@ -14,7 +14,7 @@ COPY apps/web ./apps/web
 
 RUN pnpm --filter @cataloggy/web build
 
-FROM node:20-alpine AS runtime
+FROM node:26-alpine AS runtime
 
 WORKDIR /app
 RUN apk add --no-cache wget && npm install -g serve@14
