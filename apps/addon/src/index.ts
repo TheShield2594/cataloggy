@@ -1,3 +1,4 @@
+import { Sentry } from "./lib/sentry.js";
 import Fastify, { type FastifyRequest, type FastifyReply, type RawRequestDefaultExpression } from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import { parseProxyPathPrefixes, normalizeProxyPath, parseTrustProxy } from "@cataloggy/shared";
@@ -23,6 +24,10 @@ app.register(rateLimit, {
   timeWindow: "1 minute",
   keyGenerator: (request) => request.ip,
 });
+
+// ─── Error tracking (opt-in via SENTRY_DSN) ───
+
+Sentry.setupFastifyErrorHandler(app);
 
 // ─── API helpers ───
 
@@ -776,5 +781,6 @@ process.on("SIGTERM", () => {
 
 start().catch((error) => {
   app.log.error(error);
+  Sentry.captureException(error);
   process.exit(1);
 });
