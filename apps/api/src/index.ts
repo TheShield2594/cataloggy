@@ -1,3 +1,4 @@
+import { Sentry } from "./lib/sentry.js";
 import Fastify from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import { parseProxyPathPrefixes, normalizeProxyPath, parseTrustProxy } from "@cataloggy/shared";
@@ -81,6 +82,10 @@ app.addHook("onRequest", async (request, reply) => {
   await verifyToken(request, reply);
 });
 
+// ─── Error tracking (opt-in via SENTRY_DSN) ───
+
+Sentry.setupFastifyErrorHandler(app);
+
 // ─── Route registration ───
 
 app.register(healthRoutes);
@@ -106,6 +111,11 @@ app.register(plexWebhookRoutes);
 app.register(jellyfinWebhookRoutes);
 
 // ─── Startup ───
+
+const reportBackgroundError = (error: unknown, message: string) => {
+  app.log.error(error, message);
+  Sentry.captureException(error);
+};
 
 const start = async () => {
   const port = Number(process.env.PORT ?? 7000);
@@ -138,13 +148,13 @@ const start = async () => {
       void (async () => {
         const profileId = await getDefaultProfileId();
         await pollTraktHistory(app.log, profileId).catch((error) => {
-          app.log.error(error, "Scheduled Trakt history poll failed");
+          reportBackgroundError(error, "Scheduled Trakt history poll failed");
         });
         await syncTraktWatchlist(app.log, profileId).catch((error) => {
-          app.log.error(error, "Scheduled Trakt watchlist sync failed");
+          reportBackgroundError(error, "Scheduled Trakt watchlist sync failed");
         });
       })().catch((error) => {
-        app.log.error(error, "Scheduled Trakt poll failed");
+        reportBackgroundError(error, "Scheduled Trakt poll failed");
       });
     }, TRAKT_POLL_INTERVAL_SEC * 1000);
   } else {
@@ -153,14 +163,14 @@ const start = async () => {
 
   setInterval(() => {
     void cleanupStaleSessions(app.log).catch((error) => {
-      app.log.error(error, "Scrobble session cleanup failed");
+      reportBackgroundError(error, "Scrobble session cleanup failed");
     });
   }, SCROBBLE_CLEANUP_INTERVAL_MS);
 
   if (NOTIFICATION_CHECK_INTERVAL_SEC > 0) {
     setInterval(() => {
       void checkUpcomingEpisodesAndNotify(app.log).catch((error) => {
-        app.log.error(error, "Scheduled upcoming-episode notification check failed");
+        reportBackgroundError(error, "Scheduled upcoming-episode notification check failed");
       });
     }, NOTIFICATION_CHECK_INTERVAL_SEC * 1000);
   } else {
@@ -182,11 +192,11 @@ const start = async () => {
   if (AI_REFRESH_INTERVAL_SEC > 0) {
     setTimeout(() => {
       void refreshAiRecommendations().catch((error) => {
-        app.log.error(error, "Initial AI recommendations refresh failed");
+        reportBackgroundError(error, "Initial AI recommendations refresh failed");
       });
       setInterval(() => {
         void refreshAiRecommendations().catch((error) => {
-          app.log.error(error, "Scheduled AI recommendations refresh failed");
+          reportBackgroundError(error, "Scheduled AI recommendations refresh failed");
         });
       }, AI_REFRESH_INTERVAL_SEC * 1000);
     }, 2 * 60 * 1000);
@@ -223,6 +233,7 @@ process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
 start().catch(async (error) => {
   app.log.error(error);
+  Sentry.captureException(error);
   await prisma.$disconnect();
   process.exit(1);
 });
