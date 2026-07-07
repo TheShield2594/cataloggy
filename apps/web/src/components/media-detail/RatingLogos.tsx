@@ -9,6 +9,17 @@ export function ImdbLogo() {
   );
 }
 
+export function TmdbLogo() {
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-black leading-none text-white"
+      style={{ background: "#01b4e4" }}
+    >
+      TMDB
+    </span>
+  );
+}
+
 export function RtLogo({ score }: { score: number }) {
   const isFresh = score >= 60;
   return (

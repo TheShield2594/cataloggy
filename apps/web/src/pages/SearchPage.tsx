@@ -513,6 +513,7 @@ export function SearchPage() {
           onClose={() => setSelectedItem(null)}
           onShowToast={showToast}
           onHistoryChange={(events) => setPanelHistory(events)}
+          onSelectItem={setSelectedItem}
         />
       )}
 

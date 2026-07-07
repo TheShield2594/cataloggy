@@ -265,6 +265,7 @@ export function HistoryPage() {
           onClose={() => setSelectedItem(null)}
           onShowToast={showToast}
           onHistoryChange={(updated) => setPanelHistory(updated)}
+          onSelectItem={setSelectedItem}
         />
       )}
     </div>

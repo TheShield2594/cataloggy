@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 
 /* ─── Poster fallback helpers ─── */
 
@@ -73,4 +74,19 @@ export function useHorizontalScroll() {
   }, []);
 
   return { ref: setRef, canScrollLeft, canScrollRight, scroll, checkScroll };
+}
+
+/* ─── Edge fade mask for horizontally scrollable carousels ─── */
+
+/**
+ * Fades the edges of a scrollable row toward the direction it can still scroll,
+ * so clipped cards read as "more content" instead of a hard cut. No-op (fully
+ * opaque) once a given direction runs out of content.
+ */
+export function fadeMaskStyle(canScrollLeft: boolean, canScrollRight: boolean): CSSProperties {
+  if (!canScrollLeft && !canScrollRight) return {};
+  const left = canScrollLeft ? "transparent 0, black 32px" : "black 0";
+  const right = canScrollRight ? "black calc(100% - 32px), transparent 100%" : "black 100%";
+  const image = `linear-gradient(to right, ${left}, ${right})`;
+  return { maskImage: image, WebkitMaskImage: image };
 }

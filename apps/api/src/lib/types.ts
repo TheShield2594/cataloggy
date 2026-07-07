@@ -38,6 +38,7 @@ export type CheckInData = {
   seriesImdbId?: string;
   name: string;
   poster?: string;
+  background?: string;
   season?: number;
   episode?: number;
   startedAt: string;

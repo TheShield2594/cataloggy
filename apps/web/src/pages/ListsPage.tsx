@@ -630,6 +630,7 @@ export function ListsPage() {
           onClose={() => setSelectedItem(null)}
           onShowToast={showToast}
           onHistoryChange={(events) => setPanelHistory(events)}
+          onSelectItem={setSelectedItem}
         />
       )}
     </div>
