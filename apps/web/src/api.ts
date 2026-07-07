@@ -235,6 +235,19 @@ export type WatchProviders = {
   ads: WatchProvider[];
 };
 
+export type EpisodeInfo = {
+  episodeNumber: number;
+  name: string;
+  airDate: string | null;
+  still: string | null;
+  runtime: number | null;
+};
+
+export type WatchedEpisode = {
+  season: number;
+  episode: number;
+};
+
 export type ItemListMembership = {
   listId: string;
   listName: string;
@@ -575,6 +588,34 @@ export const api = {
   getSeasons(imdbId: string, signal?: AbortSignal) {
     return request<{ seasons: Array<{ seasonNumber: number; name: string; episodeCount: number; airYear: number | null; poster: string | null }> }>(
       `/meta/series/${encodeURIComponent(imdbId)}/seasons`, { signal }
+    );
+  },
+  getSeasonEpisodes(imdbId: string, seasonNumber: number, signal?: AbortSignal) {
+    return request<{ episodes: EpisodeInfo[] }>(
+      `/meta/series/${encodeURIComponent(imdbId)}/season/${seasonNumber}/episodes`, { signal }
+    );
+  },
+  getWatchedEpisodes(imdbId: string, signal?: AbortSignal) {
+    return request<{ episodes: WatchedEpisode[] }>(
+      `/series/${encodeURIComponent(imdbId)}/watched-episodes`, { signal }
+    );
+  },
+  markEpisodeWatched(imdbId: string, seasonNumber: number, episodeNumber: number) {
+    return request<void>(
+      `/series/${encodeURIComponent(imdbId)}/season/${seasonNumber}/episode/${episodeNumber}/watch`,
+      { method: "POST" }
+    );
+  },
+  unmarkEpisodeWatched(imdbId: string, seasonNumber: number, episodeNumber: number) {
+    return request<void>(
+      `/series/${encodeURIComponent(imdbId)}/season/${seasonNumber}/episode/${episodeNumber}/watch`,
+      { method: "DELETE" }
+    );
+  },
+  markSeasonWatched(imdbId: string, seasonNumber: number, episodeNumbers: number[]) {
+    return request<{ marked: number; total: number }>(
+      `/series/${encodeURIComponent(imdbId)}/season/${seasonNumber}/watch-all`,
+      { method: "POST", body: JSON.stringify({ episodeNumbers }) }
     );
   },
   getWatchProviders(type: MediaType, imdbId: string, signal?: AbortSignal) {

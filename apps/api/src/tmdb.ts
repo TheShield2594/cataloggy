@@ -63,6 +63,16 @@ type TmdbFindResponse = {
   tv_results?: TmdbSearchResult[];
 };
 
+type TmdbSeasonResponse = {
+  episodes?: {
+    episode_number: number;
+    name: string;
+    air_date?: string | null;
+    still_path?: string | null;
+    runtime?: number | null;
+  }[];
+};
+
 type TmdbWatchProviderEntry = {
   provider_id: number;
   provider_name: string;
@@ -104,6 +114,14 @@ export type SeasonInfo = {
   episodeCount: number;
   airYear: number | null;
   poster: string | null;
+};
+
+export type EpisodeInfo = {
+  episodeNumber: number;
+  name: string;
+  airDate: string | null;
+  still: string | null;
+  runtime: number | null;
 };
 
 export type WatchProvider = {
@@ -405,6 +423,21 @@ export class TmdbClient {
           airYear: s.air_date ? new Date(s.air_date).getUTCFullYear() : null,
           poster: s.poster_path ? `${TmdbClient.imageBaseUrl}${s.poster_path}` : null,
         }));
+    } catch {
+      return [];
+    }
+  }
+
+  async getSeasonEpisodes(tmdbId: number, seasonNumber: number): Promise<EpisodeInfo[]> {
+    try {
+      const data = await this.request<TmdbSeasonResponse>(`/tv/${tmdbId}/season/${seasonNumber}`);
+      return (data.episodes ?? []).map((e) => ({
+        episodeNumber: e.episode_number,
+        name: e.name,
+        airDate: e.air_date ?? null,
+        still: e.still_path ? `${TmdbClient.imageBaseUrl}${e.still_path}` : null,
+        runtime: typeof e.runtime === "number" ? e.runtime : null,
+      }));
     } catch {
       return [];
     }

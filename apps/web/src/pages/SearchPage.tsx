@@ -510,7 +510,6 @@ export function SearchPage() {
           item={selectedItem}
           history={panelHistory}
           historyLoading={panelHistoryLoading}
-          listMap={listMap}
           onClose={() => setSelectedItem(null)}
           onShowToast={showToast}
           onHistoryChange={(events) => setPanelHistory(events)}
