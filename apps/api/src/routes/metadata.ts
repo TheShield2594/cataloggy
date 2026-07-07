@@ -5,7 +5,7 @@ import { upsertMetadata, fetchMetadata, syncMetadata } from "../lib/metadata.js"
 import { getOmdbApiKey, fetchOmdbRatings, upsertOmdbRatings } from "../lib/omdb.js";
 import { getRpdbApiKey, withRpdbPoster } from "../lib/rpdb.js";
 import { getMetadataType } from "../lib/types.js";
-import { castCache, seasonsCache, watchProvidersCache } from "../lib/cache.js";
+import { castCache, episodesCache, seasonsCache, watchProvidersCache } from "../lib/cache.js";
 import { getRegionSetting } from "../lib/settings.js";
 import { searchAnime } from "../lib/anilist-client.js";
 
@@ -128,6 +128,47 @@ const metadataRoutes: FastifyPluginAsync = async (app) => {
         return { seasons };
       } catch {
         return { seasons: [] };
+      }
+    }
+  );
+
+  app.get<{ Params: { imdbId: string; seasonNumber: string } }>(
+    "/meta/series/:imdbId/season/:seasonNumber/episodes",
+    async (request, reply) => {
+      const imdbId = request.params.imdbId.trim();
+      const seasonNumber = Number(request.params.seasonNumber);
+      if (!Number.isInteger(seasonNumber) || seasonNumber < 1) {
+        return reply.code(400).send({ error: "seasonNumber must be a positive integer" });
+      }
+
+      const cacheKey = `episodes:${imdbId}:${seasonNumber}`;
+      const cached = episodesCache.get(cacheKey);
+      if (cached) return { episodes: cached };
+
+      let meta = await prisma.metadata.findUnique({
+        where: { imdbId_type: { imdbId, type: "series" } },
+        select: { tmdbId: true },
+      });
+
+      if (!meta?.tmdbId) {
+        await fetchMetadata("series", imdbId).catch((err) =>
+          request.log.warn({ imdbId, err }, "Background metadata fetch failed")
+        );
+        meta = await prisma.metadata.findUnique({
+          where: { imdbId_type: { imdbId, type: "series" } },
+          select: { tmdbId: true },
+        });
+      }
+
+      if (!meta?.tmdbId) return { episodes: [] };
+
+      try {
+        const tmdb = await getTmdb();
+        const episodes = await tmdb.getSeasonEpisodes(meta.tmdbId, seasonNumber);
+        episodesCache.set(cacheKey, episodes);
+        return { episodes };
+      } catch {
+        return { episodes: [] };
       }
     }
   );

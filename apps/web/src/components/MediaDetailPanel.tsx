@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import {
-  Check, Clock, Film, Star, Tv, TvMinimalPlay, X,
+  Clock, Film, Star, Tv, TvMinimalPlay, X,
 } from "lucide-react";
-import { api, CatalogList, CheckIn, SearchResult, WatchEvent, WatchProviders } from "../api";
+import { api, CheckIn, SearchResult, WatchEvent, WatchProviders } from "../api";
 import { WatchDateModal } from "./media-detail/WatchDateModal";
 import { CheckInModal } from "./media-detail/CheckInModal";
 import { ExternalRatings, StarRating } from "./media-detail/RatingsSection";
+import { ListsSection } from "./media-detail/ListsSection";
 import { TagsSection } from "./media-detail/TagsSection";
 import { CastSection, CastMember } from "./media-detail/CastSection";
 import { SeasonsSection, SeasonInfo } from "./media-detail/SeasonsSection";
@@ -26,7 +27,6 @@ export function DetailPanel({
   item,
   history,
   historyLoading,
-  listMap,
   onClose,
   onShowToast,
   onHistoryChange,
@@ -34,12 +34,10 @@ export function DetailPanel({
   item: SearchResult;
   history: WatchEvent[];
   historyLoading: boolean;
-  listMap: Map<string, CatalogList>;
   onClose: () => void;
   onShowToast: (message: string, type: "success" | "error" | "info") => void;
   onHistoryChange: (events: WatchEvent[]) => void;
 }) {
-  const listNames = item.lists.map((id) => listMap.get(id)?.name).filter(Boolean) as string[];
   const dialogRef = useFocusTrap<HTMLDivElement>();
 
   useScrollLock();
@@ -312,15 +310,14 @@ export function DetailPanel({
           </div>
 
           {/* Lists */}
-          {listNames.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {listNames.map((name) => (
-                <span key={name} className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/20">
-                  <Check className="h-3 w-3" />{name}
-                </span>
-              ))}
-            </div>
-          )}
+          <ListsSection
+            imdbId={item.imdbId}
+            type={item.type}
+            name={item.name}
+            initialListIds={item.lists}
+            onError={(msg) => onShowToast(msg, "error")}
+            onToast={(msg, type) => onShowToast(msg, type)}
+          />
 
           {/* External Ratings */}
           <ExternalRatings imdbRating={item.imdbRating} rtScore={item.rtScore} mcScore={item.mcScore} />
@@ -357,7 +354,13 @@ export function DetailPanel({
 
           {/* Season Breakdown (series only) */}
           {item.type === "series" && (
-            <SeasonsSection seasons={seasons} loading={seasonsLoading} />
+            <SeasonsSection
+              imdbId={item.imdbId}
+              seasons={seasons}
+              loading={seasonsLoading}
+              onError={(msg) => onShowToast(msg, "error")}
+              onToast={(msg, type) => onShowToast(msg, type)}
+            />
           )}
 
           {/* Watch History */}

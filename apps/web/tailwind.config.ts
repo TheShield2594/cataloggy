@@ -19,11 +19,11 @@ export default {
           950: "#14110d",
         },
         claw: {
-          100: "#f7d8c4",
-          300: "#f0ad88",
-          400: "#e89163",
-          500: "#d97742",
-          600: "#c25f2e",
+          100: "rgb(var(--accent-2-rgb) / <alpha-value>)",
+          300: "rgb(var(--accent-2-rgb) / <alpha-value>)",
+          400: "rgb(var(--accent-2-rgb) / <alpha-value>)",
+          500: "rgb(var(--accent-rgb) / <alpha-value>)",
+          600: "rgb(var(--accent-strong-rgb) / <alpha-value>)",
         },
         cream: {
           50: "#faf6ef",

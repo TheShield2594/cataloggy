@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   AlertCircle,
   Film,
@@ -502,8 +502,6 @@ export function DashboardPage() {
     lists: [],
   }), []);
 
-  const emptyListMap = useMemo(() => new Map(), []);
-
   const load = useCallback(async () => {
     try {
       const [progressRes, historyRes, statsRes, checkinRes, nowPlayingRes] = await Promise.all([
@@ -947,7 +945,7 @@ export function DashboardPage() {
       {/* ── Recommended Movies ── */}
       {(recsLoading || recommendations.length > 0) && (
         <section>
-          <SectionHeader title={aiActive ? "AI Picks - Movies" : "Recommended For You"}>
+          <SectionHeader title={aiActive ? "AI Picks — Movies" : "Recommended For You"}>
             <div className="flex items-center gap-2">
               {aiActive && aiLastGeneratedAt && (() => {
                 const nextRefresh = new Date(new Date(aiLastGeneratedAt).getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -996,7 +994,7 @@ export function DashboardPage() {
       {/* ── Recommended Series ── */}
       {(seriesRecsLoading || seriesRecs.length > 0) && (
         <section>
-          <SectionHeader title={aiActive ? "AI Picks - Series" : "Recommended Series For You"}>
+          <SectionHeader title={aiActive ? "AI Picks — Series" : "Recommended Series For You"}>
             <div className="flex items-center gap-2">
               {aiActive && aiLastGeneratedAt && (() => {
                 const nextRefresh = new Date(new Date(aiLastGeneratedAt).getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -1089,19 +1087,12 @@ export function DashboardPage() {
                       </span>
                     ) : null}
                   </div>
-                  <div className="absolute top-2.5 right-2.5">
-                    <span className="rounded-md bg-black/70 px-2 py-0.5 text-2xs font-medium text-white/80 backdrop-blur-sm">
-                      {timeAgo(event.watchedAt)}
-                    </span>
-                  </div>
                 </div>
                 <p className="mt-2.5 truncate text-sm font-semibold transition-colors group-hover:text-claw-600" style={{ color: "var(--text)" }}>
                   {event.name}
                 </p>
                 <p className="text-2xs" style={{ color: "var(--text-dim)" }}>
-                  {event.type === "episode" && event.season != null && event.episode != null
-                    ? `Season ${event.season}, Episode ${event.episode}`
-                    : event.type === "movie" ? "Movie" : ""}
+                  {timeAgo(event.watchedAt)}
                 </p>
               </div>
             ))}
@@ -1115,7 +1106,6 @@ export function DashboardPage() {
           item={selectedItem}
           history={panelHistory}
           historyLoading={panelHistoryLoading}
-          listMap={emptyListMap}
           onClose={() => { setSelectedItem(null); void refreshProgress(); }}
           onShowToast={showToast}
           onHistoryChange={(events) => setPanelHistory(events)}
