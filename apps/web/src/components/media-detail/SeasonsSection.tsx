@@ -38,6 +38,7 @@ export function SeasonsSection({
     setWatched(new Set());
     setExpanded(null);
     setEpisodesBySeason({});
+    setEpisodesLoading({});
     api.getWatchedEpisodes(imdbId)
       .then((res) => {
         if (!cancelled) setWatched(new Set(res.episodes.map((e) => episodeKey(e.season, e.episode))));
