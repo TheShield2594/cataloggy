@@ -895,7 +895,11 @@ export function DashboardPage() {
 
         {hasUpcoming && (
           <section>
-            <SectionHeader title="Upcoming" count={calendarEntries.length} />
+            <SectionHeader title="Upcoming" count={calendarEntries.length}>
+              <Link to="/calendar" className="text-sm font-medium text-claw-400 hover:text-claw-300 transition-colors">
+                Full calendar &rarr;
+              </Link>
+            </SectionHeader>
             {calendarLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 3 }).map((_, i) => (
