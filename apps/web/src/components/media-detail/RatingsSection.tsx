@@ -127,7 +127,7 @@ export function StarRating({
                   onMouseLeave={() => setHoverRating(null)}
                   onFocus={() => setHoverRating(star)}
                   onBlur={() => setHoverRating(null)}
-                  className="flex flex-col items-center gap-0.5 p-0.5 disabled:opacity-50 sm:p-1"
+                  className="relative flex flex-col items-center gap-0.5 p-0.5 before:absolute before:inset-[-4px] before:content-[''] disabled:opacity-50 sm:p-1"
                   aria-label={`Rate ${star} out of 10`}
                   title={isCurrentRating ? "Click again to remove your rating" : undefined}
                 >

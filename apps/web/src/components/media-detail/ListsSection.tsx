@@ -34,11 +34,18 @@ export function ListsSection({
 
   useEffect(() => {
     if (!menuOpen) return;
-    const handler = (e: MouseEvent) => {
+    const handleClick = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
   }, [menuOpen]);
 
   const toggle = async (list: CatalogList) => {
@@ -68,6 +75,8 @@ export function ListsSection({
   const watchlist = lists.find((l) => l.kind === "watchlist");
   const inWatchlist = watchlist ? memberIds.includes(watchlist.id) : false;
   const memberLists = lists.filter((l) => memberIds.includes(l.id));
+  // The watchlist already has its own dedicated chip/button above — don't repeat it in the generic menu.
+  const otherLists = lists.filter((l) => l.kind !== "watchlist");
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -77,6 +86,7 @@ export function ListsSection({
           type="button"
           onClick={() => void toggle(list)}
           disabled={pending[list.id]}
+          aria-label={`Remove from ${list.name}`}
           className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/20 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
         >
           <Check className="h-3 w-3" />{list.name}
@@ -89,6 +99,7 @@ export function ListsSection({
           type="button"
           onClick={() => void toggle(watchlist)}
           disabled={pending[watchlist.id]}
+          aria-label={`Add ${name} to Watchlist`}
           className="inline-flex items-center gap-1.5 rounded-full bg-claw-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-claw-600 disabled:opacity-50"
         >
           <Heart className="h-3 w-3" /> Watchlist
@@ -113,10 +124,10 @@ export function ListsSection({
             className="absolute left-0 z-30 mt-1 w-48 overflow-hidden rounded-xl shadow-lg"
             style={{ background: "var(--bg-0)", borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }}
           >
-            {lists.length === 0 ? (
+            {otherLists.length === 0 ? (
               <p className="px-3 py-2.5 text-xs" style={{ color: "var(--text-mute)" }}>No lists yet</p>
             ) : (
-              lists.map((list) => {
+              otherLists.map((list) => {
                 const already = memberIds.includes(list.id);
                 return (
                   <button
@@ -125,6 +136,7 @@ export function ListsSection({
                     role="menuitem"
                     disabled={pending[list.id]}
                     onClick={() => void toggle(list)}
+                    aria-label={already ? `Remove from ${list.name}` : `Add to ${list.name}`}
                     className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-[var(--surface)] disabled:opacity-50"
                   >
                     {already ? (

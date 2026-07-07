@@ -19,8 +19,8 @@ export default {
           950: "#14110d",
         },
         claw: {
-          100: "rgb(var(--accent-2-rgb) / <alpha-value>)",
-          300: "rgb(var(--accent-2-rgb) / <alpha-value>)",
+          100: "rgb(var(--accent-tint-rgb) / <alpha-value>)",
+          300: "rgb(var(--accent-light-rgb) / <alpha-value>)",
           400: "rgb(var(--accent-2-rgb) / <alpha-value>)",
           500: "rgb(var(--accent-rgb) / <alpha-value>)",
           600: "rgb(var(--accent-strong-rgb) / <alpha-value>)",

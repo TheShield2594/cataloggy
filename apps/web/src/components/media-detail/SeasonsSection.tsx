@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Tv } from "lucide-react";
 import { api, EpisodeInfo } from "../../api";
 
@@ -27,6 +27,11 @@ export function SeasonsSection({
   const [episodesLoading, setEpisodesLoading] = useState<Record<number, boolean>>({});
   const [pendingEpisode, setPendingEpisode] = useState<Record<string, boolean>>({});
   const [pendingSeason, setPendingSeason] = useState<Record<number, boolean>>({});
+  const imdbIdRef = useRef(imdbId);
+
+  useEffect(() => {
+    imdbIdRef.current = imdbId;
+  }, [imdbId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,11 +48,17 @@ export function SeasonsSection({
 
   const loadEpisodes = (seasonNumber: number) => {
     if (episodesBySeason[seasonNumber] || episodesLoading[seasonNumber]) return;
+    const requestImdbId = imdbId;
     setEpisodesLoading((p) => ({ ...p, [seasonNumber]: true }));
     api.getSeasonEpisodes(imdbId, seasonNumber)
-      .then((res) => setEpisodesBySeason((c) => ({ ...c, [seasonNumber]: res.episodes })))
+      .then((res) => {
+        if (imdbIdRef.current !== requestImdbId) return;
+        setEpisodesBySeason((c) => ({ ...c, [seasonNumber]: res.episodes }));
+      })
       .catch(() => { /* best-effort */ })
-      .finally(() => setEpisodesLoading((p) => ({ ...p, [seasonNumber]: false })));
+      .finally(() => {
+        if (imdbIdRef.current === requestImdbId) setEpisodesLoading((p) => ({ ...p, [seasonNumber]: false }));
+      });
   };
 
   const toggleExpand = (seasonNumber: number) => {
@@ -78,16 +89,19 @@ export function SeasonsSection({
 
   const markSeasonWatched = async (season: SeasonInfo) => {
     if (pendingSeason[season.seasonNumber]) return;
+    const requestImdbId = imdbId;
     setPendingSeason((p) => ({ ...p, [season.seasonNumber]: true }));
     try {
       let episodes = episodesBySeason[season.seasonNumber];
       if (!episodes) {
         const res = await api.getSeasonEpisodes(imdbId, season.seasonNumber);
+        if (imdbIdRef.current !== requestImdbId) return;
         episodes = res.episodes;
         setEpisodesBySeason((c) => ({ ...c, [season.seasonNumber]: episodes! }));
       }
       const episodeNumbers = episodes.map((e) => e.episodeNumber);
       const res = await api.markSeasonWatched(imdbId, season.seasonNumber, episodeNumbers);
+      if (imdbIdRef.current !== requestImdbId) return;
       setWatched((prev) => {
         const next = new Set(prev);
         for (const n of episodeNumbers) next.add(episodeKey(season.seasonNumber, n));

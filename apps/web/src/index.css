@@ -24,6 +24,8 @@
   --accent-rgb: 217 119 66;
   --accent-2-rgb: 232 145 99;
   --accent-strong-rgb: 178 98 54;
+  --accent-tint-rgb: 250 233 224;
+  --accent-light-rgb: 242 191 165;
 }
 
 [data-theme="dark"] {
@@ -47,6 +49,8 @@
   --accent-rgb: 232 145 99;
   --accent-2-rgb: 240 173 136;
   --accent-strong-rgb: 190 119 81;
+  --accent-tint-rgb: 252 239 231;
+  --accent-light-rgb: 246 207 186;
 }
 
 [data-theme="glass"] {
@@ -70,6 +74,8 @@
   --accent-rgb: 10 132 255;
   --accent-2-rgb: 94 158 255;
   --accent-strong-rgb: 8 108 209;
+  --accent-tint-rgb: 223 236 255;
+  --accent-light-rgb: 162 199 255;
   --glass-blur: 24px;
 }
 
@@ -94,6 +100,8 @@
   --accent-rgb: 224 47 68;
   --accent-2-rgb: 255 90 110;
   --accent-strong-rgb: 184 39 56;
+  --accent-tint-rgb: 255 222 226;
+  --accent-light-rgb: 255 159 171;
 }
 
 [data-theme="letterboxd"] {
@@ -117,6 +125,8 @@
   --accent-rgb: 255 128 0;
   --accent-2-rgb: 0 224 84;
   --accent-strong-rgb: 209 105 0;
+  --accent-tint-rgb: 204 249 221;
+  --accent-light-rgb: 107 237 156;
 }
 
 html,
