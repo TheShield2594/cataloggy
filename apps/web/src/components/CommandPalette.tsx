@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BarChart3, Clapperboard, Film, List, Search, Settings, Tv } from "lucide-react";
+import { BarChart3, CalendarDays, Clapperboard, Film, List, Search, Settings, Tv } from "lucide-react";
 import { api, SearchResult } from "../api";
 import { Poster } from "./Poster";
 import { DetailPanel, useDetailPanel } from "./MediaDetailPanel";
@@ -105,6 +105,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     { id: "nav-dashboard", label: "Go to Dashboard", icon: Clapperboard, run: () => { onClose(); navigate("/"); } },
     { id: "nav-search", label: "Go to Search", icon: Search, run: () => { onClose(); navigate("/search"); } },
     { id: "nav-lists", label: "Go to Lists", icon: List, run: () => { onClose(); navigate("/lists"); } },
+    { id: "nav-calendar", label: "Go to Calendar", icon: CalendarDays, run: () => { onClose(); navigate("/calendar"); } },
     { id: "nav-stats", label: "Go to Stats", icon: BarChart3, run: () => { onClose(); navigate("/stats"); } },
     { id: "nav-settings", label: "Go to Settings", icon: Settings, run: () => { onClose(); navigate("/settings"); } },
   ];
