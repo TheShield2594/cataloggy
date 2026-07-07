@@ -262,7 +262,6 @@ export function HistoryPage() {
           item={selectedItem}
           history={panelHistory}
           historyLoading={panelHistoryLoading}
-          listMap={new Map()}
           onClose={() => setSelectedItem(null)}
           onShowToast={showToast}
           onHistoryChange={(updated) => setPanelHistory(updated)}

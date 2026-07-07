@@ -617,7 +617,6 @@ export function ListsPage() {
           item={selectedItem}
           history={panelHistory}
           historyLoading={panelHistoryLoading}
-          listMap={new Map(lists.map((l) => [l.id, l]))}
           onClose={() => setSelectedItem(null)}
           onShowToast={showToast}
           onHistoryChange={(events) => setPanelHistory(events)}

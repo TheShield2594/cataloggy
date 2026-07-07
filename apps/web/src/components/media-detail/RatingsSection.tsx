@@ -112,9 +112,9 @@ export function StarRating({
       <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
         <Star className="h-3.5 w-3.5" /> Your Rating <span className="font-normal">(1-10)</span>
       </h3>
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
         {groups.map((group, groupIndex) => (
-          <div key={groupIndex} className="flex items-center gap-0.5">
+          <div key={groupIndex} className="flex items-center gap-0 sm:gap-0.5">
             {group.map((star) => {
               const isFilled = userRating !== null && star <= userRating;
               const isPreview = star <= displayRating;
@@ -127,17 +127,17 @@ export function StarRating({
                   onMouseLeave={() => setHoverRating(null)}
                   onFocus={() => setHoverRating(star)}
                   onBlur={() => setHoverRating(null)}
-                  className="flex flex-col items-center gap-0.5 p-1 disabled:opacity-50"
+                  className="relative flex flex-col items-center gap-0.5 p-0.5 before:absolute before:inset-[-4px] before:content-[''] disabled:opacity-50 sm:p-1"
                   aria-label={`Rate ${star} out of 10`}
                   title={isCurrentRating ? "Click again to remove your rating" : undefined}
                 >
-                  <span className="relative grid h-7 w-7 place-items-center">
+                  <span className="relative grid h-5 w-5 place-items-center sm:h-7 sm:w-7">
                     <Star
-                      className={`absolute h-7 w-7 transition-colors duration-300 ${isPreview ? "text-amber-400" : ""}`}
+                      className={`absolute h-5 w-5 transition-colors duration-300 sm:h-7 sm:w-7 ${isPreview ? "text-amber-400" : ""}`}
                       style={isPreview ? undefined : { color: "var(--text-mute)" }}
                     />
                     <Star
-                      className={`star-shake-target absolute h-7 w-7 fill-amber-400 text-amber-400 transition-opacity duration-300 ${isFilled ? "star-pop opacity-100" : "opacity-0"}`}
+                      className={`star-shake-target absolute h-5 w-5 fill-amber-400 text-amber-400 transition-opacity duration-300 sm:h-7 sm:w-7 ${isFilled ? "star-pop opacity-100" : "opacity-0"}`}
                     />
                   </span>
                 </button>
@@ -145,7 +145,7 @@ export function StarRating({
             })}
           </div>
         ))}
-        <span className="ml-1 text-sm font-semibold text-amber-500">
+        <span className="ml-1 text-xs font-semibold text-amber-500 sm:text-sm">
           {hoverRating != null ? `Rating: ${hoverRating}/10` : userRating !== null ? `${userRating}/10` : ""}
         </span>
       </div>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BarChart3, Clapperboard, Film, List, Search, Settings, Tv } from "lucide-react";
-import { api, CatalogList, SearchResult } from "../api";
+import { api, SearchResult } from "../api";
 import { Poster } from "./Poster";
 import { DetailPanel, useDetailPanel } from "./MediaDetailPanel";
 import { useFocusTrap } from "../hooks/useFocusTrap";
@@ -44,16 +44,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [lists, setLists] = useState<CatalogList[]>([]);
   const dialogRef = useFocusTrap<HTMLDivElement>(open);
   const { showToast } = useToast();
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
-  const listMap = new Map<string, CatalogList>(lists.map((l) => [l.id, l]));
-
-  useEffect(() => {
-    if (!open) return;
-    void api.getLists().then(({ lists: loaded }) => setLists(loaded)).catch(() => {});
-  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -150,7 +143,6 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         item={selectedItem}
         history={panelHistory}
         historyLoading={panelHistoryLoading}
-        listMap={listMap}
         onClose={() => { setSelectedItem(null); onClose(); }}
         onShowToast={showToast}
         onHistoryChange={(events) => setPanelHistory(events)}
