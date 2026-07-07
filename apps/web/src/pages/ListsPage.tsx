@@ -359,8 +359,8 @@ export function ListsPage() {
                     <button
                       type="button"
                       onClick={() => setConfirmDeleteId(null)}
-                      className="flex-1 rounded-lg border bg-cream-50 px-3 py-1.5 text-xs font-semibold hover:bg-[var(--surface)] transition-colors"
-                      style={{ borderColor: "var(--border)", color: "var(--text-dim)" }}
+                      className="flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold hover:bg-[var(--surface)] transition-colors"
+                      style={{ borderColor: "var(--border)", color: "var(--text-dim)", background: "var(--bg-1)" }}
                     >
                       Cancel
                     </button>
@@ -369,10 +369,13 @@ export function ListsPage() {
               ) : (
                 <div className={`group flex items-center rounded-xl border transition-all md:w-full ${
                   selectedListId === list.id
-                    ? "border-claw-500/40 bg-claw-100/60"
-                    : "bg-white hover:bg-cream-50 hover:border-[var(--border-strong)]"
+                    ? "border-claw-500/40 bg-claw-500/10"
+                    : "hover:bg-[var(--surface)] hover:border-[var(--border-strong)]"
                 }`}
-                style={selectedListId === list.id ? undefined : { borderColor: "var(--border)" }}
+                style={{
+                  borderColor: selectedListId === list.id ? undefined : "var(--border)",
+                  background: selectedListId === list.id ? undefined : "var(--bg-1)",
+                }}
                 >
                   <button
                     type="button"
@@ -409,8 +412,8 @@ export function ListsPage() {
             value={newListName}
             onChange={(e) => setNewListName(e.target.value)}
             placeholder="New list name..."
-            className="min-w-0 flex-1 rounded-xl border bg-white px-3.5 py-2.5 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
-            style={{ borderColor: "var(--border)", color: "var(--text)" }}
+            className="min-w-0 flex-1 rounded-xl border px-3.5 py-2.5 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+            style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
           />
           <button
             type="submit"
@@ -450,8 +453,8 @@ export function ListsPage() {
                       value={renameValue}
                       onChange={(e) => setRenameValue(e.target.value)}
                       onBlur={() => void handleRenameList(selectedList.id)}
-                      className="min-w-0 flex-1 rounded-lg border bg-white px-3 py-1.5 text-2xl font-bold focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
-                      style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                      className="min-w-0 flex-1 rounded-lg border px-3 py-1.5 text-2xl font-bold focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                      style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
                     />
                     <button type="submit" aria-label="Save name" className="rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-500/10">
                       <Check className="h-5 w-5" />
@@ -495,16 +498,16 @@ export function ListsPage() {
                     onChange={(e) => setFilterQuery(e.target.value)}
                     placeholder="Search this list..."
                     aria-label="Search within list"
-                    className="w-full rounded-full border bg-white py-2 pl-9 pr-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
-                    style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                    className="w-full rounded-full border py-2 pl-9 pr-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                    style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
                   />
                 </div>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as SortOption)}
                   aria-label="Sort items"
-                  className="rounded-full border bg-white px-3.5 py-2 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
-                  style={{ borderColor: "var(--border)", color: "var(--text-dim)" }}
+                  className="rounded-full border px-3.5 py-2 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                  style={{ borderColor: "var(--border)", color: "var(--text-dim)", background: "var(--bg-1)" }}
                 >
                   {Object.entries(SORT_LABELS).map(([value, label]) => (
                     <option key={value} value={value}>Sort: {label}</option>
