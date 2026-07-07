@@ -91,14 +91,29 @@ type TmdbWatchProvidersResponse = {
   >;
 };
 
+type TmdbCastEntry = {
+  id: number;
+  name: string;
+  character: string;
+  profile_path?: string | null;
+  order: number;
+};
+
+type TmdbCrewEntry = {
+  id: number;
+  name: string;
+  job: string;
+  department?: string;
+};
+
 type TmdbCreditsResponse = {
-  cast?: {
-    id: number;
-    name: string;
-    character: string;
-    profile_path?: string | null;
-    order: number;
-  }[];
+  cast?: TmdbCastEntry[];
+  crew?: TmdbCrewEntry[];
+};
+
+type TmdbTvWithCreditsResponse = {
+  created_by?: { id: number; name: string }[];
+  credits?: TmdbCreditsResponse;
 };
 
 export type CastMember = {
@@ -106,6 +121,11 @@ export type CastMember = {
   character: string;
   photo: string | null;
   order: number;
+};
+
+export type Credits = {
+  cast: CastMember[];
+  director: string | null;
 };
 
 export type SeasonInfo = {
@@ -393,22 +413,41 @@ export class TmdbClient {
     return this.toMetadataPayloadFromDetails(type, details, imdbId);
   }
 
-  async getCast(type: MetadataType, tmdbId: number): Promise<CastMember[]> {
-    const mediaType = this.toMediaType(type);
+  async getCast(type: MetadataType, tmdbId: number): Promise<Credits> {
+    const empty: Credits = { cast: [], director: null };
     try {
-      const data = await this.request<TmdbCreditsResponse>(`/${mediaType}/${tmdbId}/credits`);
-      return (data.cast ?? [])
-        .sort((a, b) => a.order - b.order)
-        .slice(0, 20)
-        .map((c) => ({
-          name: c.name,
-          character: c.character,
-          photo: c.profile_path ? `${TmdbClient.profileBaseUrl}${c.profile_path}` : null,
-          order: c.order,
-        }));
+      if (type === MetadataType.movie) {
+        const data = await this.request<TmdbCreditsResponse>(`/movie/${tmdbId}/credits`);
+        return {
+          cast: this.mapCast(data.cast),
+          director: data.crew?.find((c) => c.job === "Director")?.name ?? null,
+        };
+      }
+
+      const data = await this.request<TmdbTvWithCreditsResponse>(`/tv/${tmdbId}`, {
+        append_to_response: "credits",
+      });
+      return {
+        cast: this.mapCast(data.credits?.cast),
+        director: data.created_by?.[0]?.name
+          ?? data.credits?.crew?.find((c) => c.job === "Executive Producer")?.name
+          ?? null,
+      };
     } catch {
-      return [];
+      return empty;
     }
+  }
+
+  private mapCast(cast: TmdbCastEntry[] | undefined): CastMember[] {
+    return (cast ?? [])
+      .sort((a, b) => a.order - b.order)
+      .slice(0, 20)
+      .map((c) => ({
+        name: c.name,
+        character: c.character,
+        photo: c.profile_path ? `${TmdbClient.profileBaseUrl}${c.profile_path}` : null,
+        order: c.order,
+      }));
   }
 
   async getSeasons(tmdbId: number): Promise<SeasonInfo[]> {

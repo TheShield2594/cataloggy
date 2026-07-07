@@ -90,6 +90,8 @@ export type SearchResult = {
   status?: string | null;
   network?: string | null;
   releaseDate?: string | null;
+  tmdbId?: number | null;
+  background?: string | null;
 };
 
 export type ListItem = {
@@ -123,6 +125,7 @@ export type SeriesProgress = {
   imdbId: string;
   name: string;
   poster?: string;
+  background?: string | null;
   lastSeason: number;
   lastEpisode: number;
   nextSeason: number;
@@ -205,6 +208,7 @@ export type CheckIn = {
   seriesImdbId?: string;
   name: string;
   poster?: string;
+  background?: string;
   season?: number;
   episode?: number;
   startedAt: string;
@@ -553,8 +557,8 @@ export const api = {
   getPersonalRecommendations(type: MediaType, limit = 20) {
     return request<{ metas: TrendingMeta[] }>(`/recommendations/personal?type=${type}&limit=${limit}`);
   },
-  getRecommendations(type: MediaType, imdbId: string) {
-    return request<{ metas: TrendingMeta[] }>(`/recommendations?type=${type}&imdbId=${encodeURIComponent(imdbId)}`);
+  getRecommendations(type: MediaType, imdbId: string, signal?: AbortSignal) {
+    return request<{ metas: TrendingMeta[] }>(`/recommendations?type=${type}&imdbId=${encodeURIComponent(imdbId)}`, { signal });
   },
   // Calendar
   getCalendar(days = 30) {
@@ -578,12 +582,14 @@ export const api = {
       imdbRating: number | null; rtScore: number | null; mcScore: number | null;
       runtime: number | null; certification: string | null;
       status: string | null; network: string | null; releaseDate: string | null;
+      tmdbId: number | null; background: string | null;
     }>(`/meta/${type}/${encodeURIComponent(imdbId)}`, { signal });
   },
   getCast(type: MediaType, imdbId: string, signal?: AbortSignal) {
-    return request<{ cast: Array<{ name: string; character: string; photo: string | null; order: number }> }>(
-      `/meta/${type}/${encodeURIComponent(imdbId)}/cast`, { signal }
-    );
+    return request<{
+      cast: Array<{ name: string; character: string; photo: string | null; order: number }>;
+      director: string | null;
+    }>(`/meta/${type}/${encodeURIComponent(imdbId)}/cast`, { signal });
   },
   getSeasons(imdbId: string, signal?: AbortSignal) {
     return request<{ seasons: Array<{ seasonNumber: number; name: string; episodeCount: number; airYear: number | null; poster: string | null }> }>(

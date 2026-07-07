@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import {
   Clock, Film, Star, Tv, TvMinimalPlay, X,
 } from "lucide-react";
-import { api, CheckIn, SearchResult, WatchEvent, WatchProviders } from "../api";
+import { api, CheckIn, SearchResult, TrendingMeta, WatchEvent, WatchProviders } from "../api";
 import { WatchDateModal } from "./media-detail/WatchDateModal";
 import { CheckInModal } from "./media-detail/CheckInModal";
-import { ExternalRatings, StarRating } from "./media-detail/RatingsSection";
+import { ExternalLinks, ExternalRatings, StarRating } from "./media-detail/RatingsSection";
 import { ListsSection } from "./media-detail/ListsSection";
 import { TagsSection } from "./media-detail/TagsSection";
 import { CastSection, CastMember } from "./media-detail/CastSection";
@@ -14,6 +14,7 @@ import { ProvidersSection } from "./media-detail/ProvidersSection";
 import { CheckInBlock } from "./media-detail/CheckInBlock";
 import { WatchHistorySection } from "./media-detail/WatchHistorySection";
 import { DropShowButton } from "./media-detail/DropShowButton";
+import { RecommendationsSection } from "./media-detail/RecommendationsSection";
 import { formatRuntime, statusColor, WatchLogTarget } from "./media-detail/detailPanelUtils";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useScrollLock } from "../hooks/useScrollLock";
@@ -30,6 +31,7 @@ export function DetailPanel({
   onClose,
   onShowToast,
   onHistoryChange,
+  onSelectItem,
 }: {
   item: SearchResult;
   history: WatchEvent[];
@@ -37,6 +39,7 @@ export function DetailPanel({
   onClose: () => void;
   onShowToast: (message: string, type: "success" | "error" | "info") => void;
   onHistoryChange: (events: WatchEvent[]) => void;
+  onSelectItem: (item: SearchResult) => void;
 }) {
   const dialogRef = useFocusTrap<HTMLDivElement>();
 
@@ -46,10 +49,15 @@ export function DetailPanel({
   // Cast
   const [cast, setCast] = useState<CastMember[]>([]);
   const [castLoading, setCastLoading] = useState(true);
+  const [director, setDirector] = useState<string | null>(null);
 
   // Where to watch
   const [providers, setProviders] = useState<WatchProviders | null>(null);
   const [providersLoading, setProvidersLoading] = useState(true);
+
+  // More like this
+  const [recommendations, setRecommendations] = useState<TrendingMeta[]>([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(true);
 
   // Seasons (series only)
   const [seasons, setSeasons] = useState<SeasonInfo[]>([]);
@@ -70,20 +78,24 @@ export function DetailPanel({
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
-    setCast([]); setCastLoading(true);
+    setCast([]); setCastLoading(true); setDirector(null);
     setSeasons([]); setSeasonsLoading(item.type === "series");
     setIsDropped(false); setDroppedLoading(item.type === "series");
     setActiveCheckin(null); setCheckinLoading(true);
     setProviders(null); setProvidersLoading(true);
+    setRecommendations([]); setRecommendationsLoading(true);
 
     const { signal } = controller;
     const loads: Promise<void>[] = [
       api.getCast(item.type, item.imdbId, signal).then((r) => {
-        if (!cancelled) { setCast(r.cast); setCastLoading(false); }
+        if (!cancelled) { setCast(r.cast); setDirector(r.director); setCastLoading(false); }
       }).catch(() => { if (!cancelled) setCastLoading(false); }),
       api.getWatchProviders(item.type, item.imdbId, signal).then((r) => {
         if (!cancelled) { setProviders(r.providers); setProvidersLoading(false); }
       }).catch(() => { if (!cancelled) setProvidersLoading(false); }),
+      api.getRecommendations(item.type, item.imdbId, signal).then((r) => {
+        if (!cancelled) { setRecommendations(r.metas); setRecommendationsLoading(false); }
+      }).catch(() => { if (!cancelled) setRecommendationsLoading(false); }),
       api.getCheckin(signal).then((r) => {
         if (!cancelled) {
           const c = r.checkin;
@@ -181,6 +193,22 @@ export function DetailPanel({
     } catch { /* best-effort */ }
   };
 
+  const handleSelectRecommendation = (rec: TrendingMeta) => {
+    onSelectItem({
+      imdbId: rec.id,
+      type: rec.type,
+      name: rec.name,
+      year: rec.year ?? null,
+      poster: rec.poster ?? null,
+      description: rec.description ?? null,
+      genres: rec.genres ?? [],
+      rating: rec.rating ?? null,
+      inWatchlist: false,
+      inCollection: false,
+      lists: [],
+    });
+  };
+
   const openWatchModal = () => {
     if (item.type === "movie") {
       setWatchTarget({ kind: "movie", imdbId: item.imdbId, releaseDate: item.releaseDate });
@@ -215,6 +243,14 @@ export function DetailPanel({
         className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/70 backdrop-blur-sm sm:p-6"
         onClick={onClose}
       >
+        {item.background && (
+          <img
+            src={item.background}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 hidden h-full w-full scale-110 object-cover opacity-30 blur-2xl sm:block"
+          />
+        )}
         <div
           ref={dialogRef}
           role="dialog"
@@ -307,6 +343,12 @@ export function DetailPanel({
                 </span>
               ))}
             </div>
+            {director && (
+              <p className="mt-1.5 text-sm" style={{ color: "var(--text-dim)" }}>
+                {item.type === "movie" ? "Directed by " : "Created by "}
+                <span style={{ color: "var(--text)" }}>{director}</span>
+              </p>
+            )}
           </div>
 
           {/* Lists */}
@@ -321,6 +363,9 @@ export function DetailPanel({
 
           {/* External Ratings */}
           <ExternalRatings imdbRating={item.imdbRating} rtScore={item.rtScore} mcScore={item.mcScore} />
+
+          {/* External Links */}
+          <ExternalLinks imdbId={item.imdbId} tmdbId={item.tmdbId} type={item.type} />
 
           {/* User Rating */}
           <StarRating imdbId={item.imdbId} type={item.type} onError={(msg) => onShowToast(msg, "error")} />
@@ -369,6 +414,13 @@ export function DetailPanel({
             loading={historyLoading}
             onLogWatch={openWatchModal}
             onDeleteEvent={(eventId) => void handleDeleteEvent(eventId)}
+          />
+
+          {/* More Like This */}
+          <RecommendationsSection
+            items={recommendations}
+            loading={recommendationsLoading}
+            onSelect={handleSelectRecommendation}
           />
 
           {/* Drop Show (series only) */}
@@ -446,6 +498,8 @@ export function useDetailPanel() {
             status: meta.status !== undefined ? meta.status : prev.status,
             network: meta.network !== undefined ? meta.network : prev.network,
             releaseDate: meta.releaseDate !== undefined ? meta.releaseDate : prev.releaseDate,
+            tmdbId: meta.tmdbId !== undefined ? meta.tmdbId : prev.tmdbId,
+            background: meta.background !== undefined ? meta.background : prev.background,
           };
         });
       };

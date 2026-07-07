@@ -1,7 +1,44 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Star } from "lucide-react";
+import { ExternalLink, Star } from "lucide-react";
 import { api, ApiError, MediaType } from "../../api";
-import { ImdbLogo, RtLogo, McIcon } from "./RatingLogos";
+import { ImdbLogo, RtLogo, McIcon, TmdbLogo } from "./RatingLogos";
+
+export function ExternalLinks({
+  imdbId, tmdbId, type,
+}: {
+  imdbId: string;
+  tmdbId: number | null | undefined;
+  type: MediaType;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <a
+        href={`https://www.imdb.com/title/${encodeURIComponent(imdbId)}/`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-1 rounded-md px-1 py-0.5 text-xs transition-opacity hover:opacity-80"
+        style={{ color: "var(--text-dim)" }}
+        aria-label="View on IMDb"
+      >
+        <ImdbLogo />
+        <ExternalLink className="h-3 w-3" />
+      </a>
+      {tmdbId != null && (
+        <a
+          href={`https://www.themoviedb.org/${type === "movie" ? "movie" : "tv"}/${tmdbId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 rounded-md px-1 py-0.5 text-xs transition-opacity hover:opacity-80"
+          style={{ color: "var(--text-dim)" }}
+          aria-label="View on TMDB"
+        >
+          <TmdbLogo />
+          <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
+    </div>
+  );
+}
 
 export function ExternalRatings({
   imdbRating, rtScore, mcScore,

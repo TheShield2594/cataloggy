@@ -55,7 +55,7 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
     const [metadata, episodeCounts] = await Promise.all([
       prisma.metadata.findMany({
         where: { imdbId: { in: imdbIds }, type: "series" },
-        select: { imdbId: true, name: true, poster: true, totalSeasons: true, totalEpisodes: true, tmdbId: true },
+        select: { imdbId: true, name: true, poster: true, background: true, totalSeasons: true, totalEpisodes: true, tmdbId: true },
       }),
       prisma.watchEvent.groupBy({
         by: ["seriesImdbId", "season", "episode"],
@@ -98,6 +98,7 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
               imdbId: result.value.imdbId,
               name: result.value.name,
               poster: result.value.poster,
+              background: result.value.background,
               totalSeasons: result.value.totalSeasons,
               totalEpisodes: result.value.totalEpisodes,
               tmdbId: result.value.tmdbId,
@@ -140,6 +141,7 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
           updatedAt: row.updatedAt,
           name: meta?.name ?? row.seriesImdbId,
           poster: meta?.poster ?? null,
+          background: meta?.background ?? null,
           totalSeasons: meta?.totalSeasons ?? null,
           totalEpisodes: meta?.totalEpisodes ?? null,
           watchedEpisodes: watchedBySeriesId.get(row.seriesImdbId) ?? null,

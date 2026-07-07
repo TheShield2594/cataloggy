@@ -1,4 +1,4 @@
-import { ScrobbleStatus, WatchEventType } from "@prisma/client";
+import { MetadataType, ScrobbleStatus, WatchEventType } from "@prisma/client";
 import type { FastifyPluginAsync, FastifyBaseLogger } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { recordWatchEvent } from "../lib/watch-event.js";
@@ -24,27 +24,41 @@ export const cleanupStaleSessions = async (logger?: FastifyBaseLogger) => {
   }
 };
 
-const toCheckInData = (row: {
-  type: WatchEventType;
-  imdbId: string;
-  seriesImdbId: string | null;
-  season: number | null;
-  episode: number | null;
-  name: string;
-  poster: string | null;
-  startedAt: Date;
-  expiresAt: Date | null;
-}): CheckInData => ({
+const toCheckInData = (
+  row: {
+    type: WatchEventType;
+    imdbId: string;
+    seriesImdbId: string | null;
+    season: number | null;
+    episode: number | null;
+    name: string;
+    poster: string | null;
+    startedAt: Date;
+    expiresAt: Date | null;
+  },
+  background?: string | null
+): CheckInData => ({
   type: row.type,
   imdbId: row.imdbId,
   seriesImdbId: row.seriesImdbId ?? undefined,
   name: row.name,
   poster: row.poster ?? undefined,
+  background: background ?? undefined,
   season: row.season ?? undefined,
   episode: row.episode ?? undefined,
   startedAt: row.startedAt.toISOString(),
   expiresAt: row.expiresAt?.toISOString(),
 });
+
+const getCheckInBackground = async (row: { type: WatchEventType; imdbId: string; seriesImdbId: string | null }) => {
+  const lookupId = row.type === "episode" && row.seriesImdbId ? row.seriesImdbId : row.imdbId;
+  const metaType = row.type === "movie" ? MetadataType.movie : MetadataType.series;
+  const meta = await prisma.metadata.findUnique({
+    where: { imdbId_type: { imdbId: lookupId, type: metaType } },
+    select: { background: true },
+  });
+  return meta?.background ?? null;
+};
 
 const scrobbleRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", resolveProfile);
@@ -54,7 +68,8 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
   app.get("/checkin", async (request) => {
     const row = await prisma.checkIn.findUnique({ where: { profileId: request.profileId! } });
     if (!row) return { checkin: null };
-    return { checkin: toCheckInData(row) };
+    const background = await getCheckInBackground(row).catch(() => null);
+    return { checkin: toCheckInData(row, background) };
   });
 
   app.post<{
@@ -89,7 +104,8 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
       create: { profileId, ...data },
       update: data,
     });
-    return { checkin: toCheckInData(row) };
+    const background = await getCheckInBackground(row).catch(() => null);
+    return { checkin: toCheckInData(row, background) };
   });
 
   app.delete<{ Querystring: { log?: string } }>("/checkin", async (request, reply) => {
