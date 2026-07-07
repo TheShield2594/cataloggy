@@ -199,7 +199,7 @@ export function HistoryPage() {
                   tabIndex={0}
                   onClick={() => setSelectedItem(toSearchResult(event))}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedItem(toSearchResult(event)); } }}
-                  className="flex cursor-pointer items-center gap-3 rounded-xl p-3 transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
+                  className="group flex cursor-pointer items-center gap-3 rounded-xl p-3 transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
                   style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
                 >
                   <div
@@ -236,7 +236,7 @@ export function HistoryPage() {
                     type="button"
                     onClick={(e) => { e.stopPropagation(); void handleDelete(event.id); }}
                     disabled={deletingId === event.id}
-                    className="flex h-9 w-9 flex-none items-center justify-center rounded-lg transition-colors hover:bg-rose-500/10 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2"
+                    className="flex h-9 w-9 flex-none items-center justify-center rounded-lg opacity-100 transition-all sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/10 disabled:opacity-50 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2"
                     aria-label="Delete watch event"
                     title="Remove from history"
                   >
