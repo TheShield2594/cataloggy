@@ -1,5 +1,5 @@
 import { LRUCache } from "lru-cache";
-import type { CastMember, EpisodeInfo, SeasonInfo, WatchProviders } from "../tmdb.js";
+import type { Credits, EpisodeInfo, SeasonInfo, WatchProviders } from "../tmdb.js";
 import type { StremioMetaPreview } from "./types.js";
 
 export type TrendingCacheEntry = { data: StremioMetaPreview[]; reasons?: Record<string, string> };
@@ -19,7 +19,7 @@ export const watchedImdbIdsCache = new LRUCache<string, Set<string>>({
   max: 200,
   ttl: WATCHED_IMDB_IDS_CACHE_TTL_MS,
 });
-export const castCache = new LRUCache<string, CastMember[]>({ max: 500, ttl: CAST_CACHE_TTL_MS });
+export const castCache = new LRUCache<string, Credits>({ max: 500, ttl: CAST_CACHE_TTL_MS });
 export const seasonsCache = new LRUCache<string, SeasonInfo[]>({ max: 500, ttl: CAST_CACHE_TTL_MS });
 export const episodesCache = new LRUCache<string, EpisodeInfo[]>({ max: 1000, ttl: CAST_CACHE_TTL_MS });
 export const watchProvidersCache = new LRUCache<string, WatchProviders>({

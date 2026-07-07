@@ -147,6 +147,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         onClose={() => { setSelectedItem(null); onClose(); }}
         onShowToast={showToast}
         onHistoryChange={(events) => setPanelHistory(events)}
+        onSelectItem={setSelectedItem}
       />
     );
   }

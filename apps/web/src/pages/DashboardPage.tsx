@@ -27,7 +27,7 @@ import {
   WatchStats,
 } from "../api";
 import { Link } from "react-router-dom";
-import { useHorizontalScroll } from "../components/carousel-utils";
+import { fadeMaskStyle, useHorizontalScroll } from "../components/carousel-utils";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { Poster } from "../components/Poster";
 import { TicketTile } from "../components/TicketTile";
@@ -167,7 +167,7 @@ function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
         {item.genres && item.genres.length > 0 ? ` · ${item.genres.slice(0, 2).join(", ")}` : ""}
       </p>
       {reason && (
-        <p className="mt-0.5 truncate text-2xs italic" style={{ color: "var(--text-dim)" }} title={reason}>
+        <p className="mt-0.5 line-clamp-2 text-2xs italic leading-snug" style={{ color: "var(--text-dim)" }} title={reason}>
           {reason}
         </p>
       )}
@@ -274,17 +274,18 @@ function ContinueWatchingHero({
   onSelect: () => void;
 }) {
   const progressPct = computeProgressPct(s);
+  const heroArt = s.background ?? s.poster;
   return (
     <div
       className="relative mb-3 flex flex-col gap-4 overflow-hidden rounded-2xl p-4 sm:flex-row sm:items-center"
       style={{ minHeight: "10.5rem", border: "1px solid var(--border)" }}
     >
-      {s.poster && (
+      {heroArt && (
         <img
-          src={s.poster}
+          src={heroArt}
           alt=""
           aria-hidden="true"
-          className="absolute inset-0 h-full w-full object-cover blur-2xl scale-110 opacity-40"
+          className={`absolute inset-0 h-full w-full object-cover scale-110 ${s.background ? "opacity-60" : "blur-2xl opacity-40"}`}
         />
       )}
       <div
@@ -489,7 +490,7 @@ export function DashboardPage() {
   const { showToast } = useToast();
 
   const toSearchResult = useCallback((imdbId: string, type: "movie" | "series", name: string, opts?: {
-    poster?: string; year?: number | null; description?: string | null; genres?: string[]; rating?: number | null;
+    poster?: string; year?: number | null; description?: string | null; genres?: string[]; rating?: number | null; background?: string | null;
   }): SearchResult => ({
     imdbId, type, name,
     year: opts?.year ?? null,
@@ -500,6 +501,7 @@ export function DashboardPage() {
     inWatchlist: false,
     inCollection: false,
     lists: [],
+    background: opts?.background ?? null,
   }), []);
 
   const load = useCallback(async () => {
@@ -698,12 +700,12 @@ export function DashboardPage() {
           className="relative overflow-hidden rounded-3xl"
           style={{ minHeight: "13rem", border: "1px solid var(--border)" }}
         >
-          {activeCheckin.poster && (
+          {(activeCheckin.background ?? activeCheckin.poster) && (
             <img
-              src={activeCheckin.poster}
+              src={activeCheckin.background ?? activeCheckin.poster}
               alt=""
               aria-hidden="true"
-              className="absolute inset-0 h-full w-full object-cover blur-2xl scale-110 opacity-50"
+              className={`absolute inset-0 h-full w-full object-cover scale-110 ${activeCheckin.background ? "opacity-70" : "blur-2xl opacity-50"}`}
             />
           )}
           <div
@@ -835,11 +837,15 @@ export function DashboardPage() {
                 isMarking={markingNext.has(continueHeroItem.imdbId)}
                 isDone={markedDone.has(continueHeroItem.imdbId)}
                 onMarkNext={() => void handleMarkNext(continueHeroItem.imdbId)}
-                onSelect={() => setSelectedItem(toSearchResult(continueHeroItem.imdbId, "series", continueHeroItem.name, { poster: continueHeroItem.poster }))}
+                onSelect={() => setSelectedItem(toSearchResult(continueHeroItem.imdbId, "series", continueHeroItem.name, { poster: continueHeroItem.poster, background: continueHeroItem.background }))}
               />
             )}
             {continueRowItems.length > 0 && (
-              <div ref={continueScroll.ref} className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide">
+              <div
+                ref={continueScroll.ref}
+                className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
+                style={fadeMaskStyle(continueScroll.canScrollLeft, continueScroll.canScrollRight)}
+              >
                 {continueRowItems.map((s, index) => (
                   <ContinueWatchingCard
                     key={s.imdbId}
@@ -848,7 +854,7 @@ export function DashboardPage() {
                     isMarking={markingNext.has(s.imdbId)}
                     isDone={markedDone.has(s.imdbId)}
                     onMarkNext={() => void handleMarkNext(s.imdbId)}
-                    onSelect={() => setSelectedItem(toSearchResult(s.imdbId, "series", s.name, { poster: s.poster }))}
+                    onSelect={() => setSelectedItem(toSearchResult(s.imdbId, "series", s.name, { poster: s.poster, background: s.background }))}
                   />
                 ))}
               </div>
@@ -985,7 +991,11 @@ export function DashboardPage() {
               ? <p className="text-sm italic" style={{ color: "var(--text-dim)" }}>Generating AI recommendations...</p>
               : <ContinueWatchingSkeleton />
           ) : (
-            <div ref={recsScroll.ref} className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide">
+            <div
+              ref={recsScroll.ref}
+              className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
+              style={fadeMaskStyle(recsScroll.canScrollLeft, recsScroll.canScrollRight)}
+            >
               {recommendations.map((item) => (
                 <DiscoveryCard
                   key={item.id}
@@ -1034,7 +1044,11 @@ export function DashboardPage() {
               ? <p className="text-sm italic" style={{ color: "var(--text-dim)" }}>Generating AI recommendations...</p>
               : <ContinueWatchingSkeleton />
           ) : (
-            <div ref={seriesRecsScroll.ref} className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide">
+            <div
+              ref={seriesRecsScroll.ref}
+              className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
+              style={fadeMaskStyle(seriesRecsScroll.canScrollLeft, seriesRecsScroll.canScrollRight)}
+            >
               {seriesRecs.map((item) => (
                 <DiscoveryCard
                   key={item.id}
@@ -1073,7 +1087,11 @@ export function DashboardPage() {
             <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>No watch history yet.</p>
           </div>
         ) : (
-          <div ref={recentScroll.ref} className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide">
+          <div
+            ref={recentScroll.ref}
+            className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
+            style={fadeMaskStyle(recentScroll.canScrollLeft, recentScroll.canScrollRight)}
+          >
             {history.map((event) => (
               <div
                 key={event.id}
@@ -1123,6 +1141,7 @@ export function DashboardPage() {
           onClose={() => { setSelectedItem(null); void refreshProgress(); }}
           onShowToast={showToast}
           onHistoryChange={(events) => setPanelHistory(events)}
+          onSelectItem={setSelectedItem}
         />
       )}
 
