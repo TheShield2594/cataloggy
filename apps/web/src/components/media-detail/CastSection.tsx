@@ -1,4 +1,5 @@
-import { User } from "lucide-react";
+import { ChevronLeft, ChevronRight, User } from "lucide-react";
+import { fadeMaskStyle, useHorizontalScroll } from "../carousel-utils";
 
 export interface CastMember {
   name: string;
@@ -7,6 +8,8 @@ export interface CastMember {
 }
 
 export function CastSection({ cast, loading }: { cast: CastMember[]; loading: boolean }) {
+  const { ref, canScrollLeft, canScrollRight, scroll } = useHorizontalScroll();
+
   if (loading) {
     return (
       <div>
@@ -27,10 +30,40 @@ export function CastSection({ cast, loading }: { cast: CastMember[]; loading: bo
 
   return (
     <div>
-      <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
-        <User className="h-3.5 w-3.5" /> Cast
-      </h3>
-      <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+          <User className="h-3.5 w-3.5" /> Cast
+        </h3>
+        {(canScrollLeft || canScrollRight) && (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => scroll("left")}
+              disabled={!canScrollLeft}
+              className="flex h-6 w-6 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95"
+              style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
+              aria-label="Scroll cast left"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scroll("right")}
+              disabled={!canScrollRight}
+              className="flex h-6 w-6 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95"
+              style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
+              aria-label="Scroll cast right"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+      <div
+        ref={ref}
+        className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide"
+        style={fadeMaskStyle(canScrollLeft, canScrollRight)}
+      >
         {cast.map((member, i) => (
           <div key={`${i}-${member.name}`} className="flex-none w-16 text-center">
             {member.photo ? (

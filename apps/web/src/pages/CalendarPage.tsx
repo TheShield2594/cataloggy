@@ -367,6 +367,7 @@ export function CalendarPage() {
           onClose={() => setSelectedItem(null)}
           onShowToast={showToast}
           onHistoryChange={(events) => setPanelHistory(events)}
+          onSelectItem={setSelectedItem}
         />
       )}
 

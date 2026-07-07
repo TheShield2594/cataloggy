@@ -66,7 +66,7 @@ const metadataRoutes: FastifyPluginAsync = async (app) => {
       const imdbId = request.params.imdbId.trim();
       const cacheKey = `cast:${type}:${imdbId}`;
       const cached = castCache.get(cacheKey);
-      if (cached) return { cast: cached };
+      if (cached) return cached;
 
       let meta = await prisma.metadata.findUnique({
         where: { imdbId_type: { imdbId, type } },
@@ -83,15 +83,15 @@ const metadataRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      if (!meta?.tmdbId) return { cast: [] };
+      if (!meta?.tmdbId) return { cast: [], director: null };
 
       try {
         const tmdb = await getTmdb();
-        const cast = await tmdb.getCast(type, meta.tmdbId);
-        castCache.set(cacheKey, cast);
-        return { cast };
+        const credits = await tmdb.getCast(type, meta.tmdbId);
+        castCache.set(cacheKey, credits);
+        return credits;
       } catch {
-        return { cast: [] };
+        return { cast: [], director: null };
       }
     }
   );
