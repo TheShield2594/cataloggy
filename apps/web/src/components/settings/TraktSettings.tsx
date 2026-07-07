@@ -72,7 +72,7 @@ export function TraktSettings() {
       </div>
 
       {status?.redirectUri && !status.connected && status.configured && (
-        <div className="rounded-xl bg-cream-100 px-4 py-3 space-y-1" style={{ border: "1px solid var(--border)" }}>
+        <div className="rounded-xl px-4 py-3 space-y-1" style={{ border: "1px solid var(--border)", background: "var(--surface)" }}>
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>
             Your Trakt app's <strong style={{ color: "var(--text-dim)" }}>Redirect URI</strong> must be set to:
           </p>
@@ -107,16 +107,16 @@ export function TraktSettings() {
             <button
               type="button"
               onClick={disconnect}
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-rose-600 hover:text-white border border-[var(--border-strong)]"
-              style={{ color: "var(--text-dim)" }}
+              className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-rose-600 hover:text-white border border-[var(--border-strong)]"
+              style={{ color: "var(--text-dim)", background: "var(--bg-1)" }}
             >
               <Unplug size={16} /> Disconnect
             </button>
             <button
               type="button"
               onClick={fetchStatus}
-              className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)] border border-[var(--border-strong)]"
-              style={{ color: "var(--text-dim)" }}
+              className="rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)] border border-[var(--border-strong)]"
+              style={{ color: "var(--text-dim)", background: "var(--bg-1)" }}
             >
               Refresh
             </button>

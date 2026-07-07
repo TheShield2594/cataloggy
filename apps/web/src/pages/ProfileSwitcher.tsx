@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { AlertCircle, ArrowRight, Clapperboard, Loader2, Lock, Plus, User, X } from "lucide-react";
+import { AlertCircle, ArrowRight, Clapperboard, Loader2, Lock, Plus, X } from "lucide-react";
 import { api, ApiError, Profile, runtimeConfig } from "../api";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 
@@ -115,8 +115,8 @@ function CreateProfileForm({
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Profile name"
-        className="w-full rounded-xl border bg-cream-50 px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
-        style={{ borderColor: "var(--border)", color: "var(--text)" }}
+        className="w-full rounded-xl border px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+        style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
       />
       <input
         type="password"
@@ -124,8 +124,8 @@ function CreateProfileForm({
         value={pin}
         onChange={(e) => setPin(e.target.value)}
         placeholder="PIN (optional)"
-        className="w-full rounded-xl border bg-cream-50 px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
-        style={{ borderColor: "var(--border)", color: "var(--text)" }}
+        className="w-full rounded-xl border px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+        style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
       />
       {error && (
         <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>
@@ -135,8 +135,8 @@ function CreateProfileForm({
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-xl border bg-white px-5 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
-            style={{ borderColor: "var(--border)", color: "var(--text-dim)" }}
+            className="flex-1 rounded-xl border px-5 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
+            style={{ borderColor: "var(--border)", color: "var(--text-dim)", background: "var(--bg-1)" }}
           >
             Cancel
           </button>
@@ -197,8 +197,8 @@ function PinPrompt({
         value={pin}
         onChange={(e) => setPin(e.target.value)}
         placeholder="PIN"
-        className="w-full rounded-xl border bg-cream-50 px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
-        style={{ borderColor: "var(--border)", color: "var(--text)" }}
+        className="w-full rounded-xl border px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+        style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
       />
       {error && (
         <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>
@@ -207,8 +207,8 @@ function PinPrompt({
         <button
           type="button"
           onClick={onBack}
-          className="flex-1 rounded-xl border bg-white px-5 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
-          style={{ borderColor: "var(--border)", color: "var(--text-dim)" }}
+          className="flex-1 rounded-xl border px-5 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
+          style={{ borderColor: "var(--border)", color: "var(--text-dim)", background: "var(--bg-1)" }}
         >
           Back
         </button>
@@ -222,6 +222,18 @@ function PinPrompt({
       </div>
     </form>
   );
+}
+
+const AVATAR_COLORS = ["#f97316", "#0ea5e9", "#a855f7", "#22c55e", "#ec4899", "#eab308"];
+
+function avatarColor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function initials(name: string) {
+  return name.trim().slice(0, 2).toUpperCase();
 }
 
 function ProfilePicker({
@@ -245,11 +257,14 @@ function ProfilePicker({
             key={profile.id}
             type="button"
             onClick={() => onSelect(profile)}
-            className="flex w-full items-center gap-3 rounded-xl border bg-white px-4 py-3 text-left text-sm font-medium transition-colors hover:border-claw-500/60 hover:bg-cream-50"
-            style={{ borderColor: "var(--border)", color: "var(--text)" }}
+            className="flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors hover:border-claw-500/60 hover:bg-[var(--surface)]"
+            style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ backgroundColor: "var(--surface)" }}>
-              <User className="h-4 w-4" style={{ color: "var(--text-dim)" }} />
+            <span
+              className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-xs font-bold text-white"
+              style={{ backgroundColor: avatarColor(profile.name) }}
+            >
+              {initials(profile.name)}
             </span>
             <span className="flex-1">{profile.name}</span>
             {profile.hasPin && <Lock className="h-4 w-4" style={{ color: "var(--text-mute)" }} />}
@@ -259,8 +274,8 @@ function ProfilePicker({
       <button
         type="button"
         onClick={onCreateNew}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border bg-white px-5 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
-        style={{ borderColor: "var(--border)", color: "var(--text-dim)" }}
+        className="flex w-full items-center justify-center gap-2 rounded-xl border px-5 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
+        style={{ borderColor: "var(--border)", color: "var(--text-dim)", background: "var(--bg-1)" }}
       >
         <Plus size={16} /> New Profile
       </button>
