@@ -417,7 +417,7 @@ export function ListsPage() {
           />
           <button
             type="submit"
-            className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors"
+            className="rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 transition-colors"
           >
             Create
           </button>
@@ -502,17 +502,27 @@ export function ListsPage() {
                     style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
                   />
                 </div>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortOption)}
+                <div
+                  role="group"
                   aria-label="Sort items"
-                  className="rounded-full border px-3.5 py-2 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
-                  style={{ borderColor: "var(--border)", color: "var(--text-dim)", background: "var(--bg-1)" }}
+                  className="flex flex-none items-center gap-1 rounded-full border p-1"
+                  style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}
                 >
-                  {Object.entries(SORT_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>Sort: {label}</option>
+                  {(Object.entries(SORT_LABELS) as [SortOption, string][]).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setSortBy(value)}
+                      aria-pressed={sortBy === value}
+                      className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                        sortBy === value ? "bg-claw-500 text-white" : "hover:text-[var(--text)]"
+                      }`}
+                      style={sortBy === value ? undefined : { color: "var(--text-mute)" }}
+                    >
+                      {label}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
             )}
 
