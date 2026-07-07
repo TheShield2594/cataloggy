@@ -380,10 +380,12 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
       // recordWatchEvent's per-call progress upsert can race when these run
       // concurrently (e.g. two "no existing row" creates for a brand new
       // series), so re-assert the true maximum once all writes have landed.
+      // Use the full requested set (not just toMark) — episodes that were
+      // already watched before this call still count toward "furthest watched".
       if (toMark.length > 0) {
         await upsertSeriesProgressIfNewer(profileId, imdbId, {
           lastSeason: seasonNumber,
-          lastEpisode: Math.max(...toMark),
+          lastEpisode: Math.max(...episodeNumbers),
           lastWatchedAt: watchedAt,
         });
       }
