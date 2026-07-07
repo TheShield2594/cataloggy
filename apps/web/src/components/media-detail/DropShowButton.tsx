@@ -22,20 +22,17 @@ export function DropShowButton({
   };
 
   return (
-    <div className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+    <div className="flex justify-end pt-1">
       <button
         type="button"
         onClick={handleClick}
         aria-pressed={isDropped}
         title={isDropped ? "Undrop this show" : "Mark this show as dropped"}
-        className={`w-full flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
-          isDropped
-            ? "hover:bg-[var(--surface-strong)]"
-            : "bg-rose-500/10 text-rose-500 ring-1 ring-rose-500/20 hover:bg-rose-500/20"
+        className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors ${
+          isDropped ? "text-[var(--text-dim)] hover:text-rose-500" : "text-[var(--text-mute)] hover:text-rose-500"
         }`}
-        style={isDropped ? { background: "var(--surface)", color: "var(--text-dim)" } : undefined}
       >
-        {isDropped ? <Check className="h-4 w-4" aria-hidden="true" /> : <X className="h-4 w-4" aria-hidden="true" />}
+        {isDropped ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
         {isDropped ? "Dropped" : "Drop Show"}
       </button>
     </div>

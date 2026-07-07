@@ -679,6 +679,14 @@ export function DashboardPage() {
   const monthly = detailedStats?.monthly ?? [];
   const hasUpcoming = calendarLoading || calendarEntries.length > 0;
 
+  // The check-in hero and the Continue Watching hero can end up showing the same series
+  // (e.g. actively checked into the episode that's also furthest along in progress).
+  // When that happens, skip the redundant Continue hero and fold that series into the row instead.
+  const checkinSeriesId = activeCheckin ? (activeCheckin.type === "episode" ? activeCheckin.seriesImdbId : activeCheckin.imdbId) : null;
+  const checkinMatchesTopProgress = checkinSeriesId != null && progress[0]?.imdbId === checkinSeriesId;
+  const continueHeroItem = checkinMatchesTopProgress ? undefined : progress[0];
+  const continueRowItems = checkinMatchesTopProgress ? progress : progress.slice(1);
+
   return (
     <div className="space-y-8">
       {/* ── Greeting strip ── */}
@@ -821,16 +829,18 @@ export function DashboardPage() {
           </div>
         ) : (
           <>
-            <ContinueWatchingHero
-              s={progress[0]}
-              isMarking={markingNext.has(progress[0].imdbId)}
-              isDone={markedDone.has(progress[0].imdbId)}
-              onMarkNext={() => void handleMarkNext(progress[0].imdbId)}
-              onSelect={() => setSelectedItem(toSearchResult(progress[0].imdbId, "series", progress[0].name, { poster: progress[0].poster }))}
-            />
-            {progress.length > 1 && (
+            {continueHeroItem && (
+              <ContinueWatchingHero
+                s={continueHeroItem}
+                isMarking={markingNext.has(continueHeroItem.imdbId)}
+                isDone={markedDone.has(continueHeroItem.imdbId)}
+                onMarkNext={() => void handleMarkNext(continueHeroItem.imdbId)}
+                onSelect={() => setSelectedItem(toSearchResult(continueHeroItem.imdbId, "series", continueHeroItem.name, { poster: continueHeroItem.poster }))}
+              />
+            )}
+            {continueRowItems.length > 0 && (
               <div ref={continueScroll.ref} className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide">
-                {progress.slice(1).map((s, index) => (
+                {continueRowItems.map((s, index) => (
                   <ContinueWatchingCard
                     key={s.imdbId}
                     s={s}
@@ -885,7 +895,11 @@ export function DashboardPage() {
 
         {hasUpcoming && (
           <section>
-            <SectionHeader title="Upcoming" count={calendarEntries.length} />
+            <SectionHeader title="Upcoming" count={calendarEntries.length}>
+              <Link to="/calendar" className="text-sm font-medium text-claw-400 hover:text-claw-300 transition-colors">
+                Full calendar &rarr;
+              </Link>
+            </SectionHeader>
             {calendarLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 3 }).map((_, i) => (
