@@ -362,16 +362,29 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
       const toMark = episodeNumbers.filter((n) => !alreadyWatched.has(n));
 
       const watchedAt = new Date();
-      for (const episode of toMark) {
-        await recordWatchEvent({
-          type: "episode",
-          imdbId,
-          seriesImdbId: imdbId,
-          season: seasonNumber,
-          episode,
-          watchedAt,
-          source: "manual",
-          request,
+      await Promise.all(
+        toMark.map((episode) =>
+          recordWatchEvent({
+            type: "episode",
+            imdbId,
+            seriesImdbId: imdbId,
+            season: seasonNumber,
+            episode,
+            watchedAt,
+            source: "manual",
+            request,
+          })
+        )
+      );
+
+      // recordWatchEvent's per-call progress upsert can race when these run
+      // concurrently (e.g. two "no existing row" creates for a brand new
+      // series), so re-assert the true maximum once all writes have landed.
+      if (toMark.length > 0) {
+        await upsertSeriesProgressIfNewer(profileId, imdbId, {
+          lastSeason: seasonNumber,
+          lastEpisode: Math.max(...toMark),
+          lastWatchedAt: watchedAt,
         });
       }
 
