@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, Route, Routes, useLocation } from "react-router-dom";
-import { BarChart3, Clapperboard, History, Loader2, Search, List, Settings, User } from "lucide-react";
+import { BarChart3, CalendarDays, Clapperboard, History, Loader2, Search, List, Settings, User } from "lucide-react";
 import { api, Profile, runtimeConfig } from "./api";
 import { CommandPalette, useCommandPalette } from "./components/CommandPalette";
 import { InstallButton } from "./components/InstallButton";
@@ -13,6 +13,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ProfileSwitcher } from "./pages/ProfileSwitcher";
 import { SetupWizard } from "./pages/SetupWizard";
 
+const CalendarPage = lazy(() => import("./pages/CalendarPage").then((m) => ({ default: m.CalendarPage })));
 const HistoryPage = lazy(() => import("./pages/HistoryPage").then((m) => ({ default: m.HistoryPage })));
 const ListsPage = lazy(() => import("./pages/ListsPage").then((m) => ({ default: m.ListsPage })));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })));
@@ -24,6 +25,7 @@ const mobileNavItems = [
   { to: "/", label: "Dashboard", icon: Clapperboard, end: true },
   { to: "/search", label: "Search", icon: Search, end: false },
   { to: "/lists", label: "Lists", icon: List, end: false },
+  { to: "/calendar", label: "Calendar", icon: CalendarDays, end: false },
   { to: "/history", label: "History", icon: History, end: false },
   { to: "/stats", label: "Stats", icon: BarChart3, end: false },
 ] as const;
@@ -200,6 +202,7 @@ function AppShell({
             <Route path="/" element={<DashboardPage />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/lists/*" element={<ListsPage />} />
+            <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/stats" element={<StatsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
