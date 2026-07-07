@@ -328,10 +328,11 @@ export function AiSettings() {
               id="ai-provider"
               value={provider}
               onChange={(e) => handleProviderChange(e.target.value as Provider)}
-              className="w-full rounded-xl border bg-white px-4 py-2.5 text-sm focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/30"
+              className="w-full rounded-xl border px-4 py-2.5 text-sm focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/30"
               style={{
                 borderColor: "var(--border-strong)",
                 color: "var(--text)",
+                background: "var(--bg-1)",
               }}
             >
               {PROVIDERS.map((p) => (
@@ -369,10 +370,11 @@ export function AiSettings() {
                 setSaved(false);
                 setTestStatus(null);
               }}
-              className="w-full rounded-xl border bg-white px-4 py-2.5 text-sm focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/30"
+              className="w-full rounded-xl border px-4 py-2.5 text-sm focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/30"
               style={{
                 borderColor: "var(--border-strong)",
                 color: "var(--text)",
+                background: "var(--bg-1)",
               }}
               placeholder="https://api.example.com/v1/chat/completions"
             />
@@ -403,10 +405,11 @@ export function AiSettings() {
                 setSaved(false);
                 setTestStatus(null);
               }}
-              className="w-full rounded-xl border bg-white px-4 py-2.5 font-mono text-sm focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/30"
+              className="w-full rounded-xl border px-4 py-2.5 font-mono text-sm focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/30"
               style={{
                 borderColor: "var(--border-strong)",
                 color: "var(--text)",
+                background: "var(--bg-1)",
               }}
               placeholder="sk-..."
               autoComplete="off"
@@ -434,10 +437,11 @@ export function AiSettings() {
                   setSaved(false);
                   setTestStatus(null);
                 }}
-                className="w-full rounded-xl border bg-white px-4 py-2.5 text-sm focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/30"
+                className="w-full rounded-xl border px-4 py-2.5 text-sm focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/30"
                 style={{
                   borderColor: "var(--border-strong)",
                   color: "var(--text)",
+                  background: "var(--bg-1)",
                 }}
               />
               {fieldErrors.model && (
@@ -466,10 +470,11 @@ export function AiSettings() {
                   setSaved(false);
                   setTestStatus(null);
                 }}
-                className="w-full rounded-xl border bg-white px-4 py-2.5 text-sm focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/30"
+                className="w-full rounded-xl border px-4 py-2.5 text-sm focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/30"
                 style={{
                   borderColor: "var(--border-strong)",
                   color: "var(--text)",
+                  background: "var(--bg-1)",
                 }}
               />
               <p
@@ -518,10 +523,11 @@ export function AiSettings() {
               }
             }}
             rows={8}
-            className="w-full rounded-xl border bg-white px-4 py-3 font-mono text-xs placeholder:text-[var(--text-mute)] focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/30 resize-y"
+            className="w-full rounded-xl border px-4 py-3 font-mono text-xs placeholder:text-[var(--text-mute)] focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/30 resize-y"
             style={{
               borderColor: "var(--border-strong)",
               color: "var(--text)",
+              background: "var(--bg-1)",
             }}
             spellCheck={false}
           />
@@ -549,10 +555,11 @@ export function AiSettings() {
           type="button"
           onClick={handleTest}
           disabled={testing}
-          className="inline-flex items-center gap-2 rounded-xl border bg-white px-4 py-2 text-sm font-semibold transition-all hover:bg-[var(--surface-strong)] disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-all hover:bg-[var(--surface-strong)] disabled:opacity-40 disabled:cursor-not-allowed"
           style={{
             borderColor: "var(--border-strong)",
             color: "var(--text-dim)",
+            background: "var(--bg-1)",
           }}
         >
           {testing ? (

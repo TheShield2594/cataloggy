@@ -32,7 +32,7 @@ import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { Poster } from "../components/Poster";
 import { TicketTile } from "../components/TicketTile";
 import { useToast } from "../hooks/useToast";
-import { timeAgo } from "../utils/timeAgo";
+import { timeAgo, timeUntil } from "../utils/timeAgo";
 
 /* ─── Collectible stat strip: a row of distinct "ticket" tiles, demoted below the fold ─── */
 
@@ -951,7 +951,7 @@ export function DashboardPage() {
             <div className="flex items-center gap-2">
               {aiActive && aiLastGeneratedAt && (() => {
                 const nextRefresh = new Date(new Date(aiLastGeneratedAt).getTime() + 7 * 24 * 60 * 60 * 1000);
-                const label = nextRefresh <= new Date() ? "Refresh due" : `Refreshes ${timeAgo(nextRefresh.toISOString())}`;
+                const label = nextRefresh <= new Date() ? "Refresh due" : `Refreshes ${timeUntil(nextRefresh.toISOString())}`;
                 return (
                   <span title={`Next refresh: ${nextRefresh.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`} className="flex items-center gap-1 text-xs cursor-default" style={{ color: "var(--text-dim)" }}>
                     <Clock size={12} />
@@ -1000,7 +1000,7 @@ export function DashboardPage() {
             <div className="flex items-center gap-2">
               {aiActive && aiLastGeneratedAt && (() => {
                 const nextRefresh = new Date(new Date(aiLastGeneratedAt).getTime() + 7 * 24 * 60 * 60 * 1000);
-                const label = nextRefresh <= new Date() ? "Refresh due" : `Refreshes ${timeAgo(nextRefresh.toISOString())}`;
+                const label = nextRefresh <= new Date() ? "Refresh due" : `Refreshes ${timeUntil(nextRefresh.toISOString())}`;
                 return (
                   <span title={`Next refresh: ${nextRefresh.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`} className="flex items-center gap-1 text-xs cursor-default" style={{ color: "var(--text-dim)" }}>
                     <Clock size={12} />
