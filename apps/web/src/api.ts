@@ -316,6 +316,55 @@ export type ImportSummary = {
   ratings: number;
 };
 
+export type GameSort = "recent" | "playtime" | "rating";
+
+export type Game = {
+  id: string;
+  igdbId: number | null;
+  steamAppId: number | null;
+  title: string;
+  coverUrl: string | null;
+  releaseDate: string | null;
+  genres: string[];
+  playtimeMinutes: number;
+  lastPlayedAt: string | null;
+  rating: number | null;
+  notes: string | null;
+  finished: boolean;
+  finishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GameSearchResult = {
+  igdbId: number;
+  title: string;
+  coverUrl: string | null;
+  releaseDate: string | null;
+  genres: string[];
+  inLibrary: boolean;
+};
+
+export type SteamPlayerSummary = {
+  steamId: string;
+  username: string;
+  avatar: string | null;
+  profileUrl: string | null;
+};
+
+export type SteamStatus = {
+  configured: boolean;
+  player: SteamPlayerSummary | null;
+};
+
+export type SteamSyncSummary = {
+  total: number;
+  created: number;
+  updated: number;
+  matched: number;
+  unmatched: number;
+};
+
 const authHeaders = (hasBody: boolean) => {
   const token = runtimeConfig.getToken();
   const headers: Record<string, string> = {
@@ -777,5 +826,38 @@ export const api = {
       body: JSON.stringify({ format, csv }),
       timeoutMs: 120000,
     });
+  },
+  // Games
+  async listGames(sort: GameSort = "recent") {
+    const res = await request<{ games: Game[] }>(`/games?sort=${sort}`);
+    return res.games;
+  },
+  async searchGames(query: string, signal?: AbortSignal) {
+    const res = await request<{ results: GameSearchResult[] }>(
+      `/games/search?q=${encodeURIComponent(query)}`,
+      { signal }
+    );
+    return res.results;
+  },
+  addGame(payload: { igdbId: number; title: string; coverUrl?: string | null; releaseDate?: string | null; genres?: string[] }) {
+    return request<{ game: Game }>("/games", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  updateGame(id: string, payload: Partial<{ rating: number | null; notes: string | null; finished: boolean; finishedAt: string | null }>) {
+    return request<{ game: Game }>(`/games/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteGame(id: string) {
+    return request<void>(`/games/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  getSteamStatus() {
+    return request<SteamStatus>("/games/steam/status");
+  },
+  triggerSteamSync() {
+    return request<SteamSyncSummary>("/games/steam/sync", { method: "POST", timeoutMs: 60000 });
   },
 };

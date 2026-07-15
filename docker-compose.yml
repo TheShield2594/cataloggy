@@ -42,6 +42,11 @@ services:
       TRAKT_POLL_MAX_PAGES: ${TRAKT_POLL_MAX_PAGES:-20}
       TMDB_API_KEY: ${TMDB_API_KEY}
       AI_REFRESH_INTERVAL_SEC: ${AI_REFRESH_INTERVAL_SEC:-86400}
+      TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID}
+      TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET}
+      STEAM_API_KEY: ${STEAM_API_KEY}
+      STEAM_ID: ${STEAM_ID}
+      STEAM_SYNC_INTERVAL_SEC: ${STEAM_SYNC_INTERVAL_SEC:-86400}
       # Optional: report unhandled errors to a Sentry project. Leave unset
       # to disable error tracking entirely (default).
       SENTRY_DSN: ${SENTRY_DSN}
