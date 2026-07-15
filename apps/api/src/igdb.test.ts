@@ -183,5 +183,24 @@ describe("igdb", () => {
 
       expect(match).toBeNull();
     });
+
+    it("returns null (not the top hit) when results exist but none match by exact or substring title", async () => {
+      const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
+        void init;
+        const href = url.toString();
+        if (href.includes("id.twitch.tv")) {
+          return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
+        }
+        return new Response(JSON.stringify([{ id: 99, name: "Totally Unrelated Game" }]), { status: 200 });
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { IgdbClient, resetIgdbTokenCache } = await import("./igdb.js");
+      resetIgdbTokenCache();
+      const client = IgdbClient.fromEnv();
+      const match = await client.findBestMatch("My Weird Steam Game");
+
+      expect(match).toBeNull();
+    });
   });
 });

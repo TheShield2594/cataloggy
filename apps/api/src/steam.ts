@@ -1,5 +1,6 @@
 const STEAM_API_BASE = "https://api.steampowered.com";
 const MAX_RETRIES = 3;
+const REQUEST_TIMEOUT_MS = 10_000;
 
 type SteamOwnedGamesResponse = {
   response?: {
@@ -49,7 +50,7 @@ async function fetchWithRetry(url: URL, maxRetries: number = MAX_RETRIES): Promi
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
       if ((response.status === 429 || response.status === 503) && attempt < maxRetries) {
         await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 1000));
         continue;

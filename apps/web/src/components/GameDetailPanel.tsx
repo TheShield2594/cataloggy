@@ -18,7 +18,15 @@ function formatDate(value: string | null): string | null {
   return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-function GameStarRating({ game, onChange }: { game: Game; onChange: (game: Game) => void }) {
+function GameStarRating({
+  game,
+  onChange,
+  onError,
+}: {
+  game: Game;
+  onChange: (game: Game) => void;
+  onError: (message: string) => void;
+}) {
   const [hoverRating, setHoverRating] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -28,6 +36,8 @@ function GameStarRating({ game, onChange }: { game: Game; onChange: (game: Game)
     try {
       const { game: updated } = await api.updateGame(game.id, { rating: game.rating === rating ? null : rating });
       onChange(updated);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Failed to save rating");
     } finally {
       setSaving(false);
       setHoverRating(null);
@@ -94,28 +104,48 @@ export function GameDetailPanel({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const notesDebounceRef = useRef<ReturnType<typeof setTimeout>>();
+  // Bumped on every edit; a save's response is only applied if it's still the
+  // latest one, so an earlier (slower) request can't clobber a newer draft with
+  // stale data if responses arrive out of order.
+  const notesVersionRef = useRef(0);
+  const pendingNotesRef = useRef<string | null>(null);
 
   useEffect(() => {
     setNotes(game.notes ?? "");
   }, [game.id, game.notes]);
 
+  const persistNotes = (value: string, { notifyOnSuccess }: { notifyOnSuccess: boolean }) => {
+    const version = ++notesVersionRef.current;
+    pendingNotesRef.current = null;
+    void (async () => {
+      try {
+        const { game: updated } = await api.updateGame(game.id, { notes: value.trim() ? value : null });
+        if (notifyOnSuccess && notesVersionRef.current === version) {
+          onUpdated(updated);
+        }
+      } catch (err) {
+        onShowToast(err instanceof Error ? err.message : "Failed to save notes", "error");
+      }
+    })();
+  };
+
   const saveNotes = (value: string) => {
     setNotes(value);
+    pendingNotesRef.current = value;
     if (notesDebounceRef.current) clearTimeout(notesDebounceRef.current);
     notesDebounceRef.current = setTimeout(() => {
-      void (async () => {
-        try {
-          const { game: updated } = await api.updateGame(game.id, { notes: value.trim() ? value : null });
-          onUpdated(updated);
-        } catch (err) {
-          onShowToast(err instanceof Error ? err.message : "Failed to save notes", "error");
-        }
-      })();
+      persistNotes(value, { notifyOnSuccess: true });
     }, 600);
   };
 
   useEffect(() => () => {
     if (notesDebounceRef.current) clearTimeout(notesDebounceRef.current);
+    // Flush a still-pending edit so closing the panel right after typing
+    // doesn't silently drop it. Skips onUpdated (the panel is already gone by
+    // the time this resolves — calling it would just reopen it).
+    if (pendingNotesRef.current !== null) {
+      persistNotes(pendingNotesRef.current, { notifyOnSuccess: false });
+    }
   }, []);
 
   const toggleFinished = async () => {
@@ -206,7 +236,7 @@ export function GameDetailPanel({
             )}
           </div>
 
-          <GameStarRating game={game} onChange={onUpdated} />
+          <GameStarRating game={game} onChange={onUpdated} onError={(msg) => onShowToast(msg, "error")} />
 
           <div>
             <label

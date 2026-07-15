@@ -20,6 +20,24 @@ function formatPlaytime(minutes: number): string {
   return hours >= 10 ? `${Math.round(hours)}h` : `${hours.toFixed(1)}h`;
 }
 
+// Mirrors the server's sortToOrderBy (routes/games.ts) so a locally-added or
+// -updated game lands in the right spot instead of just being pinned to
+// wherever the mutation happened to place it.
+function compareGames(a: Game, b: Game, sort: GameSort): number {
+  switch (sort) {
+    case "playtime":
+      return b.playtimeMinutes - a.playtimeMinutes;
+    case "rating":
+      return (b.rating ?? -Infinity) - (a.rating ?? -Infinity);
+    case "recent":
+    default: {
+      const aTime = a.lastPlayedAt ? new Date(a.lastPlayedAt).getTime() : -Infinity;
+      const bTime = b.lastPlayedAt ? new Date(b.lastPlayedAt).getTime() : -Infinity;
+      return bTime - aTime;
+    }
+  }
+}
+
 /* ─── Add Game Modal (search-to-add via IGDB) ─────────────── */
 
 function AddGameModal({
@@ -37,6 +55,7 @@ function AddGameModal({
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useFocusTrap<HTMLDivElement>();
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -45,26 +64,39 @@ function AddGameModal({
   useScrollLock();
   useEscapeKey(onClose);
 
+  // Cancel any still-in-flight search when the modal unmounts, so its response
+  // can't land after the fact.
+  useEffect(() => () => abortRef.current?.abort(), []);
+
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) {
       setResults([]);
       return;
     }
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setSearching(true);
     setError(null);
     try {
-      const res = await api.searchGames(q);
+      const res = await api.searchGames(q, controller.signal);
       setResults(res);
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Search failed");
     } finally {
-      setSearching(false);
+      if (abortRef.current === controller) setSearching(false);
     }
   }, []);
 
   useEffect(() => {
     if (!query.trim()) {
+      abortRef.current?.abort();
+      if (debounceRef.current) clearTimeout(debounceRef.current);
       setResults([]);
+      setSearching(false);
       return;
     }
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -294,31 +326,41 @@ export function GamesPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const { showToast } = useToast();
+  const loadAbortRef = useRef<AbortController | null>(null);
 
   const loadGames = useCallback(async (currentSort: GameSort) => {
+    loadAbortRef.current?.abort();
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
+
     setLoading(true);
     setError(null);
     try {
-      const loaded = await api.listGames(currentSort);
+      const loaded = await api.listGames(currentSort, controller.signal);
+      if (loadAbortRef.current !== controller) return;
       setGames(loaded);
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Failed to load games");
     } finally {
-      setLoading(false);
+      if (loadAbortRef.current === controller) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void loadGames(sort);
+    return () => loadAbortRef.current?.abort();
   }, [sort, loadGames]);
 
   const handleGameAdded = (game: Game) => {
-    setGames((prev) => (prev ? [game, ...prev] : [game]));
+    setGames((prev) => (prev ? [...prev, game].sort((a, b) => compareGames(a, b, sort)) : [game]));
     showToast(`Added ${game.title}`, "success");
   };
 
   const handleGameUpdated = (game: Game) => {
-    setGames((prev) => prev?.map((g) => (g.id === game.id ? game : g)) ?? prev);
+    setGames((prev) =>
+      prev ? prev.map((g) => (g.id === game.id ? game : g)).sort((a, b) => compareGames(a, b, sort)) : prev
+    );
     setSelectedGame(game);
   };
 

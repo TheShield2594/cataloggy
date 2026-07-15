@@ -2,6 +2,7 @@ const TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token";
 const IGDB_API_BASE = "https://api.igdb.com/v4";
 const TOKEN_EXPIRY_BUFFER_MS = 60_000;
 const RATE_LIMIT_PER_SECOND = 4;
+const REQUEST_TIMEOUT_MS = 10_000;
 
 type IgdbTokenResponse = {
   access_token: string;
@@ -121,8 +122,10 @@ export class IgdbClient {
   }
 
   // Best-effort title match used by the Steam sync to attach IGDB artwork/metadata to a
-  // Steam library entry: exact (case-insensitive) match first, falling back to the
-  // highest-rated result whose name contains the query as a substring.
+  // Steam library entry: exact (case-insensitive) match first, falling back to a result
+  // whose name contains the query as a substring. No match at all (rather than the
+  // top search hit) is returned when neither is found, since an unrelated top result
+  // would silently attach wrong artwork/genres to the Steam entry.
   async findBestMatch(title: string): Promise<IgdbGameSummary | null> {
     const results = await this.searchGames(title, 10);
     if (results.length === 0) return null;
@@ -131,10 +134,7 @@ export class IgdbClient {
     const exact = results.find((game) => game.title.trim().toLowerCase() === normalized);
     if (exact) return exact;
 
-    return (
-      results.find((game) => game.title.trim().toLowerCase().includes(normalized)) ??
-      results[0]
-    );
+    return results.find((game) => game.title.trim().toLowerCase().includes(normalized)) ?? null;
   }
 
   private async getAccessToken(): Promise<string> {
@@ -149,7 +149,8 @@ export class IgdbClient {
         client_id: this.clientId,
         client_secret: this.clientSecret,
         grant_type: "client_credentials"
-      })
+      }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
 
     if (!response.ok) {
@@ -175,7 +176,8 @@ export class IgdbClient {
           Authorization: `Bearer ${token}`,
           "Content-Type": "text/plain"
         },
-        body: query
+        body: query,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
       });
 
       if (!response.ok) {
