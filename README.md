@@ -53,6 +53,7 @@ cataloggy/
    - **Required:** `API_TOKEN` and `POSTGRES_PASSWORD` — `docker compose up` will refuse to start without them (used by both `api` and `addon` services — they share the same `API_TOKEN`). Generate a token with `openssl rand -hex 32`.
    - **Recommended for LAN devices** (phone/Apple TV): update the URLs in `api`, `addon`, and `web` services to use your LAN IP instead of `localhost`
    - **Optional integrations:** `TMDB_API_KEY`, `TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET` (in `api` service)
+   - **Optional (Games section):** `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` (IGDB game search/metadata), `STEAM_API_KEY`, `STEAM_ID` (Steam library import) — in `api` service. Leaving these unset is safe: the Games tab still works for manually-added games, just without Steam auto-sync or IGDB search-to-add.
    - **Optional:** `SENTRY_DSN` — reports unhandled errors from the `api`, `addon`, and `web` services to a Sentry project (or compatible service). Leave unset to disable; no error data leaves your server by default.
    - **Optional:** `ALLOWED_HOSTS` (in `web` service) — comma-separated hostnames allowed to reach the web server beyond IPs/localhost, e.g. a domain proxied via Nginx Proxy Manager (see below). Leave unset for LAN-IP-only access.
 
@@ -74,7 +75,7 @@ cataloggy/
    pnpm smoke
    ```
 
-   This validates API and add-on health endpoints and (when all Trakt env vars are configured) runs `/trakt/import` and verifies a catalog response contains a `metas` array.
+   This validates API and add-on health endpoints, (when all Trakt env vars are configured) runs `/trakt/import` and verifies a catalog response contains a `metas` array, and (when `STEAM_API_KEY`/`STEAM_ID` are configured) runs `/games/steam/sync` and verifies it returns a sync summary.
 
 ## Local development without Docker
 

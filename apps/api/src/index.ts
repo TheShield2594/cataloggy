@@ -12,6 +12,7 @@ import { ensureDefaultWatchlist } from "./lib/watchlist.js";
 import { ensureDefaultCollection } from "./lib/collection.js";
 import { getDefaultProfileId } from "./lib/profile.js";
 import { checkUpcomingEpisodesAndNotify } from "./lib/notify-episodes.js";
+import { isSteamSyncConfigured, syncSteamLibrary } from "./lib/steam-sync.js";
 import { cleanupStaleSessions, SCROBBLE_CLEANUP_INTERVAL_MS } from "./routes/scrobble.js";
 
 // Route modules
@@ -36,10 +37,13 @@ import exportRoutes from "./routes/export.js";
 import importRoutes from "./routes/import.js";
 import plexWebhookRoutes from "./routes/webhooks/plex.js";
 import jellyfinWebhookRoutes from "./routes/webhooks/jellyfin.js";
+import gamesRoutes from "./routes/games.js";
+import gamesSteamRoutes from "./routes/games-steam.js";
 
 const TRAKT_POLL_INTERVAL_SEC = Number(process.env.TRAKT_POLL_INTERVAL_SEC ?? 300);
 const AI_REFRESH_INTERVAL_SEC = Number(process.env.AI_REFRESH_INTERVAL_SEC ?? 86400);
 const NOTIFICATION_CHECK_INTERVAL_SEC = Number(process.env.NOTIFICATION_CHECK_INTERVAL_SEC ?? 3600);
+const STEAM_SYNC_INTERVAL_SEC = Number(process.env.STEAM_SYNC_INTERVAL_SEC ?? 86400);
 
 const PROXY_PATH_PREFIXES = parseProxyPathPrefixes(process.env.PROXY_PATH_PREFIXES, ["/api"] as const);
 
@@ -109,6 +113,8 @@ app.register(exportRoutes);
 app.register(importRoutes);
 app.register(plexWebhookRoutes);
 app.register(jellyfinWebhookRoutes);
+app.register(gamesRoutes);
+app.register(gamesSteamRoutes);
 
 // ─── Startup ───
 
@@ -203,6 +209,29 @@ const start = async () => {
   } else {
     app.log.info(
       "Scheduled AI recommendations refresh disabled because AI_REFRESH_INTERVAL_SEC is set to 0"
+    );
+  }
+
+  const refreshSteamLibrary = async () => {
+    if (!isSteamSyncConfigured()) return;
+    const profileId = await getDefaultProfileId();
+    await syncSteamLibrary(app.log, profileId);
+  };
+
+  if (STEAM_SYNC_INTERVAL_SEC > 0) {
+    setTimeout(() => {
+      void refreshSteamLibrary().catch((error) => {
+        reportBackgroundError(error, "Initial Steam library sync failed");
+      });
+      setInterval(() => {
+        void refreshSteamLibrary().catch((error) => {
+          reportBackgroundError(error, "Scheduled Steam library sync failed");
+        });
+      }, STEAM_SYNC_INTERVAL_SEC * 1000);
+    }, 2 * 60 * 1000);
+  } else {
+    app.log.info(
+      "Scheduled Steam library sync disabled because STEAM_SYNC_INTERVAL_SEC is set to 0"
     );
   }
 

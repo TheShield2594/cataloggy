@@ -56,6 +56,7 @@ model Profile {
   ratings           Rating[]
   tags              Tag[]
   checkIn           CheckIn?
+  games             Game[]
 }
 
 model Item {
@@ -251,6 +252,35 @@ model ItemTag {
 
   @@id([tagId, type, imdbId])
   @@index([type, imdbId])
+}
+
+// Deliberately denormalized (unlike the Item/Metadata/Rating/ListItem split used for
+// movies/TV): games have no status system, watch history, or list membership, so one
+// profile-scoped row holds identity, artwork, and personal data together. Partial unique
+// indexes on (profileId, steamAppId) and (profileId, igdbId) (migration 20260715120000)
+// enforce no duplicates per profile without blocking rows missing one of the two ids —
+// not expressible in Prisma's schema DSL, so not declared here.
+model Game {
+  id              String    @id @default(uuid()) @db.Uuid
+  igdbId          Int?
+  steamAppId      Int?
+  title           String
+  coverUrl        String?
+  releaseDate     DateTime? @db.Date
+  genres          String[]  @default([])
+  playtimeMinutes Int       @default(0)
+  lastPlayedAt    DateTime? @db.Timestamptz(6)
+  rating          Float?
+  notes           String?   @db.Text
+  finished        Boolean   @default(false)
+  finishedAt      DateTime? @db.Date
+  createdAt       DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt       DateTime  @updatedAt @db.Timestamp(6)
+
+  profileId String  @db.Uuid
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
 }
 
 model Metadata {
