@@ -828,8 +828,8 @@ export const api = {
     });
   },
   // Games
-  async listGames(sort: GameSort = "recent") {
-    const res = await request<{ games: Game[] }>(`/games?sort=${sort}`);
+  async listGames(sort: GameSort = "recent", signal?: AbortSignal) {
+    const res = await request<{ games: Game[] }>(`/games?sort=${sort}`, { signal });
     return res.games;
   },
   async searchGames(query: string, signal?: AbortSignal) {

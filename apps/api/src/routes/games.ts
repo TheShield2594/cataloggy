@@ -45,12 +45,20 @@ const gamesRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "q is required" });
     }
 
-    let results: Awaited<ReturnType<ReturnType<typeof getIgdb>["searchGames"]>>;
+    let igdb: ReturnType<typeof getIgdb>;
     try {
-      results = await getIgdb().searchGames(query);
+      igdb = getIgdb();
     } catch (error) {
       request.log.error(error, "IGDB client initialization failed");
       return reply.code(500).send({ error: "IGDB integration is not configured" });
+    }
+
+    let results: Awaited<ReturnType<typeof igdb.searchGames>>;
+    try {
+      results = await igdb.searchGames(query);
+    } catch (error) {
+      request.log.error(error, "IGDB search request failed");
+      return reply.code(502).send({ error: "IGDB search is temporarily unavailable. Please try again shortly." });
     }
 
     const existing = await prisma.game.findMany({
