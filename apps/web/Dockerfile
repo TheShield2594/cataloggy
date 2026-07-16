@@ -1,7 +1,7 @@
-FROM node:20-alpine AS build
+FROM node:26-alpine AS build
 
 WORKDIR /app
-RUN corepack enable
+RUN npm install -g corepack@latest && corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs .npmrc ./
 COPY apps/web/package.json ./apps/web/package.json
@@ -14,7 +14,7 @@ COPY apps/web ./apps/web
 
 RUN pnpm --filter @cataloggy/web build
 
-FROM node:20-alpine AS runtime
+FROM node:26-alpine AS runtime
 
 WORKDIR /app
 RUN apk add --no-cache wget && npm install -g serve@14

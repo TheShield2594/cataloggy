@@ -1,7 +1,7 @@
-FROM node:20-alpine AS build
+FROM node:26-alpine AS build
 
 WORKDIR /app
-RUN corepack enable
+RUN npm install -g corepack@latest && corepack enable
 RUN apk add --no-cache openssl
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json eslint.config.mjs .npmrc ./
@@ -21,10 +21,10 @@ RUN pnpm --filter @cataloggy/api build
 
 RUN pnpm prune --prod
 
-FROM node:20-alpine AS runtime
+FROM node:26-alpine AS runtime
 
 WORKDIR /app
-RUN corepack enable
+RUN npm install -g corepack@latest && corepack enable
 RUN apk add --no-cache wget openssl
 
 COPY --from=build /app/node_modules ./node_modules
