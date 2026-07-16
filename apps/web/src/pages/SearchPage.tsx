@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { Check, ChevronDown, ChevronUp, Film, Filter, Heart, MonitorPlay, Plus, Search, SlidersHorizontal, Star, Tv, X } from "lucide-react";
 import { api, CatalogList, SearchResult, WatchProvider } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
@@ -72,6 +73,7 @@ function applyFiltersAndSort(
 export function SearchPage() {
   const { filters, setFilters, clearFilters, hasActiveFilters, activeFilterCount } = useSearchFilters();
   const [rawResults, setRawResults] = useState<SearchResult[] | null>(null);
+  const [needsTmdb, setNeedsTmdb] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [lists, setLists] = useState<CatalogList[]>([]);
   const [pendingAdds, setPendingAdds] = useState<Record<string, boolean>>({});
@@ -130,6 +132,7 @@ export function SearchPage() {
 
       const requestId = ++requestIdRef.current;
       setIsSearching(true);
+      setNeedsTmdb(false);
       lastSearchRef.current = { filter: searchFilter, query: searchQuery };
 
       try {
@@ -155,7 +158,9 @@ export function SearchPage() {
         if (requestIdRef.current !== requestId) return;
         if (err instanceof DOMException && err.name === "AbortError") return;
         setRawResults([]);
-        showToast(err instanceof Error ? err.message : "Search failed", "error");
+        const message = err instanceof Error ? err.message : "Search failed";
+        setNeedsTmdb(/tmdb/i.test(message));
+        showToast(message, "error");
       } finally {
         if (requestIdRef.current === requestId) {
           setIsSearching(false);
@@ -436,13 +441,26 @@ export function SearchPage() {
           <div className="flex h-24 w-24 items-center justify-center rounded-full ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border-strong)" } as React.CSSProperties}>
             <Filter className="h-12 w-12" style={{ color: "var(--text-mute)" }} />
           </div>
-          <p className="mt-5 text-lg font-semibold" style={{ color: "var(--text-dim)" }}>No results found</p>
-          <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>
-            {hasActiveFilters
-              ? "Try adjusting your filters or search term."
-              : "Try a different search term or filter."}
+          <p className="mt-5 text-lg font-semibold" style={{ color: "var(--text-dim)" }}>
+            {needsTmdb ? "Search needs a TMDB API key" : "No results found"}
           </p>
-          {hasActiveFilters && (
+          <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>
+            {needsTmdb
+              ? "Movie and series search is powered by TMDB — set up a free API key to start searching."
+              : hasActiveFilters
+                ? "Try adjusting your filters or search term."
+                : "Try a different search term or filter."}
+          </p>
+          {needsTmdb && (
+            <Link
+              to="/settings?tab=integrations"
+              className="mt-3 rounded-full px-4 py-2 text-sm font-medium text-claw-600 transition-colors hover:bg-[var(--surface)]"
+              style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)" }}
+            >
+              Set up TMDB in Settings &rarr;
+            </Link>
+          )}
+          {hasActiveFilters && !needsTmdb && (
             <button
               onClick={clearFilters}
               className="mt-3 rounded-full px-4 py-2 text-sm font-medium hover:bg-[var(--surface)] transition-colors"

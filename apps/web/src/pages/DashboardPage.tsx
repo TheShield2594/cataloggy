@@ -465,6 +465,7 @@ export function DashboardPage() {
 
   const [trendingMovies, setTrendingMovies] = useState<TrendingMeta[]>([]);
   const [trendingLoading, setTrendingLoading] = useState(true);
+  const [trendingNeedsTmdb, setTrendingNeedsTmdb] = useState(false);
   const [recommendations, setRecommendations] = useState<TrendingMeta[]>([]);
   const [recsLoading, setRecsLoading] = useState(true);
   const [seriesRecs, setSeriesRecs] = useState<TrendingMeta[]>([]);
@@ -555,7 +556,10 @@ export function DashboardPage() {
       try {
         const res = await api.getTrending("movie", "week");
         if (mounted) setTrendingMovies(res.metas ?? []);
-      } catch (err) { console.error("Failed to fetch trending:", err); } finally {
+      } catch (err) {
+        console.error("Failed to fetch trending:", err);
+        if (mounted) setTrendingNeedsTmdb(err instanceof Error && /tmdb/i.test(err.message));
+      } finally {
         if (mounted) setTrendingLoading(false);
       }
     })();
@@ -880,9 +884,20 @@ export function DashboardPage() {
           ) : trendingMovies.length === 0 ? (
             <div className="rounded-2xl py-12 text-center" style={{ border: "1px dashed var(--border-strong)" }}>
               <TrendingUp className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
-              <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
-                Unable to load trending content.
-              </p>
+              {trendingNeedsTmdb ? (
+                <>
+                  <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
+                    Trending needs a TMDB API key to fetch content.
+                  </p>
+                  <Link to="/settings?tab=integrations" className="mt-1 inline-block text-sm font-medium text-claw-400 hover:text-claw-300 transition-colors">
+                    Set it up in Settings &rarr;
+                  </Link>
+                </>
+              ) : (
+                <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
+                  Unable to load trending content.
+                </p>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

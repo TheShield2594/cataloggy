@@ -67,7 +67,7 @@ export function ThemeToggle({ theme, onChange }: { theme: Theme; onChange: (next
             setOpen(true);
           }
         }}
-        className="flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors active:scale-95"
+        className="flex h-10 w-10 flex-none items-center justify-center rounded-full transition-colors active:scale-95 sm:h-9 sm:w-9"
         style={{ border: "1px solid var(--border-strong)", background: "var(--surface)", color: "var(--text)" }}
       >
         <Palette className="h-4 w-4" />
