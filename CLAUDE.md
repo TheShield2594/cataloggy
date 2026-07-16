@@ -4,7 +4,7 @@
 
 Author and commit all commits as the repo owner, not as Claude:
 
-```
+```bash
 git config user.name "TheShield2594"
 git config user.email "82059300+TheShield2594@users.noreply.github.com"
 ```

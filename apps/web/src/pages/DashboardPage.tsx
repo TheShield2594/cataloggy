@@ -540,6 +540,7 @@ export function DashboardPage() {
 
     setDetailedLoading(true);
     setTrendingLoading(true);
+    setTrendingNeedsTmdb(false);
     setRecsLoading(true);
     setSeriesRecsLoading(true);
     setCalendarLoading(true);

@@ -167,7 +167,7 @@ function AppShell({
             </kbd>
           </button>
 
-          <div className="flex min-w-0 items-center gap-3 overflow-x-auto scrollbar-hide">
+          <div className="flex min-w-0 items-center gap-3">
             <ThemeToggle theme={theme} onChange={setTheme} />
             <InstallButton />
             <button

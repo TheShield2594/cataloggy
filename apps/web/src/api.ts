@@ -402,40 +402,40 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
     timedOut = true;
     controller.abort();
   }, timeoutMs);
+  const onExternalAbort = () => controller.abort();
   if (init?.signal) {
     if (init.signal.aborted) controller.abort();
-    else init.signal.addEventListener("abort", () => controller.abort());
+    else init.signal.addEventListener("abort", onExternalAbort);
   }
 
   let response: Response;
   try {
-    try {
-      response = await fetch(`${runtimeConfig.getApiBase()}${path}`, {
-        ...init,
-        signal: controller.signal,
-        headers: {
-          ...authHeaders(init?.body != null),
-          ...(init?.headers ?? {})
-        }
-      });
-    } catch (err) {
-      if (init?.signal?.aborted) {
-        // The caller cancelled this request on purpose (e.g. a newer request
-        // superseded it) — rethrow the original AbortError as-is so callers
-        // can detect and silently ignore intentional cancellations instead
-        // of surfacing a misleading error.
-        throw err;
+    response = await fetch(`${runtimeConfig.getApiBase()}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        ...authHeaders(init?.body != null),
+        ...(init?.headers ?? {})
       }
-      if (timedOut) {
-        throw new Error(`Request timed out – is the API server running at ${runtimeConfig.getApiBase()}?`, { cause: err });
-      }
-      throw new Error(`Network error – cannot reach ${runtimeConfig.getApiBase()}. Check that the API server is running and the URL is correct.`, { cause: err });
+    });
+  } catch (err) {
+    if (init?.signal?.aborted) {
+      // The caller cancelled this request on purpose (e.g. a newer request
+      // superseded it) — rethrow the original AbortError as-is so callers
+      // can detect and silently ignore intentional cancellations instead
+      // of surfacing a misleading error.
+      throw err;
     }
+    if (timedOut) {
+      throw new Error(`Request timed out – is the API server running at ${runtimeConfig.getApiBase()}?`, { cause: err });
+    }
+    throw new Error(`Network error – cannot reach ${runtimeConfig.getApiBase()}. Check that the API server is running and the URL is correct.`, { cause: err });
   } finally {
     // Clear stale cache entries for attempted mutations even if the request
     // itself failed or timed out below — a half-failed write can still have
     // landed server-side, and we'd rather over-invalidate than serve stale data.
     clearTimeout(timeoutId);
+    init?.signal?.removeEventListener("abort", onExternalAbort);
     if (method !== "GET") {
       await notifyServiceWorkerToInvalidateApiCache();
     }
