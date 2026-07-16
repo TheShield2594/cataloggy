@@ -52,7 +52,7 @@ function AddGameModal({
   const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useFocusTrap<HTMLDivElement>();
   const abortRef = useRef<AbortController | null>(null);

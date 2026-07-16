@@ -29,7 +29,7 @@ export function Sidebar({
   onSwitchProfile?: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
-  const hoverTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const expanded = pinned || hovered;
 
   useEffect(() => () => clearTimeout(hoverTimerRef.current), []);

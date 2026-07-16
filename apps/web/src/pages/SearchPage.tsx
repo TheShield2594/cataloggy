@@ -79,7 +79,7 @@ export function SearchPage() {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const lastSearchRef = useRef<{ filter: FilterType; query: string }>({ filter: "all", query: "" });
   const requestIdRef = useRef(0);
@@ -585,7 +585,7 @@ function ResultCard({
   listMap: Map<string, CatalogList>;
   pendingAdds: Record<string, boolean>;
   openDropdown: string | null;
-  dropdownRef: React.RefObject<HTMLDivElement>;
+  dropdownRef: React.RefObject<HTMLDivElement | null>;
   onToggleDropdown: (id: string) => void;
   onAdd: (listId: string, result: SearchResult) => Promise<void>;
   onSelect: (result: SearchResult) => void;

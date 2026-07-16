@@ -103,7 +103,7 @@ export function GameDetailPanel({
   const [notes, setNotes] = useState(game.notes ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const notesDebounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const notesDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   // Bumped on every edit; a save's response is only applied if it's still the
   // latest one, so an earlier (slower) request can't clobber a newer draft with
   // stale data if responses arrive out of order.
