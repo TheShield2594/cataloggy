@@ -397,41 +397,66 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
   const method = (init?.method ?? "GET").toUpperCase();
   const controller = new AbortController();
   const timeoutMs = init?.timeoutMs ?? 30000;
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  const onExternalAbort = () => controller.abort();
   if (init?.signal) {
     if (init.signal.aborted) controller.abort();
-    else init.signal.addEventListener("abort", () => controller.abort());
+    else init.signal.addEventListener("abort", onExternalAbort);
   }
 
   let response: Response;
   try {
-    try {
-      response = await fetch(`${runtimeConfig.getApiBase()}${path}`, {
-        ...init,
-        signal: controller.signal,
-        headers: {
-          ...authHeaders(init?.body != null),
-          ...(init?.headers ?? {})
-        }
-      });
-    } catch {
-      if (controller.signal.aborted) {
-        throw new Error(`Request timed out – is the API server running at ${runtimeConfig.getApiBase()}?`);
+    response = await fetch(`${runtimeConfig.getApiBase()}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        ...authHeaders(init?.body != null),
+        ...(init?.headers ?? {})
       }
-      throw new Error(`Network error – cannot reach ${runtimeConfig.getApiBase()}. Check that the API server is running and the URL is correct.`);
+    });
+  } catch (err) {
+    if (init?.signal?.aborted) {
+      // The caller cancelled this request on purpose (e.g. a newer request
+      // superseded it) — rethrow the original AbortError as-is so callers
+      // can detect and silently ignore intentional cancellations instead
+      // of surfacing a misleading error.
+      throw err;
     }
+    if (timedOut) {
+      throw new Error(`Request timed out – is the API server running at ${runtimeConfig.getApiBase()}?`, { cause: err });
+    }
+    throw new Error(`Network error – cannot reach ${runtimeConfig.getApiBase()}. Check that the API server is running and the URL is correct.`, { cause: err });
   } finally {
     // Clear stale cache entries for attempted mutations even if the request
     // itself failed or timed out below — a half-failed write can still have
     // landed server-side, and we'd rather over-invalidate than serve stale data.
     clearTimeout(timeoutId);
+    init?.signal?.removeEventListener("abort", onExternalAbort);
     if (method !== "GET") {
       await notifyServiceWorkerToInvalidateApiCache();
     }
   }
 
   if (!response.ok) {
-    const message = await response.text();
+    const body = await response.text();
+    // API errors are shaped as JSON: { "error": "human-readable message" }.
+    // Fall back to the raw body if it isn't (or isn't valid JSON) so nothing
+    // is ever silently swallowed.
+    let message = body;
+    if (body) {
+      try {
+        const parsed = JSON.parse(body) as { error?: unknown };
+        if (typeof parsed.error === "string" && parsed.error.trim()) {
+          message = parsed.error;
+        }
+      } catch {
+        // not JSON — use the raw body as-is
+      }
+    }
     throw new ApiError(message || `Request failed: ${response.status}`, response.status);
   }
 

@@ -89,7 +89,7 @@ export function InstallButton() {
             void onInstall();
           }}
           aria-label={label === "Install" ? "Install Cataloggy" : label}
-          className="flex items-center gap-1.5 rounded-full border border-[var(--border-strong)] bg-[var(--bg-0)] px-3.5 py-2 text-xs font-medium text-[var(--text-dim)] transition-all hover:bg-[var(--surface-strong)] hover:text-[var(--text)]"
+          className="flex items-center gap-1.5 rounded-full border border-[var(--border-strong)] bg-[var(--bg-0)] px-3.5 py-2.5 text-xs font-medium text-[var(--text-dim)] transition-all hover:bg-[var(--surface-strong)] hover:text-[var(--text)] sm:py-2"
         >
           <Download className="h-3.5 w-3.5" />
           <span className="hidden sm:inline" aria-hidden="true">{label}</span>
@@ -98,7 +98,7 @@ export function InstallButton() {
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss install prompt"
-          className="flex items-center justify-center rounded-full border border-[var(--border-strong)] bg-[var(--bg-0)] p-2 text-[var(--text-mute)] transition-all hover:bg-[var(--surface-strong)] hover:text-[var(--text-dim)]"
+          className="flex items-center justify-center rounded-full border border-[var(--border-strong)] bg-[var(--bg-0)] p-2.5 text-[var(--text-mute)] transition-all hover:bg-[var(--surface-strong)] hover:text-[var(--text-dim)] sm:p-2"
         >
           <X className="h-3.5 w-3.5" />
         </button>

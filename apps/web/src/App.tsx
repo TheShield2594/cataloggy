@@ -30,6 +30,7 @@ const mobileNavItems = [
   { to: "/calendar", label: "Calendar", icon: CalendarDays, end: false },
   { to: "/history", label: "History", icon: History, end: false },
   { to: "/stats", label: "Stats", icon: BarChart3, end: false },
+  { to: "/settings", label: "Settings", icon: Settings, end: false },
 ] as const;
 
 export function App() {
@@ -153,7 +154,7 @@ function AppShell({
             type="button"
             onClick={() => setPaletteOpen(true)}
             aria-label="Search (⌘K)"
-            className="flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] sm:h-auto sm:w-auto sm:flex-1 sm:max-w-sm sm:justify-start sm:gap-2.5 sm:px-4 sm:py-2 sm:text-sm"
+            className="flex h-10 w-10 flex-none items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] sm:h-auto sm:w-auto sm:flex-1 sm:max-w-sm sm:justify-start sm:gap-2.5 sm:px-4 sm:py-2 sm:text-sm"
             style={{ border: "1px solid var(--border-strong)", color: "var(--text-mute)", background: "var(--surface)" }}
           >
             <Search className="h-4 w-4" />
@@ -166,7 +167,7 @@ function AppShell({
             </kbd>
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <ThemeToggle theme={theme} onChange={setTheme} />
             <InstallButton />
             <button
@@ -174,19 +175,11 @@ function AppShell({
               onClick={openSwitcher}
               aria-label={profile ? `Switch profile (currently ${profile.name})` : "Switch profile"}
               title={profile?.name}
-              className="flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2 sm:hidden"
+              className="flex h-10 w-10 flex-none items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2 sm:hidden"
               style={{ color: "var(--text-mute)" }}
             >
               <User className="h-5 w-5" />
             </button>
-            <Link
-              to="/settings"
-              aria-label="Settings"
-              className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2 sm:hidden ${location.pathname.startsWith("/settings") ? "text-claw-600" : ""}`}
-              style={location.pathname.startsWith("/settings") ? {} : { color: "var(--text-mute)" }}
-            >
-              <Settings className="h-5 w-5" />
-            </Link>
           </div>
         </div>
       </header>

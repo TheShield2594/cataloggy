@@ -279,8 +279,15 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       ]);
       if (cached) return { metas: applyRpdbToMetaList(cached.data, rpdbKey) };
 
+      let tmdb: Awaited<ReturnType<typeof getTmdb>>;
       try {
-        const tmdb = await getTmdb();
+        tmdb = await getTmdb();
+      } catch (error) {
+        request.log.error(error, "TMDB client initialization failed");
+        return reply.code(500).send({ error: "TMDB integration is not configured" });
+      }
+
+      try {
         const results = await tmdb.trending(type, timeWindow);
         await Promise.all(results.map((r) => upsertMetadata(r)));
         const metas: StremioMetaPreview[] = results.map((r) => ({
@@ -314,8 +321,15 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
     ]);
     if (cached) return { metas: applyRpdbToMetaList(cached.data, rpdbKey) };
 
+    let tmdb: Awaited<ReturnType<typeof getTmdb>>;
     try {
-      const tmdb = await getTmdb();
+      tmdb = await getTmdb();
+    } catch (error) {
+      request.log.error(error, "TMDB client initialization failed");
+      return reply.code(500).send({ error: "TMDB integration is not configured" });
+    }
+
+    try {
       const results = await tmdb.popular(type);
       await Promise.all(results.map((r) => upsertMetadata(r)));
       const metas: StremioMetaPreview[] = results.map((r) => ({
