@@ -260,7 +260,7 @@ const parseRecsFromContent = (content: string): AiRecItem[] => {
   try {
     return JSON.parse(content.slice(start, end + 1)) as AiRecItem[];
   } catch (e) {
-    throw new Error(`Failed to parse AI response as JSON: ${e}`);
+    throw new Error(`Failed to parse AI response as JSON: ${e}`, { cause: e });
   }
 };
 

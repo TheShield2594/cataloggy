@@ -29,7 +29,7 @@ const resolveImdbIdByTitle = async (
   const cacheKey = `${title.toLowerCase()}::${year ?? ""}`;
   if (cache.has(cacheKey)) return cache.get(cacheKey) ?? null;
 
-  let imdbId: string | null = null;
+  let imdbId: string | null;
   try {
     const tmdb = await getTmdb();
     const results = await tmdb.search("movie", title);

@@ -19,11 +19,11 @@ export default {
           950: "#14110d",
         },
         claw: {
-          100: "rgb(var(--accent-tint-rgb) / <alpha-value>)",
-          300: "rgb(var(--accent-light-rgb) / <alpha-value>)",
-          400: "rgb(var(--accent-2-rgb) / <alpha-value>)",
-          500: "rgb(var(--accent-rgb) / <alpha-value>)",
-          600: "rgb(var(--accent-strong-rgb) / <alpha-value>)",
+          100: "rgb(var(--accent-tint-rgb))",
+          300: "rgb(var(--accent-light-rgb))",
+          400: "rgb(var(--accent-2-rgb))",
+          500: "rgb(var(--accent-rgb))",
+          600: "rgb(var(--accent-strong-rgb))",
         },
         cream: {
           50: "#faf6ef",

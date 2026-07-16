@@ -43,7 +43,7 @@ const fetchWithTimeout = async (url: string | URL, init?: RequestInit): Promise<
     return await fetch(url, { ...init, signal: controller.signal });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`Request to ${String(url)} timed out after ${FETCH_TIMEOUT_MS}ms`);
+      throw new Error(`Request to ${String(url)} timed out after ${FETCH_TIMEOUT_MS}ms`, { cause: error });
     }
     throw error;
   } finally {
