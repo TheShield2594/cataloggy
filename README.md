@@ -30,6 +30,7 @@ cataloggy/
   apps/
     api/        # Fastify API + Prisma
     addon/      # Stremio/Omni addon service
+    web/        # React + Vite PWA frontend
   packages/
     shared/     # shared types/utilities
   docker-compose.yml
@@ -235,3 +236,11 @@ Cataloggy is designed for self-hosting on a trusted local network (LAN), not for
   ```bash
   pnpm --filter @cataloggy/api prisma:push
   ```
+
+## Author
+
+Created and maintained by [TheShield2594](https://github.com/TheShield2594).
+
+## License
+
+Cataloggy is licensed under the [MIT License](LICENSE).
