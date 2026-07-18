@@ -8,17 +8,28 @@ export class ApiError extends Error {
 declare global {
   interface Window {
     __CATALOGGY_API_BASE__?: string;
+    __CATALOGGY_ADDON_BASE__?: string;
   }
 }
 
-const API_BASE_DEFAULT =
-  window.__CATALOGGY_API_BASE__ || import.meta.env.VITE_API_BASE || "http://localhost:7000";
+const stripTrailingSlash = (url: string) => url.replace(/\/+$/, "");
+
+const API_BASE_DEFAULT = stripTrailingSlash(
+  window.__CATALOGGY_API_BASE__ || import.meta.env.VITE_API_BASE || "http://localhost:7000"
+);
+// Base URL of the dedicated apps/addon service (the full-featured Stremio
+// addon with meta/subtitles/search/genre support) — distinct from the API
+// server above, which only hosts a thinner catalog-only manifest.
+const ADDON_BASE_DEFAULT = stripTrailingSlash(
+  window.__CATALOGGY_ADDON_BASE__ || import.meta.env.VITE_ADDON_BASE || "http://localhost:7001"
+);
 const API_BASE_OVERRIDE_KEY = "cataloggy_api_base_override";
 const TOKEN_KEY = "cataloggy_token";
 const PROFILE_ID_KEY = "cataloggy_profile_id";
 
 export const runtimeConfig = {
   apiBaseDefault: API_BASE_DEFAULT,
+  addonBaseDefault: ADDON_BASE_DEFAULT,
   apiBaseOverrideKey: API_BASE_OVERRIDE_KEY,
   tokenKey: TOKEN_KEY,
   profileIdKey: PROFILE_ID_KEY,
@@ -36,6 +47,9 @@ export const runtimeConfig = {
   },
   getApiBase() {
     return runtimeConfig.getApiBaseOverride() || API_BASE_DEFAULT;
+  },
+  getAddonBase() {
+    return ADDON_BASE_DEFAULT;
   },
   getToken() {
     return window.localStorage.getItem(TOKEN_KEY) ?? "";

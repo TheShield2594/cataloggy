@@ -32,6 +32,9 @@ services:
       API_TOKEN: ${API_TOKEN:?Set API_TOKEN in a .env file next to docker-compose.yml — see README.md}
       CATALOGGY_ALLOWED_ORIGINS: ${CATALOGGY_ALLOWED_ORIGINS:-http://192.168.1.25:7002,http://localhost:7002,http://127.0.0.1:7002}
       CATALOGGY_API_PUBLIC: ${CATALOGGY_API_PUBLIC:-http://192.168.1.25:7000}
+      # Public URL of the web service — used to build the "Configure" link
+      # Stremio shows for this addon's manifest (redirects to /settings).
+      CATALOGGY_WEB_PUBLIC: ${CATALOGGY_WEB_PUBLIC:-http://192.168.1.25:7002}
       # Optional integrations — set these in a .env file or export them.
       # Leaving them unset is safe; the API validates at startup/request time
       # and returns clear error messages if they are missing when needed.
@@ -72,6 +75,9 @@ services:
       CATALOGGY_API_BASE: http://api:7000
       CATALOGGY_API_TOKEN: ${API_TOKEN:?Set API_TOKEN in a .env file next to docker-compose.yml — see README.md}
       ADDON_PUBLIC_BASE: ${ADDON_PUBLIC_BASE:-http://192.168.1.25:7001}
+      # Public URL of the web service — used to build the "Configure" link
+      # Stremio shows for this addon's manifest (redirects to /settings).
+      CATALOGGY_WEB_PUBLIC: ${CATALOGGY_WEB_PUBLIC:-http://192.168.1.25:7002}
       SENTRY_DSN: ${SENTRY_DSN}
     ports:
       - "7001:7001"
@@ -92,6 +98,10 @@ services:
     image: ghcr.io/theshield2594/cataloggy-web:latest
     environment:
       VITE_API_BASE: ${VITE_API_BASE:-http://192.168.1.25:7000}
+      # Public URL of the dedicated addon service — the full-featured
+      # Stremio addon (meta/subtitles/search/genre support). Used to build
+      # the manifest URL shown in Settings.
+      VITE_ADDON_BASE: ${VITE_ADDON_BASE:-http://192.168.1.25:7001}
       # Comma-separated hostnames allowed to reach the web server, beyond
       # IPs/localhost (which are always allowed) — e.g. a domain proxied via
       # Nginx Proxy Manager. Leave unset for LAN-IP-only access.

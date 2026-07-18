@@ -30,7 +30,7 @@ const CATALOG_LABELS: Record<string, string> = {
 function AddonManifestUrl() {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
-  const manifestUrl = `${runtimeConfig.getApiBase()}/addon/stremio/manifest.json`;
+  const manifestUrl = `${runtimeConfig.getAddonBase()}/manifest.json`;
 
   const copy = () => {
     navigator.clipboard.writeText(manifestUrl).then(() => {
@@ -79,7 +79,7 @@ function AddonManifestUrl() {
         </a>
       </div>
       <p className="text-xs" style={{ color: "var(--text-mute)" }}>
-        The URL points to your local API server. Stremio must be able to reach it on your network.
+        The URL points to your local addon server. Stremio must be able to reach it on your network.
       </p>
     </div>
   );
