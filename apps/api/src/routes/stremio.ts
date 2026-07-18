@@ -22,6 +22,11 @@ import type { MetadataPayload } from "../tmdb.js";
 const STREMIO_ADDON_ID = "com.cataloggy.api";
 const STREMIO_ADDON_VERSION = "1.0.0";
 
+// Only set once this route has an actual place to send Stremio's
+// "Configure" button — otherwise behaviorHints.configurable stays false
+// even though catalog selection is possible via the web Settings page.
+const CATALOGGY_WEB_PUBLIC = process.env.CATALOGGY_WEB_PUBLIC ?? process.env.WEB_PUBLIC_BASE;
+
 const CORE_STREMIO_CATALOGS = [
   { id: "my_watchlist_movies", type: "movie" as const, name: "My Watchlist – Movies" },
   { id: "my_watchlist_series", type: "series" as const, name: "My Watchlist – Series" },
@@ -227,6 +232,15 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
   // Stricter limit than the global default since this route is unauthenticated.
   const PUBLIC_STREMIO_RATE_LIMIT = { max: 60, timeWindow: "1 minute" };
 
+  app.get(
+    "/addon/stremio/configure",
+    { config: { rateLimit: PUBLIC_STREMIO_RATE_LIMIT } },
+    async (_request, reply) => {
+      if (!CATALOGGY_WEB_PUBLIC) return reply.code(404).send({ error: "Not configured" });
+      return reply.redirect(`${CATALOGGY_WEB_PUBLIC}/settings`);
+    }
+  );
+
   app.get("/addon/stremio/manifest.json", { config: { rateLimit: PUBLIC_STREMIO_RATE_LIMIT } }, async () => {
     const [config, aiConfigured] = await Promise.all([getAddonConfig(), isAiConfigured()]);
 
@@ -272,7 +286,9 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
       resources: ["catalog"],
       types: ["movie", "series"],
       catalogs,
-      behaviorHints: { configurable: false, configurationRequired: false },
+      ...(CATALOGGY_WEB_PUBLIC
+        ? { behaviorHints: { configurable: true, configurationRequired: false } }
+        : {}),
     };
   });
 
