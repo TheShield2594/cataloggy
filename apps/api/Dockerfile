@@ -30,6 +30,7 @@ RUN apk add --no-cache wget openssl
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/apps/api/package.json ./apps/api/package.json
+COPY --from=build /app/apps/api/prisma.config.ts ./apps/api/prisma.config.ts
 COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/prisma ./apps/api/prisma
@@ -43,4 +44,4 @@ ENV NODE_ENV=production
 
 EXPOSE 7000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s CMD wget -q --spider http://127.0.0.1:7000/health || exit 1
-CMD ["sh", "-c", "cd apps/api && node_modules/.bin/prisma migrate deploy && node dist/index.js"]
+CMD ["sh", "-c", "cd apps/api && /app/node_modules/.bin/prisma migrate deploy && node dist/index.js"]
