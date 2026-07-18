@@ -640,7 +640,9 @@ export function DashboardPage() {
         void load();
       }, 1200);
     } catch {
-      // best-effort; UI simply won't show the optimistic "done" state
+      // Mark failed (e.g. the series turned out to already be fully watched) —
+      // reload so a now-stale card can be dropped from the list.
+      void load();
     } finally {
       setMarkingNext((prev) => { const next = new Set(prev); next.delete(imdbId); return next; });
     }

@@ -122,6 +122,15 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
     const progressWithNulls = await Promise.all(
       progressRows.map(async (row) => {
         const meta = metaByImdbId.get(row.seriesImdbId);
+        const watchedEpisodes = watchedBySeriesId.get(row.seriesImdbId) ?? null;
+        const totalEpisodes = meta?.totalEpisodes ?? null;
+        // Fully watched by the same episode count shown on the card — drop
+        // from Continue Watching regardless of what the TMDB per-season
+        // math below (used only to pick the next episode) concludes, since
+        // that math can be wrong or unavailable and never signal completion.
+        if (totalEpisodes !== null && watchedEpisodes !== null && watchedEpisodes >= totalEpisodes) {
+          return null;
+        }
         const next = await computeNextEpisode(
           row.seriesImdbId,
           meta?.tmdbId ?? null,
@@ -144,7 +153,7 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
           background: meta?.background ?? null,
           totalSeasons: meta?.totalSeasons ?? null,
           totalEpisodes: meta?.totalEpisodes ?? null,
-          watchedEpisodes: watchedBySeriesId.get(row.seriesImdbId) ?? null,
+          watchedEpisodes,
         };
       })
     );
@@ -203,8 +212,19 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
 
       const meta = await prisma.metadata.findUnique({
         where: { imdbId_type: { imdbId, type: "series" } },
-        select: { tmdbId: true },
+        select: { tmdbId: true, totalEpisodes: true },
       });
+
+      if (meta?.totalEpisodes != null) {
+        const watchedEpisodes = await prisma.watchEvent.findMany({
+          where: { profileId, type: "episode", seriesImdbId: imdbId, season: { not: null }, episode: { not: null } },
+          select: { season: true, episode: true },
+          distinct: ["season", "episode"],
+        });
+        if (watchedEpisodes.length >= meta.totalEpisodes) {
+          return reply.code(409).send({ error: "Series already fully watched" });
+        }
+      }
 
       const next = await computeNextEpisode(imdbId, meta?.tmdbId ?? null, row.lastSeason, row.lastEpisode);
       if (!next) return reply.code(409).send({ error: "Series already fully watched" });
