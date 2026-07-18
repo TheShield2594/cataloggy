@@ -25,7 +25,7 @@ const STREMIO_ADDON_VERSION = "1.0.0";
 // Only set once this route has an actual place to send Stremio's
 // "Configure" button — otherwise behaviorHints.configurable stays false
 // even though catalog selection is possible via the web Settings page.
-const CATALOGGY_WEB_PUBLIC = process.env.CATALOGGY_WEB_PUBLIC ?? process.env.WEB_PUBLIC_BASE;
+const CATALOGGY_WEB_PUBLIC = (process.env.CATALOGGY_WEB_PUBLIC ?? process.env.WEB_PUBLIC_BASE)?.replace(/\/+$/, "");
 
 const CORE_STREMIO_CATALOGS = [
   { id: "my_watchlist_movies", type: "movie" as const, name: "My Watchlist – Movies" },
