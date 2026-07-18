@@ -43,4 +43,4 @@ ENV NODE_ENV=production
 
 EXPOSE 7000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s CMD wget -q --spider http://127.0.0.1:7000/health || exit 1
-CMD ["sh", "-c", "cd apps/api && node_modules/.bin/prisma migrate deploy && node dist/index.js"]
+CMD ["sh", "-c", "cd apps/api && /app/node_modules/.bin/prisma migrate deploy && node dist/index.js"]
