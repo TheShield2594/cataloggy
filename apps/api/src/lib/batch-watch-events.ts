@@ -1,5 +1,8 @@
 import { WatchEventType } from "@prisma/client";
 import { prisma } from "./prisma.js";
+import { mapWithConcurrency } from "./concurrency.js";
+
+const UPDATE_CONCURRENCY = 10;
 
 export type WatchEventInput = {
   type: WatchEventType;
@@ -115,10 +118,8 @@ export async function batchUpsertWatchEvents(profileId: string, inputs: WatchEve
     await prisma.watchEvent.createMany({ data: creates });
   }
   if (updates.size > 0) {
-    await Promise.all(
-      [...updates.entries()].map(([id, increment]) =>
-        prisma.watchEvent.update({ where: { id }, data: { plays: { increment } } })
-      )
+    await mapWithConcurrency([...updates.entries()], UPDATE_CONCURRENCY, ([id, increment]) =>
+      prisma.watchEvent.update({ where: { id }, data: { plays: { increment } } })
     );
   }
 

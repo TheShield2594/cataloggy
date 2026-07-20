@@ -335,11 +335,14 @@ export function ListsPage() {
     const el = sentinelRef.current;
     if (!el || renderLimit >= displayedItems.length) return;
 
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting) {
-        setRenderLimit((prev) => Math.min(prev + RENDER_PAGE_SIZE, displayedItems.length));
-      }
-    });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setRenderLimit((prev) => Math.min(prev + RENDER_PAGE_SIZE, displayedItems.length));
+        }
+      },
+      { rootMargin: "800px" }
+    );
     observer.observe(el);
     return () => observer.disconnect();
   }, [renderLimit, displayedItems.length]);
@@ -634,7 +637,7 @@ export function ListsPage() {
                 })}
               </div>
             )}
-            {renderLimit < displayedItems.length && <div ref={sentinelRef} className="h-4" />}
+            {!loadingItems && renderLimit < displayedItems.length && <div ref={sentinelRef} className="h-4" />}
           </>
         )}
       </main>

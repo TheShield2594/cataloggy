@@ -4,22 +4,10 @@ import { prisma } from "../lib/prisma.js";
 import { resolveProfile } from "../lib/profile.js";
 import { getTmdb } from "../lib/tmdb-client.js";
 import { batchUpsertWatchEvents, type WatchEventInput } from "../lib/batch-watch-events.js";
+import { mapWithConcurrency } from "../lib/concurrency.js";
 import { parseCsv } from "./export.js";
 
 const TMDB_LOOKUP_CONCURRENCY = 5;
-
-async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await fn(items[i]);
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}
 
 const parseDate = (v: string | undefined): Date | null => {
   if (!v?.trim()) return null;

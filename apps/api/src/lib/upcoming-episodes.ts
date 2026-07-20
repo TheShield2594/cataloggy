@@ -7,12 +7,15 @@ async function getCachedShowDetails(
   tmdb: Awaited<ReturnType<typeof getTmdb>>,
   tmdbId: number
 ): Promise<ShowDetails | null> {
-  const cacheKey = `show-details:${tmdbId}`;
+  const cacheKey = `show-details:${tmdb.getLanguage()}:${tmdbId}`;
   const cached = showDetailsCache.get(cacheKey);
   if (cached) return cached.details;
 
   const details = await tmdb.getShowDetails(tmdbId);
-  showDetailsCache.set(cacheKey, { details });
+  // tmdb.getShowDetails returns null on a fetch/parse error (not a legitimate "no next
+  // episode" state, which is `details.nextEpisodeToAir === null` on a successful call) —
+  // don't cache that for hours, or a transient TMDB outage looks like it lasts that long.
+  if (details) showDetailsCache.set(cacheKey, { details });
   return details;
 }
 

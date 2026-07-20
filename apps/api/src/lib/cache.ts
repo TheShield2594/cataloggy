@@ -33,7 +33,7 @@ export const externalIdsCache = new LRUCache<string, { imdbId: string | null }>(
   max: 5000,
   ttl: EXTERNAL_IDS_CACHE_TTL_MS,
 });
-export const showDetailsCache = new LRUCache<string, { details: ShowDetails | null }>({
+export const showDetailsCache = new LRUCache<string, { details: ShowDetails }>({
   max: 1000,
   ttl: SHOW_DETAILS_CACHE_TTL_MS,
 });

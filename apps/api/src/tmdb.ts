@@ -219,6 +219,10 @@ export class TmdbClient {
     this.language = language ?? "en-US";
   }
 
+  getLanguage(): string {
+    return this.language;
+  }
+
   static fromEnv(language?: string) {
     const apiKey = process.env.TMDB_API_KEY?.trim();
     if (!apiKey) {
