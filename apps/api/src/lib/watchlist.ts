@@ -30,7 +30,19 @@ export const getDefaultWatchlist = async (profileId?: string) => {
 
   if (watchlist) return watchlist;
 
-  return prisma.list.create({
-    data: { kind: ListKind.watchlist, name: "Watchlist", profileId: resolvedProfileId },
-  });
+  try {
+    return await prisma.list.create({
+      data: { kind: ListKind.watchlist, name: "Watchlist", profileId: resolvedProfileId },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      // race condition — another concurrent request created it first
+      const retry = await prisma.list.findFirst({
+        where: { kind: ListKind.watchlist, name: "Watchlist", profileId: resolvedProfileId },
+        orderBy: { createdAt: "asc" },
+      });
+      if (retry) return retry;
+    }
+    throw error;
+  }
 };
