@@ -14,6 +14,7 @@ import { getDefaultProfileId } from "./lib/profile.js";
 import { checkUpcomingEpisodesAndNotify } from "./lib/notify-episodes.js";
 import { isSteamSyncConfigured, syncSteamLibrary } from "./lib/steam-sync.js";
 import { cleanupStaleSessions, SCROBBLE_CLEANUP_INTERVAL_MS } from "./routes/scrobble.js";
+import { recordJobFailure, recordJobSuccess, type JobName } from "./lib/job-status.js";
 
 // Route modules
 import healthRoutes from "./routes/health.js";
@@ -136,9 +137,20 @@ app.register(gamesSteamRoutes);
 
 // ─── Startup ───
 
-const reportBackgroundError = (error: unknown, message: string) => {
+const reportBackgroundError = (error: unknown, message: string, job?: JobName) => {
   app.log.error(error, message);
   Sentry.captureException(error);
+  if (job) {
+    void recordJobFailure(job, error).catch((kvError) => {
+      app.log.error(kvError, `Failed to persist job-status failure for ${job}`);
+    });
+  }
+};
+
+const reportJobSuccess = (job: JobName) => {
+  void recordJobSuccess(job).catch((error) => {
+    app.log.error(error, `Failed to clear job-status failure for ${job}`);
+  });
 };
 
 const start = async () => {
@@ -171,12 +183,16 @@ const start = async () => {
     setInterval(() => {
       void (async () => {
         const profileId = await getDefaultProfileId();
-        await pollTraktHistory(app.log, profileId).catch((error) => {
-          reportBackgroundError(error, "Scheduled Trakt history poll failed");
-        });
-        await syncTraktWatchlist(app.log, profileId).catch((error) => {
-          reportBackgroundError(error, "Scheduled Trakt watchlist sync failed");
-        });
+        await pollTraktHistory(app.log, profileId)
+          .then(() => reportJobSuccess("trakt-history-poll"))
+          .catch((error) => {
+            reportBackgroundError(error, "Scheduled Trakt history poll failed", "trakt-history-poll");
+          });
+        await syncTraktWatchlist(app.log, profileId)
+          .then(() => reportJobSuccess("trakt-watchlist-sync"))
+          .catch((error) => {
+            reportBackgroundError(error, "Scheduled Trakt watchlist sync failed", "trakt-watchlist-sync");
+          });
       })().catch((error) => {
         reportBackgroundError(error, "Scheduled Trakt poll failed");
       });
@@ -186,16 +202,20 @@ const start = async () => {
   }
 
   setInterval(() => {
-    void cleanupStaleSessions(app.log).catch((error) => {
-      reportBackgroundError(error, "Scrobble session cleanup failed");
-    });
+    void cleanupStaleSessions(app.log)
+      .then(() => reportJobSuccess("scrobble-cleanup"))
+      .catch((error) => {
+        reportBackgroundError(error, "Scrobble session cleanup failed", "scrobble-cleanup");
+      });
   }, SCROBBLE_CLEANUP_INTERVAL_MS);
 
   if (NOTIFICATION_CHECK_INTERVAL_SEC > 0) {
     setInterval(() => {
-      void checkUpcomingEpisodesAndNotify(app.log).catch((error) => {
-        reportBackgroundError(error, "Scheduled upcoming-episode notification check failed");
-      });
+      void checkUpcomingEpisodesAndNotify(app.log)
+        .then(() => reportJobSuccess("episode-notifications"))
+        .catch((error) => {
+          reportBackgroundError(error, "Scheduled upcoming-episode notification check failed", "episode-notifications");
+        });
     }, NOTIFICATION_CHECK_INTERVAL_SEC * 1000);
   } else {
     app.log.info(
@@ -215,13 +235,17 @@ const start = async () => {
 
   if (AI_REFRESH_INTERVAL_SEC > 0) {
     setTimeout(() => {
-      void refreshAiRecommendations().catch((error) => {
-        reportBackgroundError(error, "Initial AI recommendations refresh failed");
-      });
-      setInterval(() => {
-        void refreshAiRecommendations().catch((error) => {
-          reportBackgroundError(error, "Scheduled AI recommendations refresh failed");
+      void refreshAiRecommendations()
+        .then(() => reportJobSuccess("ai-recommendations"))
+        .catch((error) => {
+          reportBackgroundError(error, "Initial AI recommendations refresh failed", "ai-recommendations");
         });
+      setInterval(() => {
+        void refreshAiRecommendations()
+          .then(() => reportJobSuccess("ai-recommendations"))
+          .catch((error) => {
+            reportBackgroundError(error, "Scheduled AI recommendations refresh failed", "ai-recommendations");
+          });
       }, AI_REFRESH_INTERVAL_SEC * 1000);
     }, 2 * 60 * 1000);
   } else {
@@ -238,13 +262,17 @@ const start = async () => {
 
   if (STEAM_SYNC_INTERVAL_SEC > 0) {
     setTimeout(() => {
-      void refreshSteamLibrary().catch((error) => {
-        reportBackgroundError(error, "Initial Steam library sync failed");
-      });
-      setInterval(() => {
-        void refreshSteamLibrary().catch((error) => {
-          reportBackgroundError(error, "Scheduled Steam library sync failed");
+      void refreshSteamLibrary()
+        .then(() => reportJobSuccess("steam-sync"))
+        .catch((error) => {
+          reportBackgroundError(error, "Initial Steam library sync failed", "steam-sync");
         });
+      setInterval(() => {
+        void refreshSteamLibrary()
+          .then(() => reportJobSuccess("steam-sync"))
+          .catch((error) => {
+            reportBackgroundError(error, "Scheduled Steam library sync failed", "steam-sync");
+          });
       }, STEAM_SYNC_INTERVAL_SEC * 1000);
     }, 2 * 60 * 1000);
   } else {

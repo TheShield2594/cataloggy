@@ -12,6 +12,7 @@ import {
 import { OMDB_API_KEY_KV, getOmdbApiKey } from "../lib/omdb.js";
 import { RPDB_API_KEY_KV, getRpdbApiKey, buildRpdbPosterUrl } from "../lib/rpdb.js";
 import { trendingCache } from "../lib/cache.js";
+import { getFailedJobStatuses } from "../lib/job-status.js";
 
 const settingsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/settings/preferences", async () => {
@@ -183,6 +184,15 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/rpdb/config", async () => {
     const apiKey = await getRpdbApiKey();
     return { enabled: !!apiKey, apiKey: apiKey ?? null };
+  });
+
+  // ─── Background job status ───
+  // Surfaces scheduled-job failures (Steam sync, Trakt poll, episode
+  // notifications, AI recs) that would otherwise only be visible in server
+  // logs or Sentry (opt-in, off by default) — see lib/job-status.ts.
+  app.get("/settings/job-status", async () => {
+    const failures = await getFailedJobStatuses();
+    return { failures };
   });
 };
 

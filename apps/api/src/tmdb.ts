@@ -207,6 +207,8 @@ export const STREAMING_PROVIDERS: Record<string, { id: number; name: string }> =
   crunchyroll: { id: 283, name: "Crunchyroll" },
 };
 
+const REQUEST_TIMEOUT_MS = 10_000;
+
 export class TmdbClient {
   private static readonly baseUrl = "https://api.themoviedb.org/3";
   private static readonly imageBaseUrl = "https://image.tmdb.org/t/p/w500";
@@ -646,7 +648,8 @@ export class TmdbClient {
     const response = await fetch(url, {
       headers: {
         Accept: "application/json"
-      }
+      },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
 
     if (!response.ok) {

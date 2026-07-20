@@ -2,13 +2,11 @@ import "./sentry";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import { registerSW } from "virtual:pwa-register";
 import { App } from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { UpdatePrompt } from "./components/UpdatePrompt";
 import "@fontsource-variable/plus-jakarta-sans";
 import "./index.css";
-
-registerSW({ immediate: true });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -16,6 +14,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <BrowserRouter>
         <App />
       </BrowserRouter>
+      <UpdatePrompt />
     </ErrorBoundary>
   </React.StrictMode>
 );

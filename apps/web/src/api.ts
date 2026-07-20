@@ -379,6 +379,12 @@ export type SteamSyncSummary = {
   unmatched: number;
 };
 
+export type JobFailure = {
+  job: string;
+  message: string;
+  failedAt: string;
+};
+
 const authHeaders = (hasBody: boolean) => {
   const token = runtimeConfig.getToken();
   const headers: Record<string, string> = {
@@ -470,6 +476,15 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
       } catch {
         // not JSON — use the raw body as-is
       }
+    }
+    // A 401 with a WWW-Authenticate header (RFC 6750) comes from the bearer-token
+    // auth middleware itself, meaning the stored token is missing/invalid/rotated —
+    // as opposed to a route-level 401 like an incorrect profile PIN. Clear it and
+    // tell the app to fall back to the setup wizard instead of leaving every page
+    // stuck on a generic "Unable to connect" error for the rest of the session.
+    if (response.status === 401 && response.headers.get("www-authenticate")) {
+      runtimeConfig.setToken("");
+      window.dispatchEvent(new Event("cataloggy:unauthorized"));
     }
     throw new ApiError(message || `Request failed: ${response.status}`, response.status);
   }
@@ -596,6 +611,9 @@ export const api = {
   },
   removeOmdbKey() {
     return request<{ configured: boolean }>("/omdb/key", { method: "DELETE" });
+  },
+  getJobStatus() {
+    return request<{ failures: JobFailure[] }>("/settings/job-status");
   },
   getDetailedStats() {
     return request<DetailedWatchStats>("/watch/stats/detailed");
@@ -810,6 +828,12 @@ export const api = {
     return request<{ id: string; name: string }>(`/profiles/${encodeURIComponent(profileId)}/verify`, {
       method: "POST",
       body: JSON.stringify(pin ? { pin } : {}),
+    });
+  },
+  updateProfile(profileId: string, payload: { name?: string; pin?: string | null; currentPin?: string }) {
+    return request<{ profile: Profile }>(`/profiles/${encodeURIComponent(profileId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
     });
   },
   deleteProfile(profileId: string) {

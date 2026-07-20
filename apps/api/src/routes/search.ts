@@ -33,9 +33,15 @@ const searchRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(500).send({ error: "TMDB integration is not configured" });
       }
 
-      const allResults = isAll
-        ? await tmdb.searchMulti(query)
-        : await tmdb.search(type!, query);
+      let allResults;
+      try {
+        allResults = isAll
+          ? await tmdb.searchMulti(query)
+          : await tmdb.search(type!, query);
+      } catch (error) {
+        request.log.error(error, "TMDB search failed");
+        return reply.code(502).send({ error: "TMDB search failed" });
+      }
 
       const results = allResults.slice(0, 20);
 

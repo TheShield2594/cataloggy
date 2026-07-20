@@ -92,6 +92,14 @@ self.addEventListener("message", (event) => {
     // Ack on the reply port (if the caller sent one) so it can await
     // completion instead of firing-and-forgetting the postMessage.
     done.then(() => event.ports[0]?.postMessage({ done: true }));
+    return;
+  }
+
+  // Sent by the page's update-available prompt (see UpdatePrompt.tsx) once
+  // the user chooses to reload — without this, a waiting SW never activates
+  // and the "Reload" button would appear to do nothing.
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
   }
 });
 
