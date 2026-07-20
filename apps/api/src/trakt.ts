@@ -4,6 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 const TRAKT_API_BASE = "https://api.trakt.tv";
 const MAX_PAGES = 100;
 const DEFAULT_POLL_MAX_PAGES = 20;
+const REQUEST_TIMEOUT_MS = 10_000;
 
 function parsePollMaxPages(raw: string | undefined): number {
   const parsed = raw !== undefined ? Number.parseInt(raw, 10) : NaN;
@@ -343,7 +344,8 @@ export class TraktClient {
     const response = await fetch(url, {
       method: options.method,
       headers: { "User-Agent": "Cataloggy/1.0", ...options.headers },
-      body: options.body
+      body: options.body,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
 
     if (response.status === 401 && options.allowRefresh !== false) {
@@ -378,7 +380,8 @@ export class TraktClient {
         client_id: this.clientId,
         client_secret: this.clientSecret,
         grant_type: "refresh_token"
-      })
+      }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
 
     if (!response.ok) {

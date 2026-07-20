@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { Sentry } from "./lib/sentry.js";
 import Fastify, { type FastifyRequest, type FastifyReply, type RawRequestDefaultExpression } from "fastify";
 import rateLimit from "@fastify/rate-limit";
@@ -572,11 +573,12 @@ app.get<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", a
   }
 
   const addonBase = ADDON_PUBLIC_BASE ?? `http://localhost:${process.env.PORT ?? 7001}`;
+  const tokenQuery = MUTATION_TOKEN ? `?token=${MUTATION_TOKEN}` : "";
 
   if (type === "movie") {
     const subtitles: StremioSubtitle[] = [{
       id: `cataloggy-watch-${imdbId}`,
-      url: `${addonBase}/mark-watched/${type}/${imdbId}.srt`,
+      url: `${addonBase}/mark-watched/${type}/${imdbId}.srt${tokenQuery}`,
       lang: "Cataloggy: Mark Watched",
     }];
     return reply.send({ subtitles });
@@ -589,7 +591,7 @@ app.get<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", a
     if (!isNaN(season) && !isNaN(episode)) {
       const subtitles: StremioSubtitle[] = [{
         id: `cataloggy-watch-${imdbId}-s${season}e${episode}`,
-        url: `${addonBase}/mark-watched/episode/${imdbId}/${season}/${episode}.srt`,
+        url: `${addonBase}/mark-watched/episode/${imdbId}/${season}/${episode}.srt${tokenQuery}`,
         lang: `Cataloggy: Mark S${season}E${episode} Watched`,
       }];
       return reply.send({ subtitles });
@@ -599,11 +601,32 @@ app.get<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", a
   return reply.send({ subtitles: [] });
 });
 
-// ─── CSRF guard for mutation endpoints ───
-// Stremio (desktop/mobile app, not a browser) doesn't send an Origin header
-// when calling subtitle/scrobble URLs. Browsers always send one for
-// cross-origin fetch/img requests, so reject those to stop arbitrary web
-// pages from triggering mark-watched/scrobble side effects via CORS *.
+// ─── Auth guard for mutation endpoints ───
+// The addon's URL is necessarily shared (to install it in Stremio/Omni), so
+// anyone who has it can reach these routes. An Origin-header check alone
+// isn't real auth — it only stops browser-issued cross-origin requests;
+// nothing stops a direct script/curl request from setting its own Origin
+// header. So mutations additionally require a token derived from the shared
+// CATALOGGY_API_TOKEN (never the raw token itself, to cap the blast radius
+// if a URL containing it leaks — e.g. via proxy/access logs).
+//
+// Stremio's subtitle mechanism can only fetch a plain URL (no custom
+// headers), so /mark-watched/*.srt carries the token as a query param,
+// embedded server-side when the /subtitles route builds the URL. Scrobble
+// callers (media-player integrations, capable of setting headers) send it
+// as a standard Bearer token instead.
+const MUTATION_TOKEN = CATALOGGY_API_TOKEN
+  ? createHmac("sha256", CATALOGGY_API_TOKEN).update("cataloggy-addon-mutation").digest("hex")
+  : null;
+
+const isValidMutationToken = (candidate: string | undefined | null): boolean => {
+  if (!MUTATION_TOKEN || !candidate) return false;
+  const a = Buffer.from(candidate);
+  const b = Buffer.from(MUTATION_TOKEN);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+};
+
 const STREMIO_WEB_ORIGINS = ["https://web.strem.io", "https://app.strem.io"];
 
 const isAllowedMutationOrigin = (request: FastifyRequest): boolean => {
@@ -624,34 +647,37 @@ const SERIES_NO_EPISODE_SRT = `1
 Cannot mark a series as watched — select a specific episode first
 `;
 
-app.get<{ Params: { type: string; imdbId: string } }>("/mark-watched/:type/:imdbId.srt", async (request, reply) => {
-  reply.header("Access-Control-Allow-Origin", "*");
-  reply.header("Content-Type", "text/srt; charset=utf-8");
+app.get<{ Params: { type: string; imdbId: string }; Querystring: { token?: string } }>(
+  "/mark-watched/:type/:imdbId.srt",
+  async (request, reply) => {
+    reply.header("Access-Control-Allow-Origin", "*");
+    reply.header("Content-Type", "text/srt; charset=utf-8");
 
-  const { type, imdbId } = request.params;
+    const { type, imdbId } = request.params;
 
-  if (!isAllowedMutationOrigin(request)) {
-    request.log.warn({ origin: request.headers.origin }, "Rejected mark-watched request from disallowed origin");
+    if (!isValidMutationToken(request.query.token) || !isAllowedMutationOrigin(request)) {
+      request.log.warn({ origin: request.headers.origin }, "Rejected mark-watched request: missing/invalid token or disallowed origin");
+      return reply.send(MINIMAL_SRT);
+    }
+
+    try {
+      if (type === "movie") {
+        await apiPost("/watch", { type: "movie", imdbId });
+        request.log.info({ type, imdbId }, "Marked as watched from Stremio");
+      } else {
+        // For series without episode info, return honest feedback instead of a silent no-op
+        request.log.info({ type, imdbId }, "Series mark-watched requested without episode info — no-op");
+        return reply.send(SERIES_NO_EPISODE_SRT);
+      }
+    } catch (error) {
+      request.log.error(error, "Failed to mark as watched");
+    }
+
     return reply.send(MINIMAL_SRT);
   }
+);
 
-  try {
-    if (type === "movie") {
-      await apiPost("/watch", { type: "movie", imdbId });
-      request.log.info({ type, imdbId }, "Marked as watched from Stremio");
-    } else {
-      // For series without episode info, return honest feedback instead of a silent no-op
-      request.log.info({ type, imdbId }, "Series mark-watched requested without episode info — no-op");
-      return reply.send(SERIES_NO_EPISODE_SRT);
-    }
-  } catch (error) {
-    request.log.error(error, "Failed to mark as watched");
-  }
-
-  return reply.send(MINIMAL_SRT);
-});
-
-app.get<{ Params: { type: string; imdbId: string; season: string; episode: string } }>(
+app.get<{ Params: { type: string; imdbId: string; season: string; episode: string }; Querystring: { token?: string } }>(
   "/mark-watched/:type/:imdbId/:season/:episode.srt",
   async (request, reply) => {
     reply.header("Access-Control-Allow-Origin", "*");
@@ -661,8 +687,8 @@ app.get<{ Params: { type: string; imdbId: string; season: string; episode: strin
     const season = parseInt(seasonStr, 10);
     const episode = parseInt(episodeStr, 10);
 
-    if (!isAllowedMutationOrigin(request)) {
-      request.log.warn({ origin: request.headers.origin }, "Rejected mark-watched request from disallowed origin");
+    if (!isValidMutationToken(request.query.token) || !isAllowedMutationOrigin(request)) {
+      request.log.warn({ origin: request.headers.origin }, "Rejected mark-watched request: missing/invalid token or disallowed origin");
       return reply.send(MINIMAL_SRT);
     }
 
@@ -695,9 +721,11 @@ app.post<{ Body: unknown }>("/scrobble/:action", async (request, reply) => {
     return reply.code(400).send({ error: "action must be one of: start, pause, stop" });
   }
 
-  if (!isAllowedMutationOrigin(request)) {
-    request.log.warn({ origin: request.headers.origin }, "Rejected scrobble request from disallowed origin");
-    return reply.code(403).send({ error: "Origin not allowed" });
+  const authHeader = request.headers.authorization;
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : undefined;
+  if (!isValidMutationToken(bearerToken) || !isAllowedMutationOrigin(request)) {
+    request.log.warn({ origin: request.headers.origin }, "Rejected scrobble request: missing/invalid token or disallowed origin");
+    return reply.code(403).send({ error: "Unauthorized" });
   }
 
   if (!request.body || typeof request.body !== "object") {

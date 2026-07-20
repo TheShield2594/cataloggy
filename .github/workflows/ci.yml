@@ -12,6 +12,24 @@ jobs:
     permissions:
       contents: read
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: cataloggy
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d cataloggy"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cataloggy
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -32,6 +50,12 @@ jobs:
 
       - name: Generate Prisma client
         run: pnpm --filter @cataloggy/api prisma:generate
+
+      # Applies every migration against a real Postgres so a broken migration
+      # fails CI instead of crashing a self-hoster's api container on update
+      # (the same `prisma migrate deploy` command runs at container start).
+      - name: Run database migrations
+        run: pnpm --filter @cataloggy/api exec prisma migrate deploy
 
       - name: Lint
         run: pnpm lint

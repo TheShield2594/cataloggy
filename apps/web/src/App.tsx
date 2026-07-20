@@ -42,6 +42,12 @@ export function App() {
   const [sidebarPinned, setSidebarPinned] = useState(() => localStorage.getItem(PIN_KEY) === "1");
   const sidebarPad = sidebarPinned ? "sm:pl-[15rem]" : "sm:pl-16";
 
+  useEffect(() => {
+    const handleUnauthorized = () => setNeedsSetup(true);
+    window.addEventListener("cataloggy:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("cataloggy:unauthorized", handleUnauthorized);
+  }, []);
+
   if (needsSetup) {
     return (
       <SetupWizard

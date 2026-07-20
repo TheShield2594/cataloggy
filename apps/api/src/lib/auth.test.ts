@@ -4,8 +4,13 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 class FakeReply {
   statusCode?: number;
   body?: unknown;
+  headers: Record<string, string> = {};
   code(code: number) {
     this.statusCode = code;
+    return this;
+  }
+  header(name: string, value: string) {
+    this.headers[name] = value;
     return this;
   }
   send(payload: unknown) {
@@ -50,6 +55,7 @@ describe("verifyToken", () => {
     await verifyToken(makeRequest(undefined), reply as unknown as FastifyReply);
 
     expect(reply.statusCode).toBe(401);
+    expect(reply.headers["WWW-Authenticate"]).toBe("Bearer");
   });
 
   it("returns 401 for a malformed Authorization header", async () => {
@@ -72,6 +78,7 @@ describe("verifyToken", () => {
     await verifyToken(makeRequest("Bearer wrong-token"), reply as unknown as FastifyReply);
 
     expect(reply.statusCode).toBe(401);
+    expect(reply.headers["WWW-Authenticate"]).toBe("Bearer");
   });
 
   it("lets the request through for the correct token", async () => {

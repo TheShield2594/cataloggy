@@ -471,6 +471,15 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
         // not JSON — use the raw body as-is
       }
     }
+    // A 401 with a WWW-Authenticate header (RFC 6750) comes from the bearer-token
+    // auth middleware itself, meaning the stored token is missing/invalid/rotated —
+    // as opposed to a route-level 401 like an incorrect profile PIN. Clear it and
+    // tell the app to fall back to the setup wizard instead of leaving every page
+    // stuck on a generic "Unable to connect" error for the rest of the session.
+    if (response.status === 401 && response.headers.get("www-authenticate")) {
+      runtimeConfig.setToken("");
+      window.dispatchEvent(new Event("cataloggy:unauthorized"));
+    }
     throw new ApiError(message || `Request failed: ${response.status}`, response.status);
   }
 

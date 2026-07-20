@@ -72,6 +72,8 @@ cataloggy/
    docker compose up --build
    ```
 
+   By default `docker-compose.yml` runs the `:latest` image for each service, which always points at the most recent build from `main`. To pin a known-good version instead (recommended once you have a working setup, so `docker compose pull` can't silently update you into a broken state), every image is also published with a `sha-<short-sha>` tag, and with a semver tag (e.g. `v1.2.0`) for tagged releases. Replace `:latest` with a specific tag in the `image:` line for each service to pin it, and roll back the same way if an update causes problems.
+
 3. Run the smoke checks:
 
    ```bash

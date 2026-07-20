@@ -13,7 +13,10 @@ export const verifyToken = async (request: FastifyRequest, reply: FastifyReply) 
 
   const authHeader = request.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
-    return reply.code(401).send({ error: "Unauthorized" });
+    // WWW-Authenticate (RFC 6750) marks this as a bearer-token failure specifically,
+    // distinct from route-level 401s (e.g. an incorrect profile PIN) — the web client
+    // uses it to tell "your API token is invalid, re-enter it" apart from other 401s.
+    return reply.code(401).header("WWW-Authenticate", "Bearer").send({ error: "Unauthorized" });
   }
 
   const token = authHeader.slice("Bearer ".length).trim();
@@ -21,6 +24,6 @@ export const verifyToken = async (request: FastifyRequest, reply: FastifyReply) 
   const expectedTokenDigest = toSha256Digest(API_TOKEN);
 
   if (!timingSafeEqual(tokenDigest, expectedTokenDigest)) {
-    return reply.code(401).send({ error: "Unauthorized" });
+    return reply.code(401).header("WWW-Authenticate", "Bearer").send({ error: "Unauthorized" });
   }
 };
