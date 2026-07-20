@@ -205,6 +205,17 @@ In addition to full database backups, Settings → Data lets you export your lis
 
 Settings → Data also supports importing directly from other trackers' CSV exports via `POST /import/external` (`format`: `letterboxd-diary`, `letterboxd-ratings`, `imdb-ratings`, or `simkl`). Letterboxd exports don't include IMDb IDs, so titles are resolved against TMDB on a best-effort basis; unmatched rows are skipped and reported in the import summary.
 
+### Updating safely / if a migration fails
+
+The `api` container runs `prisma migrate deploy` automatically on every start, applying any new database migrations that shipped since your last update. This is usually seamless, but two things are worth knowing before you run `docker compose pull && docker compose up -d` on a long-unattended instance:
+
+- **Back up first.** Run `./scripts/backup.sh` before pulling a new image. Prisma migrations aren't automatically reversible, so a backup taken right before updating is your fastest way back to a known-good state if something goes wrong.
+- **If `prisma migrate deploy` fails on startup**, the `api` container will exit and `docker compose ps` will show it restarting in a crash loop rather than serving traffic — check `docker compose logs api` for the failing migration. To recover:
+  1. Restore the database from the backup you took before updating (`./scripts/restore.sh <backup-file>`) — rolling back the image alone won't undo a partially-applied migration.
+  2. Roll back to the previous working image tag (see "Docker Compose install" above for pinning by `sha-<short-sha>` or a semver tag) and start it against the restored database.
+
+If you don't have a recent backup when this happens, don't guess at manually editing the `_prisma_migrations` table — that's how partial-migration failures turn into data loss. Open an issue with the failing migration name and the error from `docker compose logs api` instead.
+
 ## Security
 
 Cataloggy is designed for self-hosting on a trusted local network (LAN), not for direct exposure to the internet. Known limitations:
@@ -240,6 +251,10 @@ Cataloggy is designed for self-hosting on a trusted local network (LAN), not for
   ```bash
   pnpm --filter @cataloggy/api prisma:push
   ```
+
+## Contributing
+
+Want to contribute? See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, checks to run before opening a PR, and how to report bugs. Notable changes are tracked in [CHANGELOG.md](CHANGELOG.md).
 
 ## Author
 

@@ -379,6 +379,12 @@ export type SteamSyncSummary = {
   unmatched: number;
 };
 
+export type JobFailure = {
+  job: string;
+  message: string;
+  failedAt: string;
+};
+
 const authHeaders = (hasBody: boolean) => {
   const token = runtimeConfig.getToken();
   const headers: Record<string, string> = {
@@ -605,6 +611,9 @@ export const api = {
   },
   removeOmdbKey() {
     return request<{ configured: boolean }>("/omdb/key", { method: "DELETE" });
+  },
+  getJobStatus() {
+    return request<{ failures: JobFailure[] }>("/settings/job-status");
   },
   getDetailedStats() {
     return request<DetailedWatchStats>("/watch/stats/detailed");

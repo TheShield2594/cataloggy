@@ -1,5 +1,5 @@
 import { useSearchParams } from "react-router-dom";
-import { Key, Link, Database, Info, Clapperboard, Image, Globe, Star, Sparkles, Bell, Users } from "lucide-react";
+import { Key, Link, Database, Info, Clapperboard, Image, Globe, Star, Sparkles, Bell, Users, Activity } from "lucide-react";
 import { Section } from "../components/settings/Section";
 import { ApiTokenSettings } from "../components/settings/ApiTokenSettings";
 import { TraktSettings } from "../components/settings/TraktSettings";
@@ -11,6 +11,7 @@ import { DataSettings } from "../components/settings/DataSettings";
 import { PreferencesSettings } from "../components/settings/PreferencesSettings";
 import { PushSettings } from "../components/settings/PushSettings";
 import { ProfileSettings } from "../components/settings/ProfileSettings";
+import { JobStatusSettings } from "../components/settings/JobStatusSettings";
 
 declare const __APP_VERSION__: string;
 const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "unknown";
@@ -74,6 +75,10 @@ export function SettingsPage() {
 
           <Section title="Notifications" icon={<Bell size={20} />} storageKey="notifications">
             <PushSettings />
+          </Section>
+
+          <Section title="Sync Status" icon={<Activity size={20} />} storageKey="job-status" defaultOpen={false}>
+            <JobStatusSettings />
           </Section>
 
           <Section title="About" icon={<Info size={20} />} storageKey="about">
