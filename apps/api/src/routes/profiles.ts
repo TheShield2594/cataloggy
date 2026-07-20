@@ -151,6 +151,50 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
+  app.patch<{ Params: { id: string }; Body: unknown }>("/profiles/:id", async (request, reply) => {
+    if (!UUID_V4_PATTERN.test(request.params.id)) {
+      return reply.code(400).send({ error: "id must be a valid UUID" });
+    }
+
+    const profile = await prisma.profile.findUnique({ where: { id: request.params.id } });
+    if (!profile) return reply.code(404).send({ error: "Profile not found" });
+
+    const body = (request.body ?? {}) as { name?: unknown; pin?: unknown };
+    const data: { name?: string; pinHash?: string | null } = {};
+
+    if (body.name !== undefined) {
+      if (typeof body.name !== "string" || !body.name.trim()) {
+        return reply.code(400).send({ error: "name must be a non-empty string when provided" });
+      }
+      data.name = body.name.trim();
+    }
+
+    // pin: omitted = leave as-is, null = remove PIN protection, string = set/change PIN.
+    if (body.pin !== undefined) {
+      if (body.pin === null) {
+        data.pinHash = null;
+      } else if (typeof body.pin === "string" && body.pin.trim()) {
+        data.pinHash = hashPin(body.pin.trim());
+      } else {
+        return reply.code(400).send({ error: "pin must be a non-empty string or null when provided" });
+      }
+    }
+
+    if (Object.keys(data).length === 0) {
+      return reply.code(400).send({ error: "name or pin must be provided" });
+    }
+
+    const updated = await prisma.profile.update({ where: { id: profile.id }, data });
+
+    // The PIN just changed (or was removed) — any outstanding lockout/attempt
+    // count from the old PIN no longer applies.
+    if (data.pinHash !== undefined) {
+      await clearPinAttempts(profile.id);
+    }
+
+    return { profile: { id: updated.id, name: updated.name, hasPin: updated.pinHash != null } };
+  });
+
   app.delete<{ Params: { id: string } }>("/profiles/:id", async (request, reply) => {
     if (!UUID_V4_PATTERN.test(request.params.id)) {
       return reply.code(400).send({ error: "id must be a valid UUID" });

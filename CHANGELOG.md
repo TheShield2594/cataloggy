@@ -13,6 +13,10 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - CI now runs CodeQL static analysis and a `pnpm audit` dependency check (weekly, plus every push/PR).
 - README: guidance on pinning/rolling back image versions, and on recovering if a database migration fails on container start.
 - `CONTRIBUTING.md`.
+- A "Sync Status" Settings section and `GET /settings/job-status` endpoint surfacing the last failure of each scheduled background job (Trakt poll/watchlist sync, episode notifications, AI recs refresh, Steam sync, scrobble cleanup), so a self-hoster without Sentry configured can still notice a silently-broken sync.
+- A visible "update available" prompt for the web PWA instead of the service worker silently swapping itself in.
+- `PATCH /profiles/:id` for renaming a profile or setting/changing/removing its PIN, plus a Settings UI to do so — previously only creating and switching profiles was possible from the app; deleting one (already supported server-side) had no UI entry point at all.
+- Test coverage for previously-untested modules: `lib/collection.ts`, `lib/watchlist.ts`, `lib/series-progress.ts`, `routes/watch.ts`, the Plex/Jellyfin webhook handlers, and the new profile-management/job-status endpoints.
 
 ### Changed
 
@@ -26,3 +30,4 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `/search` no longer throws an uncaught exception (and a bare 500) when the upstream TMDB request fails.
 - Bumped a transitive `serialize-javascript` dependency (via `workbox-build`) to patch a high-severity RCE advisory ([GHSA-5c6j-r48x-rmvq](https://github.com/advisories/GHSA-5c6j-r48x-rmvq)).
+- `getDefaultWatchlist` now retries on a concurrent-create race instead of throwing a raw Prisma error (matching `getDefaultCollection`'s existing behavior).

@@ -6,7 +6,7 @@ const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 const hashPin = (pin: string) => createHash("sha256").update(pin).digest("hex");
 
 const prismaMock = {
-  profile: { findMany: vi.fn(), create: vi.fn(), findUnique: vi.fn(), count: vi.fn(), delete: vi.fn() },
+  profile: { findMany: vi.fn(), create: vi.fn(), findUnique: vi.fn(), count: vi.fn(), delete: vi.fn(), update: vi.fn() },
   kV: { findUnique: vi.fn(), upsert: vi.fn(), deleteMany: vi.fn() },
   $transaction: vi.fn(),
   $executeRaw: vi.fn(),
@@ -195,6 +195,98 @@ describe("profiles routes", () => {
       expect(lockedResponse.json()).toEqual(
         expect.objectContaining({ error: expect.stringContaining("Too many incorrect attempts") })
       );
+      await app.close();
+    });
+  });
+
+  describe("PATCH /profiles/:id", () => {
+    it("rejects a non-UUID id", async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: "PATCH", url: "/profiles/not-a-uuid", payload: { name: "Alice" } });
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it("404s for an unknown profile", async () => {
+      prismaMock.profile.findUnique.mockResolvedValue(null);
+      const app = await buildApp();
+      const response = await app.inject({ method: "PATCH", url: `/profiles/${PROFILE_ID}`, payload: { name: "Alice" } });
+      expect(response.statusCode).toBe(404);
+      await app.close();
+    });
+
+    it("rejects an empty body (nothing to update)", async () => {
+      prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: null });
+      const app = await buildApp();
+      const response = await app.inject({ method: "PATCH", url: `/profiles/${PROFILE_ID}`, payload: {} });
+      expect(response.statusCode).toBe(400);
+      expect(prismaMock.profile.update).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it("rejects a blank name", async () => {
+      prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: null });
+      const app = await buildApp();
+      const response = await app.inject({ method: "PATCH", url: `/profiles/${PROFILE_ID}`, payload: { name: "  " } });
+      expect(response.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it("renames a profile", async () => {
+      prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: null });
+      prismaMock.profile.update.mockResolvedValue({ id: PROFILE_ID, name: "Alicia", pinHash: null });
+      const app = await buildApp();
+
+      const response = await app.inject({ method: "PATCH", url: `/profiles/${PROFILE_ID}`, payload: { name: "Alicia" } });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().profile).toEqual({ id: PROFILE_ID, name: "Alicia", hasPin: false });
+      expect(prismaMock.profile.update).toHaveBeenCalledWith({
+        where: { id: PROFILE_ID },
+        data: { name: "Alicia" },
+      });
+      await app.close();
+    });
+
+    it("sets a PIN and clears any prior lockout attempts", async () => {
+      prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: null });
+      prismaMock.profile.update.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: hashPin("9999") });
+      const app = await buildApp();
+
+      const response = await app.inject({ method: "PATCH", url: `/profiles/${PROFILE_ID}`, payload: { pin: "9999" } });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().profile.hasPin).toBe(true);
+      expect(prismaMock.profile.update).toHaveBeenCalledWith({
+        where: { id: PROFILE_ID },
+        data: { pinHash: hashPin("9999") },
+      });
+      expect(prismaMock.kV.deleteMany).toHaveBeenCalled();
+      await app.close();
+    });
+
+    it("removes a PIN when pin is explicitly null", async () => {
+      prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: hashPin("1234") });
+      prismaMock.profile.update.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: null });
+      const app = await buildApp();
+
+      const response = await app.inject({ method: "PATCH", url: `/profiles/${PROFILE_ID}`, payload: { pin: null } });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().profile.hasPin).toBe(false);
+      expect(prismaMock.profile.update).toHaveBeenCalledWith({
+        where: { id: PROFILE_ID },
+        data: { pinHash: null },
+      });
+      await app.close();
+    });
+
+    it("rejects a blank pin string (use null to remove)", async () => {
+      prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: null });
+      const app = await buildApp();
+      const response = await app.inject({ method: "PATCH", url: `/profiles/${PROFILE_ID}`, payload: { pin: "  " } });
+      expect(response.statusCode).toBe(400);
+      expect(prismaMock.profile.update).not.toHaveBeenCalled();
       await app.close();
     });
   });

@@ -830,6 +830,12 @@ export const api = {
       body: JSON.stringify(pin ? { pin } : {}),
     });
   },
+  updateProfile(profileId: string, payload: { name?: string; pin?: string | null }) {
+    return request<{ profile: Profile }>(`/profiles/${encodeURIComponent(profileId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
   deleteProfile(profileId: string) {
     return request<void>(`/profiles/${encodeURIComponent(profileId)}`, { method: "DELETE" });
   },
