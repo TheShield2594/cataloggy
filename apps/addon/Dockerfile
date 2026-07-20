@@ -23,16 +23,16 @@ FROM node:26-alpine AS runtime
 
 WORKDIR /app
 RUN apk add --no-cache wget
+RUN addgroup -S app && adduser -S app -G app
 
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/package.json ./package.json
-COPY --from=build /app/apps/addon/package.json ./apps/addon/package.json
-COPY --from=build /app/apps/addon/node_modules ./apps/addon/node_modules
-COPY --from=build /app/apps/addon/dist ./apps/addon/dist
-COPY --from=build /app/packages/shared/package.json ./packages/shared/package.json
-COPY --from=build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=build --chown=app:app /app/node_modules ./node_modules
+COPY --from=build --chown=app:app /app/package.json ./package.json
+COPY --from=build --chown=app:app /app/apps/addon/package.json ./apps/addon/package.json
+COPY --from=build --chown=app:app /app/apps/addon/node_modules ./apps/addon/node_modules
+COPY --from=build --chown=app:app /app/apps/addon/dist ./apps/addon/dist
+COPY --from=build --chown=app:app /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=build --chown=app:app /app/packages/shared/dist ./packages/shared/dist
 
-RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
 USER app
 ENV NODE_ENV=production
 

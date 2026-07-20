@@ -1,5 +1,5 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
+import { isUniqueConstraintError } from "./prisma-tolerant.js";
 import type { SeriesProgressCandidate } from "./types.js";
 
 export const isIncomingSeriesProgressNewer = (
@@ -58,6 +58,6 @@ export const upsertSeriesProgressIfNewer = async (
       },
     });
   } catch (error) {
-    if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
+    if (!isUniqueConstraintError(error)) throw error;
   }
 };

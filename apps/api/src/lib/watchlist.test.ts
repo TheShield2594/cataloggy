@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Prisma } from "@prisma/client";
+import { P2002 } from "./test-fixtures/prisma-errors.js";
 
 const prismaMock = {
   list: { findFirst: vi.fn(), create: vi.fn() },
@@ -7,11 +7,6 @@ const prismaMock = {
 };
 
 vi.mock("./prisma.js", () => ({ prisma: prismaMock }));
-
-const P2002 = new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
-  code: "P2002",
-  clientVersion: "test",
-});
 
 describe("ensureDefaultWatchlist", () => {
   beforeEach(() => {
@@ -40,8 +35,10 @@ describe("ensureDefaultWatchlist", () => {
     });
   });
 
-  it("swallows a P2002 race from a concurrent creator", async () => {
-    prismaMock.list.findFirst.mockResolvedValue(null);
+  it("resolves without throwing when a P2002 race retry finds the winner's row", async () => {
+    prismaMock.list.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "winner" });
     prismaMock.list.create.mockRejectedValue(P2002);
     const { ensureDefaultWatchlist } = await import("./watchlist.js");
 

@@ -31,3 +31,6 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `/search` no longer throws an uncaught exception (and a bare 500) when the upstream TMDB request fails.
 - Bumped a transitive `serialize-javascript` dependency (via `workbox-build`) to patch a high-severity RCE advisory ([GHSA-5c6j-r48x-rmvq](https://github.com/advisories/GHSA-5c6j-r48x-rmvq)).
 - `getDefaultWatchlist` now retries on a concurrent-create race instead of throwing a raw Prisma error (matching `getDefaultCollection`'s existing behavior).
+- `PATCH /profiles/:id` now requires the profile's current PIN to change or remove an *existing* PIN (reusing the same verification/lockout logic as `/verify`); previously anyone with Settings access could strip another profile's PIN protection without ever knowing it.
+- The addon's mutation-token check no longer assumes the incoming token is a string — a repeated query param (`?token=a&token=b`) would have thrown instead of being rejected cleanly.
+- `dockerpublish.yml` reads the git ref type/name from the runner's `GITHUB_REF_TYPE`/`GITHUB_REF_NAME` environment variables instead of interpolating `github.ref_type`/`github.ref_name` into a shell script.

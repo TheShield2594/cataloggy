@@ -159,7 +159,7 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
     const profile = await prisma.profile.findUnique({ where: { id: request.params.id } });
     if (!profile) return reply.code(404).send({ error: "Profile not found" });
 
-    const body = (request.body ?? {}) as { name?: unknown; pin?: unknown };
+    const body = (request.body ?? {}) as { name?: unknown; pin?: unknown; currentPin?: unknown };
     const data: { name?: string; pinHash?: string | null } = {};
 
     if (body.name !== undefined) {
@@ -177,6 +177,25 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
         data.pinHash = hashPin(body.pin.trim());
       } else {
         return reply.code(400).send({ error: "pin must be a non-empty string or null when provided" });
+      }
+
+      // Changing or removing an *existing* PIN requires proving you know it —
+      // otherwise PIN protection is meaningless from Settings (anyone with app
+      // access could strip it without ever seeing the PIN). Setting a PIN for
+      // the first time needs no proof, since there's nothing to bypass yet.
+      if (profile.pinHash) {
+        const lockout = await getPinLockout(profile.id);
+        if (lockout.locked) {
+          return reply
+            .code(429)
+            .send({ error: "Too many incorrect attempts. Try again later.", retryAfterSec: lockout.retryAfterSec });
+        }
+
+        const currentPin = typeof body.currentPin === "string" ? body.currentPin.trim() : "";
+        if (!currentPin || !pinMatches(currentPin, profile.pinHash)) {
+          await recordPinFailure(profile.id);
+          return reply.code(401).send({ error: "Incorrect current PIN" });
+        }
       }
     }
 

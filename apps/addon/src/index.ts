@@ -619,8 +619,12 @@ const MUTATION_TOKEN = CATALOGGY_API_TOKEN
   ? createHmac("sha256", CATALOGGY_API_TOKEN).update("cataloggy-addon-mutation").digest("hex")
   : null;
 
-const isValidMutationToken = (candidate: string | undefined | null): boolean => {
-  if (!MUTATION_TOKEN || !candidate) return false;
+const isValidMutationToken = (candidate: unknown): boolean => {
+  // Fastify doesn't validate query/header types against the route's TS generics at
+  // runtime, so a repeated query param (e.g. "?token=a&token=b") can arrive here as
+  // a string[] despite the declared type — guard explicitly rather than let
+  // Buffer.from throw on a non-string value.
+  if (!MUTATION_TOKEN || typeof candidate !== "string" || !candidate) return false;
   const a = Buffer.from(candidate);
   const b = Buffer.from(MUTATION_TOKEN);
   if (a.length !== b.length) return false;

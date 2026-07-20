@@ -38,17 +38,22 @@ describe("POST /webhooks/jellyfin", () => {
     await app.close();
   });
 
-  it("400s on an empty body", async () => {
+  it("400s with the route's own error when the parsed body is null", async () => {
     const app = await buildApp();
 
+    // A genuinely empty request body never reaches the route handler — Fastify's
+    // JSON parser itself rejects it before the handler's `if (!body)` check runs.
+    // A literal JSON `null` body does reach the handler, so this exercises that
+    // check specifically instead of just asserting "some 400 happened".
     const response = await app.inject({
       method: "POST",
       url: "/webhooks/jellyfin",
-      payload: "",
+      payload: "null",
       headers: { "content-type": "application/json" },
     });
 
     expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "Empty body" });
     await app.close();
   });
 

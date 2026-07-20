@@ -1,16 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Prisma } from "@prisma/client";
+import { P2002 } from "./test-fixtures/prisma-errors.js";
 
 const prismaMock = {
   seriesProgress: { updateMany: vi.fn(), create: vi.fn() },
 };
 
 vi.mock("./prisma.js", () => ({ prisma: prismaMock }));
-
-const P2002 = new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
-  code: "P2002",
-  clientVersion: "test",
-});
 
 describe("isIncomingSeriesProgressNewer", () => {
   it("prefers the later watched timestamp regardless of season/episode", async () => {

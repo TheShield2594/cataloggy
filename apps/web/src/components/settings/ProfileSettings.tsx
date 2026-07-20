@@ -58,8 +58,12 @@ function RenameForm({ profile, onSaved, onCancel }: { profile: Profile; onSaved:
   );
 }
 
+// Changing or removing an *existing* PIN requires the current one (enforced
+// server-side too) — otherwise anyone with the app open could strip another
+// profile's PIN protection without ever knowing it, defeating its purpose.
 function PinForm({ profile, onSaved, onCancel }: { profile: Profile; onSaved: (p: Profile) => void; onCancel: () => void }) {
   const [pin, setPin] = useState("");
+  const [currentPin, setCurrentPin] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,13 +71,86 @@ function PinForm({ profile, onSaved, onCancel }: { profile: Profile; onSaved: (p
     e.preventDefault();
     const trimmed = pin.trim();
     if (!trimmed) return;
+    if (profile.hasPin && !currentPin.trim()) return;
     setSaving(true);
     setError(null);
     try {
-      const { profile: updated } = await api.updateProfile(profile.id, { pin: trimmed });
+      const { profile: updated } = await api.updateProfile(profile.id, {
+        pin: trimmed,
+        ...(profile.hasPin ? { currentPin: currentPin.trim() } : {}),
+      });
       onSaved(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not set PIN.");
+      if (err instanceof ApiError && err.status === 401) {
+        setError("Incorrect current PIN.");
+      } else {
+        setError(err instanceof Error ? err.message : "Could not set PIN.");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="flex flex-1 flex-wrap items-center gap-2">
+      {profile.hasPin && (
+        <input
+          autoFocus
+          type="password"
+          inputMode="numeric"
+          value={currentPin}
+          onChange={(e) => setCurrentPin(e.target.value)}
+          placeholder="Current PIN"
+          className="w-full min-w-0 flex-1 rounded-lg border px-2.5 py-1.5 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+          style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
+        />
+      )}
+      <input
+        autoFocus={!profile.hasPin}
+        type="password"
+        inputMode="numeric"
+        value={pin}
+        onChange={(e) => setPin(e.target.value)}
+        placeholder={profile.hasPin ? "New PIN" : "PIN"}
+        className="w-full min-w-0 flex-1 rounded-lg border px-2.5 py-1.5 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+        style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
+      />
+      <button
+        type="submit"
+        disabled={saving || !pin.trim() || (profile.hasPin && !currentPin.trim())}
+        aria-label="Save PIN"
+        className="flex-none rounded-lg p-1.5 text-emerald-600 hover:bg-[var(--surface-strong)] disabled:opacity-50"
+      >
+        {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+      </button>
+      <button type="button" onClick={onCancel} aria-label="Cancel" className="flex-none rounded-lg p-1.5 hover:bg-[var(--surface-strong)]" style={{ color: "var(--text-mute)" }}>
+        <X size={16} />
+      </button>
+      {error && <p className="w-full text-xs text-rose-600">{error}</p>}
+    </form>
+  );
+}
+
+function RemovePinForm({ profile, onSaved, onCancel }: { profile: Profile; onSaved: (p: Profile) => void; onCancel: () => void }) {
+  const [currentPin, setCurrentPin] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const trimmed = currentPin.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const { profile: updated } = await api.updateProfile(profile.id, { pin: null, currentPin: trimmed });
+      onSaved(updated);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setError("Incorrect current PIN.");
+      } else {
+        setError(err instanceof Error ? err.message : "Could not remove PIN.");
+      }
     } finally {
       setSaving(false);
     }
@@ -85,13 +162,13 @@ function PinForm({ profile, onSaved, onCancel }: { profile: Profile; onSaved: (p
         autoFocus
         type="password"
         inputMode="numeric"
-        value={pin}
-        onChange={(e) => setPin(e.target.value)}
-        placeholder={profile.hasPin ? "New PIN" : "PIN"}
+        value={currentPin}
+        onChange={(e) => setCurrentPin(e.target.value)}
+        placeholder="Current PIN to confirm removal"
         className="w-full min-w-0 rounded-lg border px-2.5 py-1.5 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
       />
-      <button type="submit" disabled={saving || !pin.trim()} aria-label="Save PIN" className="flex-none rounded-lg p-1.5 text-emerald-600 hover:bg-[var(--surface-strong)] disabled:opacity-50">
+      <button type="submit" disabled={saving || !currentPin.trim()} aria-label="Confirm PIN removal" className="flex-none rounded-lg p-1.5 text-emerald-600 hover:bg-[var(--surface-strong)] disabled:opacity-50">
         {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
       </button>
       <button type="button" onClick={onCancel} aria-label="Cancel" className="flex-none rounded-lg p-1.5 hover:bg-[var(--surface-strong)]" style={{ color: "var(--text-mute)" }}>
@@ -115,21 +192,10 @@ function ProfileRow({
   onUpdated: (p: Profile) => void;
   onDeleted: (id: string) => void;
 }) {
-  const [editing, setEditing] = useState<"none" | "name" | "pin">("none");
+  const [editing, setEditing] = useState<"none" | "name" | "pin" | "removePin">("none");
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
-
-  const removePin = async () => {
-    setError(null);
-    try {
-      const { profile: updated } = await api.updateProfile(profile.id, { pin: null });
-      onUpdated(updated);
-      showToast(`PIN removed for ${updated.name}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not remove PIN.");
-    }
-  };
 
   const remove = async () => {
     if (
@@ -172,6 +238,12 @@ function ProfileRow({
             onSaved={(p) => { onUpdated(p); setEditing("none"); showToast(`PIN ${profile.hasPin ? "changed" : "set"} for ${p.name}`); }}
             onCancel={() => setEditing("none")}
           />
+        ) : editing === "removePin" ? (
+          <RemovePinForm
+            profile={profile}
+            onSaved={(p) => { onUpdated(p); setEditing("none"); showToast(`PIN removed for ${p.name}`); }}
+            onCancel={() => setEditing("none")}
+          />
         ) : (
           <>
             <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -204,7 +276,7 @@ function ProfileRow({
             {profile.hasPin && (
               <button
                 type="button"
-                onClick={removePin}
+                onClick={() => setEditing("removePin")}
                 aria-label={`Remove PIN for ${profile.name}`}
                 className="flex-none rounded-lg p-1.5 transition-colors hover:bg-[var(--surface-strong)]"
                 style={{ color: "var(--text-mute)" }}

@@ -830,7 +830,7 @@ export const api = {
       body: JSON.stringify(pin ? { pin } : {}),
     });
   },
-  updateProfile(profileId: string, payload: { name?: string; pin?: string | null }) {
+  updateProfile(profileId: string, payload: { name?: string; pin?: string | null; currentPin?: string }) {
     return request<{ profile: Profile }>(`/profiles/${encodeURIComponent(profileId)}`, {
       method: "PATCH",
       body: JSON.stringify(payload),

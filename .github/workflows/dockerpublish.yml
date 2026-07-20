@@ -82,8 +82,8 @@ jobs:
         run: |
           SHORT_SHA=$(git rev-parse --short=12 HEAD)
           VERSION=""
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            VERSION="${{ github.ref_name }}"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            VERSION="$GITHUB_REF_NAME"
           fi
           {
             echo "sha=$SHORT_SHA"
