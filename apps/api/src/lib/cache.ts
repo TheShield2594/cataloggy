@@ -1,5 +1,5 @@
 import { LRUCache } from "lru-cache";
-import type { Credits, EpisodeInfo, SeasonInfo, WatchProviders } from "../tmdb.js";
+import type { Credits, EpisodeInfo, SeasonInfo, ShowDetails, WatchProviders } from "../tmdb.js";
 import type { StremioMetaPreview } from "./types.js";
 
 export type TrendingCacheEntry = { data: StremioMetaPreview[]; reasons?: Record<string, string> };
@@ -8,6 +8,9 @@ export const TRENDING_CACHE_TTL_MS = 30 * 60 * 1000;
 export const CAST_CACHE_TTL_MS = 60 * 60 * 1000;
 export const WATCH_PROVIDERS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 export const EXTERNAL_IDS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// next_episode_to_air/status rarely change within a day; this is refetched on every
+// /calendar load and dashboard "Upcoming" widget render for every in-progress series.
+export const SHOW_DETAILS_CACHE_TTL_MS = 3 * 60 * 60 * 1000;
 // Short-lived: this only exists to collapse the burst of watched-history lookups
 // that back-to-back requests (e.g. the movie + series AI recs calls on page load)
 // trigger, not to serve as a source of truth — kept well under a minute so a
@@ -29,6 +32,10 @@ export const watchProvidersCache = new LRUCache<string, WatchProviders>({
 export const externalIdsCache = new LRUCache<string, { imdbId: string | null }>({
   max: 5000,
   ttl: EXTERNAL_IDS_CACHE_TTL_MS,
+});
+export const showDetailsCache = new LRUCache<string, { details: ShowDetails }>({
+  max: 1000,
+  ttl: SHOW_DETAILS_CACHE_TTL_MS,
 });
 
 export const trendingCacheGet = (key: string): TrendingCacheEntry | undefined => trendingCache.get(key);

@@ -267,15 +267,24 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
     >();
 
     if (listItems.length > 0) {
-      const metadata = await prisma.metadata.findMany({
-        where: {
-          OR: listItems.map((item) => ({
-            imdbId: item.imdbId,
-            type: item.type as unknown as MetadataType,
-          })),
-        },
-        select: { imdbId: true, type: true, name: true, poster: true, year: true, genres: true, rating: true },
-      });
+      const imdbIdsByType = new Map<MetadataType, string[]>();
+      for (const item of listItems) {
+        const type = item.type as unknown as MetadataType;
+        const ids = imdbIdsByType.get(type);
+        if (ids) ids.push(item.imdbId);
+        else imdbIdsByType.set(type, [item.imdbId]);
+      }
+
+      const metadata = (
+        await Promise.all(
+          [...imdbIdsByType.entries()].map(([type, imdbIds]) =>
+            prisma.metadata.findMany({
+              where: { type, imdbId: { in: imdbIds } },
+              select: { imdbId: true, type: true, name: true, poster: true, year: true, genres: true, rating: true },
+            })
+          )
+        )
+      ).flat();
 
       for (const m of metadata) {
         metadataMap.set(`${m.imdbId}:${m.type}`, {

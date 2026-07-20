@@ -118,7 +118,8 @@ model WatchEvent {
   profileId String  @db.Uuid
   profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
-  @@index([profileId])
+  @@index([profileId, watchedAt])
+  @@index([profileId, type, imdbId, season, episode], name: "idx_watchevent_dedup")
 }
 
 model SeriesProgress {
@@ -224,8 +225,7 @@ model ScrobbleSession {
   profileId String  @db.Uuid
   profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
-  @@index([imdbId, season, episode, status])
-  @@index([profileId])
+  @@index([profileId, imdbId, season, episode, status])
 }
 
 model Tag {

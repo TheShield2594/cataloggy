@@ -6,10 +6,10 @@ const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 const prismaMock = {
   profile: { findUnique: vi.fn() },
   list: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
-  watchEvent: { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn(), create: vi.fn() },
+  watchEvent: { findMany: vi.fn(), update: vi.fn(), createMany: vi.fn() },
   seriesProgress: { findMany: vi.fn() },
   rating: { findMany: vi.fn(), upsert: vi.fn() },
-  listItem: { create: vi.fn() },
+  listItem: { createMany: vi.fn() },
 };
 
 vi.mock("../lib/prisma.js", () => ({ prisma: prismaMock }));
@@ -31,6 +31,8 @@ const resetMocks = () => {
   prismaMock.profile.findUnique.mockResolvedValue({ name: "Default" });
   prismaMock.list.findMany.mockResolvedValue([]);
   prismaMock.watchEvent.findMany.mockResolvedValue([]);
+  prismaMock.watchEvent.createMany.mockResolvedValue({ count: 0 });
+  prismaMock.listItem.createMany.mockResolvedValue({ count: 0 });
   prismaMock.seriesProgress.findMany.mockResolvedValue([]);
   prismaMock.rating.findMany.mockResolvedValue([]);
 };
@@ -78,7 +80,7 @@ describe("export routes", () => {
 
   describe("POST /import — watch event dedup", () => {
     it("creates a watch event when none exists yet for that day", async () => {
-      prismaMock.watchEvent.findFirst.mockResolvedValue(null);
+      prismaMock.watchEvent.findMany.mockResolvedValue([]);
       const app = await buildApp();
 
       const response = await app.inject({
@@ -93,13 +95,25 @@ describe("export routes", () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(prismaMock.watchEvent.create).toHaveBeenCalled();
+      expect(prismaMock.watchEvent.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({ imdbId: "tt1", type: "movie", plays: 1 })],
+      });
       expect(response.json().summary.watchEvents).toBe(1);
       await app.close();
     });
 
     it("increments plays for a duplicate watch event instead of creating a new row", async () => {
-      prismaMock.watchEvent.findFirst.mockResolvedValue({ id: "existing-1" });
+      prismaMock.watchEvent.findMany.mockResolvedValue([
+        {
+          id: "existing-1",
+          type: "movie",
+          imdbId: "tt1",
+          seriesImdbId: null,
+          season: null,
+          episode: null,
+          watchedAt: new Date("2024-01-01T00:00:00Z"),
+        },
+      ]);
       const app = await buildApp();
 
       const response = await app.inject({
@@ -112,7 +126,7 @@ describe("export routes", () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(prismaMock.watchEvent.create).not.toHaveBeenCalled();
+      expect(prismaMock.watchEvent.createMany).not.toHaveBeenCalled();
       expect(prismaMock.watchEvent.update).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: "existing-1" }, data: { plays: { increment: 2 } } })
       );
@@ -129,7 +143,7 @@ describe("export routes", () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json().summary.watchEvents).toBe(0);
-      expect(prismaMock.watchEvent.create).not.toHaveBeenCalled();
+      expect(prismaMock.watchEvent.createMany).not.toHaveBeenCalled();
       await app.close();
     });
 
@@ -166,7 +180,7 @@ describe("export routes", () => {
     });
 
     it("imports a simple movie row", async () => {
-      prismaMock.watchEvent.findFirst.mockResolvedValue(null);
+      prismaMock.watchEvent.findMany.mockResolvedValue([]);
       const app = await buildApp();
 
       const response = await app.inject({
@@ -177,28 +191,28 @@ describe("export routes", () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json().summary).toEqual({ imported: 1, skipped: 0 });
-      expect(prismaMock.watchEvent.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ imdbId: "tt1", type: "movie" }) })
-      );
+      expect(prismaMock.watchEvent.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({ imdbId: "tt1", type: "movie" })],
+      });
       await app.close();
     });
 
     it("handles quoted fields containing embedded commas and escaped quotes", async () => {
-      prismaMock.watchEvent.findFirst.mockResolvedValue(null);
+      prismaMock.watchEvent.findMany.mockResolvedValue([]);
       const app = await buildApp();
 
       const csv = 'imdbId,type,watchedAt\n"tt,1",movie,2024-01-01T00:00:00Z';
       const response = await app.inject({ method: "POST", url: "/import/csv", payload: { csv } });
 
       expect(response.statusCode).toBe(200);
-      expect(prismaMock.watchEvent.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ imdbId: "tt,1" }) })
-      );
+      expect(prismaMock.watchEvent.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({ imdbId: "tt,1" })],
+      });
       await app.close();
     });
 
     it("skips rows with missing required fields and counts them", async () => {
-      prismaMock.watchEvent.findFirst.mockResolvedValue(null);
+      prismaMock.watchEvent.findMany.mockResolvedValue([]);
       const app = await buildApp();
 
       const csv = "imdbId,type,watchedAt\n,movie,2024-01-01T00:00:00Z\ntt2,movie,2024-01-02T00:00:00Z";
@@ -209,7 +223,7 @@ describe("export routes", () => {
     });
 
     it("skips rows with an invalid type", async () => {
-      prismaMock.watchEvent.findFirst.mockResolvedValue(null);
+      prismaMock.watchEvent.findMany.mockResolvedValue([]);
       const app = await buildApp();
 
       const csv = "imdbId,type,watchedAt\ntt1,bogus,2024-01-01T00:00:00Z";
@@ -220,7 +234,7 @@ describe("export routes", () => {
     });
 
     it("skips blank lines without counting them as imported or skipped", async () => {
-      prismaMock.watchEvent.findFirst.mockResolvedValue(null);
+      prismaMock.watchEvent.findMany.mockResolvedValue([]);
       const app = await buildApp();
 
       const csv = "imdbId,type,watchedAt\ntt1,movie,2024-01-01T00:00:00Z\n\n";
@@ -231,7 +245,17 @@ describe("export routes", () => {
     });
 
     it("sets seriesImdbId for episode rows and increments plays on a duplicate", async () => {
-      prismaMock.watchEvent.findFirst.mockResolvedValue({ id: "existing-ep" });
+      prismaMock.watchEvent.findMany.mockResolvedValue([
+        {
+          id: "existing-ep",
+          type: "episode",
+          imdbId: "tt-show",
+          seriesImdbId: "tt-show",
+          season: 1,
+          episode: 2,
+          watchedAt: new Date("2024-01-01T00:00:00Z"),
+        },
+      ]);
       const app = await buildApp();
 
       const csv = "imdbId,type,season,episode,watchedAt\ntt-show,episode,1,2,2024-01-01T00:00:00Z";

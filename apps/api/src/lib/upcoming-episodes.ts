@@ -1,5 +1,23 @@
 import { prisma } from "./prisma.js";
 import { getTmdb } from "./tmdb-client.js";
+import { showDetailsCache } from "./cache.js";
+import type { ShowDetails } from "../tmdb.js";
+
+async function getCachedShowDetails(
+  tmdb: Awaited<ReturnType<typeof getTmdb>>,
+  tmdbId: number
+): Promise<ShowDetails | null> {
+  const cacheKey = `show-details:${tmdb.getLanguage()}:${tmdbId}`;
+  const cached = showDetailsCache.get(cacheKey);
+  if (cached) return cached.details;
+
+  const details = await tmdb.getShowDetails(tmdbId);
+  // tmdb.getShowDetails returns null on a fetch/parse error (not a legitimate "no next
+  // episode" state, which is `details.nextEpisodeToAir === null` on a successful call) —
+  // don't cache that for hours, or a transient TMDB outage looks like it lasts that long.
+  if (details) showDetailsCache.set(cacheKey, { details });
+  return details;
+}
 
 export type UpcomingEpisode = {
   seriesImdbId: string;
@@ -56,7 +74,7 @@ export const getUpcomingEpisodes = async (
         const meta = metaByImdbId.get(imdbId);
         if (!meta?.tmdbId) return [];
 
-        const details = await tmdb.getShowDetails(meta.tmdbId);
+        const details = await getCachedShowDetails(tmdb, meta.tmdbId);
         if (!details?.nextEpisodeToAir) return [];
 
         const ep = details.nextEpisodeToAir;

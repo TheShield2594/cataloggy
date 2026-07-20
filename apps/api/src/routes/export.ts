@@ -1,9 +1,10 @@
-import { ListItemType, ListKind, MetadataType, Prisma, WatchEventType } from "@prisma/client";
+import { ListItemType, ListKind, MetadataType, WatchEventType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { resolveProfile } from "../lib/profile.js";
 import { upsertSeriesProgressIfNewer } from "../lib/series-progress.js";
 import { getDefaultWatchlist } from "../lib/watchlist.js";
+import { batchUpsertWatchEvents, type WatchEventInput } from "../lib/batch-watch-events.js";
 
 const EXPORT_VERSION = 1;
 
@@ -156,21 +157,24 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
               });
             })();
 
-      for (const item of Array.isArray(list.items) ? list.items : []) {
-        if (!Object.values(ListItemType).includes(item.type) || !isString(item.imdbId)) continue;
-        const addedAt = parseDate(item.addedAt) ?? new Date();
-
-        try {
-          await prisma.listItem.create({
-            data: { listId: targetList.id, type: item.type, imdbId: item.imdbId.trim(), addedAt },
-          });
-          summary.listItems += 1;
-        } catch (error) {
-          if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
-        }
+      const validItems = (Array.isArray(list.items) ? list.items : []).filter(
+        (item) => Object.values(ListItemType).includes(item.type) && isString(item.imdbId)
+      );
+      if (validItems.length > 0) {
+        const { count } = await prisma.listItem.createMany({
+          data: validItems.map((item) => ({
+            listId: targetList.id,
+            type: item.type,
+            imdbId: item.imdbId.trim(),
+            addedAt: parseDate(item.addedAt) ?? new Date(),
+          })),
+          skipDuplicates: true,
+        });
+        summary.listItems += count;
       }
     }
 
+    const watchEventInputs: WatchEventInput[] = [];
     for (const event of Array.isArray(body.watchEvents) ? body.watchEvents : []) {
       if (!Object.values(WatchEventType).includes(event.type) || !isString(event.imdbId)) continue;
       const watchedAt = parseDate(event.watchedAt);
@@ -180,48 +184,20 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       const episode = isFiniteNumber(event.episode) ? event.episode : null;
       const seriesImdbId = isString(event.seriesImdbId) ? event.seriesImdbId.trim() : null;
       const imdbId = event.imdbId.trim();
-      const matchImdbId = event.type === WatchEventType.episode ? seriesImdbId ?? imdbId : imdbId;
 
-      const dayStart = new Date(watchedAt);
-      dayStart.setUTCHours(0, 0, 0, 0);
-      const dayEnd = new Date(watchedAt);
-      dayEnd.setUTCHours(23, 59, 59, 999);
-
-      const existing = await prisma.watchEvent.findFirst({
-        where: {
-          profileId,
-          type: event.type,
-          ...(event.type === WatchEventType.episode
-            ? { seriesImdbId: matchImdbId }
-            : { imdbId: matchImdbId }),
-          season,
-          episode,
-          watchedAt: { gte: dayStart, lte: dayEnd },
-        },
+      watchEventInputs.push({
+        type: event.type,
+        imdbId,
+        seriesImdbId,
+        season,
+        episode,
+        watchedAt,
+        plays: isFiniteNumber(event.plays) ? event.plays : 1,
+        note: isString(event.note) ? event.note : null,
       });
-
-      if (existing) {
-        await prisma.watchEvent.update({
-          where: { id: existing.id },
-          data: { plays: { increment: isFiniteNumber(event.plays) ? event.plays : 1 } },
-        });
-      } else {
-        await prisma.watchEvent.create({
-          data: {
-            type: event.type,
-            imdbId,
-            seriesImdbId,
-            season,
-            episode,
-            watchedAt,
-            plays: isFiniteNumber(event.plays) ? event.plays : 1,
-            note: isString(event.note) ? event.note : null,
-            profileId,
-          },
-        });
-      }
       summary.watchEvents += 1;
     }
+    await batchUpsertWatchEvents(profileId, watchEventInputs);
 
     for (const sp of Array.isArray(body.seriesProgress) ? body.seriesProgress : []) {
       if (!isString(sp.seriesImdbId) || !isFiniteNumber(sp.lastSeason) || !isFiniteNumber(sp.lastEpisode)) {
@@ -292,6 +268,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
 
     let imported = 0;
     let skipped = 0;
+    const watchEventInputs: WatchEventInput[] = [];
 
     for (const row of rows.slice(1)) {
       if (row.length === 0 || row.every((cell) => cell.trim() === "")) continue;
@@ -310,39 +287,18 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       const type = rawType as WatchEventType;
       const seriesImdbId = type === "episode" ? imdbId : null;
 
-      const dayStart = new Date(watchedAt);
-      dayStart.setUTCHours(0, 0, 0, 0);
-      const dayEnd = new Date(watchedAt);
-      dayEnd.setUTCHours(23, 59, 59, 999);
-
-      const existing = await prisma.watchEvent.findFirst({
-        where: {
-          profileId,
-          type,
-          imdbId,
-          season: Number.isFinite(season) ? season : null,
-          episode: Number.isFinite(episode) ? episode : null,
-          watchedAt: { gte: dayStart, lte: dayEnd },
-        },
+      watchEventInputs.push({
+        type,
+        imdbId,
+        seriesImdbId,
+        season: Number.isFinite(season) ? season : null,
+        episode: Number.isFinite(episode) ? episode : null,
+        watchedAt,
       });
-
-      if (existing) {
-        await prisma.watchEvent.update({ where: { id: existing.id }, data: { plays: { increment: 1 } } });
-      } else {
-        await prisma.watchEvent.create({
-          data: {
-            type,
-            imdbId,
-            seriesImdbId,
-            season: Number.isFinite(season) ? season : null,
-            episode: Number.isFinite(episode) ? episode : null,
-            watchedAt,
-            profileId,
-          },
-        });
-      }
       imported += 1;
     }
+
+    await batchUpsertWatchEvents(profileId, watchEventInputs);
 
     return reply.code(200).send({ status: "imported", summary: { imported, skipped } });
   });
