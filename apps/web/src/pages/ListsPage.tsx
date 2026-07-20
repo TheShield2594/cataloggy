@@ -9,6 +9,12 @@ import { useEscapeKey } from "../hooks/useEscapeKey";
 
 type SortOption = "added" | "name" | "year" | "rating";
 
+// Large imported collections (Letterboxd/Trakt) can carry thousands of items;
+// rendering them all as DOM nodes at once is what actually costs, not the fetch
+// (which is one indexed query), so grow the rendered slice as the user scrolls
+// instead of paginating the already-sorted/filtered in-memory list.
+const RENDER_PAGE_SIZE = 60;
+
 const SORT_LABELS: Record<SortOption, string> = {
   added: "Date Added",
   name: "Name",
@@ -208,6 +214,8 @@ export function ListsPage() {
   const [renameValue, setRenameValue] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("name");
   const [filterQuery, setFilterQuery] = useState("");
+  const [renderLimit, setRenderLimit] = useState(RENDER_PAGE_SIZE);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
 
@@ -318,6 +326,25 @@ export function ListsPage() {
     }
     return sorted;
   }, [items, filterQuery, sortBy]);
+
+  useEffect(() => {
+    setRenderLimit(RENDER_PAGE_SIZE);
+  }, [selectedListId, filterQuery, sortBy]);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || renderLimit >= displayedItems.length) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) {
+        setRenderLimit((prev) => Math.min(prev + RENDER_PAGE_SIZE, displayedItems.length));
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [renderLimit, displayedItems.length]);
+
+  const visibleItems = displayedItems.slice(0, renderLimit);
 
   const handleRemove = async (item: ListItemWithMeta) => {
     if (!selectedListId || removingIds[item.imdbId]) return;
@@ -557,7 +584,7 @@ export function ListsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                {displayedItems.map((item, index) => {
+                {visibleItems.map((item, index) => {
                   const name = item.metadata?.name ?? item.imdbId;
                   const poster = item.metadata?.poster;
                   const year = item.metadata?.year;
@@ -607,6 +634,7 @@ export function ListsPage() {
                 })}
               </div>
             )}
+            {renderLimit < displayedItems.length && <div ref={sentinelRef} className="h-4" />}
           </>
         )}
       </main>

@@ -1,5 +1,20 @@
 import { prisma } from "./prisma.js";
 import { getTmdb } from "./tmdb-client.js";
+import { showDetailsCache } from "./cache.js";
+import type { ShowDetails } from "../tmdb.js";
+
+async function getCachedShowDetails(
+  tmdb: Awaited<ReturnType<typeof getTmdb>>,
+  tmdbId: number
+): Promise<ShowDetails | null> {
+  const cacheKey = `show-details:${tmdbId}`;
+  const cached = showDetailsCache.get(cacheKey);
+  if (cached) return cached.details;
+
+  const details = await tmdb.getShowDetails(tmdbId);
+  showDetailsCache.set(cacheKey, { details });
+  return details;
+}
 
 export type UpcomingEpisode = {
   seriesImdbId: string;
@@ -56,7 +71,7 @@ export const getUpcomingEpisodes = async (
         const meta = metaByImdbId.get(imdbId);
         if (!meta?.tmdbId) return [];
 
-        const details = await tmdb.getShowDetails(meta.tmdbId);
+        const details = await getCachedShowDetails(tmdb, meta.tmdbId);
         if (!details?.nextEpisodeToAir) return [];
 
         const ep = details.nextEpisodeToAir;

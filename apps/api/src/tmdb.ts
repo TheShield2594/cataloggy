@@ -157,6 +157,12 @@ export type WatchProviders = {
   ads: WatchProvider[];
 };
 
+export type ShowDetails = {
+  nextEpisodeToAir: { season_number: number; episode_number: number; name: string; air_date: string; overview?: string } | null;
+  lastEpisodeToAir: { season_number: number; episode_number: number; name: string; air_date: string } | null;
+  status: string | null;
+};
+
 export type MetadataPayload = {
   imdbId: string;
   type: MetadataType;
@@ -373,11 +379,7 @@ export class TmdbClient {
     return withImdb.filter((item): item is MetadataPayload => item !== null);
   }
 
-  async getShowDetails(tmdbId: number): Promise<{
-    nextEpisodeToAir: { season_number: number; episode_number: number; name: string; air_date: string; overview?: string } | null;
-    lastEpisodeToAir: { season_number: number; episode_number: number; name: string; air_date: string } | null;
-    status: string | null;
-  } | null> {
+  async getShowDetails(tmdbId: number): Promise<ShowDetails | null> {
     try {
       const data = await this.request<{
         next_episode_to_air?: { season_number: number; episode_number: number; name: string; air_date: string; overview?: string } | null;

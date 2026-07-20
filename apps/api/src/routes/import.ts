@@ -3,20 +3,28 @@ import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { resolveProfile } from "../lib/profile.js";
 import { getTmdb } from "../lib/tmdb-client.js";
+import { batchUpsertWatchEvents, type WatchEventInput } from "../lib/batch-watch-events.js";
 import { parseCsv } from "./export.js";
+
+const TMDB_LOOKUP_CONCURRENCY = 5;
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
 
 const parseDate = (v: string | undefined): Date | null => {
   if (!v?.trim()) return null;
   const d = new Date(v.trim());
   return Number.isNaN(d.getTime()) ? null : d;
-};
-
-const dayRange = (date: Date) => {
-  const start = new Date(date);
-  start.setUTCHours(0, 0, 0, 0);
-  const end = new Date(date);
-  end.setUTCHours(23, 59, 59, 999);
-  return { start, end };
 };
 
 // Letterboxd diary/ratings exports don't include IMDb IDs, so we resolve
@@ -133,6 +141,8 @@ async function importSimkl(
     throw Object.assign(new Error("Simkl export must include an imdb id column"), { code: "BAD_FORMAT" });
   }
 
+  const watchInputs: WatchEventInput[] = [];
+
   for (const row of rows) {
     const imdbId = row[imdbCol]?.trim();
     if (!imdbId) {
@@ -147,35 +157,15 @@ async function importSimkl(
 
     const watchedAt = dateCol !== -1 ? parseDate(row[dateCol]) : null;
     if (watchedAt) {
-      const { start, end } = dayRange(watchedAt);
       const watchType: WatchEventType = isEpisode ? "episode" : "movie";
-
-      const existing = await prisma.watchEvent.findFirst({
-        where: {
-          profileId,
-          type: watchType,
-          ...(watchType === "episode" ? { seriesImdbId: imdbId } : { imdbId }),
-          season: Number.isFinite(season) ? season : null,
-          episode: Number.isFinite(episode) ? episode : null,
-          watchedAt: { gte: start, lte: end },
-        },
+      watchInputs.push({
+        type: watchType,
+        imdbId,
+        seriesImdbId: watchType === "episode" ? imdbId : null,
+        season: Number.isFinite(season) ? season : null,
+        episode: Number.isFinite(episode) ? episode : null,
+        watchedAt,
       });
-
-      if (existing) {
-        await prisma.watchEvent.update({ where: { id: existing.id }, data: { plays: { increment: 1 } } });
-      } else {
-        await prisma.watchEvent.create({
-          data: {
-            type: watchType,
-            imdbId,
-            seriesImdbId: watchType === "episode" ? imdbId : null,
-            season: Number.isFinite(season) ? season : null,
-            episode: Number.isFinite(episode) ? episode : null,
-            watchedAt,
-            profileId,
-          },
-        });
-      }
       summary.imported += 1;
     }
 
@@ -190,6 +180,8 @@ async function importSimkl(
       summary.ratingsImported += 1;
     }
   }
+
+  await batchUpsertWatchEvents(profileId, watchInputs);
 }
 
 async function importLetterboxd(
@@ -210,15 +202,26 @@ async function importLetterboxd(
     throw Object.assign(new Error("Unrecognized Letterboxd export header"), { code: "BAD_FORMAT" });
   }
 
-  for (const row of rows) {
+  // Title -> IMDb id resolution is a TMDB search per unique title; run it with bounded
+  // concurrency instead of one-at-a-time (which can take minutes for a few hundred rows).
+  const resolvedImdbIds = await mapWithConcurrency(rows, TMDB_LOOKUP_CONCURRENCY, async (row) => {
+    const title = row[nameCol]?.trim();
+    if (!title) return null;
+    const year = yearCol !== -1 && row[yearCol]?.trim() ? Number(row[yearCol]) : null;
+    return resolveImdbIdByTitle(title, Number.isFinite(year) ? year : null, titleCache);
+  });
+
+  const watchInputs: WatchEventInput[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
     const title = row[nameCol]?.trim();
     if (!title) {
       summary.skipped += 1;
       continue;
     }
-    const year = yearCol !== -1 && row[yearCol]?.trim() ? Number(row[yearCol]) : null;
 
-    const imdbId = await resolveImdbIdByTitle(title, Number.isFinite(year) ? year : null, titleCache);
+    const imdbId = resolvedImdbIds[i];
     if (!imdbId) {
       summary.skipped += 1;
       continue;
@@ -227,15 +230,7 @@ async function importLetterboxd(
     if (format === "letterboxd-diary") {
       const watchedAt = watchedDateCol !== -1 ? parseDate(row[watchedDateCol]) : null;
       if (watchedAt) {
-        const { start, end } = dayRange(watchedAt);
-        const existing = await prisma.watchEvent.findFirst({
-          where: { profileId, type: "movie", imdbId, watchedAt: { gte: start, lte: end } },
-        });
-        if (existing) {
-          await prisma.watchEvent.update({ where: { id: existing.id }, data: { plays: { increment: 1 } } });
-        } else {
-          await prisma.watchEvent.create({ data: { type: "movie", imdbId, watchedAt, profileId } });
-        }
+        watchInputs.push({ type: "movie", imdbId, seriesImdbId: null, season: null, episode: null, watchedAt });
         summary.imported += 1;
       }
     }
@@ -253,6 +248,8 @@ async function importLetterboxd(
       summary.ratingsImported += 1;
     }
   }
+
+  await batchUpsertWatchEvents(profileId, watchInputs);
 }
 
 export default importRoutes;
