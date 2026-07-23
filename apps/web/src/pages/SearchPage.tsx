@@ -655,17 +655,17 @@ function ResultCard({
           {result.type === "movie" ? "Movie" : "Series"}
         </span>
 
-        {/* Hover gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 transition-opacity duration-300 sm:opacity-0 sm:group-hover:opacity-100" />
+        {/* Gradient overlay: low resting opacity on desktop so it stays discoverable without a hover, full on hover/focus */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 transition-opacity duration-300 sm:opacity-30 sm:group-hover:opacity-100" />
 
-        {/* Quick-add button (bottom-right on hover) */}
+        {/* Quick-add button: same low-resting-opacity treatment so trackpad/keyboard users see it exists before hovering/focusing */}
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             onToggleDropdown(result.imdbId);
           }}
-          className="absolute bottom-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-claw-500 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shadow-lg transition-all duration-300 hover:bg-claw-600 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-300 focus-visible:ring-offset-2"
+          className="absolute bottom-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-claw-500 text-white opacity-100 sm:opacity-60 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shadow-lg transition-all duration-300 hover:bg-claw-600 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-300 focus-visible:ring-offset-2"
           aria-label={`Add ${result.name} to a list`}
           aria-haspopup="menu"
           aria-expanded={isOpen}
