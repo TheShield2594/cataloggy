@@ -30,51 +30,8 @@ import { Link } from "react-router-dom";
 import { fadeMaskStyle, useHorizontalScroll } from "../components/carousel-utils";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { Poster } from "../components/Poster";
-import { TicketTile } from "../components/TicketTile";
 import { useToast } from "../hooks/useToast";
 import { timeAgo, timeUntil } from "../utils/timeAgo";
-
-/* ─── Collectible stat strip: a row of distinct "ticket" tiles, demoted below the fold ─── */
-
-function StatStrip({
-  stats,
-  monthly,
-  genres,
-  currentStreak,
-  longestStreak,
-  loading,
-}: {
-  stats: WatchStats | null;
-  monthly: DetailedWatchStats["monthly"];
-  genres: DetailedWatchStats["genreDistribution"];
-  currentStreak: number;
-  longestStreak: number;
-  loading: boolean;
-}) {
-  const last6 = monthly.slice(-6);
-  const movieBars = last6.length ? last6.map((m) => m.movies) : [0, 0, 0, 0, 0, 0];
-  const epBars = last6.length ? last6.map((m) => m.episodes) : [0, 0, 0, 0, 0, 0];
-  const topGenre = genres[0]?.genre;
-
-  if (loading) {
-    return (
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="skeleton h-28 rounded-2xl" />
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <TicketTile icon={Flame} label="Day streak" value={currentStreak} sub={`Best: ${longestStreak}`} />
-      <TicketTile icon={Film} label="Movies watched" value={stats?.totalMovies ?? 0} bars={movieBars} />
-      <TicketTile icon={Tv} label="Episodes watched" value={stats?.totalEpisodes ?? 0} bars={epBars} />
-      <TicketTile icon={Trophy} label="Top genre" value={topGenre ?? "—"} sub={genres[0] ? `${genres[0].count} watched` : undefined} />
-    </div>
-  );
-}
 
 /* ─── Skeleton placeholders ─── */
 
@@ -116,6 +73,7 @@ type DiscoveryItem = {
   genres?: string[];
   year?: number;
   type?: string;
+  description?: string;
 };
 
 function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
@@ -410,7 +368,65 @@ function SectionHeader({
   );
 }
 
-/* ─── Greeting strip: persistent context on every open, even with nothing playing ─── */
+/* ─── Discover sub-row: one labeled rail (Movies / Series) within the shared Discover section ─── */
+
+function DiscoverSubRow({
+  label,
+  loading,
+  items,
+  reasons,
+  aiActive,
+  scroll,
+  onSelect,
+}: {
+  label: string;
+  loading: boolean;
+  items: TrendingMeta[];
+  reasons: Record<string, string>;
+  aiActive: boolean;
+  scroll: ReturnType<typeof useHorizontalScroll>;
+  onSelect: (item: DiscoveryItem) => void;
+}) {
+  if (!loading && items.length === 0) return null;
+  return (
+    <div>
+      <div className="mb-2.5 flex items-center justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>{label}</h3>
+        {!loading && items.length > 0 && (
+          <ScrollArrows canScrollLeft={scroll.canScrollLeft} canScrollRight={scroll.canScrollRight} onScroll={scroll.scroll} />
+        )}
+      </div>
+      {loading ? (
+        aiActive
+          ? <p className="text-sm italic" style={{ color: "var(--text-dim)" }}>Generating AI recommendations...</p>
+          : <ContinueWatchingSkeleton />
+      ) : (
+        <div
+          ref={scroll.ref}
+          className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
+          style={fadeMaskStyle(scroll.canScrollLeft, scroll.canScrollRight)}
+        >
+          {items.map((item) => (
+            <DiscoveryCard
+              key={item.id}
+              item={item}
+              reason={reasons[item.id]}
+              onSelect={onSelect}
+              badge={
+                <span className="inline-flex items-center gap-1 rounded-md bg-plum-500/80 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
+                  <Sparkles className="h-2.5 w-2.5" />
+                  {aiActive && <span>AI</span>}
+                </span>
+              }
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Header stat row: greeting + the collectible stats folded into one persistent strip ─── */
 
 function timeOfDayGreeting() {
   const hour = new Date().getHours();
@@ -420,33 +436,60 @@ function timeOfDayGreeting() {
   return "Good evening";
 }
 
-function GreetingStrip({ playsThisWeek, streak, loading }: { playsThisWeek: number; streak: number; loading: boolean }) {
+function StatChip({ icon: Icon, label, value, accent }: { icon: React.ElementType; label: string; value: string | number; accent?: boolean }) {
+  return (
+    <span className="flex items-center gap-1.5 text-sm" style={{ color: accent ? undefined : "var(--text-dim)" }}>
+      <Icon className={`h-3.5 w-3.5 ${accent ? "text-claw-400" : ""}`} style={accent ? undefined : { color: "var(--text-mute)" }} />
+      <span className={accent ? "font-semibold text-claw-400" : ""}>
+        {typeof value === "number" ? value.toLocaleString() : value}
+      </span>
+      <span className="hidden sm:inline" style={{ color: "var(--text-mute)" }}>{label}</span>
+    </span>
+  );
+}
+
+function DashboardHeader({
+  playsThisWeek,
+  streak,
+  longestStreak,
+  totalMovies,
+  totalEpisodes,
+  topGenre,
+  loading,
+  statsLoading,
+}: {
+  playsThisWeek: number;
+  streak: number;
+  longestStreak: number;
+  totalMovies: number;
+  totalEpisodes: number;
+  topGenre?: string;
+  loading: boolean;
+  statsLoading: boolean;
+}) {
   const today = new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   return (
     <div
-      className="flex flex-wrap items-center gap-2 rounded-xl px-4 py-2.5"
+      className="flex flex-col gap-2.5 rounded-xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
-      <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{timeOfDayGreeting()}</span>
-      {!loading && (
-        <>
-          <span style={{ color: "var(--border-strong)" }}>&middot;</span>
-          <span className="flex items-center gap-1.5 text-sm" style={{ color: "var(--text-dim)" }}>
-            <Clock className="h-3 w-3" />
-            {playsThisWeek} watched this week
-          </span>
-          {streak > 0 && (
-            <>
-              <span style={{ color: "var(--border-strong)" }}>&middot;</span>
-              <span className="flex items-center gap-1 text-sm font-semibold text-claw-400">
-                <Flame className="h-3.5 w-3.5" />
-                {streak}-day streak
-              </span>
-            </>
-          )}
-        </>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+        <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{timeOfDayGreeting()}</span>
+        <span style={{ color: "var(--border-strong)" }}>&middot;</span>
+        <span className="text-xs" style={{ color: "var(--text-mute)" }}>{today}</span>
+      </div>
+      {!loading && !statsLoading && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          <StatChip icon={Clock} label="this week" value={playsThisWeek} />
+          {streak > 0 && <StatChip icon={Flame} label={`day streak (best ${longestStreak})`} value={streak} accent />}
+          <StatChip icon={Film} label="movies" value={totalMovies} />
+          <StatChip icon={Tv} label="episodes" value={totalEpisodes} />
+          {topGenre && <StatChip icon={Trophy} label="top genre" value={topGenre} />}
+          <Link to="/stats" className="text-xs font-medium text-claw-400 hover:text-claw-300 transition-colors">
+            Full stats &rarr;
+          </Link>
+        </div>
       )}
-      <span className="ml-auto text-xs" style={{ color: "var(--text-mute)" }}>{today}</span>
     </div>
   );
 }
@@ -685,7 +728,6 @@ export function DashboardPage() {
     if (logWatch) void load();
   };
 
-  const monthly = detailedStats?.monthly ?? [];
   const hasUpcoming = calendarLoading || calendarEntries.length > 0;
 
   // The check-in hero and the Continue Watching hero can end up showing the same series
@@ -698,8 +740,17 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      {/* ── Greeting strip ── */}
-      <GreetingStrip playsThisWeek={stats?.playsThisWeek ?? 0} streak={detailedStats?.currentStreak ?? 0} loading={loading || detailedLoading} />
+      {/* ── Header stat row ── */}
+      <DashboardHeader
+        playsThisWeek={stats?.playsThisWeek ?? 0}
+        streak={detailedStats?.currentStreak ?? 0}
+        longestStreak={detailedStats?.longestStreak ?? 0}
+        totalMovies={stats?.totalMovies ?? 0}
+        totalEpisodes={stats?.totalEpisodes ?? 0}
+        topGenre={detailedStats?.genreDistribution[0]?.genre}
+        loading={loading}
+        statsLoading={detailedLoading}
+      />
 
       {/* ── Hero: Now Watching ── */}
       {activeCheckin && (
@@ -980,109 +1031,41 @@ export function DashboardPage() {
         )}
       </div>
 
-      {/* ── Recommended Movies ── */}
-      {(recsLoading || recommendations.length > 0) && (
+      {/* ── Discover: shared section for both recommendation rails ── */}
+      {(recsLoading || recommendations.length > 0 || seriesRecsLoading || seriesRecs.length > 0) && (
         <section>
-          <SectionHeader title={aiActive ? "AI Picks — Movies" : "Recommended For You"}>
-            <div className="flex items-center gap-2">
-              {aiActive && aiLastGeneratedAt && (() => {
-                const nextRefresh = new Date(new Date(aiLastGeneratedAt).getTime() + 7 * 24 * 60 * 60 * 1000);
-                const label = nextRefresh <= new Date() ? "Refresh due" : `Refreshes ${timeUntil(nextRefresh.toISOString())}`;
-                return (
-                  <span title={`Next refresh: ${nextRefresh.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`} className="flex items-center gap-1 text-xs cursor-default" style={{ color: "var(--text-dim)" }}>
-                    <Clock size={12} />
-                    {label}
-                  </span>
-                );
-              })()}
-              {!recsLoading && recommendations.length > 0 && (
-                <ScrollArrows
-                  canScrollLeft={recsScroll.canScrollLeft}
-                  canScrollRight={recsScroll.canScrollRight}
-                  onScroll={recsScroll.scroll}
-                />
-              )}
-            </div>
+          <SectionHeader title={aiActive ? "AI Picks" : "Discover"}>
+            {aiActive && aiLastGeneratedAt && (() => {
+              const nextRefresh = new Date(new Date(aiLastGeneratedAt).getTime() + 7 * 24 * 60 * 60 * 1000);
+              const label = nextRefresh <= new Date() ? "Refresh due" : `Refreshes ${timeUntil(nextRefresh.toISOString())}`;
+              return (
+                <span title={`Next refresh: ${nextRefresh.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`} className="flex items-center gap-1 text-xs cursor-default" style={{ color: "var(--text-dim)" }}>
+                  <Clock size={12} />
+                  {label}
+                </span>
+              );
+            })()}
           </SectionHeader>
-          {recsLoading ? (
-            aiActive
-              ? <p className="text-sm italic" style={{ color: "var(--text-dim)" }}>Generating AI recommendations...</p>
-              : <ContinueWatchingSkeleton />
-          ) : (
-            <div
-              ref={recsScroll.ref}
-              className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
-              style={fadeMaskStyle(recsScroll.canScrollLeft, recsScroll.canScrollRight)}
-            >
-              {recommendations.map((item) => (
-                <DiscoveryCard
-                  key={item.id}
-                  item={item}
-                  reason={movieReasons[item.id]}
-                  onSelect={(i) => setSelectedItem(toSearchResult(i.id, (i.type ?? "movie") as "movie" | "series", i.name, { poster: i.poster, year: i.year, description: item.description, genres: i.genres, rating: i.rating }))}
-                  badge={
-                    <span className="inline-flex items-center gap-1 rounded-md bg-plum-500/80 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
-                      <Sparkles className="h-2.5 w-2.5" />
-                      {aiActive && <span>AI</span>}
-                    </span>
-                  }
-                />
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* ── Recommended Series ── */}
-      {(seriesRecsLoading || seriesRecs.length > 0) && (
-        <section>
-          <SectionHeader title={aiActive ? "AI Picks — Series" : "Recommended Series For You"}>
-            <div className="flex items-center gap-2">
-              {aiActive && aiLastGeneratedAt && (() => {
-                const nextRefresh = new Date(new Date(aiLastGeneratedAt).getTime() + 7 * 24 * 60 * 60 * 1000);
-                const label = nextRefresh <= new Date() ? "Refresh due" : `Refreshes ${timeUntil(nextRefresh.toISOString())}`;
-                return (
-                  <span title={`Next refresh: ${nextRefresh.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`} className="flex items-center gap-1 text-xs cursor-default" style={{ color: "var(--text-dim)" }}>
-                    <Clock size={12} />
-                    {label}
-                  </span>
-                );
-              })()}
-              {!seriesRecsLoading && seriesRecs.length > 0 && (
-                <ScrollArrows
-                  canScrollLeft={seriesRecsScroll.canScrollLeft}
-                  canScrollRight={seriesRecsScroll.canScrollRight}
-                  onScroll={seriesRecsScroll.scroll}
-                />
-              )}
-            </div>
-          </SectionHeader>
-          {seriesRecsLoading ? (
-            aiActive
-              ? <p className="text-sm italic" style={{ color: "var(--text-dim)" }}>Generating AI recommendations...</p>
-              : <ContinueWatchingSkeleton />
-          ) : (
-            <div
-              ref={seriesRecsScroll.ref}
-              className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
-              style={fadeMaskStyle(seriesRecsScroll.canScrollLeft, seriesRecsScroll.canScrollRight)}
-            >
-              {seriesRecs.map((item) => (
-                <DiscoveryCard
-                  key={item.id}
-                  item={item}
-                  reason={seriesReasons[item.id]}
-                  onSelect={(i) => setSelectedItem(toSearchResult(i.id, "series", i.name, { poster: i.poster, year: i.year, description: item.description, genres: i.genres, rating: i.rating }))}
-                  badge={
-                    <span className="inline-flex items-center gap-1 rounded-md bg-plum-500/80 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
-                      <Sparkles className="h-2.5 w-2.5" />
-                      {aiActive && <span>AI</span>}
-                    </span>
-                  }
-                />
-              ))}
-            </div>
-          )}
+          <div className="space-y-5">
+            <DiscoverSubRow
+              label="Movies"
+              loading={recsLoading}
+              items={recommendations}
+              reasons={movieReasons}
+              aiActive={aiActive}
+              scroll={recsScroll}
+              onSelect={(i) => setSelectedItem(toSearchResult(i.id, (i.type ?? "movie") as "movie" | "series", i.name, { poster: i.poster, year: i.year, description: i.description, genres: i.genres, rating: i.rating }))}
+            />
+            <DiscoverSubRow
+              label="Series"
+              loading={seriesRecsLoading}
+              items={seriesRecs}
+              reasons={seriesReasons}
+              aiActive={aiActive}
+              scroll={seriesRecsScroll}
+              onSelect={(i) => setSelectedItem(toSearchResult(i.id, "series", i.name, { poster: i.poster, year: i.year, description: i.description, genres: i.genres, rating: i.rating }))}
+            />
+          </div>
         </section>
       )}
 
@@ -1162,26 +1145,6 @@ export function DashboardPage() {
           onSelectItem={setSelectedItem}
         />
       )}
-
-      {/* ── Stat strip — banded container, gives it visual weight ── */}
-      <section
-        className="rounded-2xl p-5"
-        style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-      >
-        <SectionHeader title="Your Stats">
-          <Link to="/stats" className="text-sm font-medium text-claw-400 hover:text-claw-300 transition-colors">
-            Full stats &rarr;
-          </Link>
-        </SectionHeader>
-        <StatStrip
-          stats={stats}
-          monthly={monthly}
-          genres={detailedStats?.genreDistribution ?? []}
-          currentStreak={detailedStats?.currentStreak ?? 0}
-          longestStreak={detailedStats?.longestStreak ?? 0}
-          loading={loading || detailedLoading}
-        />
-      </section>
     </div>
   );
 }
