@@ -14,9 +14,9 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "@sentry/node": "^10.65.0"
+    "@sentry/node": "^10.67.0"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   }
 }
