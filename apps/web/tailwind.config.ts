@@ -57,7 +57,11 @@ export default {
         sans: ['"Plus Jakarta Sans Variable"', "system-ui", "-apple-system", "BlinkMacSystemFont", '"Segoe UI"', "sans-serif"],
       },
       fontSize: {
-        "2xs": ["0.6875rem", { lineHeight: "1rem" }],
+        // Supporting metadata (year, genre chips, episode counts) leans on this
+        // token across nearly every card. Held at a 12px floor for legibility —
+        // kept as a distinct token so dense metadata can carry tighter tracking
+        // than body `xs` without dropping below the readable minimum.
+        "2xs": ["0.75rem", { lineHeight: "1rem" }],
       },
       aspectRatio: {
         poster: "2 / 3",

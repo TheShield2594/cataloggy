@@ -255,7 +255,7 @@ function ContinueWatchingHero({
       </div>
       <div className="relative z-10 min-w-0 flex-1">
         <p className="text-2xs font-bold uppercase tracking-wider text-claw-400">Series &middot; In Progress</p>
-        <p className="mt-1 truncate text-xl font-bold" style={{ color: "var(--text)" }}>{s.name}</p>
+        <p className="mt-1 truncate font-heading text-xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{s.name}</p>
         <p className="mt-0.5 text-sm" style={{ color: "var(--text-dim)" }}>
           S{s.lastSeason}:E{s.lastEpisode}
           {s.totalSeasons ? ` · ${s.totalSeasons} seasons` : ""}
@@ -784,7 +784,7 @@ export function DashboardPage() {
                 </span>
                 <span className="text-xs font-semibold uppercase tracking-wider text-claw-400">Now Watching</span>
               </div>
-              <p className="mt-1 truncate text-2xl font-bold" style={{ color: "var(--text)" }}>{activeCheckin.name}</p>
+              <p className="mt-1 truncate font-heading text-2xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{activeCheckin.name}</p>
               {activeCheckin.season != null && activeCheckin.episode != null && (
                 <p className="mt-1 text-sm" style={{ color: "var(--text-dim)" }}>
                   S{String(activeCheckin.season).padStart(2, "0")}:E{String(activeCheckin.episode).padStart(2, "0")}

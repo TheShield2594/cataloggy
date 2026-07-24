@@ -20,6 +20,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Typography hierarchy: hero titles (media/game detail panels, the dashboard "Now Watching" and "Continue Watching" heroes) now use a heavier, tighter heading treatment (`font-extrabold`, tightened tracking) so a title separates cleanly from the metadata sitting directly beneath it, and the smallest supporting-metadata token (year, genre chips, episode counts) is held to a 12px legibility floor instead of 11px.
 - `docker-compose.yml` services now use `restart: unless-stopped`, so the stack recovers automatically after a host reboot or crash instead of staying down.
 - `apps/addon`'s Dockerfile is now a multi-stage build (matching `apps/api`/`apps/web`), shipping a smaller runtime image without the full pnpm workspace/devDependencies.
 - The web app now detects an invalid or rotated API token globally (via a `WWW-Authenticate` response header on bearer-auth failures) and returns to the setup wizard, instead of every page showing a generic "Unable to connect" error for the rest of the session.
