@@ -15,6 +15,7 @@ const navItems = [
 ] as const;
 
 export const PIN_KEY = "cataloggy:sidebar-pinned";
+const HINT_KEY = "cataloggy:sidebar-hint-seen";
 const HOVER_DELAY_MS = 200;
 
 export function Sidebar({
@@ -29,25 +30,49 @@ export function Sidebar({
   onSwitchProfile?: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  // One-time discovery hint: the hover-to-expand / pin pattern is invisible until
+  // you happen to hover, so surface it the first time the rail expands, then never again.
+  const [showHint, setShowHint] = useState(false);
+  const hintSeenRef = useRef(true);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const expanded = pinned || hovered;
 
+  useEffect(() => {
+    hintSeenRef.current = localStorage.getItem(HINT_KEY) === "1";
+  }, []);
+
   useEffect(() => () => clearTimeout(hoverTimerRef.current), []);
+
+  const dismissHint = () => {
+    setShowHint(false);
+    hintSeenRef.current = true;
+    localStorage.setItem(HINT_KEY, "1");
+  };
 
   const handleMouseEnter = () => {
     clearTimeout(hoverTimerRef.current);
-    hoverTimerRef.current = setTimeout(() => setHovered(true), HOVER_DELAY_MS);
+    hoverTimerRef.current = setTimeout(() => {
+      setHovered(true);
+      // First hover-expand ever: reveal the hint (and mark it seen so it stays a one-off).
+      if (!hintSeenRef.current && !pinned) {
+        setShowHint(true);
+        hintSeenRef.current = true;
+        localStorage.setItem(HINT_KEY, "1");
+      }
+    }, HOVER_DELAY_MS);
   };
 
   const handleMouseLeave = () => {
     clearTimeout(hoverTimerRef.current);
     setHovered(false);
+    setShowHint(false);
   };
 
   const togglePin = () => {
     const next = !pinned;
     onPinnedChange(next);
     localStorage.setItem(PIN_KEY, next ? "1" : "0");
+    if (showHint) dismissHint();
   };
 
   return (
@@ -106,6 +131,25 @@ export function Sidebar({
         </nav>
 
         <div className="px-2.5">
+          {showHint && expanded && (
+            <div
+              role="status"
+              className="mb-2 rounded-lg p-3 text-xs shadow-lg"
+              style={{ background: "var(--surface-strong)", border: "1px solid var(--border-strong)" }}
+            >
+              <p className="font-semibold" style={{ color: "var(--text)" }}>Quick tip</p>
+              <p className="mt-1 leading-snug" style={{ color: "var(--text-dim)" }}>
+                Hover this rail to peek, or pin it below to keep it open.
+              </p>
+              <button
+                type="button"
+                onClick={dismissHint}
+                className="mt-2 rounded-md bg-claw-500 px-2.5 py-1 text-2xs font-semibold text-white transition-colors hover:bg-claw-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400"
+              >
+                Got it
+              </button>
+            </div>
+          )}
           {onSwitchProfile && (
             <button
               type="button"

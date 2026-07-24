@@ -21,6 +21,10 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - Typography hierarchy: hero titles (media/game detail panels, the dashboard "Now Watching" and "Continue Watching" heroes) now use a heavier, tighter heading treatment (`font-extrabold`, tightened tracking) so a title separates cleanly from the metadata sitting directly beneath it, and the smallest supporting-metadata token (year, genre chips, episode counts) is held to a 12px legibility floor instead of 11px.
+- Combined ("All") search now ranks movie and series results by how closely each title matches the query instead of strictly interleaving them one-for-one, so a strong match of either type no longer sits below a weaker one; equally-good matches still alternate as before.
+- The "Add to list" menus (both the search quick-add popover and the media detail panel) now offer an inline "Create new list" path, so a profile with no lists yet can create one and add the item in a single step instead of hitting an empty dropdown.
+- Type badges laid over posters now carry a dark text-halo and edge ring so their white labels stay legible on any theme accent (e.g. the lighter Letterboxd orange) and over bright poster art, rather than depending on a per-theme contrast check.
+- The collapsible sidebar shows a one-time "hover to peek, or pin it open" tip the first time it expands, so the hover-to-expand/pin pattern is discoverable instead of hidden.
 - `docker-compose.yml` services now use `restart: unless-stopped`, so the stack recovers automatically after a host reboot or crash instead of staying down.
 - `apps/addon`'s Dockerfile is now a multi-stage build (matching `apps/api`/`apps/web`), shipping a smaller runtime image without the full pnpm workspace/devDependencies.
 - The web app now detects an invalid or rotated API token globally (via a `WWW-Authenticate` response header on bearer-auth failures) and returns to the setup wizard, instead of every page showing a generic "Unable to connect" error for the rest of the session.

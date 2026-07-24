@@ -14,6 +14,44 @@ import {
 
 /* ─── Helpers ─── */
 
+// How closely a result's title matches the raw query, as a coarse relevance tier.
+// Exact hit > prefix > word-start > substring > no title hit. Used to rank the
+// combined movie+series list so a strong match of either type floats to the top.
+function titleMatchScore(name: string, query: string): number {
+  const n = name.trim().toLowerCase();
+  const q = query.trim().toLowerCase();
+  if (!q) return 0;
+  if (n === q) return 4;
+  if (n.startsWith(q)) return 3;
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`\\b${escaped}`).test(n)) return 2;
+  if (n.includes(q)) return 1;
+  return 0;
+}
+
+// The `all` search fires movie and series queries separately, each already returned
+// in the provider's relevance order. A naive one-for-one interleave lets a weak series
+// match sit above a strong movie match. Instead, rank by title-match tier first, then by
+// each result's original per-type position, falling back to movies-before-series so
+// equally-good matches still alternate the way the old interleave did.
+function mergeByRelevance(
+  movies: SearchResult[],
+  series: SearchResult[],
+  query: string,
+): SearchResult[] {
+  const tagged = [
+    ...movies.map((r, rank) => ({ r, rank, order: 0 })),
+    ...series.map((r, rank) => ({ r, rank, order: 1 })),
+  ];
+  tagged.sort((a, b) => {
+    const scoreDiff = titleMatchScore(b.r.name, query) - titleMatchScore(a.r.name, query);
+    if (scoreDiff !== 0) return scoreDiff;
+    if (a.rank !== b.rank) return a.rank - b.rank;
+    return a.order - b.order;
+  });
+  return tagged.map((t) => t.r);
+}
+
 function applyFiltersAndSort(
   results: SearchResult[],
   genre: string,
@@ -142,13 +180,7 @@ export function SearchPage() {
             api.search("series", searchQuery, controller.signal),
           ]);
           if (requestIdRef.current !== requestId) return;
-          const merged: SearchResult[] = [];
-          const maxLen = Math.max(movies.length, series.length);
-          for (let i = 0; i < maxLen; i++) {
-            if (i < movies.length) merged.push(movies[i]);
-            if (i < series.length) merged.push(series[i]);
-          }
-          setRawResults(merged);
+          setRawResults(mergeByRelevance(movies, series, searchQuery));
         } else {
           const response = await api.search(searchFilter, searchQuery, controller.signal);
           if (requestIdRef.current !== requestId) return;
@@ -239,6 +271,28 @@ export function SearchPage() {
       showToast(err instanceof Error ? err.message : "Unable to add item", "error");
     } finally {
       setPendingAdds((current) => ({ ...current, [key]: false }));
+    }
+  };
+
+  const handleCreateAndAdd = async (rawName: string, result: SearchResult) => {
+    const name = rawName.trim();
+    if (!name) return;
+    try {
+      const { list } = await api.createList(name);
+      setLists((prev) => [...prev, list]);
+      await api.addToList(list.id, { type: result.type, imdbId: result.imdbId, title: result.name });
+      showToast(`Created "${list.name}" and added "${result.name}"`, "success");
+      setLists((prev) =>
+        prev.map((l) => (l.id === list.id ? { ...l, itemCount: l.itemCount + 1 } : l))
+      );
+      setRawResults((prev) =>
+        prev?.map((r) =>
+          r.imdbId === result.imdbId ? { ...r, lists: [...r.lists, list.id] } : r
+        ) ?? null
+      );
+      setOpenDropdown(null);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Unable to create list", "error");
     }
   };
 
@@ -515,6 +569,7 @@ export function SearchPage() {
                 dropdownRef={dropdownRef}
                 onToggleDropdown={(id) => setOpenDropdown(openDropdown === id ? null : id)}
                 onAdd={handleAdd}
+                onCreateAndAdd={handleCreateAndAdd}
                 onSelect={setSelectedItem}
               />
             ))}
@@ -595,6 +650,7 @@ function ResultCard({
   dropdownRef,
   onToggleDropdown,
   onAdd,
+  onCreateAndAdd,
   onSelect,
 }: {
   result: SearchResult;
@@ -606,9 +662,28 @@ function ResultCard({
   dropdownRef: React.RefObject<HTMLDivElement | null>;
   onToggleDropdown: (id: string) => void;
   onAdd: (listId: string, result: SearchResult) => Promise<void>;
+  onCreateAndAdd: (name: string, result: SearchResult) => Promise<void>;
   onSelect: (result: SearchResult) => void;
 }) {
   const isOpen = openDropdown === result.imdbId;
+  const [creating, setCreating] = useState(false);
+  const [newListName, setNewListName] = useState("");
+  const [savingNewList, setSavingNewList] = useState(false);
+
+  // Reset the inline create form whenever this card's menu closes.
+  useEffect(() => {
+    if (!isOpen) { setCreating(false); setNewListName(""); }
+  }, [isOpen]);
+
+  const submitNewList = async () => {
+    if (!newListName.trim() || savingNewList) return;
+    setSavingNewList(true);
+    try {
+      await onCreateAndAdd(newListName, result);
+    } finally {
+      setSavingNewList(false);
+    }
+  };
   const listNames = result.lists
     .map((id) => listMap.get(id)?.name)
     .filter(Boolean) as string[];
@@ -645,11 +720,14 @@ function ResultCard({
 
         {/* Type badge */}
         <span
-          className={`absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-lg ${
+          className={`absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-lg ring-1 ring-black/15 ${
             result.type === "movie"
               ? "bg-claw-500/90 text-white"
               : "bg-plum-500/90 text-white"
           }`}
+          // Dark text-halo keeps the white label legible on the theme accent (e.g. the
+          // lighter Letterboxd orange) and over bright posters, without a per-theme tweak spot.
+          style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
         >
           {result.type === "movie" ? <Film className="h-3 w-3" /> : <Tv className="h-3 w-3" />}
           {result.type === "movie" ? "Movie" : "Series"}
@@ -688,6 +766,11 @@ function ResultCard({
             <p className="px-3 py-2.5 text-2xs font-semibold uppercase tracking-wider" style={{ borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: "var(--border)", color: "var(--text-mute)" }}>
               Add to list
             </p>
+            {lists.length === 0 && !creating && (
+              <p className="px-3 py-2.5 text-2xs" style={{ color: "var(--text-mute)" }}>
+                No lists yet — create one below.
+              </p>
+            )}
             {lists.map((list) => {
               const already = result.lists.includes(list.id);
               const key = `${list.id}:${result.imdbId}`;
@@ -717,6 +800,45 @@ function ResultCard({
                 </button>
               );
             })}
+            {creating ? (
+              <div
+                className="flex items-center gap-2 px-3 py-2.5"
+                style={{ borderTopWidth: lists.length > 0 ? 1 : 0, borderTopStyle: "solid", borderTopColor: "var(--border)" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <input
+                  autoFocus
+                  value={newListName}
+                  onChange={(e) => setNewListName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); void submitNewList(); }
+                    if (e.key === "Escape") { setCreating(false); setNewListName(""); }
+                  }}
+                  placeholder="List name..."
+                  aria-label="New list name"
+                  className="min-w-0 flex-1 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-claw-500/40"
+                  style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", background: "var(--bg-1)", color: "var(--text)" }}
+                />
+                <button
+                  type="button"
+                  disabled={!newListName.trim() || savingNewList}
+                  onClick={(e) => { e.stopPropagation(); void submitNewList(); }}
+                  className="flex-none rounded-md bg-claw-500 px-2.5 py-1 text-2xs font-semibold text-white transition-colors hover:bg-claw-600 disabled:opacity-50"
+                >
+                  {savingNewList ? "…" : "Add"}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setCreating(true); }}
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-claw-600 transition-colors hover:bg-[var(--surface)]"
+                style={{ borderTopWidth: lists.length > 0 ? 1 : 0, borderTopStyle: "solid", borderTopColor: "var(--border)" }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Create new list
+              </button>
+            )}
           </div>
         </div>
       )}

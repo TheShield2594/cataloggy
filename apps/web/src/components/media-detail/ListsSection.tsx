@@ -17,6 +17,9 @@ export function ListsSection({
   const [memberIds, setMemberIds] = useState<string[]>(initialListIds);
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const [menuOpen, setMenuOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newListName, setNewListName] = useState("");
+  const [savingNewList, setSavingNewList] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,6 +50,29 @@ export function ListsSection({
       document.removeEventListener("keydown", handleKey);
     };
   }, [menuOpen]);
+
+  // Reset the inline create form whenever the menu closes.
+  useEffect(() => {
+    if (!menuOpen) { setCreating(false); setNewListName(""); }
+  }, [menuOpen]);
+
+  const createAndAdd = async () => {
+    const listName = newListName.trim();
+    if (!listName || savingNewList) return;
+    setSavingNewList(true);
+    try {
+      const { list } = await api.createList(listName);
+      await api.addToList(list.id, { type, imdbId, title: name });
+      setLists((prev) => [...prev, list]);
+      setMemberIds((ids) => [...ids, list.id]);
+      onToast?.(`Created ${list.name} and added`, "success");
+      setMenuOpen(false);
+    } catch (err) {
+      onError?.(err instanceof Error ? err.message : "Failed to create list");
+    } finally {
+      setSavingNewList(false);
+    }
+  };
 
   const toggle = async (list: CatalogList) => {
     if (pending[list.id]) return;
@@ -124,31 +150,68 @@ export function ListsSection({
             className="absolute left-0 z-30 mt-1 w-48 overflow-hidden rounded-xl shadow-lg"
             style={{ background: "var(--bg-0)", borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }}
           >
-            {otherLists.length === 0 ? (
-              <p className="px-3 py-2.5 text-xs" style={{ color: "var(--text-mute)" }}>No lists yet</p>
+            {otherLists.length === 0 && !creating && (
+              <p className="px-3 py-2.5 text-xs" style={{ color: "var(--text-mute)" }}>No lists yet — create one below.</p>
+            )}
+            {otherLists.map((list) => {
+              const already = memberIds.includes(list.id);
+              return (
+                <button
+                  key={list.id}
+                  type="button"
+                  role="menuitem"
+                  disabled={pending[list.id]}
+                  onClick={() => void toggle(list)}
+                  aria-label={already ? `Remove from ${list.name}` : `Add to ${list.name}`}
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-[var(--surface)] disabled:opacity-50"
+                >
+                  {already ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-500" />
+                  ) : (
+                    <Plus className="h-3.5 w-3.5" style={{ color: "var(--text-mute)" }} />
+                  )}
+                  <span style={{ color: "var(--text-dim)" }}>{list.name}</span>
+                  {already && <span className="ml-auto text-2xs" style={{ color: "var(--text-mute)" }}>Added</span>}
+                </button>
+              );
+            })}
+            {creating ? (
+              <div
+                className="flex items-center gap-2 px-3 py-2.5"
+                style={{ borderTopWidth: otherLists.length > 0 ? 1 : 0, borderTopStyle: "solid", borderTopColor: "var(--border)" }}
+              >
+                <input
+                  autoFocus
+                  value={newListName}
+                  onChange={(e) => setNewListName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); void createAndAdd(); }
+                    if (e.key === "Escape") { setCreating(false); setNewListName(""); }
+                  }}
+                  placeholder="List name..."
+                  aria-label="New list name"
+                  className="min-w-0 flex-1 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-claw-500/40"
+                  style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", background: "var(--bg-1)", color: "var(--text)" }}
+                />
+                <button
+                  type="button"
+                  disabled={!newListName.trim() || savingNewList}
+                  onClick={() => void createAndAdd()}
+                  className="flex-none rounded-md bg-claw-500 px-2.5 py-1 text-2xs font-semibold text-white transition-colors hover:bg-claw-600 disabled:opacity-50"
+                >
+                  {savingNewList ? "…" : "Add"}
+                </button>
+              </div>
             ) : (
-              otherLists.map((list) => {
-                const already = memberIds.includes(list.id);
-                return (
-                  <button
-                    key={list.id}
-                    type="button"
-                    role="menuitem"
-                    disabled={pending[list.id]}
-                    onClick={() => void toggle(list)}
-                    aria-label={already ? `Remove from ${list.name}` : `Add to ${list.name}`}
-                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-[var(--surface)] disabled:opacity-50"
-                  >
-                    {already ? (
-                      <Check className="h-3.5 w-3.5 text-emerald-500" />
-                    ) : (
-                      <Plus className="h-3.5 w-3.5" style={{ color: "var(--text-mute)" }} />
-                    )}
-                    <span style={{ color: "var(--text-dim)" }}>{list.name}</span>
-                    {already && <span className="ml-auto text-2xs" style={{ color: "var(--text-mute)" }}>Added</span>}
-                  </button>
-                );
-              })
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-claw-600 transition-colors hover:bg-[var(--surface)]"
+                style={{ borderTopWidth: otherLists.length > 0 ? 1 : 0, borderTopStyle: "solid", borderTopColor: "var(--border)" }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Create new list
+              </button>
             )}
           </div>
         )}
