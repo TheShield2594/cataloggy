@@ -308,7 +308,7 @@ export function DetailPanel({
                 </span>
               )}
             </div>
-            <h2 className="mt-3 text-2xl font-bold" style={{ color: "var(--text)" }}>{item.name}</h2>
+            <h2 className="mt-3 font-heading text-2xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{item.name}</h2>
 
             {/* Meta row: rating, runtime, network, genres */}
             <div className="mt-2 flex flex-wrap items-center gap-2">

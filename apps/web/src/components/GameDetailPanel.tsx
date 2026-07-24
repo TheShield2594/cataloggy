@@ -217,7 +217,7 @@ export function GameDetailPanel({
                 </span>
               )}
             </div>
-            <h2 className="mt-3 text-2xl font-bold" style={{ color: "var(--text)" }}>{game.title}</h2>
+            <h2 className="mt-3 font-heading text-2xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{game.title}</h2>
 
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs" style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}>
