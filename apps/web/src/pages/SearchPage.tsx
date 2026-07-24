@@ -277,23 +277,36 @@ export function SearchPage() {
   const handleCreateAndAdd = async (rawName: string, result: SearchResult) => {
     const name = rawName.trim();
     if (!name) return;
+    // createList and addToList are two separate calls: keep a successfully created
+    // list in state even if the add then fails, report the two failures distinctly,
+    // and only claim full success once both complete. The created list stays in the
+    // menu so the user can retry the add without spawning a duplicate list.
+    let list: CatalogList;
     try {
-      const { list } = await api.createList(name);
+      ({ list } = await api.createList(name));
       setLists((prev) => [...prev, list]);
-      await api.addToList(list.id, { type: result.type, imdbId: result.imdbId, title: result.name });
-      showToast(`Created "${list.name}" and added "${result.name}"`, "success");
-      setLists((prev) =>
-        prev.map((l) => (l.id === list.id ? { ...l, itemCount: l.itemCount + 1 } : l))
-      );
-      setRawResults((prev) =>
-        prev?.map((r) =>
-          r.imdbId === result.imdbId ? { ...r, lists: [...r.lists, list.id] } : r
-        ) ?? null
-      );
-      setOpenDropdown(null);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Unable to create list", "error");
+      return;
     }
+    try {
+      await api.addToList(list.id, { type: result.type, imdbId: result.imdbId, title: result.name });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "unknown error";
+      showToast(`Created "${list.name}", but couldn't add "${result.name}" (${reason})`, "error");
+      setOpenDropdown(null);
+      return;
+    }
+    showToast(`Created "${list.name}" and added "${result.name}"`, "success");
+    setLists((prev) =>
+      prev.map((l) => (l.id === list.id ? { ...l, itemCount: l.itemCount + 1 } : l))
+    );
+    setRawResults((prev) =>
+      prev?.map((r) =>
+        r.imdbId === result.imdbId ? { ...r, lists: [...r.lists, list.id] } : r
+      ) ?? null
+    );
+    setOpenDropdown(null);
   };
 
   const filterOptions: { value: FilterType; label: string; icon?: typeof Film }[] = [

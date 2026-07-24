@@ -60,16 +60,27 @@ export function ListsSection({
     const listName = newListName.trim();
     if (!listName || savingNewList) return;
     setSavingNewList(true);
+    // These are two separate backend calls; the list can be created even if adding
+    // the item then fails. Report each step honestly and never discard a list that
+    // was actually created (which would also tempt a retry into a duplicate list).
+    let list: CatalogList;
     try {
-      const { list } = await api.createList(listName);
-      await api.addToList(list.id, { type, imdbId, title: name });
+      ({ list } = await api.createList(listName));
       setLists((prev) => [...prev, list]);
-      setMemberIds((ids) => [...ids, list.id]);
-      onToast?.(`Created ${list.name} and added`, "success");
-      setMenuOpen(false);
     } catch (err) {
       onError?.(err instanceof Error ? err.message : "Failed to create list");
+      setSavingNewList(false);
+      return;
+    }
+    try {
+      await api.addToList(list.id, { type, imdbId, title: name });
+      setMemberIds((ids) => [...ids, list.id]);
+      onToast?.(`Created ${list.name} and added`, "success");
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "unknown error";
+      onError?.(`Created ${list.name}, but couldn't add this title (${reason})`);
     } finally {
+      setMenuOpen(false);
       setSavingNewList(false);
     }
   };
@@ -186,7 +197,13 @@ export function ListsSection({
                   onChange={(e) => setNewListName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") { e.preventDefault(); void createAndAdd(); }
-                    if (e.key === "Escape") { setCreating(false); setNewListName(""); }
+                    if (e.key === "Escape") {
+                      // Stop the document-level Escape handler from closing the whole
+                      // menu; Escape here should only back out of the create form.
+                      e.stopPropagation();
+                      setCreating(false);
+                      setNewListName("");
+                    }
                   }}
                   placeholder="List name..."
                   aria-label="New list name"
