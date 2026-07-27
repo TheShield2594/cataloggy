@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { prisma } from "./prisma.js";
+import { verifyProfileToken } from "./profile-token.js";
 import { UUID_V4_PATTERN } from "./types.js";
 
 declare module "fastify" {
@@ -9,6 +10,7 @@ declare module "fastify" {
 }
 
 const PROFILE_HEADER = "x-profile-id";
+const PROFILE_TOKEN_HEADER = "x-profile-token";
 
 /**
  * Resolves the active profile for a request from the `x-profile-id` header.
@@ -30,6 +32,21 @@ export const getDefaultProfileId = async (): Promise<string> => {
   return created.id;
 };
 
+// A PIN-protected profile requires a valid, unexpired profile-access token
+// (minted by POST /profiles/:id/verify on correct PIN). This is what makes the
+// PIN a real server-side boundary rather than a client-side prompt: a token
+// holder can't reach a locked profile's data just by naming its UUID.
+const hasValidProfileToken = (request: FastifyRequest, profileId: string): boolean => {
+  const headerValue = request.headers[PROFILE_TOKEN_HEADER];
+  const token = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  return verifyProfileToken(token, profileId);
+};
+
+const PROFILE_LOCKED_RESPONSE = {
+  error: "Profile PIN verification required",
+  code: "profile_verification_required",
+} as const;
+
 export const resolveProfile = async (request: FastifyRequest, reply: FastifyReply) => {
   const headerValue = request.headers[PROFILE_HEADER];
   const rawProfileId = Array.isArray(headerValue) ? headerValue[0] : headerValue;
@@ -42,13 +59,20 @@ export const resolveProfile = async (request: FastifyRequest, reply: FastifyRepl
     if (!profile) {
       return reply.code(404).send({ error: "Profile not found" });
     }
+    if (profile.pinHash && !hasValidProfileToken(request, profile.id)) {
+      return reply.code(401).send(PROFILE_LOCKED_RESPONSE);
+    }
     request.profileId = rawProfileId;
     return;
   }
 
-  const profiles = await prisma.profile.findMany({ select: { id: true }, take: 2 });
+  const profiles = await prisma.profile.findMany({ select: { id: true, pinHash: true }, take: 2 });
   if (profiles.length === 1) {
-    request.profileId = profiles[0].id;
+    const [only] = profiles;
+    if (only.pinHash && !hasValidProfileToken(request, only.id)) {
+      return reply.code(401).send(PROFILE_LOCKED_RESPONSE);
+    }
+    request.profileId = only.id;
     return;
   }
 

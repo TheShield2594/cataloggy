@@ -8,7 +8,7 @@ const CATALOGGY_ALLOWED_ORIGINS = (process.env.CATALOGGY_ALLOWED_ORIGINS ?? "")
 export const ALLOWED_ORIGINS = IS_DEVELOPMENT ? ["*"] : Array.from(new Set(CATALOGGY_ALLOWED_ORIGINS));
 
 const CORS_METHODS = "GET,POST,DELETE,PATCH,OPTIONS";
-const CORS_HEADERS = "Authorization,Content-Type,X-Profile-Id";
+const CORS_HEADERS = "Authorization,Content-Type,X-Profile-Id,X-Profile-Token";
 
 export const isAllowedOrigin = (origin: string | undefined): boolean => {
   if (IS_DEVELOPMENT) return true;

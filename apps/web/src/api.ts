@@ -26,6 +26,7 @@ const ADDON_BASE_DEFAULT = stripTrailingSlash(
 const API_BASE_OVERRIDE_KEY = "cataloggy_api_base_override";
 const TOKEN_KEY = "cataloggy_token";
 const PROFILE_ID_KEY = "cataloggy_profile_id";
+const PROFILE_TOKEN_KEY = "cataloggy_profile_token";
 
 export const runtimeConfig = {
   apiBaseDefault: API_BASE_DEFAULT,
@@ -77,6 +78,24 @@ export const runtimeConfig = {
   },
   clearProfileId() {
     window.localStorage.removeItem(PROFILE_ID_KEY);
+    window.localStorage.removeItem(PROFILE_TOKEN_KEY);
+  },
+  // Signed capability returned by POST /profiles/:id/verify. Sent as the
+  // x-profile-token header so PIN-protected profiles pass the server-side gate.
+  getProfileToken() {
+    return window.localStorage.getItem(PROFILE_TOKEN_KEY) ?? "";
+  },
+  setProfileToken(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      window.localStorage.removeItem(PROFILE_TOKEN_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(PROFILE_TOKEN_KEY, trimmed);
+  },
+  clearProfileToken() {
+    window.localStorage.removeItem(PROFILE_TOKEN_KEY);
   }
 };
 
@@ -399,6 +418,10 @@ const authHeaders = (hasBody: boolean) => {
   if (profileId) {
     headers["x-profile-id"] = profileId;
   }
+  const profileToken = runtimeConfig.getProfileToken();
+  if (profileToken) {
+    headers["x-profile-token"] = profileToken;
+  }
   return headers;
 };
 
@@ -469,15 +492,26 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
     // Fall back to the raw body if it isn't (or isn't valid JSON) so nothing
     // is ever silently swallowed.
     let message = body;
+    let errorCode: string | undefined;
     if (body) {
       try {
-        const parsed = JSON.parse(body) as { error?: unknown };
+        const parsed = JSON.parse(body) as { error?: unknown; code?: unknown };
         if (typeof parsed.error === "string" && parsed.error.trim()) {
           message = parsed.error;
+        }
+        if (typeof parsed.code === "string") {
+          errorCode = parsed.code;
         }
       } catch {
         // not JSON — use the raw body as-is
       }
+    }
+    // A PIN-protected profile's access token is missing or expired. Drop the
+    // stale profile selection and prompt the user to re-verify, rather than
+    // leaving every page stuck on a 401.
+    if (response.status === 401 && errorCode === "profile_verification_required") {
+      runtimeConfig.clearProfileId();
+      window.dispatchEvent(new Event("cataloggy:profile-locked"));
     }
     // A 401 with a WWW-Authenticate header (RFC 6750) comes from the bearer-token
     // auth middleware itself, meaning the stored token is missing/invalid/rotated —
@@ -826,11 +860,18 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
-  verifyProfile(profileId: string, pin?: string) {
-    return request<{ id: string; name: string }>(`/profiles/${encodeURIComponent(profileId)}/verify`, {
-      method: "POST",
-      body: JSON.stringify(pin ? { pin } : {}),
-    });
+  async verifyProfile(profileId: string, pin?: string) {
+    const result = await request<{ id: string; name: string; profileToken?: string }>(
+      `/profiles/${encodeURIComponent(profileId)}/verify`,
+      {
+        method: "POST",
+        body: JSON.stringify(pin ? { pin } : {}),
+      }
+    );
+    // Persist the signed capability so subsequent requests for this profile
+    // clear the server-side PIN gate.
+    runtimeConfig.setProfileToken(result.profileToken ?? "");
+    return result;
   },
   updateProfile(profileId: string, payload: { name?: string; pin?: string | null; currentPin?: string }) {
     return request<{ profile: Profile }>(`/profiles/${encodeURIComponent(profileId)}`, {
