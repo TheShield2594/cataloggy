@@ -11,9 +11,22 @@
 // turning the AI feature into a metadata-service / internal-probe proxy while
 // preserving local-model setups.
 
-const isBlockedAiHostname = (hostname: string): boolean => {
-  // URL.hostname keeps IPv6 in bracket-free form already; normalize just in case.
+// Canonicalize an IPv4-mapped IPv6 literal (e.g. "::ffff:a9fe:a9fe", the form
+// Node normalizes "[::ffff:169.254.169.254]" into) to its dotted-quad IPv4
+// address, so the IPv4 blocklist rules below can't be bypassed by expressing a
+// blocked address in IPv6 mapped notation.
+const normalizeHostname = (hostname: string): string => {
   const host = hostname.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+  const mapped = host.match(/^::ffff:(?:0:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (!mapped) return host;
+
+  const high = Number.parseInt(mapped[1], 16);
+  const low = Number.parseInt(mapped[2], 16);
+  return [high >> 8, high & 0xff, low >> 8, low & 0xff].join(".");
+};
+
+const isBlockedAiHostname = (hostname: string): boolean => {
+  const host = normalizeHostname(hostname);
   return (
     host === "0.0.0.0" ||
     host === "::" ||
