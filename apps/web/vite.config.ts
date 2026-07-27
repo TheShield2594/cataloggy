@@ -24,7 +24,10 @@ export default defineConfig({
       filename: "sw.js",
       injectManifest: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        globIgnores: ["config.js"]
+        // iOS launch screens are read by Safari straight from the network when
+        // the app is added to the home screen, so precaching all 46 of them
+        // would just push ~2.5 MB at every install for no benefit.
+        globIgnores: ["config.js", "splash/**"]
       },
       includeAssets: ["favicon.ico", "icons/icon-192.png", "icons/icon-512.png"],
       manifest: {
