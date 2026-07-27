@@ -22,11 +22,18 @@ const SORT_LABELS: Record<SortOption, string> = {
   rating: "Rating",
 };
 
+// Metadata rows are backfilled in the background, so an item can arrive without
+// one. Fall back to the title captured when it was added before showing the bare
+// IMDb ID, which is never what the user is looking for.
+function itemName(item: ListItemWithMeta): string {
+  return item.metadata?.name ?? item.title ?? item.imdbId;
+}
+
 function toSearchResult(item: ListItemWithMeta, list?: CatalogList): SearchResult {
   return {
     imdbId: item.imdbId,
     type: item.type,
-    name: item.metadata?.name ?? item.imdbId,
+    name: itemName(item),
     year: item.metadata?.year ?? null,
     poster: item.metadata?.poster ?? null,
     description: null,
@@ -306,12 +313,12 @@ export function ListsPage() {
     let result = items;
     const q = filterQuery.trim().toLowerCase();
     if (q) {
-      result = result.filter((item) => (item.metadata?.name ?? item.imdbId).toLowerCase().includes(q));
+      result = result.filter((item) => itemName(item).toLowerCase().includes(q));
     }
     const sorted = [...result];
     switch (sortBy) {
       case "name":
-        sorted.sort((a, b) => (a.metadata?.name ?? a.imdbId).localeCompare(b.metadata?.name ?? b.imdbId));
+        sorted.sort((a, b) => itemName(a).localeCompare(itemName(b)));
         break;
       case "year":
         sorted.sort((a, b) => (b.metadata?.year ?? 0) - (a.metadata?.year ?? 0));
@@ -588,7 +595,7 @@ export function ListsPage() {
             ) : (
               <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {visibleItems.map((item, index) => {
-                  const name = item.metadata?.name ?? item.imdbId;
+                  const name = itemName(item);
                   const poster = item.metadata?.poster;
                   const year = item.metadata?.year;
                   return (

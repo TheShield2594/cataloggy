@@ -1,7 +1,7 @@
 import { ItemType, ListItemType, ListKind, MetadataType, Prisma } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
-import { syncMetadata } from "../lib/metadata.js";
+import { backfillMissingMetadata, syncMetadata } from "../lib/metadata.js";
 import { pushTraktWatchlistChange } from "../lib/trakt-client.js";
 import { resolveProfile } from "../lib/profile.js";
 import { UUID_V4_PATTERN } from "../lib/types.js";
@@ -297,9 +297,31 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
+    // Items still waiting on a metadata row fall back to the title captured when
+    // they were added, so a list shows real names instead of raw IMDb IDs while
+    // the rows are being filled in.
+    const titleMap = new Map<string, string>();
+    const missing = listItems.filter((item) => !metadataMap.has(`${item.imdbId}:${item.type}`));
+
+    if (missing.length > 0) {
+      const rows = await prisma.item.findMany({
+        where: { imdbId: { in: [...new Set(missing.map((item) => item.imdbId))] } },
+        select: { imdbId: true, type: true, title: true },
+      });
+      for (const row of rows) {
+        if (row.title) titleMap.set(`${row.imdbId}:${row.type}`, row.title);
+      }
+
+      backfillMissingMetadata(
+        missing.map((item) => ({ imdbId: item.imdbId, type: item.type as unknown as MetadataType })),
+        app.log
+      );
+    }
+
     const items = listItems.map((item) => {
-      const meta = metadataMap.get(`${item.imdbId}:${item.type}`);
-      return { ...item, metadata: meta ?? null };
+      const key = `${item.imdbId}:${item.type}`;
+      const meta = metadataMap.get(key);
+      return { ...item, title: titleMap.get(key) ?? null, metadata: meta ?? null };
     });
 
     return { items };

@@ -1,6 +1,8 @@
 import { prisma } from "./prisma.js";
 import { getTmdb } from "./tmdb-client.js";
 import { getOmdbApiKey, fetchOmdbRatings, upsertOmdbRatings } from "./omdb.js";
+import { mapWithConcurrency } from "./concurrency.js";
+import { metadataBackfillCooldownCache } from "./cache.js";
 import type { MetadataPayload } from "../tmdb.js";
 import type { MetadataType } from "@prisma/client";
 
@@ -96,4 +98,47 @@ export const syncMetadata = async (imdbId: string, type: MetadataType) => {
   const enriched = await enrichWithOmdb(imdbId, type);
 
   return enriched ?? row;
+};
+
+// The metadata sync on add is fire-and-forget, and Trakt sync adds in bulk, so a
+// list can hold items whose metadata row was never written — leaving the UI and
+// the Stremio catalog with nothing to show but the raw IMDb ID. Repair those on
+// read, but bounded and off the response path: a freshly imported list of a few
+// thousand items must not turn one list load into a few thousand TMDB requests.
+const BACKFILL_MAX_PER_CALL = 25;
+const BACKFILL_CONCURRENCY = 4;
+
+const backfillInFlight = new Set<string>();
+
+type BackfillLogger = { warn: (obj: object, msg: string) => void };
+
+export const backfillMissingMetadata = (
+  items: { imdbId: string; type: MetadataType }[],
+  log?: BackfillLogger
+): void => {
+  const pending: { imdbId: string; type: MetadataType; key: string }[] = [];
+
+  for (const item of items) {
+    if (pending.length >= BACKFILL_MAX_PER_CALL) break;
+    const key = `${item.imdbId}:${item.type}`;
+    if (backfillInFlight.has(key) || metadataBackfillCooldownCache.has(key)) continue;
+    backfillInFlight.add(key);
+    pending.push({ ...item, key });
+  }
+
+  if (pending.length === 0) return;
+
+  void mapWithConcurrency(pending, BACKFILL_CONCURRENCY, async (item) => {
+    try {
+      const row = await syncMetadata(item.imdbId, item.type);
+      // No row means TMDB had no match, not a transient failure — hold off before
+      // asking again rather than retrying on every subsequent list load.
+      if (!row) metadataBackfillCooldownCache.set(item.key, true);
+    } catch (err) {
+      metadataBackfillCooldownCache.set(item.key, true);
+      log?.warn({ imdbId: item.imdbId, type: item.type, err }, "Metadata backfill failed");
+    } finally {
+      backfillInFlight.delete(item.key);
+    }
+  });
 };

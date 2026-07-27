@@ -84,6 +84,8 @@ type CataloggyList = {
 type ListItemResponse = {
   imdbId: string;
   type: string;
+  // Title captured when the item was added — stands in until the metadata row lands.
+  title?: string | null;
   metadata: {
     name: string;
     poster: string | null;
@@ -358,7 +360,7 @@ const itemsToMetas = (items: ListItemResponse[], type: string): StremioMetaPrevi
     .map((item) => ({
       id: item.imdbId,
       type: item.type,
-      name: item.metadata?.name ?? item.imdbId,
+      name: item.metadata?.name ?? item.title ?? item.imdbId,
       ...(item.metadata?.poster ? { poster: item.metadata.poster } : {}),
       posterShape: "poster" as const,
       ...(item.metadata?.genres?.length ? { genres: item.metadata.genres } : {}),
