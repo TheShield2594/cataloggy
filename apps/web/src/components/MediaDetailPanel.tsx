@@ -477,15 +477,24 @@ export function useDetailPanel() {
     const needsMeta = !active.description && active.genres.length === 0 && active.rating == null;
     const needsOmdb = active.imdbRating === undefined;
     const needsDetail = active.runtime === undefined;
+    // Callers that build a SearchResult from a list row fall back to the IMDb ID
+    // when the metadata row hasn't been synced yet, so the placeholder title is
+    // itself a reason to fetch — even when every other field is already present.
+    const needsName = active.name === active.imdbId;
 
-    if (needsMeta || needsOmdb || needsDetail) {
+    if (needsMeta || needsOmdb || needsDetail || needsName) {
       const cacheKey = `${active.type}:${active.imdbId}`;
       const cached = metaCache.get(cacheKey);
       const applyMeta = (meta: Awaited<ReturnType<typeof api.getItemMeta>>) => {
         setSelectedItem((prev) => {
           if (!prev || prev.imdbId !== active.imdbId) return prev;
+          // The API falls back to the IMDb ID when TMDB has no title, so only
+          // take a name that is a real title — otherwise keep what we had.
+          const hasRealName = !!meta.name && meta.name !== prev.imdbId;
           return {
             ...prev,
+            name: hasRealName ? meta.name : prev.name,
+            year: meta.year ?? prev.year,
             description: meta.description ?? prev.description,
             genres: meta.genres.length > 0 ? meta.genres : prev.genres,
             rating: meta.rating ?? prev.rating,

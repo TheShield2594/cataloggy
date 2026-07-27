@@ -26,7 +26,7 @@ import {
   WatchEvent,
   WatchStats,
 } from "../api";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { fadeMaskStyle, useHorizontalScroll } from "../components/carousel-utils";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { Poster } from "../components/Poster";

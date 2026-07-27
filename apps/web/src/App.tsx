@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Link, Route, Routes, useLocation } from "react-router-dom";
+import { Link, Route, Routes, useLocation } from "react-router";
 import { BarChart3, CalendarDays, Clapperboard, Gamepad2, History, Loader2, Search, List, Settings, User } from "lucide-react";
 import { api, Profile, runtimeConfig } from "./api";
 import { CommandPalette, useCommandPalette } from "./components/CommandPalette";

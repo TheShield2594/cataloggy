@@ -116,6 +116,8 @@ export type ListItem = {
 };
 
 export type ListItemWithMeta = ListItem & {
+  // Title captured when the item was added — stands in until the metadata row lands.
+  title?: string | null;
   metadata: { name: string; poster: string | null; year: number | null; genres: string[]; rating: number | null } | null;
 };
 

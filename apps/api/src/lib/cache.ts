@@ -38,6 +38,18 @@ export const showDetailsCache = new LRUCache<string, { details: ShowDetails }>({
   ttl: SHOW_DETAILS_CACHE_TTL_MS,
 });
 
+// A metadata backfill that comes back empty — TMDB has no match for that IMDb ID
+// under the type the item is filed as, which happens when the two disagree on
+// whether something is a movie or a series — would otherwise be retried on every
+// single list load. Park those IDs instead of hammering TMDB for a row that is
+// not going to appear.
+export const METADATA_BACKFILL_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+export const metadataBackfillCooldownCache = new LRUCache<string, true>({
+  max: 5000,
+  ttl: METADATA_BACKFILL_COOLDOWN_MS,
+});
+
 export const trendingCacheGet = (key: string): TrendingCacheEntry | undefined => trendingCache.get(key);
 
 export const trendingCacheSet = (key: string, entry: TrendingCacheEntry, ttl?: number) => {

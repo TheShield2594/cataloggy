@@ -3,6 +3,7 @@ import { prisma } from "./prisma.js";
 import { getRpdbApiKey, withRpdbPoster } from "./rpdb.js";
 import { getDefaultWatchlist } from "./watchlist.js";
 import { getDroppedSeriesIds } from "./dropped-shows.js";
+import { backfillMissingMetadata } from "./metadata.js";
 import type { ContinueMetaPreview, StremioMetaPreview, StremioMetaType } from "./types.js";
 
 export const buildMetasFromIds = async (
@@ -28,6 +29,13 @@ export const buildMetasFromIds = async (
 
   const titleByImdbId = new Map(items.map((item) => [item.imdbId, item.title?.trim() ?? ""]));
   const metadataByImdbId = new Map(metadata.map((entry) => [entry.imdbId, entry]));
+
+  // Without a metadata row these metas carry no poster, year, or genres — repair
+  // them in the background so the catalog fills in on the next request.
+  const missing = ids.filter((id) => !metadataByImdbId.has(id));
+  if (missing.length > 0) {
+    backfillMissingMetadata(missing.map((imdbId) => ({ imdbId, type: metadataType })));
+  }
 
   return ids.map((id) => {
     const meta = metadataByImdbId.get(id);
