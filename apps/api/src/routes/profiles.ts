@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
+import { mintProfileToken } from "../lib/profile-token.js";
 import { UUID_V4_PATTERN } from "../lib/types.js";
 
 const toSha256Digest = (value: string) => createHash("sha256").update(value).digest();
@@ -129,7 +130,9 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
       if (!profile) return reply.code(404).send({ error: "Profile not found" });
 
       if (!profile.pinHash) {
-        return reply.code(200).send({ id: profile.id, name: profile.name });
+        return reply
+          .code(200)
+          .send({ id: profile.id, name: profile.name, profileToken: mintProfileToken(profile.id) });
       }
 
       const lockout = await getPinLockout(profile.id);
@@ -147,7 +150,9 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
       }
 
       await clearPinAttempts(profile.id);
-      return reply.code(200).send({ id: profile.id, name: profile.name });
+      return reply
+        .code(200)
+        .send({ id: profile.id, name: profile.name, profileToken: mintProfileToken(profile.id) });
     },
   );
 

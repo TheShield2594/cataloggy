@@ -5,6 +5,7 @@ import { trendingCacheGet, trendingCacheSet, trendingCacheDelete, watchedImdbIds
 import { getTmdb } from "./tmdb-client.js";
 import { getRpdbApiKey, withRpdbPoster } from "./rpdb.js";
 import { upsertMetadata } from "./metadata.js";
+import { validateAiProviderUrl } from "./ssrf.js";
 import type { AiProviderConfig, StremioMetaPreview } from "./types.js";
 
 export const AI_CONFIG_KEY = "ai:config";
@@ -171,6 +172,13 @@ const callAiProvider = async (
   prompt: string,
   minTokens = 0
 ): Promise<string> => {
+  // Defense-in-depth: a config persisted before this validation existed (or by
+  // a future code path that skips the route check) must still not be able to
+  // drive an outbound request at a blocked SSRF target.
+  if (!validateAiProviderUrl(config.url)) {
+    throw new Error("AI provider URL is not an allowed outbound target");
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 60_000);
 
@@ -195,14 +203,19 @@ const callAiProvider = async (
       headers: { "Content-Type": "application/json", ...config.headers },
       body: JSON.stringify(payload),
       signal: controller.signal,
+      // Do not follow redirects: an allowed host must not be able to bounce the
+      // request (carrying any configured Authorization header) to an internal
+      // address the SSRF validator would otherwise reject.
+      redirect: "error",
     });
   } finally {
     clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(`AI provider error (${response.status}): ${body.slice(0, 200)}`);
+    // Deliberately do not echo the upstream response body: reflecting it would
+    // turn this into an SSRF probe that leaks internal responses to the caller.
+    throw new Error(`AI provider error (${response.status})`);
   }
 
   const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };

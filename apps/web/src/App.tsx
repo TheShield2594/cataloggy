@@ -48,6 +48,14 @@ export function App() {
     return () => window.removeEventListener("cataloggy:unauthorized", handleUnauthorized);
   }, []);
 
+  useEffect(() => {
+    // A PIN-protected profile's access token expired or was cleared — send the
+    // user back to the profile picker to re-verify.
+    const handleProfileLocked = () => setNeedsProfile(true);
+    window.addEventListener("cataloggy:profile-locked", handleProfileLocked);
+    return () => window.removeEventListener("cataloggy:profile-locked", handleProfileLocked);
+  }, []);
+
   if (needsSetup) {
     return (
       <SetupWizard

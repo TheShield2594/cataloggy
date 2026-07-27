@@ -15,6 +15,7 @@ import {
   getAiRecommendations,
 } from "../lib/ai.js";
 import { resolveProfile } from "../lib/profile.js";
+import { validateAiProviderUrl } from "../lib/ssrf.js";
 import { getMetadataType } from "../lib/types.js";
 import type { StremioMetaPreview, StremioMetaType } from "../lib/types.js";
 
@@ -369,9 +370,10 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
     const body = request.body as { config?: unknown } | null;
     const cfg = body?.config as Record<string, unknown> | undefined;
 
-    if (!cfg || typeof cfg.url !== "string" || !cfg.url.startsWith("http")) {
+    if (!cfg || typeof cfg.url !== "string" || !validateAiProviderUrl(cfg.url)) {
       return reply.code(400).send({
-        error: "config.url must be a non-empty string starting with http",
+        error:
+          "config.url must be an http(s) URL and must not target the cloud-metadata/link-local range",
       });
     }
     if (!cfg.headers || typeof cfg.headers !== "object" || Array.isArray(cfg.headers)) {
@@ -430,7 +432,7 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
     if (
       !cfg ||
       typeof cfg.url !== "string" ||
-      !cfg.url.startsWith("http") ||
+      !validateAiProviderUrl(cfg.url) ||
       !cfg.headers ||
       typeof cfg.headers !== "object" ||
       Array.isArray(cfg.headers) ||
@@ -439,7 +441,11 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       Array.isArray(cfg.payload) ||
       typeof (cfg.payload as Record<string, unknown>).model !== "string"
     ) {
-      return { success: false, error: "Invalid config: url, headers, and payload.model are required" };
+      return {
+        success: false,
+        error:
+          "Invalid config: url (an http(s) URL not targeting the cloud-metadata/link-local range), headers, and payload.model are required",
+      };
     }
 
     const testConfig = {
@@ -463,14 +469,18 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
           headers: { "Content-Type": "application/json", ...testConfig.headers },
           body: JSON.stringify(testConfig.payload),
           signal: controller.signal,
+          // Don't follow redirects — an allowed host must not be able to bounce
+          // this request to an internal address the validator would reject.
+          redirect: "error",
         });
       } finally {
         clearTimeout(timeoutId);
       }
 
       if (!response.ok) {
-        const errBody = await response.text().catch(() => "");
-        return { success: false, error: `HTTP ${response.status}: ${errBody.slice(0, 200)}` };
+        // Don't echo the upstream body back to the caller: reflecting it would
+        // leak internal responses and turn this into an SSRF probe.
+        return { success: false, error: `HTTP ${response.status}` };
       }
 
       const data = await response.json() as {

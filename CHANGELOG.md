@@ -32,6 +32,12 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The Stremio addon's mark-watched/scrobble endpoints now require a token derived from the shared API token, instead of relying solely on a spoofable `Origin` header check.
 - TMDB and Trakt API calls now time out after 10s, matching the existing IGDB/Steam client behavior, instead of hanging indefinitely on a slow/unresponsive upstream.
 
+### Security
+
+- Profile PINs are now enforced server-side. Successful PIN verification (`POST /profiles/:id/verify`) issues a short-lived, HMAC-signed profile-access token that `resolveProfile` requires (via the `x-profile-token` header) for any PIN-protected profile. Previously the PIN was only a client-side prompt: anyone holding the shared `API_TOKEN` could read or mutate a "locked" profile's data — including a full `/export` — just by setting the `x-profile-id` header to that profile's UUID. The web app stores and sends the token automatically and re-prompts for the PIN when it expires.
+- The AI-provider config endpoints (`POST /ai/config`, `POST /ai/test`) and the outbound AI request now reject URLs that target the cloud-metadata/link-local range (`169.254.0.0/16`, IPv6 link-local, `0.0.0.0`) or use a non-HTTP scheme, no longer follow redirects, and no longer reflect the upstream response body back to the caller — closing an SSRF-with-reflection vector reachable by an `API_TOKEN` holder. LAN/localhost LLM endpoints (Ollama, LM Studio, etc.) remain allowed.
+- `docker-compose.yml` now binds the Postgres port to `127.0.0.1` instead of `0.0.0.0`, so the database (which stores OAuth tokens) is no longer reachable from the LAN — or the internet, if the host is port-forwarded — bypassing `API_TOKEN`. The api/addon services still reach it over the internal Docker network.
+
 ### Fixed
 
 - `/search` no longer throws an uncaught exception (and a bare 500) when the upstream TMDB request fails.

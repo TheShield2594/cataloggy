@@ -11,8 +11,15 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-cataloggy}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in a .env file next to docker-compose.yml — see README.md}
+    # Bind Postgres to loopback only. The api/addon services reach it over the
+    # internal "cataloggy" Docker network (host db:5432), so no host mapping is
+    # needed for the app to work. Publishing on 0.0.0.0 would expose the
+    # database — including stored OAuth tokens — to the whole LAN (and the
+    # internet if the host is port-forwarded), bypassing API_TOKEN entirely.
+    # Loopback keeps host-side psql/backups working without that exposure.
+    # Remove this block entirely if you never need host-side DB access.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
