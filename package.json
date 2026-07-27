@@ -30,7 +30,8 @@
       "serialize-javascript": "^7.0.3",
       "find-my-way": "^9.7.0",
       "fast-uri": "^4.1.1",
-      "ajv>fast-uri": "^3.1.4"
+      "ajv>fast-uri": "^3.1.4",
+      "brace-expansion": "^5.0.8"
     }
   }
 }

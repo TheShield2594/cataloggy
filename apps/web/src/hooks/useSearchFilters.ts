@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 
 export type FilterType = "all" | "movie" | "series";
 export type SortOption = "relevance" | "rating" | "year_desc" | "year_asc" | "title";

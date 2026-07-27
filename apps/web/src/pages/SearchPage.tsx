@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { Check, ChevronDown, ChevronUp, Film, Filter, Heart, MonitorPlay, Plus, Search, SlidersHorizontal, Star, Tv, X } from "lucide-react";
 import { api, CatalogList, SearchResult, WatchProvider } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";

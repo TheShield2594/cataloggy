@@ -1,4 +1,4 @@
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 import { Key, Link, Database, Info, Clapperboard, Image, Globe, Star, Sparkles, Bell, Users, Activity } from "lucide-react";
 import { Section } from "../components/settings/Section";
 import { ApiTokenSettings } from "../components/settings/ApiTokenSettings";
