@@ -14,12 +14,16 @@ updates:
         patterns:
           - "*"
     ignore:
-      # typescript-eslint refuses to load under TS 7 (its peer range stops at
-      # <6.1.0), so `pnpm lint` hard-errors on any TS 7 bump. Drop this ignore
-      # once typescript-eslint ships TS 7 support:
+      # typescript-eslint's peer range on typescript stops at <6.1.0, and it
+      # throws on load rather than degrading, so `pnpm lint` hard-errors on
+      # anything past 6.0.x -- a 6.1 minor breaks it just as surely as 7.0.
+      # Leaving patch bumps alone keeps 6.0.x security fixes flowing. Drop
+      # this ignore once typescript-eslint ships TS 7 support:
       # https://github.com/typescript-eslint/typescript-eslint/issues/10940
       - dependency-name: "typescript"
-        update-types: ["version-update:semver-major"]
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
 
   - package-ecosystem: "docker"
     directory: "/apps/api"
