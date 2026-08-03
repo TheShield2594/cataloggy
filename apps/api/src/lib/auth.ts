@@ -5,6 +5,25 @@ const API_TOKEN = process.env.API_TOKEN;
 
 const toSha256Digest = (value: string) => createHash("sha256").update(value).digest();
 
+const bearerToken = (request: FastifyRequest): string | null => {
+  const authHeader = request.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  return authHeader.slice("Bearer ".length).trim();
+};
+
+/**
+ * Constant-time check that a request carries the configured API token, without
+ * sending a reply. Used by surfaces that need to know whether a request is
+ * authenticated but must not reject it themselves — currently the rate limiter,
+ * which runs before {@link verifyToken} has had a chance to answer.
+ */
+export const hasValidApiToken = (request: FastifyRequest): boolean => {
+  if (!API_TOKEN) return false;
+  const token = bearerToken(request);
+  if (token === null) return false;
+  return timingSafeEqual(toSha256Digest(token), toSha256Digest(API_TOKEN));
+};
+
 export const verifyToken = async (request: FastifyRequest, reply: FastifyReply) => {
   if (!API_TOKEN) {
     request.log.error("API_TOKEN is not configured");

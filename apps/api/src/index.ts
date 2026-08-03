@@ -1,10 +1,16 @@
 import { Sentry } from "./lib/sentry.js";
-import Fastify from "fastify";
+import Fastify, { type FastifyRequest } from "fastify";
 import rateLimit from "@fastify/rate-limit";
-import { parseProxyPathPrefixes, normalizeProxyPath, parseTrustProxy } from "@cataloggy/shared";
+import {
+  parseProxyPathPrefixes,
+  normalizeProxyPath,
+  parseTrustProxy,
+  ADDON_SERVICE_CLIENT,
+  SERVICE_CLIENT_HEADER,
+} from "@cataloggy/shared";
 import { prisma } from "./lib/prisma.js";
 import { applyCorsHeaders } from "./lib/cors.js";
-import { verifyToken } from "./lib/auth.js";
+import { hasValidApiToken, verifyToken } from "./lib/auth.js";
 import { getAiRecommendations, isAiConfigured } from "./lib/ai.js";
 import { trendingCacheDeletePrefix } from "./lib/cache.js";
 import { pollTraktHistory, syncTraktWatchlist } from "./lib/trakt-client.js";
@@ -73,12 +79,36 @@ const app = Fastify({
 });
 
 // ─── Rate limiting ───
+//
+// The store is in-memory and per-process, so this limiter assumes the documented
+// single-container deployment: run more than one API replica and each replica
+// enforces its own independent budget.
+//
+// Keying purely on `request.ip` also lumps all Stremio traffic into one bucket.
+// The addon is a single container on the internal Docker network, so a phone, an
+// Apple TV and a desktop all reach the API from the same address — and a Stremio
+// home screen fans out to one request per enabled catalog, so a few clients
+// refreshing at once is a burst against a single key. Service-to-service calls
+// therefore get their own key and a larger budget.
+//
+// Identification is the addon's client header *plus* a valid API token: the addon
+// authenticates with the same token the browser uses, so the token alone can't
+// tell them apart, and requiring it means an unauthenticated caller can't claim
+// the larger budget by setting a header. A caller that can forge both already has
+// full API access, so this grants no privilege it didn't already have.
+
+const BROWSER_RATE_LIMIT_MAX = 200;
+const SERVICE_RATE_LIMIT_MAX = 1000;
+const SERVICE_RATE_LIMIT_KEY = `service:${ADDON_SERVICE_CLIENT}`;
+
+const isServiceRequest = (request: FastifyRequest): boolean =>
+  request.headers[SERVICE_CLIENT_HEADER] === ADDON_SERVICE_CLIENT && hasValidApiToken(request);
 
 app.register(rateLimit, {
   global: true,
-  max: 200,
+  max: (request) => (isServiceRequest(request) ? SERVICE_RATE_LIMIT_MAX : BROWSER_RATE_LIMIT_MAX),
   timeWindow: "1 minute",
-  keyGenerator: (request) => request.ip,
+  keyGenerator: (request) => (isServiceRequest(request) ? SERVICE_RATE_LIMIT_KEY : request.ip),
 });
 
 // ─── Global hooks ───

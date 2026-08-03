@@ -9,7 +9,14 @@ import Fastify, {
   type RouteHandlerMethod,
 } from "fastify";
 import rateLimit from "@fastify/rate-limit";
-import { parseProxyPathPrefixes, normalizeProxyPath, parseTrustProxy, UUID_V4_PATTERN } from "@cataloggy/shared";
+import {
+  parseProxyPathPrefixes,
+  normalizeProxyPath,
+  parseTrustProxy,
+  UUID_V4_PATTERN,
+  ADDON_SERVICE_CLIENT,
+  SERVICE_CLIENT_HEADER,
+} from "@cataloggy/shared";
 
 const CATALOGGY_API_BASE = process.env.CATALOGGY_API_BASE ?? "http://api:7000";
 const CATALOGGY_API_TOKEN = process.env.CATALOGGY_API_TOKEN;
@@ -69,7 +76,10 @@ const profilePathParam = (request: FastifyRequest): string | undefined => {
 // ─── API helpers ───
 
 const apiHeaders = (profileId?: string | null): Record<string, string> => {
-  const headers: Record<string, string> = {};
+  // Marks these as service-to-service calls so the API can rate-limit them
+  // separately from browser traffic — every Stremio client's requests arrive at
+  // the API from this one container's IP.
+  const headers: Record<string, string> = { [SERVICE_CLIENT_HEADER]: ADDON_SERVICE_CLIENT };
   if (CATALOGGY_API_TOKEN) headers.Authorization = `Bearer ${CATALOGGY_API_TOKEN}`;
   if (profileId) headers["x-profile-id"] = profileId;
   return headers;

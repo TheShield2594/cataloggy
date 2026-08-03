@@ -120,6 +120,7 @@ model WatchEvent {
 
   @@index([profileId, watchedAt])
   @@index([profileId, type, imdbId, season, episode], name: "idx_watchevent_dedup")
+  @@index([profileId, type, seriesImdbId], name: "idx_watchevent_series")
 }
 
 model SeriesProgress {

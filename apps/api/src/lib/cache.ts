@@ -38,6 +38,27 @@ export const showDetailsCache = new LRUCache<string, { details: ShowDetails }>({
   ttl: SHOW_DETAILS_CACHE_TTL_MS,
 });
 
+// Every profile-scoped request resolves its profile before doing anything else, so
+// one dashboard load — around a dozen requests fired in parallel — pays a dozen
+// identical profile lookups before any real work starts. This collapses them.
+//
+// Short-lived on purpose, and cleared outright whenever a profile is created,
+// updated or deleted, so a PIN change or a removed profile takes effect on the
+// next request rather than after the TTL. Only positive lookups are cached;
+// resolving an unknown profile ID is a 404 path, not a hot one.
+export const PROFILE_CACHE_TTL_MS = 30 * 1000;
+
+export type CachedProfile = { id: string; pinHash: string | null };
+
+export const profileCache = new LRUCache<string, CachedProfile[]>({
+  max: 100,
+  ttl: PROFILE_CACHE_TTL_MS,
+});
+
+export const profileCacheClear = () => {
+  profileCache.clear();
+};
+
 // A metadata backfill that comes back empty — TMDB has no match for that IMDb ID
 // under the type the item is filed as, which happens when the two disagree on
 // whether something is a movie or a series — would otherwise be retried on every

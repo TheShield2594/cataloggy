@@ -42,10 +42,37 @@ const buildApp = async (): Promise<FastifyInstance> => {
   return app;
 };
 
+// /watch/stats/detailed runs two aggregate queries against the same mock, so the
+// fixtures are dispatched on the SQL text rather than on call order.
+const rawQueryText = (query: unknown): string => {
+  const strings = (query as { strings?: string[] } | undefined)?.strings;
+  return Array.isArray(strings) ? strings.join(" ") : String(query);
+};
+
+type EventStatsRow = {
+  longest_streak: bigint;
+  current_streak: bigint;
+  monthly: { month: string; movies: number; episodes: number }[];
+};
+type MetadataStatsRow = {
+  genres: { genre: string; count: number }[];
+  top_rated: { imdbId: string; name: string; type: string; rating: number | null; poster: string | null }[];
+};
+
+let eventStatsRows: EventStatsRow[] = [];
+let metadataStatsRows: MetadataStatsRow[] = [];
+
 const resetMocks = () => {
   vi.clearAllMocks();
   prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof txMock) => unknown) => callback(txMock));
-  prismaMock.$queryRaw.mockResolvedValue([{ longest_streak: 0n, current_streak: 0n }]);
+  eventStatsRows = [{ longest_streak: 0n, current_streak: 0n, monthly: [] }];
+  metadataStatsRows = [{ genres: [], top_rated: [] }];
+  prismaMock.$queryRaw.mockImplementation(async (query: unknown) => {
+    const text = rawQueryText(query);
+    if (text.includes("watched_metadata")) return metadataStatsRows;
+    if (text.includes("run_lengths")) return eventStatsRows;
+    return [];
+  });
   prismaMock.metadata.findMany.mockResolvedValue([]);
   prismaMock.rating.findMany.mockResolvedValue([]);
 };
@@ -331,8 +358,7 @@ describe("watch routes", () => {
 
   describe("GET /watch/stats/detailed", () => {
     it("surfaces the current/longest streak from the raw SQL query", async () => {
-      prismaMock.watchEvent.findMany.mockResolvedValue([]);
-      prismaMock.$queryRaw.mockResolvedValue([{ longest_streak: 12n, current_streak: 3n }]);
+      eventStatsRows = [{ longest_streak: 12n, current_streak: 3n, monthly: [] }];
 
       const app = await buildApp();
       const response = await app.inject({ method: "GET", url: "/watch/stats/detailed" });
@@ -341,6 +367,62 @@ describe("watch routes", () => {
       expect(response.json()).toEqual(
         expect.objectContaining({ longestStreak: 12, currentStreak: 3 })
       );
+      await app.close();
+    });
+
+    it("aggregates in SQL — no per-event or per-metadata rows are pulled into Node", async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: "GET", url: "/watch/stats/detailed" });
+
+      expect(response.statusCode).toBe(200);
+      expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2);
+      expect(prismaMock.watchEvent.findMany).not.toHaveBeenCalled();
+      expect(prismaMock.metadata.findMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it("pads the monthly series to 12 buckets and passes SQL rollups through", async () => {
+      const now = new Date();
+      const thisMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+      eventStatsRows = [
+        {
+          longest_streak: 1n,
+          current_streak: 1n,
+          monthly: [{ month: thisMonth, movies: 4, episodes: 9 }],
+        },
+      ];
+
+      const app = await buildApp();
+      const response = await app.inject({ method: "GET", url: "/watch/stats/detailed" });
+      const body = response.json();
+
+      expect(body.monthly).toHaveLength(12);
+      expect(body.monthly.at(-1)).toEqual({ month: thisMonth, movies: 4, episodes: 9 });
+      expect(body.monthly[0]).toEqual(expect.objectContaining({ movies: 0, episodes: 0 }));
+      await app.close();
+    });
+
+    it("returns the genre histogram and top-rated list built by Postgres", async () => {
+      metadataStatsRows = [
+        {
+          genres: [{ genre: "Drama", count: 7 }, { genre: "Comedy", count: 2 }],
+          top_rated: [
+            { imdbId: "tt1", name: "A Film", type: "movie", rating: 8.4, poster: null },
+          ],
+        },
+      ];
+
+      const app = await buildApp();
+      const response = await app.inject({ method: "GET", url: "/watch/stats/detailed" });
+      const body = response.json();
+
+      expect(body.genreDistribution).toEqual([
+        { genre: "Drama", count: 7 },
+        { genre: "Comedy", count: 2 },
+      ]);
+      expect(body.topRated).toEqual([
+        { imdbId: "tt1", name: "A Film", type: "movie", rating: 8.4, poster: null },
+      ]);
       await app.close();
     });
   });
