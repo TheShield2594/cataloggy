@@ -31,6 +31,7 @@ export function ApiTokenSettings() {
           value={token}
           onChange={(e) => setToken(e.target.value)}
           placeholder="Paste your API token"
+          aria-label="API token"
           className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-0)] px-4 py-3 pr-20 text-sm text-[var(--text)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         />
         <button

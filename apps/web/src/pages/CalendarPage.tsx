@@ -159,7 +159,7 @@ export function CalendarPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <CalendarDays className="h-6 w-6" style={{ color: "var(--text-dim)" }} />
-          <h2 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Calendar</h2>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Calendar</h1>
         </div>
 
         <div className="relative inline-flex rounded-full p-0.5" style={{ background: "var(--surface-strong)", border: "1px solid var(--border)" }}>
@@ -220,9 +220,9 @@ export function CalendarPage() {
             <div className="space-y-6">
               {agendaGroups.map((group) => (
                 <div key={group.label} className="space-y-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+                  <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
                     {group.label}
-                  </h3>
+                  </h2>
                   {group.entries.map((entry) => (
                     <button
                       key={`${entry.seriesImdbId}-s${entry.season}e${entry.episode}`}

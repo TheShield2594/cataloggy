@@ -383,6 +383,9 @@ export function ListsPage() {
 
   return (
     <div className="flex flex-col gap-6 md:flex-row md:gap-8">
+      {/* The visible headline is the selected list's name, which changes as you
+          click around, so the page keeps a stable hidden h1 above it. */}
+      <h1 className="sr-only">Lists</h1>
       {/* Sidebar */}
       <aside className="w-full shrink-0 md:w-56 lg:w-64">
         {/* Mobile: horizontal scrollable tabs */}
@@ -465,6 +468,7 @@ export function ListsPage() {
             value={newListName}
             onChange={(e) => setNewListName(e.target.value)}
             placeholder="New list name..."
+            aria-label="New list name"
             className="min-w-0 flex-1 rounded-xl border px-3.5 py-2.5 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
             style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
           />
@@ -510,6 +514,7 @@ export function ListsPage() {
                       // no way back to the original. Enter and ✓ commit instead.
                       onBlur={cancelRename}
                       onKeyDown={(e) => { if (e.key === "Escape") cancelRename(); }}
+                      aria-label={`Rename list ${selectedList.name}`}
                       className="min-w-0 flex-1 rounded-lg border px-3 py-1.5 text-2xl font-bold focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
                       style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
                     />

@@ -338,12 +338,16 @@ export function SearchPage() {
         className="sticky top-[76px] z-40 rounded-2xl p-4 backdrop-blur-xl shadow-sm"
         style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)", background: "color-mix(in srgb, var(--bg-1) 90%, transparent)" }}
       >
+        {/* The search field is the page's title bar, so the h1 is hidden rather
+            than duplicated above it — the outline still needs one. */}
+        <h1 className="sr-only">Search</h1>
         <div className="relative">
           <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2" style={{ color: "var(--text-mute)" }} />
           <input
             value={filters.query}
             onChange={(e) => setFilters({ query: e.target.value })}
             placeholder="Search movies & TV shows..."
+            aria-label="Search movies and TV shows"
             className="w-full rounded-full py-3.5 pl-14 pr-12 text-base placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15 transition-all"
             style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", background: "var(--bg-0)", color: "var(--text)" }}
             autoFocus={typeof window !== "undefined" && !window.matchMedia("(pointer: coarse)").matches}

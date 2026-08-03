@@ -142,6 +142,7 @@ export function WatchDateModal({
           <div className="space-y-3">
             <input
               type="date"
+              aria-label="Watch date"
               value={customDate}
               max={new Date().toISOString().slice(0, 10)}
               onChange={(e) => setCustomDate(e.target.value)}

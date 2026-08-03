@@ -259,10 +259,11 @@ export function GameDetailPanel({
           </div>
 
           <div>
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Notes</h3>
+            <h3 id="game-notes-heading" className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Notes</h3>
             <textarea
               value={notes}
               onChange={(e) => saveNotes(e.target.value)}
+              aria-labelledby="game-notes-heading"
               placeholder="Add personal notes about this game..."
               rows={4}
               className="w-full rounded-xl border p-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"

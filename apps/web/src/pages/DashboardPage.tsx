@@ -505,6 +505,10 @@ function DashboardHeader({
       className="flex flex-col gap-2.5 rounded-xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
+      {/* The dashboard shows a greeting, not a title, so its h1 is hidden — the
+          page still needs one to head the outline. It lives here because this
+          strip is the first thing rendered. */}
+      <h1 className="sr-only">Dashboard</h1>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
         <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{timeOfDayGreeting()}</span>
         <span style={{ color: "var(--border-strong)" }}>&middot;</span>
