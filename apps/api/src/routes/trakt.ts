@@ -17,6 +17,14 @@ import { consumeOAuthState, createOAuthState } from "../lib/trakt-oauth-state.js
 import { getDefaultProfileId, resolveProfile } from "../lib/profile.js";
 import type { SeriesProgressCandidate } from "../lib/types.js";
 
+// Tighter than the global 200/min bucket, on the two routes that touch the
+// OAuth state table: the callback is unauthenticated by construction (trakt.tv
+// redirects a browser to it) and deletes a row per request, and each authorize
+// call writes one — so this also bounds how many pending states a single client
+// can pile up. Matches the limit PIN verification already uses; completing the
+// linking flow takes one request, not ten.
+const OAUTH_RATE_LIMIT = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
+
 const traktRoutes: FastifyPluginAsync = async (app) => {
   app.get("/trakt/status", async (_request, reply) => {
     const token = await prisma.traktToken.findUnique({ where: { id: "default" } });
@@ -32,7 +40,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  app.get("/trakt/oauth/authorize", async (_request, reply) => {
+  app.get("/trakt/oauth/authorize", OAUTH_RATE_LIMIT, async (_request, reply) => {
     const clientId = process.env.TRAKT_CLIENT_ID;
     const redirectUri =
       process.env.TRAKT_REDIRECT_URI ??
@@ -48,7 +56,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
     return reply.send({ url, redirectUri });
   });
 
-  app.get("/trakt/oauth/callback", async (request, reply) => {
+  app.get("/trakt/oauth/callback", OAUTH_RATE_LIMIT, async (request, reply) => {
     const { code, state, error: oauthError, error_description: oauthErrorDescription } =
       request.query as { code?: string; state?: string; error?: string; error_description?: string };
 
