@@ -5,7 +5,7 @@ import { trendingCacheGet, trendingCacheSet, trendingCacheDelete, watchedImdbIds
 import { getTmdb } from "./tmdb-client.js";
 import { getRpdbApiKey, withRpdbPoster } from "./rpdb.js";
 import { upsertMetadata } from "./metadata.js";
-import { validateAiProviderUrl } from "./ssrf.js";
+import { resolveAiProviderUrl } from "./ssrf.js";
 import type { AiProviderConfig, StremioMetaPreview } from "./types.js";
 
 export const AI_CONFIG_KEY = "ai:config";
@@ -174,8 +174,10 @@ const callAiProvider = async (
 ): Promise<string> => {
   // Defense-in-depth: a config persisted before this validation existed (or by
   // a future code path that skips the route check) must still not be able to
-  // drive an outbound request at a blocked SSRF target.
-  if (!validateAiProviderUrl(config.url)) {
+  // drive an outbound request at a blocked SSRF target. Re-checked here rather
+  // than trusted from save time because the hostname's DNS records can change
+  // between the two.
+  if (!(await resolveAiProviderUrl(config.url))) {
     throw new Error("AI provider URL is not an allowed outbound target");
   }
 
