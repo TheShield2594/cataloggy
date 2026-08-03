@@ -75,9 +75,12 @@ export function StatsPage() {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-lg rounded-2xl p-8 text-center" style={{ border: "1px solid rgba(244,63,94,0.2)", background: "rgba(244,63,94,0.05)" }}>
-        <AlertCircle className="mx-auto h-12 w-12 text-rose-500" />
-        <p className="mt-3 text-lg font-semibold text-rose-500">{error}</p>
+      <div className="mx-auto max-w-4xl space-y-6">
+        <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Watch Statistics</h1>
+        <div className="mx-auto max-w-lg rounded-2xl p-8 text-center" style={{ border: "1px solid rgba(244,63,94,0.2)", background: "rgba(244,63,94,0.05)" }}>
+          <AlertCircle className="mx-auto h-12 w-12 text-rose-500" />
+          <p className="mt-3 text-lg font-semibold text-rose-500">{error}</p>
+        </div>
       </div>
     );
   }

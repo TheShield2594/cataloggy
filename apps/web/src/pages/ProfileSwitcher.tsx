@@ -338,9 +338,14 @@ export function ProfileSwitcher({ onSelected, onClose }: { onSelected: (profile:
     }
   };
 
+  // Neither branch has a title to show, but both are still the whole surface, so
+  // they carry a hidden one rather than leaving the outline empty.
+  const Heading = headingTag;
+
   if (loading) {
     return (
       <Shell onClose={onClose}>
+        <Heading className="sr-only">Profiles</Heading>
         <div className="flex items-center justify-center gap-2 py-6 text-sm" style={{ color: "var(--text-mute)" }}>
           <Loader2 size={16} className="animate-spin" /> Loading profiles...
         </div>
@@ -351,6 +356,7 @@ export function ProfileSwitcher({ onSelected, onClose }: { onSelected: (profile:
   if (error) {
     return (
       <Shell onClose={onClose}>
+        <Heading className="sr-only">Profiles</Heading>
         <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>
       </Shell>
     );

@@ -254,6 +254,16 @@ describe("ProfileSwitcher", () => {
       expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
     });
 
+    it("keeps a heading while loading and when the fetch fails", async () => {
+      getProfiles.mockRejectedValue(new Error("Network error – cannot reach API"));
+      renderSwitcher();
+
+      expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
+
+      await screen.findByText(/cannot reach api/i);
+      expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
+    });
+
     it("names the PIN and create fields without relying on their placeholders", async () => {
       renderSwitcher();
 
