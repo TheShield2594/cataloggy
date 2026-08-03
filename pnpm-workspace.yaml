@@ -10,7 +10,7 @@ overrides:
   find-my-way: "^9.7.0"
   fast-uri: "^4.1.1"
   "ajv>fast-uri": "^3.1.4"
-  brace-expansion: "^5.0.8"
+  brace-expansion: "^5.0.9"
 
 # pnpm does not run a dependency's install scripts unless it is approved here.
 # Prisma downloads its query engine that way, esbuild its platform binary.
