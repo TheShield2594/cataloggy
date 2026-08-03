@@ -1,12 +1,34 @@
-/**
- * Identifies service-to-service callers of the API.
- *
- * The addon calls the API with the same `API_TOKEN` the browser uses, so the
- * bearer token alone cannot tell the two apart. This header lets the API give
- * internal traffic its own rate-limit bucket — see the limiter comment in
- * `apps/api/src/index.ts`.
- */
-export const SERVICE_CLIENT_HEADER = "x-cataloggy-client";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
-/** Value the Stremio addon service sends in {@link SERVICE_CLIENT_HEADER}. */
-export const ADDON_SERVICE_CLIENT = "addon";
+/** Header the addon sends to identify its calls to the API as service traffic. */
+export const SERVICE_TOKEN_HEADER = "x-cataloggy-service-token";
+
+const SERVICE_TOKEN_LABEL = "cataloggy-service-client";
+
+/**
+ * Derives the addon's service token from the shared API token.
+ *
+ * The addon has to prove it *is* the addon, not merely that it holds
+ * `API_TOKEN` — the browser holds that too, so the raw token cannot tell the
+ * two apart. Deriving costs no extra configuration (both sides already have
+ * `API_TOKEN`) and keeps the blast radius small: the derived value grants
+ * nothing on its own, and does not yield the token it came from.
+ *
+ * Same construction as the addon's mutation token in `apps/addon/src/app.ts`.
+ */
+export const deriveServiceToken = (apiToken: string): string =>
+  createHmac("sha256", apiToken).update(SERVICE_TOKEN_LABEL).digest("hex");
+
+/**
+ * Constant-time comparison of a presented service token against the expected
+ * one. Both are fixed-width hex digests, so the length guard — needed because
+ * `timingSafeEqual` throws on a length mismatch — cannot leak anything about
+ * the secret.
+ */
+export const matchesServiceToken = (candidate: unknown, expected: string | null): boolean => {
+  if (!expected || typeof candidate !== "string" || !candidate) return false;
+  const presented = Buffer.from(candidate);
+  const wanted = Buffer.from(expected);
+  if (presented.length !== wanted.length) return false;
+  return timingSafeEqual(presented, wanted);
+};

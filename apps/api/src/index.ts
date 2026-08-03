@@ -5,12 +5,13 @@ import {
   parseProxyPathPrefixes,
   normalizeProxyPath,
   parseTrustProxy,
-  ADDON_SERVICE_CLIENT,
-  SERVICE_CLIENT_HEADER,
+  deriveServiceToken,
+  matchesServiceToken,
+  SERVICE_TOKEN_HEADER,
 } from "@cataloggy/shared";
 import { prisma } from "./lib/prisma.js";
 import { applyCorsHeaders } from "./lib/cors.js";
-import { hasValidApiToken, verifyToken } from "./lib/auth.js";
+import { verifyToken } from "./lib/auth.js";
 import { getAiRecommendations, isAiConfigured } from "./lib/ai.js";
 import { trendingCacheDeletePrefix } from "./lib/cache.js";
 import { pollTraktHistory, syncTraktWatchlist } from "./lib/trakt-client.js";
@@ -91,18 +92,20 @@ const app = Fastify({
 // refreshing at once is a burst against a single key. Service-to-service calls
 // therefore get their own key and a larger budget.
 //
-// Identification is the addon's client header *plus* a valid API token: the addon
-// authenticates with the same token the browser uses, so the token alone can't
-// tell them apart, and requiring it means an unauthenticated caller can't claim
-// the larger budget by setting a header. A caller that can forge both already has
-// full API access, so this grants no privilege it didn't already have.
+// Identification is a token derived from API_TOKEN rather than API_TOKEN itself.
+// The addon authenticates with the same token the browser uses, so the raw token
+// can't tell them apart — only something the addon can compute and the browser is
+// never given. That also means a leaked browser token can't be used to drain the
+// addon's budget, and it needs no extra configuration on either side.
 
 const BROWSER_RATE_LIMIT_MAX = 200;
 const SERVICE_RATE_LIMIT_MAX = 1000;
-const SERVICE_RATE_LIMIT_KEY = `service:${ADDON_SERVICE_CLIENT}`;
+const SERVICE_RATE_LIMIT_KEY = "service:addon";
+
+const SERVICE_TOKEN = process.env.API_TOKEN ? deriveServiceToken(process.env.API_TOKEN) : null;
 
 const isServiceRequest = (request: FastifyRequest): boolean =>
-  request.headers[SERVICE_CLIENT_HEADER] === ADDON_SERVICE_CLIENT && hasValidApiToken(request);
+  matchesServiceToken(request.headers[SERVICE_TOKEN_HEADER], SERVICE_TOKEN);
 
 app.register(rateLimit, {
   global: true,

@@ -14,8 +14,8 @@ import {
   normalizeProxyPath,
   parseTrustProxy,
   UUID_V4_PATTERN,
-  ADDON_SERVICE_CLIENT,
-  SERVICE_CLIENT_HEADER,
+  deriveServiceToken,
+  SERVICE_TOKEN_HEADER,
 } from "@cataloggy/shared";
 
 const CATALOGGY_API_BASE = process.env.CATALOGGY_API_BASE ?? "http://api:7000";
@@ -75,11 +75,14 @@ const profilePathParam = (request: FastifyRequest): string | undefined => {
 
 // ─── API helpers ───
 
+// Proves these calls come from the addon rather than from a browser holding the
+// same API token, so the API can rate-limit them separately — every Stremio
+// client's requests reach the API from this one container's IP.
+const SERVICE_TOKEN = CATALOGGY_API_TOKEN ? deriveServiceToken(CATALOGGY_API_TOKEN) : null;
+
 const apiHeaders = (profileId?: string | null): Record<string, string> => {
-  // Marks these as service-to-service calls so the API can rate-limit them
-  // separately from browser traffic — every Stremio client's requests arrive at
-  // the API from this one container's IP.
-  const headers: Record<string, string> = { [SERVICE_CLIENT_HEADER]: ADDON_SERVICE_CLIENT };
+  const headers: Record<string, string> = {};
+  if (SERVICE_TOKEN) headers[SERVICE_TOKEN_HEADER] = SERVICE_TOKEN;
   if (CATALOGGY_API_TOKEN) headers.Authorization = `Bearer ${CATALOGGY_API_TOKEN}`;
   if (profileId) headers["x-profile-id"] = profileId;
   return headers;
