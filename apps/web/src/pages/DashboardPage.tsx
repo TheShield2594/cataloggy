@@ -113,10 +113,7 @@ function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
           <p className="truncate text-xs font-semibold text-white">{item.name}</p>
         </div>
       </div>
-      <p
-        className="mt-2.5 truncate text-sm font-semibold transition-colors group-hover:text-claw-text"
-        style={{ color: "var(--text)" }}
-      >
+      <p className="mt-2.5 truncate text-sm font-semibold text-[var(--text)] transition-colors group-hover:text-claw-text">
         {item.name}
       </p>
       <p className="truncate text-2xs" style={{ color: "var(--text-dim)" }}>
@@ -201,8 +198,7 @@ function ContinueWatchingCard({
       </div>
       <button
         type="button"
-        className="mt-2.5 block truncate text-sm font-semibold transition-colors text-left w-full hover:text-claw-text"
-        style={{ color: "var(--text)" }}
+        className="mt-2.5 block truncate text-sm font-semibold text-[var(--text)] transition-colors text-left w-full hover:text-claw-text"
         onClick={onSelect}
       >
         {s.name}
@@ -1121,7 +1117,7 @@ export function DashboardPage() {
                     ) : null}
                   </div>
                 </div>
-                <p className="mt-2.5 truncate text-sm font-semibold transition-colors group-hover:text-claw-text" style={{ color: "var(--text)" }}>
+                <p className="mt-2.5 truncate text-sm font-semibold text-[var(--text)] transition-colors group-hover:text-claw-text">
                   {event.name}
                 </p>
                 <p className="text-2xs" style={{ color: "var(--text-dim)" }}>

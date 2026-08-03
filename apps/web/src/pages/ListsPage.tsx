@@ -422,7 +422,11 @@ export function ListsPage() {
                     }`}
                     style={selectedListId === list.id ? undefined : { color: "var(--text-dim)" }}
                   >
-                    <p className="truncate font-semibold" style={{ color: "var(--text)" }}>{list.name}</p>
+                    <p
+                      className={`truncate font-semibold ${selectedListId === list.id ? "text-claw-text" : "text-[var(--text)]"}`}
+                    >
+                      {list.name}
+                    </p>
                     <p className="mt-0.5 text-xs" style={{ color: "var(--text-mute)" }}>
                       {list.itemCount} {list.itemCount === 1 ? "item" : "items"}
                     </p>
@@ -619,10 +623,10 @@ export function ListsPage() {
                         <span
                           className={`absolute top-2.5 left-2.5 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-lg ring-1 ring-black/15 ${
                             item.type === "movie"
-                              ? "bg-claw-500/90 text-claw-on"
+                              ? "bg-claw-500 text-claw-on"
                               : "bg-plum-500/90 text-white"
                           }`}
-                          style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
+                          style={item.type === "movie" ? undefined : { textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
                         >
                           {item.type === "movie" ? "Movie" : "Series"}
                         </span>

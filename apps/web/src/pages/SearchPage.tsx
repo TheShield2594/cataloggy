@@ -735,7 +735,7 @@ function ResultCard({
         <span
           className={`absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-lg ring-1 ring-black/15 ${
             result.type === "movie"
-              ? "bg-claw-500/90 text-claw-on"
+              ? "bg-claw-500 text-claw-on"
               : "bg-plum-500/90 text-white"
           }`}
           // The movie badge takes its foreground from --on-accent, which is already

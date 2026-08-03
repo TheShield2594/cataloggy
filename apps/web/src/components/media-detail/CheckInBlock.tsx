@@ -62,8 +62,8 @@ export function CheckInBlock({
           onStartCheckin();
         }
       }}
-      className="flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors hover:border-claw-500/40 hover:bg-claw-500/5 hover:text-claw-text"
-      style={{ borderColor: "var(--border-strong)", background: "var(--surface)", color: "var(--text-dim)" }}
+      className="flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold text-[var(--text-dim)] transition-colors hover:border-claw-500/40 hover:bg-claw-500/5 hover:text-claw-text"
+      style={{ borderColor: "var(--border-strong)", background: "var(--surface)" }}
     >
       <Radio className="h-4 w-4" /> Check In
     </button>

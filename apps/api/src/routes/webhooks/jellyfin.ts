@@ -39,7 +39,10 @@ const jellyfinWebhookRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(200).send({ status: "skipped", reason: "no_imdb_id" });
     }
 
-    const profile = await resolveWebhookProfile(request, body.NotificationUsername ?? body.Username);
+    // `??` alone would stop at a NotificationUsername the webhook template
+    // rendered as an empty string, never reaching the Username fallback.
+    const accountName = body.NotificationUsername?.trim() || body.Username;
+    const profile = await resolveWebhookProfile(request, accountName);
     if (!profile.ok) {
       return reply.code(profile.status).send({ error: profile.error });
     }

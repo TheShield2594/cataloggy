@@ -287,7 +287,7 @@ export function DetailPanel({
           {/* Title + badges */}
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide ${item.type === "movie" ? "bg-claw-500/90 text-claw-on" : "bg-plum-500/90 text-claw-on"}`}>
+              <span className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide ${item.type === "movie" ? "bg-claw-500 text-claw-on" : "bg-plum-500/90 text-white"}`}>
                 {item.type === "movie" ? <Film className="h-3 w-3" /> : <Tv className="h-3 w-3" />}
                 {item.type === "movie" ? "Movie" : "Series"}
               </span>

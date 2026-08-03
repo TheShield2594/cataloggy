@@ -83,7 +83,7 @@ export function RecommendationsSection({
             >
               <Poster src={item.poster} alt={item.name} className="h-full w-full" sizes="112px" />
             </div>
-            <p className="mt-1.5 truncate text-2xs font-medium leading-tight transition-colors group-hover:text-claw-text" style={{ color: "var(--text-dim)" }}>
+            <p className="mt-1.5 truncate text-2xs font-medium leading-tight text-[var(--text-dim)] transition-colors group-hover:text-claw-text">
               {item.name}
             </p>
           </button>

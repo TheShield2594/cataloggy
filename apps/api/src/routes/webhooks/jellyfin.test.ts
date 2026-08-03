@@ -177,6 +177,25 @@ describe("POST /webhooks/jellyfin", () => {
     await app.close();
   });
 
+  it("falls back to Username when NotificationUsername renders empty", async () => {
+    const app = await buildApp();
+
+    await app.inject({
+      method: "POST",
+      url: "/webhooks/jellyfin",
+      payload: {
+        NotificationType: "PlaybackStop",
+        ItemType: "Movie",
+        Provider_imdb: "tt4444444",
+        NotificationUsername: "   ",
+        Username: "Alex",
+      },
+    });
+
+    expect(webhookProfileMock.resolveWebhookProfile).toHaveBeenCalledWith(expect.anything(), "Alex");
+    await app.close();
+  });
+
   it("does not record anything when the profile can't be resolved", async () => {
     webhookProfileMock.resolveWebhookProfile.mockResolvedValue({
       ok: false,
