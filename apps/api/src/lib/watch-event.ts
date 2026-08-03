@@ -6,8 +6,7 @@ import { syncWatchEventToTrakt } from "./trakt-client.js";
 import type { RecordWatchParams } from "./types.js";
 
 export const recordWatchEvent = async (params: RecordWatchParams) => {
-  const { type, imdbId, seriesImdbId, season, episode, watchedAt, dateUnknown, note, source, request: req } = params;
-  const profileId = req.profileId!;
+  const { type, imdbId, seriesImdbId, season, episode, watchedAt, dateUnknown, note, source, profileId, log } = params;
 
   const dayStart = new Date(watchedAt);
   dayStart.setUTCHours(0, 0, 0, 0);
@@ -39,7 +38,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
             ...(note !== undefined ? { note } : {}),
           },
         });
-        req.log.info(
+        log.info(
           { imdbId: resolvedSeriesImdbId, season, episode, plays: updated.plays },
           `${source} scrobble: episode play incremented`
         );
@@ -59,7 +58,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
           profileId,
         },
       });
-      req.log.info({ imdbId: resolvedSeriesImdbId, season, episode }, `${source} scrobble: episode recorded`);
+      log.info({ imdbId: resolvedSeriesImdbId, season, episode }, `${source} scrobble: episode recorded`);
       return { watchEvent: created, wasCreated: true };
     });
 
@@ -74,7 +73,7 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
     syncWatchEventToTrakt(
       watchEvent,
       { type: "episode", imdbId: resolvedSeriesImdbId, seriesImdbId: resolvedSeriesImdbId, season, episode },
-      req.log
+      log
     );
 
     void (async () => {
@@ -82,12 +81,12 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
         if (await shouldRefreshAiRecs()) {
           trendingCacheDeletePrefix("ai-recs:");
           await Promise.allSettled([
-            getAiRecommendations("movie", 15, profileId, req.log),
-            getAiRecommendations("series", 15, profileId, req.log),
+            getAiRecommendations("movie", 15, profileId, log),
+            getAiRecommendations("series", 15, profileId, log),
           ]);
         }
       } catch (error) {
-        req.log.warn(error, "Background AI recs refresh failed");
+        log.warn(error, "Background AI recs refresh failed");
       }
     })();
 
@@ -109,30 +108,30 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
           ...(note !== undefined ? { note } : {}),
         },
       });
-      req.log.info({ imdbId, plays: updated.plays }, `${source} scrobble: movie play incremented`);
+      log.info({ imdbId, plays: updated.plays }, `${source} scrobble: movie play incremented`);
       return { watchEvent: updated, wasCreated: false };
     }
 
     const created = await tx.watchEvent.create({
       data: { type: "movie", imdbId, watchedAt, dateUnknown: dateUnknown ?? false, note: note ?? null, profileId },
     });
-    req.log.info({ imdbId }, `${source} scrobble: movie recorded`);
+    log.info({ imdbId }, `${source} scrobble: movie recorded`);
     return { watchEvent: created, wasCreated: true };
   });
 
-  syncWatchEventToTrakt(watchEvent, { type: "movie", imdbId }, req.log);
+  syncWatchEventToTrakt(watchEvent, { type: "movie", imdbId }, log);
 
   void (async () => {
     try {
       if (await shouldRefreshAiRecs()) {
         trendingCacheDeletePrefix("ai-recs:");
         await Promise.allSettled([
-          getAiRecommendations("movie", 15, profileId, req.log),
-          getAiRecommendations("series", 15, profileId, req.log),
+          getAiRecommendations("movie", 15, profileId, log),
+          getAiRecommendations("series", 15, profileId, log),
         ]);
       }
     } catch (error) {
-      req.log.warn(error, "Background AI recs refresh failed");
+      log.warn(error, "Background AI recs refresh failed");
     }
   })();
 

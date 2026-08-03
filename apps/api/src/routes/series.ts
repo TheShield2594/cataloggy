@@ -287,7 +287,8 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
         episode: episodeNumber,
         watchedAt: new Date(),
         source: "manual",
-        request,
+        profileId: request.profileId!,
+        log: request.log,
       });
 
       return reply.code(204).send();
@@ -394,7 +395,8 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
             episode,
             watchedAt,
             source: "manual",
-            request,
+            profileId,
+            log: request.log,
           })
         )
       );

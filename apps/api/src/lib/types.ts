@@ -1,5 +1,5 @@
 import type { MetadataType } from "@prisma/client";
-import type { FastifyRequest } from "fastify";
+import type { FastifyBaseLogger } from "fastify";
 
 export type StremioMetaType = "movie" | "series";
 
@@ -61,7 +61,14 @@ export type RecordWatchParams = {
   dateUnknown?: boolean;
   note?: string | null;
   source: string;
-  request: FastifyRequest;
+  /**
+   * The profile the event belongs to. Passed explicitly rather than read off the
+   * request, so a caller that has no `resolveProfile` hook (the Plex/Jellyfin
+   * webhooks) can't silently write an event with no owner — Prisma treats an
+   * `undefined` profileId as "no filter" on read and rejects it on create.
+   */
+  profileId: string;
+  log: FastifyBaseLogger;
 };
 
 // Re-exported so existing `../lib/types.js` imports keep working; the pattern

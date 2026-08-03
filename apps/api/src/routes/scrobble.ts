@@ -123,7 +123,8 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
           episode: checkin.type === "episode" ? (checkin.episode ?? null) : undefined,
           watchedAt: new Date(),
           source: "checkin",
-          request,
+          profileId,
+          log: request.log,
         });
       } catch (error) {
         request.log.warn(error, "Failed to log watch event from check-in");
@@ -287,7 +288,8 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
         episode: session.episode,
         watchedAt,
         source: "Scrobble",
-        request,
+        profileId: request.profileId!,
+        log: request.log,
       });
       watchEvent = result.watchEvent;
     } else {
