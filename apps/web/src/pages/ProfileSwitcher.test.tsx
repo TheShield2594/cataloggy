@@ -239,4 +239,41 @@ describe("ProfileSwitcher", () => {
       expect(screen.queryByRole("button", { name: /close/i })).not.toBeInTheDocument();
     });
   });
+
+  describe("accessibility", () => {
+    it("heads the full-page gate with an h1", async () => {
+      renderSwitcher();
+
+      expect(await screen.findByRole("heading", { level: 1, name: /who's watching/i })).toBeInTheDocument();
+    });
+
+    it("drops to an h2 as a modal, since the page behind still owns the h1", async () => {
+      renderSwitcher({ onClose: vi.fn() });
+
+      expect(await screen.findByRole("heading", { level: 2, name: /who's watching/i })).toBeInTheDocument();
+      expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+    });
+
+    it("keeps a heading while loading and when the fetch fails", async () => {
+      getProfiles.mockRejectedValue(new Error("Network error – cannot reach API"));
+      renderSwitcher();
+
+      expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
+
+      await screen.findByText(/cannot reach api/i);
+      expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
+    });
+
+    it("names the PIN and create fields without relying on their placeholders", async () => {
+      renderSwitcher();
+
+      await userEvent.click(await screen.findByRole("button", { name: /kid/i }));
+      expect(screen.getByLabelText("PIN for Kid")).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("button", { name: /back/i }));
+      await userEvent.click(screen.getByRole("button", { name: /new profile/i }));
+      expect(screen.getByLabelText("Profile name")).toBeInTheDocument();
+      expect(screen.getByLabelText("PIN (optional)")).toBeInTheDocument();
+    });
+  });
 });

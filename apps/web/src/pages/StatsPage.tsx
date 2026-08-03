@@ -75,9 +75,12 @@ export function StatsPage() {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-lg rounded-2xl p-8 text-center" style={{ border: "1px solid rgba(244,63,94,0.2)", background: "rgba(244,63,94,0.05)" }}>
-        <AlertCircle className="mx-auto h-12 w-12 text-rose-500" />
-        <p className="mt-3 text-lg font-semibold text-rose-500">{error}</p>
+      <div className="mx-auto max-w-4xl space-y-6">
+        <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Watch Statistics</h1>
+        <div className="mx-auto max-w-lg rounded-2xl p-8 text-center" style={{ border: "1px solid rgba(244,63,94,0.2)", background: "rgba(244,63,94,0.05)" }}>
+          <AlertCircle className="mx-auto h-12 w-12 text-rose-500" />
+          <p className="mt-3 text-lg font-semibold text-rose-500">{error}</p>
+        </div>
       </div>
     );
   }
@@ -85,7 +88,7 @@ export function StatsPage() {
   if (loading) {
     return (
       <div className="mx-auto max-w-4xl space-y-6">
-        <h2 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Watch Statistics</h2>
+        <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Watch Statistics</h1>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="skeleton h-28 rounded-2xl" />
@@ -115,7 +118,7 @@ export function StatsPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
-      <h2 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Watch Statistics</h2>
+      <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Watch Statistics</h1>
 
       {/* Summary tiles */}
       {stats && (
@@ -140,7 +143,7 @@ export function StatsPage() {
       {detailed && detailed.monthly.length > 0 && (
         <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h3 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Monthly Activity</h3>
+            <h2 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Monthly Activity</h2>
             {momComparison && (
               <span
                 className={`flex items-center gap-1 text-xs font-medium ${
@@ -246,7 +249,7 @@ export function StatsPage() {
       {/* Genre distribution */}
       {detailed && detailed.genreDistribution.length > 0 && (
         <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
-          <h3 className="mb-4 text-lg font-semibold" style={{ color: "var(--text)" }}>Top Genres</h3>
+          <h2 className="mb-4 text-lg font-semibold" style={{ color: "var(--text)" }}>Top Genres</h2>
           <div className="space-y-2.5">
             {detailed.genreDistribution.map((g) => (
               <div key={g.genre} className="flex items-center gap-3">
@@ -271,9 +274,9 @@ export function StatsPage() {
       {/* Top rated watched content */}
       {detailed && detailed.topRated.length > 0 && (
         <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
-          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold" style={{ color: "var(--text)" }}>
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold" style={{ color: "var(--text)" }}>
             <Star className="h-5 w-5 text-amber-400" /> Top Rated Watched
-          </h3>
+          </h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
             {detailed.topRated.map((item, index) => (
               <div key={item.imdbId} className="group">
@@ -305,8 +308,9 @@ export function StatsPage() {
       {/* Year in Review */}
       <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Year in Review</h3>
+          <h2 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Year in Review</h2>
           <select
+            aria-label="Year in review: year"
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
             className="rounded-lg px-3 py-1.5 text-sm"
@@ -331,7 +335,7 @@ export function StatsPage() {
 
             {yearReview.topGenres.length > 0 && (
               <div>
-                <h4 className="mb-2 text-sm font-semibold" style={{ color: "var(--text-dim)" }}>Top Genres</h4>
+                <h3 className="mb-2 text-sm font-semibold" style={{ color: "var(--text-dim)" }}>Top Genres</h3>
                 <div className="flex flex-wrap gap-2">
                   {yearReview.topGenres.map((g) => (
                     <span
@@ -348,9 +352,9 @@ export function StatsPage() {
 
             {yearReview.topRated.length > 0 && (
               <div>
-                <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-dim)" }}>
+                <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-dim)" }}>
                   <Star className="h-4 w-4 text-amber-400" /> Top Rated Picks
-                </h4>
+                </h3>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
                   {yearReview.topRated.map((item) => (
                     <div key={item.imdbId} className="group">
@@ -412,9 +416,9 @@ function MilestoneBadges({
 
   return (
     <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
-      <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold" style={{ color: "var(--text)" }}>
+      <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold" style={{ color: "var(--text)" }}>
         <Award className="h-5 w-5 text-amber-400" /> Achievements
-      </h3>
+      </h2>
       {earned.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {earned.map((m) => (

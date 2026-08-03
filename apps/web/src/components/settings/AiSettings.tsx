@@ -510,6 +510,7 @@ export function AiSettings() {
       {showAdvanced && (
         <div>
           <textarea
+            aria-label="Raw JSON configuration"
             value={advancedJson}
             onChange={(e) => {
               setAdvancedJson(e.target.value);

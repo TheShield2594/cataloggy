@@ -137,7 +137,7 @@ export function HistoryPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Watch History</h2>
+        <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Watch History</h1>
 
         <div className="relative inline-flex rounded-full p-0.5" style={{ background: "var(--surface-strong)", border: "1px solid var(--border)" }}>
           {(["all", "movie", "episode"] as const).map((opt) => (
@@ -191,9 +191,9 @@ export function HistoryPage() {
         <div className="space-y-6">
           {groups.map((group) => (
             <div key={`${group.label}-${group.events[0].id}`} className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+              <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
                 {group.label}
-              </h3>
+              </h2>
               {group.events.map((event) => (
                 <div
                   key={event.id}

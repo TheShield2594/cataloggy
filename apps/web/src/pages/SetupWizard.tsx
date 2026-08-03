@@ -74,7 +74,7 @@ function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => vo
   return (
     <form onSubmit={submit} className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">Welcome to Cataloggy</h2>
+        <h1 className="text-lg font-semibold">Welcome to Cataloggy</h1>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
           Enter the API token configured on your Cataloggy server to get started.
         </p>
@@ -86,6 +86,7 @@ function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => vo
           value={token}
           onChange={(e) => setToken(e.target.value)}
           placeholder="Paste your API token"
+          aria-label="API token"
           className="w-full rounded-xl border border-[var(--border-strong)] bg-[var(--bg-0)] px-4 py-3 pr-12 text-sm text-[var(--text)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         />
         <button
@@ -115,7 +116,7 @@ function TmdbStep({ configured, onContinue }: { configured: boolean; onContinue:
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">TMDB Metadata</h2>
+        <h1 className="text-lg font-semibold">TMDB Metadata</h1>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
           Cataloggy uses TMDB to fetch posters, ratings, and details for movies and shows.
         </p>
@@ -148,7 +149,7 @@ function TraktStep({ onContinue }: { onContinue: () => void }) {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">Connect Trakt (optional)</h2>
+        <h1 className="text-lg font-semibold">Connect Trakt (optional)</h1>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
           Sync your watch history and watchlist from Trakt. You can also do this later in Settings.
         </p>
@@ -175,7 +176,7 @@ function DoneStep({ onFinish }: { onFinish: () => void }) {
         <Check className="h-7 w-7 text-emerald-600" />
       </div>
       <div>
-        <h2 className="text-lg font-semibold">You're all set</h2>
+        <h1 className="text-lg font-semibold">You're all set</h1>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
           Start searching for movies and shows to build your catalog.
         </p>

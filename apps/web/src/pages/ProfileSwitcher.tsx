@@ -5,6 +5,11 @@ import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useScrollLock } from "../hooks/useScrollLock";
 
+// Standing in for the switcher's own title. As a full page (first run) it is the
+// document's h1; opened as a modal over the app, the page behind already owns the
+// h1, so the same title drops a level.
+type HeadingTag = "h1" | "h2";
+
 function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
   // All three gated on `onClose`: without it this renders as a full page
   // (first-run profile setup), not a modal, and must not lock scroll or
@@ -69,11 +74,13 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
 function CreateProfileForm({
   title,
   subtitle,
+  headingTag: Heading,
   onCreated,
   onCancel,
 }: {
   title: string;
   subtitle: string;
+  headingTag: HeadingTag;
   onCreated: (profile: Profile) => void;
   onCancel?: () => void;
 }) {
@@ -105,7 +112,7 @@ function CreateProfileForm({
   return (
     <form onSubmit={submit} className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold" style={{ color: "var(--text)" }}>{title}</h2>
+        <Heading className="text-lg font-semibold" style={{ color: "var(--text)" }}>{title}</Heading>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>{subtitle}</p>
       </div>
       <input
@@ -114,6 +121,7 @@ function CreateProfileForm({
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Profile name"
+        aria-label="Profile name"
         className="w-full rounded-xl border px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
       />
@@ -123,6 +131,7 @@ function CreateProfileForm({
         value={pin}
         onChange={(e) => setPin(e.target.value)}
         placeholder="PIN (optional)"
+        aria-label="PIN (optional)"
         className="w-full rounded-xl border px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
       />
@@ -154,10 +163,12 @@ function CreateProfileForm({
 
 function PinPrompt({
   profile,
+  headingTag: Heading,
   onVerified,
   onBack,
 }: {
   profile: Profile;
+  headingTag: HeadingTag;
   onVerified: (profile: Profile) => void;
   onBack: () => void;
 }) {
@@ -186,7 +197,7 @@ function PinPrompt({
   return (
     <form onSubmit={submit} className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Enter PIN for {profile.name}</h2>
+        <Heading className="text-lg font-semibold" style={{ color: "var(--text)" }}>Enter PIN for {profile.name}</Heading>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>This profile is PIN-protected.</p>
       </div>
       <input
@@ -196,6 +207,7 @@ function PinPrompt({
         value={pin}
         onChange={(e) => setPin(e.target.value)}
         placeholder="PIN"
+        aria-label={`PIN for ${profile.name}`}
         className="w-full rounded-xl border px-4 py-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
       />
@@ -237,17 +249,19 @@ function initials(name: string) {
 
 function ProfilePicker({
   profiles,
+  headingTag: Heading,
   onSelect,
   onCreateNew,
 }: {
   profiles: Profile[];
+  headingTag: HeadingTag;
   onSelect: (profile: Profile) => void;
   onCreateNew: () => void;
 }) {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Who's watching?</h2>
+        <Heading className="text-lg font-semibold" style={{ color: "var(--text)" }}>Who's watching?</Heading>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>Choose a profile to continue.</p>
       </div>
       <div className="space-y-2">
@@ -288,6 +302,7 @@ export function ProfileSwitcher({ onSelected, onClose }: { onSelected: (profile:
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"picker" | "create" | "pin">("picker");
   const [pinTarget, setPinTarget] = useState<Profile | null>(null);
+  const headingTag: HeadingTag = onClose ? "h2" : "h1";
 
   useEffect(() => {
     let cancelled = false;
@@ -323,9 +338,14 @@ export function ProfileSwitcher({ onSelected, onClose }: { onSelected: (profile:
     }
   };
 
+  // Neither branch has a title to show, but both are still the whole surface, so
+  // they carry a hidden one rather than leaving the outline empty.
+  const Heading = headingTag;
+
   if (loading) {
     return (
       <Shell onClose={onClose}>
+        <Heading className="sr-only">Profiles</Heading>
         <div className="flex items-center justify-center gap-2 py-6 text-sm" style={{ color: "var(--text-mute)" }}>
           <Loader2 size={16} className="animate-spin" /> Loading profiles...
         </div>
@@ -336,6 +356,7 @@ export function ProfileSwitcher({ onSelected, onClose }: { onSelected: (profile:
   if (error) {
     return (
       <Shell onClose={onClose}>
+        <Heading className="sr-only">Profiles</Heading>
         <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>
       </Shell>
     );
@@ -344,12 +365,13 @@ export function ProfileSwitcher({ onSelected, onClose }: { onSelected: (profile:
   return (
     <Shell onClose={onClose}>
       {mode === "picker" && (
-        <ProfilePicker profiles={profiles} onSelect={selectProfile} onCreateNew={() => setMode("create")} />
+        <ProfilePicker profiles={profiles} headingTag={headingTag} onSelect={selectProfile} onCreateNew={() => setMode("create")} />
       )}
       {mode === "create" && (
         <CreateProfileForm
           title={profiles.length === 0 ? "Create your first profile" : "New Profile"}
           subtitle="Each profile gets its own watch history, lists, and stats."
+          headingTag={headingTag}
           onCreated={(profile) => {
             runtimeConfig.setProfileId(profile.id);
             onSelected(profile);
@@ -360,6 +382,7 @@ export function ProfileSwitcher({ onSelected, onClose }: { onSelected: (profile:
       {mode === "pin" && pinTarget && (
         <PinPrompt
           profile={pinTarget}
+          headingTag={headingTag}
           onVerified={(profile) => {
             runtimeConfig.setProfileId(profile.id);
             onSelected(profile);

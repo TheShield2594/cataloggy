@@ -185,7 +185,7 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <h2 className="text-2xl font-bold">Settings</h2>
+      <h1 className="text-2xl font-bold">Settings</h1>
 
       <div className="relative">
         <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2" style={{ color: "var(--text-mute)" }} />

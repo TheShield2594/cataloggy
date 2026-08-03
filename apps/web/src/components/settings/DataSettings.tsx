@@ -203,6 +203,7 @@ export function DataSettings() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <select
+            aria-label="Import format"
             value={externalFormat}
             onChange={(e) => setExternalFormat(e.target.value as typeof externalFormat)}
             className="rounded-xl px-4 py-2.5 text-sm font-medium"

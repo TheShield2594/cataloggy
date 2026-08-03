@@ -102,6 +102,12 @@ describe("SettingsPage", () => {
     expect(expanded[0]).toHaveAccessibleName(byTab("preferences")[0].title);
   });
 
+  it("titles the page with an h1, so the heading outline starts at the top", () => {
+    renderPage();
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Settings");
+  });
+
   it("filters to matching sections, reaching the tab that isn't open", async () => {
     renderPage();
     await userEvent.type(searchBox(), "trakt");

@@ -93,6 +93,7 @@ export function OmdbSettings() {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="Paste your OMDB API key"
+              aria-label="OMDB API key"
               className="w-full rounded-xl border px-4 py-3 pr-20 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
               style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
             />

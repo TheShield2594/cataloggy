@@ -456,6 +456,12 @@ function DiscoverSubRow({
 
 /* ─── Header stat row: greeting + the collectible stats folded into one persistent strip ─── */
 
+// The dashboard shows a greeting, not a title, so its h1 is hidden — every render
+// path still needs one to head the outline, including the API-error card.
+function PageHeading() {
+  return <h1 className="sr-only">Dashboard</h1>;
+}
+
 function timeOfDayGreeting() {
   const hour = new Date().getHours();
   if (hour < 5) return "Good night";
@@ -505,6 +511,7 @@ function DashboardHeader({
       className="flex flex-col gap-2.5 rounded-xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
+      <PageHeading />
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
         <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{timeOfDayGreeting()}</span>
         <span style={{ color: "var(--border-strong)" }}>&middot;</span>
@@ -781,32 +788,35 @@ export function DashboardPage() {
 
   if (error) {
     return (
-      <div
-        className="mx-auto max-w-lg space-y-4 rounded-2xl border border-claw-400/20 bg-claw-400/5 p-8 text-center"
-      >
-        <AlertCircle className="mx-auto h-12 w-12 text-claw-text" />
-        <p className="text-xl font-semibold text-claw-text">Unable to connect to the API</p>
-        <p className="text-sm" style={{ color: "var(--text-dim)" }}>{error}</p>
-        <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-          API base: <span className="font-mono text-claw-text">{runtimeConfig.getApiBase()}</span>
-        </p>
-        <div className="flex items-center justify-center gap-3 pt-2">
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="rounded-lg bg-claw-500 px-5 py-2.5 text-sm font-semibold text-claw-on hover:bg-claw-600 transition-colors active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400"
-          >
-            Reload
-          </button>
-          <Link
-            to="/settings"
-            className="rounded-lg px-5 py-2.5 text-sm font-medium transition-colors focus:outline-none"
-            style={{ border: "1px solid var(--border-strong)", color: "var(--text-dim)" }}
-          >
-            Settings
-          </Link>
+      <>
+        <PageHeading />
+        <div
+          className="mx-auto max-w-lg space-y-4 rounded-2xl border border-claw-400/20 bg-claw-400/5 p-8 text-center"
+        >
+          <AlertCircle className="mx-auto h-12 w-12 text-claw-text" />
+          <p className="text-xl font-semibold text-claw-text">Unable to connect to the API</p>
+          <p className="text-sm" style={{ color: "var(--text-dim)" }}>{error}</p>
+          <p className="text-sm" style={{ color: "var(--text-dim)" }}>
+            API base: <span className="font-mono text-claw-text">{runtimeConfig.getApiBase()}</span>
+          </p>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="rounded-lg bg-claw-500 px-5 py-2.5 text-sm font-semibold text-claw-on hover:bg-claw-600 transition-colors active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400"
+            >
+              Reload
+            </button>
+            <Link
+              to="/settings"
+              className="rounded-lg px-5 py-2.5 text-sm font-medium transition-colors focus:outline-none"
+              style={{ border: "1px solid var(--border-strong)", color: "var(--text-dim)" }}
+            >
+              Settings
+            </Link>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
