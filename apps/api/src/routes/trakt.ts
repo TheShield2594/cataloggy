@@ -13,6 +13,7 @@ import {
   computeTokenExpiresAt,
 } from "../lib/trakt-client.js";
 import { renderOAuthHtml } from "../lib/html.js";
+import { consumeOAuthState, createOAuthState } from "../lib/trakt-oauth-state.js";
 import { getDefaultProfileId, resolveProfile } from "../lib/profile.js";
 import type { SeriesProgressCandidate } from "../lib/types.js";
 
@@ -39,13 +40,17 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
     if (!clientId) {
       return reply.code(500).send({ error: "TRAKT_CLIENT_ID is not configured" });
     }
-    const url = `https://trakt.tv/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    // This route is behind the API token gate, so a `state` minted here proves
+    // the flow was started from Cataloggy itself — the callback below refuses
+    // anything else.
+    const state = await createOAuthState();
+    const url = `https://trakt.tv/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
     return reply.send({ url, redirectUri });
   });
 
   app.get("/trakt/oauth/callback", async (request, reply) => {
-    const { code, error: oauthError, error_description: oauthErrorDescription } =
-      request.query as { code?: string; error?: string; error_description?: string };
+    const { code, state, error: oauthError, error_description: oauthErrorDescription } =
+      request.query as { code?: string; state?: string; error?: string; error_description?: string };
 
     if (oauthError) {
       request.log.warn({ error: oauthError, error_description: oauthErrorDescription }, "Trakt OAuth denied");
@@ -53,6 +58,22 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
         .code(403)
         .type("text/html")
         .send(renderOAuthHtml(oauthErrorDescription ?? oauthError, "Trakt Authorization Failed"));
+    }
+
+    // Checked before the code is looked at, let alone exchanged: an
+    // unrecognised state means this callback was not started by this install,
+    // and the code it carries belongs to someone else's Trakt account.
+    if (!(await consumeOAuthState(state))) {
+      request.log.warn("Rejected Trakt OAuth callback with a missing, unknown or expired state");
+      return reply
+        .code(403)
+        .type("text/html")
+        .send(
+          renderOAuthHtml(
+            "This authorization could not be verified — it was not started from this Cataloggy install, or it took too long to complete. Start again from Settings.",
+            "Trakt Authorization Failed"
+          )
+        );
     }
 
     if (!code) {

@@ -27,7 +27,10 @@ export function TraktSettings() {
   const connect = async () => {
     try {
       const { url } = await api.getTraktOAuthUrl();
-      window.open(url, "_blank");
+      // `window.open` — unlike `<a target="_blank">` — does not imply
+      // `noopener`, so without it trakt.tv keeps a `window.opener` handle on
+      // this tab and could navigate it.
+      window.open(url, "_blank", "noopener");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to get OAuth URL");
     }

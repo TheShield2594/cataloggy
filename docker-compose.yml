@@ -134,6 +134,11 @@ services:
       # IPs/localhost (which are always allowed) — e.g. a domain proxied via
       # Nginx Proxy Manager. Leave unset for LAN-IP-only access.
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      # Extra origins the browser may connect to, on top of VITE_API_BASE,
+      # VITE_ADDON_BASE and SENTRY_DSN (already allowed by the page's
+      # Content-Security-Policy). Only needed when some browsers reach the API
+      # at a different address — e.g. one set per-browser in Settings.
+      CSP_CONNECT_SRC_EXTRA: ${CSP_CONNECT_SRC_EXTRA:-}
       SENTRY_DSN: ${SENTRY_DSN}
     ports:
       - "7002:7002"

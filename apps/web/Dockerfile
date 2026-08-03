@@ -20,7 +20,10 @@ WORKDIR /app
 RUN apk add --no-cache wget && npm install -g serve@14
 
 COPY --from=build /app/apps/web/dist ./dist
-COPY apps/web/serve.json ./dist/serve.json
+# dist/serve.json is rendered from this template at container start — it carries
+# a connect-src that depends on runtime env, so it cannot be baked in here.
+COPY apps/web/serve.template.json ./serve.template.json
+COPY apps/web/scripts/csp.mjs apps/web/scripts/render-serve-json.mjs ./scripts/
 COPY apps/web/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
