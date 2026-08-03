@@ -27,10 +27,18 @@ const CATALOG_LABELS: Record<string, string> = {
   "cataloggy-ai-series": "AI Picks — Series",
 };
 
-function AddonManifestUrl() {
+function AddonManifestUrl({ profileName, multiProfile }: { profileName: string | null; multiProfile: boolean }) {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
-  const manifestUrl = `${runtimeConfig.getAddonBase()}/manifest.json`;
+  // Stremio has no way to say who is watching, so the profile is baked into the
+  // installed URL: everything Stremio requests hangs off the manifest URL's
+  // base, and the addon reads the profile back out of that path. Without it,
+  // marking something watched from Stremio has no profile to write to once a
+  // second profile exists.
+  const activeProfileId = runtimeConfig.getProfileId();
+  const manifestUrl = activeProfileId
+    ? `${runtimeConfig.getAddonBase()}/p/${activeProfileId}/manifest.json`
+    : `${runtimeConfig.getAddonBase()}/manifest.json`;
 
   const copy = () => {
     navigator.clipboard.writeText(manifestUrl).then(() => {
@@ -47,6 +55,9 @@ function AddonManifestUrl() {
       <p className="text-sm font-medium" style={{ color: "var(--text-dim)" }}>Manifest URL</p>
       <p className="text-xs leading-relaxed" style={{ color: "var(--text-mute)" }}>
         Copy this URL and paste it into Stremio under <strong style={{ color: "var(--text-dim)" }}>Add-ons &rarr; Install from URL</strong>.
+        {profileName && (
+          <> It installs the addon for <strong style={{ color: "var(--text-dim)" }}>{profileName}</strong>—catalogs and anything you mark as watched from Stremio belong to that profile.</>
+        )}
       </p>
       <div className="flex items-center gap-2">
         <code className="flex-1 overflow-x-auto rounded-lg border px-3 py-2 text-xs select-all whitespace-nowrap scrollbar-hide" style={{ borderColor: "var(--border)", background: "var(--bg-0)", color: "var(--text-dim)" }}>
@@ -80,6 +91,7 @@ function AddonManifestUrl() {
       </div>
       <p className="text-xs" style={{ color: "var(--text-mute)" }}>
         The URL points to your local addon server. Stremio must be able to reach it on your network.
+        {multiProfile && " To use a different profile in Stremio, switch profiles here and install the URL shown then — each profile has its own."}
       </p>
     </div>
   );
@@ -94,15 +106,24 @@ export function AddonSettings() {
   const [available, setAvailable] = useState<string[]>([]);
   const [availableLists, setAvailableLists] = useState<{ id: string; name: string }[]>([]);
   const [aiConfigured, setAiConfigured] = useState(false);
+  const [profileName, setProfileName] = useState<string | null>(null);
+  const [multiProfile, setMultiProfile] = useState(false);
 
   useEffect(() => {
     void (async () => {
       try {
-        const [res, aiRes] = await Promise.all([api.getAddonConfig(), api.getAiConfig().catch(() => ({ configured: false, config: null, lastGeneratedAt: null }))]);
+        const [res, aiRes, profilesRes] = await Promise.all([
+          api.getAddonConfig(),
+          api.getAiConfig().catch(() => ({ configured: false, config: null, lastGeneratedAt: null })),
+          api.getProfiles().catch(() => ({ profiles: [] })),
+        ]);
         setEnabled(res.config.enabledCatalogs);
         setAvailable(res.availableCatalogs);
         setAvailableLists(res.availableLists ?? []);
         setAiConfigured(aiRes.configured);
+        const activeProfileId = runtimeConfig.getProfileId();
+        setProfileName(profilesRes.profiles.find((p) => p.id === activeProfileId)?.name ?? null);
+        setMultiProfile(profilesRes.profiles.length > 1);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load config");
       } finally {
@@ -138,7 +159,7 @@ export function AddonSettings() {
 
   return (
     <div className="space-y-4">
-      <AddonManifestUrl />
+      <AddonManifestUrl profileName={profileName} multiProfile={multiProfile} />
       <p className="text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
         Choose which catalogs appear in Stremio. Changes take effect after the manifest cache refreshes (~60s).
       </p>

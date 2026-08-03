@@ -160,6 +160,24 @@ Cataloggy's add-on service speaks the standard Stremio add-on protocol, so it wo
 
 The web app itself also installs fine as a PWA on Android TV browsers that support it, but the Stremio app gives a better remote-control-friendly experience for browsing/playback on a TV.
 
+### Profiles and the add-on URL
+
+Stremio and Omni have no way to say *who* is watching — the installed URL is the only thing that distinguishes one installation from another. Cataloggy therefore binds a profile to the URL itself:
+
+```text
+http://LAN-IP:7001/p/PROFILE-ID/manifest.json
+```
+
+Behind a reverse proxy (see the Nginx section below), the `/p/PROFILE-ID` part sits after the proxy path, not before it:
+
+```text
+https://cataloggy.domain.com/addon/p/PROFILE-ID/manifest.json
+```
+
+Rather than assembling either by hand, use **Settings → Stremio Addon** — it always shows the correct, ready-to-paste URL for the profile you're currently using. To install for someone else: switch to their profile, come back, and copy the URL again. Catalogs, "Mark Watched", and scrobbles from that installation all belong to that profile.
+
+The prefix-less URLs (`http://LAN-IP:7001/manifest.json`, `https://cataloggy.domain.com/addon/manifest.json`) keep working and resolve to your oldest profile, so installs made before profiles existed are unaffected — but on a household with several profiles, each person should install their own URL.
+
 ## Nginx Proxy Manager Setup
 
 Configure Nginx Proxy Manager with one Proxy Host for your domain (for example, `cataloggy.domain.com`):
@@ -174,10 +192,12 @@ Set `ALLOWED_HOSTS=cataloggy.domain.com` in your `.env` so the web service accep
 Use this Omni add-on URL to install when accessing through your domain:
 
 ```text
-https://cataloggy.domain.com/addon/manifest.json
+https://cataloggy.domain.com/addon/p/PROFILE-ID/manifest.json
 ```
 
-LAN development URLs stay available, so you can continue using direct local access like `http://LAN-IP:7002` and `http://LAN-IP:7001/manifest.json` on your network.
+Copy it from **Settings → Stremio Addon** rather than filling in `PROFILE-ID` yourself — see [Profiles and the add-on URL](#profiles-and-the-add-on-url) for why the profile is part of the URL. Dropping the `/p/PROFILE-ID` segment also works and resolves to your oldest profile.
+
+LAN development URLs stay available, so you can continue using direct local access like `http://LAN-IP:7002` and `http://LAN-IP:7001/p/PROFILE-ID/manifest.json` on your network.
 
 ## Backup & Restore
 
