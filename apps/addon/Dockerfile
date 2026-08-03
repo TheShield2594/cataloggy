@@ -17,7 +17,15 @@ COPY packages/shared ./packages/shared
 RUN pnpm --filter @cataloggy/shared build
 RUN pnpm --filter @cataloggy/addon build
 
-RUN pnpm prune --prod --config.confirmModulesPurge=false
+# Collect just this app into /deploy: its own production dependencies plus
+# @cataloggy/shared, and nothing else. A workspace-wide `pnpm prune --prod`
+# keeps the union of every project's production deps, so the addon image would
+# otherwise carry the API's Prisma tree and the web app's React tree as well.
+# `--legacy` selects the pre-v10 deploy that does not need injected workspace
+# packages; `confirmModulesPurge` keeps pnpm from asking for a TTY it will
+# never get inside a builder.
+RUN pnpm deploy --filter @cataloggy/addon --prod --legacy \
+      --config.confirmModulesPurge=false /deploy
 
 FROM node:26-alpine AS runtime
 
@@ -25,17 +33,11 @@ WORKDIR /app
 RUN apk add --no-cache wget
 RUN addgroup -S app && adduser -S app -G app
 
-COPY --from=build --chown=app:app /app/node_modules ./node_modules
-COPY --from=build --chown=app:app /app/package.json ./package.json
-COPY --from=build --chown=app:app /app/apps/addon/package.json ./apps/addon/package.json
-COPY --from=build --chown=app:app /app/apps/addon/node_modules ./apps/addon/node_modules
-COPY --from=build --chown=app:app /app/apps/addon/dist ./apps/addon/dist
-COPY --from=build --chown=app:app /app/packages/shared/package.json ./packages/shared/package.json
-COPY --from=build --chown=app:app /app/packages/shared/dist ./packages/shared/dist
+COPY --from=build --chown=app:app /deploy ./
 
 USER app
 ENV NODE_ENV=production
 
 EXPOSE 7001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s CMD wget -q --spider http://127.0.0.1:7001/health || exit 1
-CMD ["node", "apps/addon/dist/index.js"]
+CMD ["node", "dist/index.js"]
