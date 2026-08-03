@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { FastifyRequest } from "fastify";
+import type { FastifyBaseLogger } from "fastify";
 
 const txMock = {
   watchEvent: { findFirst: vi.fn(), update: vi.fn(), create: vi.fn() },
@@ -23,11 +23,15 @@ vi.mock("./cache.js", () => cacheMock);
 const traktClientMock = { syncWatchEventToTrakt: vi.fn() };
 vi.mock("./trakt-client.js", () => traktClientMock);
 
-const makeRequest = (profileId = "profile-1"): FastifyRequest =>
+const makeLog = (): FastifyBaseLogger =>
   ({
-    profileId,
-    log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), trace: vi.fn(), fatal: vi.fn() },
-  }) as unknown as FastifyRequest;
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    trace: vi.fn(),
+    fatal: vi.fn(),
+  }) as unknown as FastifyBaseLogger;
 
 describe("recordWatchEvent", () => {
   beforeEach(() => {
@@ -50,7 +54,8 @@ describe("recordWatchEvent", () => {
         episode: 2,
         watchedAt: new Date("2024-01-01T12:00:00Z"),
         source: "test",
-        request: makeRequest(),
+        profileId: "profile-1",
+        log: makeLog(),
       });
 
       expect(result.wasCreated).toBe(true);
@@ -75,7 +80,8 @@ describe("recordWatchEvent", () => {
         episode: 2,
         watchedAt: new Date("2024-01-01T18:00:00Z"),
         source: "test",
-        request: makeRequest(),
+        profileId: "profile-1",
+        log: makeLog(),
       });
 
       expect(result.wasCreated).toBe(false);
@@ -98,7 +104,8 @@ describe("recordWatchEvent", () => {
         episode: 4,
         watchedAt: new Date("2024-02-01T00:00:00Z"),
         source: "test",
-        request: makeRequest(),
+        profileId: "profile-1",
+        log: makeLog(),
       });
 
       expect(txMock.watchEvent.findFirst).toHaveBeenCalledWith(
@@ -121,7 +128,8 @@ describe("recordWatchEvent", () => {
         episode: 5,
         watchedAt: new Date("2024-01-01T12:00:00Z"),
         source: "test",
-        request: makeRequest(),
+        profileId: "profile-1",
+        log: makeLog(),
       });
 
       expect(txMock.watchEvent.findFirst).toHaveBeenCalledWith(
@@ -141,7 +149,8 @@ describe("recordWatchEvent", () => {
         imdbId: "tt-movie",
         watchedAt: new Date("2024-03-01T08:00:00Z"),
         source: "test",
-        request: makeRequest(),
+        profileId: "profile-1",
+        log: makeLog(),
       });
 
       expect(result.wasCreated).toBe(true);
@@ -160,7 +169,8 @@ describe("recordWatchEvent", () => {
         imdbId: "tt-movie",
         watchedAt: new Date("2024-03-01T20:00:00Z"),
         source: "test",
-        request: makeRequest(),
+        profileId: "profile-1",
+        log: makeLog(),
       });
 
       expect(result.wasCreated).toBe(false);
@@ -181,7 +191,8 @@ describe("recordWatchEvent", () => {
         imdbId: "tt-movie-2",
         watchedAt: new Date("2024-03-02T00:00:00Z"),
         source: "test",
-        request: makeRequest("profile-other"),
+        profileId: "profile-other",
+        log: makeLog(),
       });
 
       expect(txMock.watchEvent.findFirst).toHaveBeenCalledWith(
@@ -200,7 +211,8 @@ describe("recordWatchEvent", () => {
       imdbId: "tt-trakt",
       watchedAt: new Date("2024-04-01T00:00:00Z"),
       source: "test",
-      request: makeRequest(),
+      profileId: "profile-1",
+      log: makeLog(),
     });
 
     expect(traktClientMock.syncWatchEventToTrakt).toHaveBeenCalledWith(

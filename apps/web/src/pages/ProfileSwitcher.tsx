@@ -27,7 +27,7 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
         <div ref={dialogRef} tabIndex={-1} className="w-full max-w-md space-y-6" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-center gap-2.5">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-claw-500">
-              <Clapperboard className="h-6 w-6 text-white" />
+              <Clapperboard className="h-6 w-6 text-claw-on" />
             </div>
             <span className="text-2xl font-bold" style={{ color: "var(--text)" }}>Cataloggy</span>
           </div>
@@ -54,7 +54,7 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
       <div className="w-full max-w-md space-y-6">
         <div className="flex items-center justify-center gap-2.5">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-claw-500">
-            <Clapperboard className="h-6 w-6 text-white" />
+            <Clapperboard className="h-6 w-6 text-claw-on" />
           </div>
           <span className="text-2xl font-bold" style={{ color: "var(--text)" }}>Cataloggy</span>
         </div>
@@ -144,7 +144,7 @@ function CreateProfileForm({
         <button
           type="submit"
           disabled={creating || !name.trim()}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-claw-600 disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all hover:bg-claw-600 disabled:opacity-50"
         >
           {creating ? <><Loader2 size={16} className="animate-spin" /> Creating...</> : <>Create <ArrowRight size={16} /></>}
         </button>
@@ -215,7 +215,7 @@ function PinPrompt({
         <button
           type="submit"
           disabled={verifying || !pin.trim()}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-claw-600 disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all hover:bg-claw-600 disabled:opacity-50"
         >
           {verifying ? <Loader2 size={16} className="animate-spin" /> : <>Unlock <ArrowRight size={16} /></>}
         </button>

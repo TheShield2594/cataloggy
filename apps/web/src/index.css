@@ -1,6 +1,22 @@
 @import "tailwindcss";
 @config "../tailwind.config.ts";
 
+/*
+ * Two accent tokens exist because one accent colour can't do both jobs at a
+ * readable contrast:
+ *
+ *   --on-accent   text/icons sitting ON an accent fill (bg-claw-500 buttons,
+ *                 active pills). White clears 4.5:1 only on the darkest accents
+ *                 — the warm oranges and the blue need near-black instead.
+ *   --accent-text accent-coloured text sitting on a page background. Light
+ *                 themes need it darker than --accent, dark themes lighter.
+ *
+ * Every pairing below is measured at >= 4.5:1 (WCAG AA, normal text) against
+ * --bg-0, --bg-1 and accent tints up to bg-claw-500/20. --accent-strong-rgb —
+ * the `hover:bg-claw-600` fill — is tuned to stay above 4.5:1 against
+ * --on-accent too, so hover states don't quietly drop below the threshold.
+ */
+
 :root,
 [data-theme="light"] {
   color-scheme: light;
@@ -16,15 +32,19 @@
   --border-strong: rgba(28,24,20,0.14);
   --text: #1c1814;
   --text-dim: #6f6457;
-  --text-mute: #786d5f;
+  --text-mute: #73685b;
   --accent: #d97742;
   --accent-2: #e89163;
   --accent-3: #10b981;
   --accent-rgb: 217 119 66;
   --accent-2-rgb: 232 145 99;
-  --accent-strong-rgb: 178 98 54;
+  --accent-strong-rgb: 195 107 59;
   --accent-tint-rgb: 250 233 224;
   --accent-light-rgb: 242 191 165;
+  --on-accent-rgb: 28 24 20;
+  --on-accent: rgb(var(--on-accent-rgb));
+  --accent-text-rgb: 149 72 30;
+  --accent-text: rgb(var(--accent-text-rgb));
 }
 
 [data-theme="dark"] {
@@ -50,6 +70,10 @@
   --accent-strong-rgb: 190 119 81;
   --accent-tint-rgb: 252 239 231;
   --accent-light-rgb: 246 207 186;
+  --on-accent-rgb: 20 17 16;
+  --on-accent: rgb(var(--on-accent-rgb));
+  --accent-text-rgb: 232 145 99;
+  --accent-text: rgb(var(--accent-text-rgb));
 }
 
 [data-theme="glass"] {
@@ -72,9 +96,13 @@
   --accent-3: #30d158;
   --accent-rgb: 10 132 255;
   --accent-2-rgb: 94 158 255;
-  --accent-strong-rgb: 8 108 209;
+  --accent-strong-rgb: 61 155 255;
   --accent-tint-rgb: 223 236 255;
   --accent-light-rgb: 162 199 255;
+  --on-accent-rgb: 11 13 18;
+  --on-accent: rgb(var(--on-accent-rgb));
+  --accent-text-rgb: 39 147 255;
+  --accent-text: rgb(var(--accent-text-rgb));
   --glass-blur: 24px;
 }
 
@@ -92,7 +120,7 @@
   --border-strong: rgba(244,241,234,0.16);
   --text: #f4f1ea;
   --text-dim: #a3a6b8;
-  --text-mute: #6f7286;
+  --text-mute: #797c90;
   --accent: #e02f44;
   --accent-2: #ff5a6e;
   --accent-3: #f0c419;
@@ -101,6 +129,10 @@
   --accent-strong-rgb: 184 39 56;
   --accent-tint-rgb: 255 222 226;
   --accent-light-rgb: 255 159 171;
+  --on-accent-rgb: 255 255 255;
+  --on-accent: rgb(var(--on-accent-rgb));
+  --accent-text-rgb: 230 89 106;
+  --accent-text: rgb(var(--accent-text-rgb));
 }
 
 [data-theme="letterboxd"] {
@@ -117,7 +149,7 @@
   --border-strong: rgba(255,255,255,0.16);
   --text: #ffffff;
   --text-dim: #9ab;
-  --text-mute: #678;
+  --text-mute: #7b8b9c;
   --accent: #ff8000;
   --accent-2: #00e054;
   --accent-3: #40bcf4;
@@ -126,6 +158,10 @@
   --accent-strong-rgb: 209 105 0;
   --accent-tint-rgb: 204 249 221;
   --accent-light-rgb: 107 237 156;
+  --on-accent-rgb: 20 24 28;
+  --on-accent: rgb(var(--on-accent-rgb));
+  --accent-text-rgb: 255 128 0;
+  --accent-text: rgb(var(--accent-text-rgb));
 }
 
 html,

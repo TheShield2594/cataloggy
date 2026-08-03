@@ -22,6 +22,7 @@ import { checkUpcomingEpisodesAndNotify } from "./lib/notify-episodes.js";
 import { isSteamSyncConfigured, syncSteamLibrary } from "./lib/steam-sync.js";
 import { cleanupStaleSessions, SCROBBLE_CLEANUP_INTERVAL_MS } from "./routes/scrobble.js";
 import { recordJobFailure, recordJobSuccess, type JobName } from "./lib/job-status.js";
+import { bodyTooLargeMessage, isBodyTooLargeError, mbToBytes, parseMaxBodySizeMb } from "./lib/body-limit.js";
 
 // Route modules
 import healthRoutes from "./routes/health.js";
@@ -73,8 +74,11 @@ const STEAM_SYNC_INTERVAL_SEC = parseSteamSyncIntervalSec(process.env.STEAM_SYNC
 
 const PROXY_PATH_PREFIXES = parseProxyPathPrefixes(process.env.PROXY_PATH_PREFIXES, ["/api"] as const);
 
+const MAX_BODY_SIZE_MB = parseMaxBodySizeMb(process.env.MAX_BODY_SIZE_MB);
+
 const app = Fastify({
   logger: true,
+  bodyLimit: mbToBytes(MAX_BODY_SIZE_MB),
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   rewriteUrl: (request) => normalizeProxyPath(request.url ?? "/", PROXY_PATH_PREFIXES),
 });
@@ -136,6 +140,25 @@ app.addHook("onRequest", async (request, reply) => {
     return;
   }
   await verifyToken(request, reply);
+});
+
+// ─── Error handling ───
+
+// Every route's error responses are shaped `{ error: "<human-readable>" }`, and
+// the web client reads that field. Fastify's built-in 413 isn't — it says
+// "Payload Too Large" and leaves someone restoring their own backup with no
+// idea that the fix is a single env var — so it's re-shaped here.
+app.setErrorHandler((error, request, reply) => {
+  if (isBodyTooLargeError(error)) {
+    request.log.warn(
+      { url: request.url, limitMb: MAX_BODY_SIZE_MB },
+      "Rejected a request body larger than MAX_BODY_SIZE_MB"
+    );
+    return reply.code(413).send({ error: bodyTooLargeMessage(MAX_BODY_SIZE_MB), code: "body_too_large" });
+  }
+  // Everything else keeps Fastify's default handling (status code, logging and
+  // serialization), which is what re-sending the error delegates to.
+  return reply.send(error);
 });
 
 // ─── Error tracking (opt-in via SENTRY_DSN) ───

@@ -249,7 +249,7 @@ function ProfileRow({
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <span className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>{profile.name}</span>
               {isActive && (
-                <span className="flex-none rounded-full bg-claw-500/10 px-2 py-0.5 text-2xs font-medium text-claw-600">Active</span>
+                <span className="flex-none rounded-full bg-claw-500/10 px-2 py-0.5 text-2xs font-medium text-claw-text">Active</span>
               )}
               {profile.hasPin ? (
                 <Lock size={13} className="flex-none" style={{ color: "var(--text-mute)" }} />

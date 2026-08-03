@@ -13,7 +13,7 @@ export function NotFoundPage() {
       </p>
       <Link
         to="/"
-        className="mt-6 rounded-full bg-claw-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-claw-600"
+        className="mt-6 rounded-full bg-claw-500 px-5 py-2.5 text-sm font-semibold text-claw-on transition-colors hover:bg-claw-600"
       >
         Back to Dashboard
       </Link>

@@ -7,6 +7,9 @@ vi.mock("../../lib/webhook-auth.js", () => webhookAuthMock);
 const watchEventMock = { recordWatchEvent: vi.fn() };
 vi.mock("../../lib/watch-event.js", () => watchEventMock);
 
+const webhookProfileMock = { resolveWebhookProfile: vi.fn() };
+vi.mock("../../lib/webhook-profile.js", () => webhookProfileMock);
+
 const buildApp = async (): Promise<FastifyInstance> => {
   vi.resetModules();
   const { default: plexWebhookRoutes } = await import("./plex.js");
@@ -30,6 +33,7 @@ describe("POST /webhooks/plex", () => {
     vi.clearAllMocks();
     webhookAuthMock.verifyWebhookSecret.mockReturnValue(true);
     watchEventMock.recordWatchEvent.mockResolvedValue({ watchEvent: { id: "we-1" }, wasCreated: true });
+    webhookProfileMock.resolveWebhookProfile.mockResolvedValue({ ok: true, profileId: "profile-1" });
   });
 
   it("rejects requests that fail webhook secret verification", async () => {
@@ -174,6 +178,48 @@ describe("POST /webhooks/plex", () => {
     expect(watchEventMock.recordWatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({ imdbId: "tt5555555" })
     );
+    await app.close();
+  });
+
+  it("records against the profile resolved from the Plex account", async () => {
+    webhookProfileMock.resolveWebhookProfile.mockResolvedValue({ ok: true, profileId: "profile-sam" });
+    const app = await buildApp();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/webhooks/plex",
+      payload: {
+        event: "media.scrobble",
+        Account: { title: "Sam" },
+        Metadata: { type: "movie", guid: "imdb://tt7777777" },
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(webhookProfileMock.resolveWebhookProfile).toHaveBeenCalledWith(expect.anything(), "Sam");
+    expect(watchEventMock.recordWatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ imdbId: "tt7777777", profileId: "profile-sam" })
+    );
+    await app.close();
+  });
+
+  it("does not record anything when the profile can't be resolved", async () => {
+    webhookProfileMock.resolveWebhookProfile.mockResolvedValue({
+      ok: false,
+      status: 404,
+      error: "Profile not found",
+    });
+    const app = await buildApp();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/webhooks/plex?profile=11111111-1111-4111-8111-111111111111",
+      payload: { event: "media.scrobble", Metadata: { type: "movie", guid: "imdb://tt5555555" } },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "Profile not found" });
+    expect(watchEventMock.recordWatchEvent).not.toHaveBeenCalled();
     await app.close();
   });
 });

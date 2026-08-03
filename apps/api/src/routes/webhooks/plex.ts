@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { recordWatchEvent } from "../../lib/watch-event.js";
 import { verifyWebhookSecret } from "../../lib/webhook-auth.js";
+import { resolveWebhookProfile } from "../../lib/webhook-profile.js";
 
 function extractMultipartPayload(rawBody: string, contentType: string): string | null {
   const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^\s;]+))/);
@@ -54,6 +55,7 @@ const plexWebhookRoutes: FastifyPluginAsync = async (app) => {
 
     let payload: {
       event?: string;
+      Account?: { title?: string };
       Metadata?: {
         type?: string;
         title?: string;
@@ -100,6 +102,11 @@ const plexWebhookRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(200).send({ status: "skipped", reason: "no_imdb_id" });
     }
 
+    const profile = await resolveWebhookProfile(request, payload.Account?.title);
+    if (!profile.ok) {
+      return reply.code(profile.status).send({ error: profile.error });
+    }
+
     const now = new Date();
 
     if (metadata.type === "episode") {
@@ -113,7 +120,8 @@ const plexWebhookRoutes: FastifyPluginAsync = async (app) => {
         episode,
         watchedAt: now,
         source: "Plex",
-        request,
+        profileId: profile.profileId,
+        log: request.log,
       });
       return reply.code(201).send(result);
     }
@@ -123,7 +131,8 @@ const plexWebhookRoutes: FastifyPluginAsync = async (app) => {
       imdbId,
       watchedAt: now,
       source: "Plex",
-      request,
+      profileId: profile.profileId,
+      log: request.log,
     });
     return reply.code(201).send(result);
   });

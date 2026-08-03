@@ -47,7 +47,7 @@ export function TicketTile({
       style={{ border: "1px solid var(--border)", borderTop: "3px solid var(--accent)", background: "var(--bg-1)" }}
     >
       <div className="flex items-center gap-1.5">
-        <Icon className="h-3.5 w-3.5 text-claw-400" />
+        <Icon className="h-3.5 w-3.5 text-claw-text" />
         <span className="text-2xs font-medium uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
           {label}
         </span>

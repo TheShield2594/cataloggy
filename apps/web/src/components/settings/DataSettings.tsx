@@ -116,7 +116,7 @@ export function DataSettings() {
           type="button"
           onClick={refreshAll}
           disabled={syncing}
-          className="inline-flex items-center gap-2 rounded-xl bg-claw-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-claw-600 disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-xl bg-claw-500 px-5 py-2.5 text-sm font-semibold text-claw-on transition-colors hover:bg-claw-600 disabled:opacity-60"
         >
           {syncing ? <><Loader2 size={16} className="animate-spin" /> Syncing...</> : "Sync all metadata"}
         </button>

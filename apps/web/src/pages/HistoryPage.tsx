@@ -166,7 +166,7 @@ export function HistoryPage() {
               className="relative rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
               style={
                 typeFilter === opt
-                  ? { background: "var(--accent)", color: "white" }
+                  ? { background: "var(--accent)", color: "var(--on-accent)" }
                   : { color: "var(--text-dim)" }
               }
             >

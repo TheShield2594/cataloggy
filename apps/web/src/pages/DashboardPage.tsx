@@ -113,10 +113,7 @@ function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
           <p className="truncate text-xs font-semibold text-white">{item.name}</p>
         </div>
       </div>
-      <p
-        className="mt-2.5 truncate text-sm font-semibold transition-colors group-hover:text-claw-600"
-        style={{ color: "var(--text)" }}
-      >
+      <p className="mt-2.5 truncate text-sm font-semibold text-[var(--text)] transition-colors group-hover:text-claw-text">
         {item.name}
       </p>
       <p className="truncate text-2xs" style={{ color: "var(--text-dim)" }}>
@@ -201,8 +198,7 @@ function ContinueWatchingCard({
       </div>
       <button
         type="button"
-        className="mt-2.5 block truncate text-sm font-semibold transition-colors text-left w-full hover:text-claw-600"
-        style={{ color: "var(--text)" }}
+        className="mt-2.5 block truncate text-sm font-semibold text-[var(--text)] transition-colors text-left w-full hover:text-claw-text"
         onClick={onSelect}
       >
         {s.name}
@@ -254,7 +250,7 @@ function ContinueWatchingHero({
         <Poster src={s.poster} alt={s.name} className="h-full w-full" eager sizes="112px" />
       </div>
       <div className="relative z-10 min-w-0 flex-1">
-        <p className="text-2xs font-bold uppercase tracking-wider text-claw-400">Series &middot; In Progress</p>
+        <p className="text-2xs font-bold uppercase tracking-wider text-claw-text">Series &middot; In Progress</p>
         <p className="mt-1 truncate font-heading text-xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{s.name}</p>
         <p className="mt-0.5 text-sm" style={{ color: "var(--text-dim)" }}>
           S{s.lastSeason}:E{s.lastEpisode}
@@ -264,7 +260,7 @@ function ContinueWatchingHero({
           <div className="mt-3 max-w-xs">
             <div className="mb-1.5 flex items-center justify-between text-2xs" style={{ color: "var(--text-mute)" }}>
               <span>Season progress</span>
-              <span className="font-semibold text-claw-400">{s.watchedEpisodes} / {s.totalEpisodes} episodes</span>
+              <span className="font-semibold text-claw-text">{s.watchedEpisodes} / {s.totalEpisodes} episodes</span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--surface-strong)" }}>
               <div className="h-full rounded-full bg-claw-500 transition-all duration-500" style={{ width: `${progressPct}%` }} />
@@ -277,7 +273,7 @@ function ContinueWatchingHero({
             disabled={isMarking || isDone}
             onClick={onMarkNext}
             aria-label={isMarking ? "Marking" : isDone ? "Marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
-            className="flex items-center gap-1.5 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-white transition-all active:scale-[0.98] hover:bg-claw-600 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on transition-all active:scale-[0.98] hover:bg-claw-600 disabled:opacity-60"
           >
             {isDone ? (
               <><Check className="h-4 w-4" /> Marked</>
@@ -439,8 +435,8 @@ function timeOfDayGreeting() {
 function StatChip({ icon: Icon, label, value, accent }: { icon: React.ElementType; label: string; value: string | number; accent?: boolean }) {
   return (
     <span className="flex items-center gap-1.5 text-sm" style={{ color: accent ? undefined : "var(--text-dim)" }}>
-      <Icon className={`h-3.5 w-3.5 ${accent ? "text-claw-400" : ""}`} style={accent ? undefined : { color: "var(--text-mute)" }} />
-      <span className={accent ? "font-semibold text-claw-400" : ""}>
+      <Icon className={`h-3.5 w-3.5 ${accent ? "text-claw-text" : ""}`} style={accent ? undefined : { color: "var(--text-mute)" }} />
+      <span className={accent ? "font-semibold text-claw-text" : ""}>
         {typeof value === "number" ? value.toLocaleString() : value}
       </span>
       <span className="hidden sm:inline" style={{ color: "var(--text-mute)" }}>{label}</span>
@@ -485,7 +481,7 @@ function DashboardHeader({
           <StatChip icon={Film} label="movies" value={totalMovies} />
           <StatChip icon={Tv} label="episodes" value={totalEpisodes} />
           {topGenre && <StatChip icon={Trophy} label="top genre" value={topGenre} />}
-          <Link to="/stats" className="text-xs font-medium text-claw-400 hover:text-claw-300 transition-colors">
+          <Link to="/stats" className="text-xs font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
             Full stats &rarr;
           </Link>
         </div>
@@ -696,17 +692,17 @@ export function DashboardPage() {
       <div
         className="mx-auto max-w-lg space-y-4 rounded-2xl border border-claw-400/20 bg-claw-400/5 p-8 text-center"
       >
-        <AlertCircle className="mx-auto h-12 w-12 text-claw-400" />
-        <p className="text-xl font-semibold text-claw-300">Unable to connect to the API</p>
+        <AlertCircle className="mx-auto h-12 w-12 text-claw-text" />
+        <p className="text-xl font-semibold text-claw-text">Unable to connect to the API</p>
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>{error}</p>
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-          API base: <span className="font-mono text-claw-400">{runtimeConfig.getApiBase()}</span>
+          API base: <span className="font-mono text-claw-text">{runtimeConfig.getApiBase()}</span>
         </p>
         <div className="flex items-center justify-center gap-3 pt-2">
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="rounded-lg bg-claw-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 transition-colors active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400"
+            className="rounded-lg bg-claw-500 px-5 py-2.5 text-sm font-semibold text-claw-on hover:bg-claw-600 transition-colors active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400"
           >
             Reload
           </button>
@@ -782,7 +778,7 @@ export function DashboardPage() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-claw-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-claw-500" />
                 </span>
-                <span className="text-xs font-semibold uppercase tracking-wider text-claw-400">Now Watching</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-claw-text">Now Watching</span>
               </div>
               <p className="mt-1 truncate font-heading text-2xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{activeCheckin.name}</p>
               {activeCheckin.season != null && activeCheckin.episode != null && (
@@ -795,7 +791,7 @@ export function DashboardPage() {
               <button
                 type="button"
                 onClick={() => void handleCheckout(true)}
-                className="flex items-center gap-1.5 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 active:scale-[0.98] transition-all"
+                className="flex items-center gap-1.5 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on hover:bg-claw-600 active:scale-[0.98] transition-all"
               >
                 <Check className="h-4 w-4" /> Finished
               </button>
@@ -925,7 +921,7 @@ export function DashboardPage() {
       <div className={`grid gap-5 ${hasUpcoming ? "lg:grid-cols-[1fr_268px]" : ""}`}>
         <section>
           <SectionHeader title="Trending Now">
-            <Link to="/search" className="text-sm font-medium text-claw-400 hover:text-claw-300 transition-colors">
+            <Link to="/search" className="text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
               Search &rarr;
             </Link>
           </SectionHeader>
@@ -943,7 +939,7 @@ export function DashboardPage() {
                   <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
                     Trending needs a TMDB API key to fetch content.
                   </p>
-                  <Link to="/settings?tab=integrations" className="mt-1 inline-block text-sm font-medium text-claw-400 hover:text-claw-300 transition-colors">
+                  <Link to="/settings?tab=integrations" className="mt-1 inline-block text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
                     Set it up in Settings &rarr;
                   </Link>
                 </>
@@ -971,7 +967,7 @@ export function DashboardPage() {
         {hasUpcoming && (
           <section>
             <SectionHeader title="Upcoming" count={calendarEntries.length}>
-              <Link to="/calendar" className="text-sm font-medium text-claw-400 hover:text-claw-300 transition-colors">
+              <Link to="/calendar" className="text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
                 Full calendar &rarr;
               </Link>
             </SectionHeader>
@@ -1013,7 +1009,7 @@ export function DashboardPage() {
                       <span
                         className={`flex-none rounded-full px-2 py-0.5 text-2xs font-semibold ${
                           isToday
-                            ? "bg-claw-500/15 text-claw-400"
+                            ? "bg-claw-500/15 text-claw-text"
                             : isTomorrow
                               ? "bg-amber-500/15 text-amber-400"
                               : ""
@@ -1121,7 +1117,7 @@ export function DashboardPage() {
                     ) : null}
                   </div>
                 </div>
-                <p className="mt-2.5 truncate text-sm font-semibold transition-colors group-hover:text-claw-600" style={{ color: "var(--text)" }}>
+                <p className="mt-2.5 truncate text-sm font-semibold text-[var(--text)] transition-colors group-hover:text-claw-text">
                   {event.name}
                 </p>
                 <p className="text-2xs" style={{ color: "var(--text-dim)" }}>

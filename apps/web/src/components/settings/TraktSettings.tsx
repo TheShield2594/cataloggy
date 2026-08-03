@@ -76,7 +76,7 @@ export function TraktSettings() {
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>
             Your Trakt app's <strong style={{ color: "var(--text-dim)" }}>Redirect URI</strong> must be set to:
           </p>
-          <code className="block text-sm text-claw-600 break-all select-all">{status.redirectUri}</code>
+          <code className="block text-sm text-claw-text break-all select-all">{status.redirectUri}</code>
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>
             Set this at trakt.tv under Settings &gt; Your API Apps &gt; Edit. A mismatch causes an OAuth error.
           </p>
@@ -100,7 +100,7 @@ export function TraktSettings() {
               type="button"
               onClick={runImport}
               disabled={importing}
-              className="inline-flex items-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-claw-600 disabled:opacity-60 shadow-lg shadow-claw-500/20"
+              className="inline-flex items-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on transition-colors hover:bg-claw-600 disabled:opacity-60 shadow-lg shadow-claw-500/20"
             >
               {importing ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : "Run Import"}
             </button>

@@ -110,7 +110,8 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
       dateUnknown,
       note,
       source: "manual",
-      request,
+      profileId: request.profileId!,
+      log: request.log,
     });
 
     return reply.code(wasCreated ? 201 : 200).send({ watchEvent: serializeWatchEvent(watchEvent) });

@@ -24,6 +24,11 @@ export default {
           400: "rgb(var(--accent-2-rgb))",
           500: "rgb(var(--accent-rgb))",
           600: "rgb(var(--accent-strong-rgb))",
+          // Contrast-safe pair for the accent — see the comment at the top of
+          // src/index.css. `on` goes on top of a claw-500/600 fill; `text` is
+          // the accent used as text on a page background.
+          on: "rgb(var(--on-accent-rgb))",
+          text: "rgb(var(--accent-text-rgb))",
         },
         cream: {
           50: "#faf6ef",

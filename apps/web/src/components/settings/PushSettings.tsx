@@ -85,7 +85,7 @@ export function PushSettings() {
         className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all disabled:opacity-50 ${
           subscribed
             ? "border hover:bg-rose-600 hover:text-white"
-            : "bg-claw-500 text-white hover:bg-claw-600 shadow-lg shadow-claw-500/20"
+            : "bg-claw-500 text-claw-on hover:bg-claw-600 shadow-lg shadow-claw-500/20"
         }`}
         style={subscribed ? { backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--text-dim)" } : undefined}
       >

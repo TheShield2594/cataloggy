@@ -178,6 +178,20 @@ Rather than assembling either by hand, use **Settings → Stremio Addon** — it
 
 The prefix-less URLs (`http://LAN-IP:7001/manifest.json`, `https://cataloggy.domain.com/addon/manifest.json`) keep working and resolve to your oldest profile, so installs made before profiles existed are unaffected — but on a household with several profiles, each person should install their own URL.
 
+### Profiles and the Plex/Jellyfin webhooks
+
+Plex and Jellyfin don't send Cataloggy's profile header either, so a scrobble's profile is worked out from the webhook itself:
+
+1. **A profile pinned to the URL.** Add `profile=<profile-id>` to the webhook URL you configure in Plex/Jellyfin, alongside the secret:
+
+   ```text
+   http://LAN-IP:7000/webhooks/plex?token=WEBHOOK_SECRET&profile=PROFILE-ID
+   ```
+
+   Both servers let you set the target URL per user, so this is the reliable option for a shared server. An unknown or malformed profile ID is rejected rather than quietly redirected.
+2. **The media-server account name.** With no `profile` parameter, the Plex account title (or the Jellyfin username) is matched against your profile names, ignoring case — so a Plex user named `Sam` scrobbles into the Cataloggy profile named `Sam` with nothing to configure.
+3. **Your oldest profile**, if neither applies. This is what single-profile installs get, and what every webhook did before profiles were taken into account.
+
 ## Nginx Proxy Manager Setup
 
 Configure Nginx Proxy Manager with one Proxy Host for your domain (for example, `cataloggy.domain.com`):
@@ -224,6 +238,8 @@ To schedule automatic backups, add a cron entry that runs `backup.sh` on a sched
 In addition to full database backups, Settings → Data lets you export your lists, watch history, series progress, and ratings as a single JSON file, and re-import it later (e.g. after a fresh install, or to migrate to a new instance). The API also accepts CSV watch-history imports (columns: `imdbId`, `type`, `watchedAt`, with optional `season`/`episode`) for importing history exported from other tools.
 
 Settings → Data also supports importing directly from other trackers' CSV exports via `POST /import/external` (`format`: `letterboxd-diary`, `letterboxd-ratings`, `imdb-ratings`, or `simkl`). Letterboxd exports don't include IMDb IDs, so titles are resolved against TMDB on a best-effort basis; unmatched rows are skipped and reported in the import summary.
+
+Imports are sent as a single request body, capped at `MAX_BODY_SIZE_MB` (32 MB by default — roughly 200k watch events). A larger file is rejected with a 413 that names the limit; raise the variable and restart the API to accept it.
 
 ### Updating safely / if a migration fails
 

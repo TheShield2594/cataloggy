@@ -66,7 +66,7 @@ export function OmdbSettings() {
       <p className="text-sm leading-relaxed" style={{ color: "var(--text-dim)" }}>
         OMDB provides ratings from <strong style={{ color: "var(--text)" }}>IMDb</strong>, <strong style={{ color: "var(--text)" }}>Rotten Tomatoes</strong>, and <strong style={{ color: "var(--text)" }}>Metacritic</strong> for every movie and show in your detail panels.
         Get a free API key at{" "}
-        <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" rel="noopener noreferrer" className="text-claw-600 underline hover:text-claw-500">
+        <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" rel="noopener noreferrer" className="text-claw-text underline underline-offset-2 hover:decoration-2">
           omdbapi.com
         </a>.
       </p>
@@ -112,7 +112,7 @@ export function OmdbSettings() {
             className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
               saved
                 ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/20"
-                : "bg-claw-500 text-white hover:bg-claw-600 disabled:opacity-50"
+                : "bg-claw-500 text-claw-on hover:bg-claw-600 disabled:opacity-50"
             }`}
           >
             {saved ? <><Check size={16} /> Saved</> : saving ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : "Save OMDB Key"}

@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { recordWatchEvent } from "../../lib/watch-event.js";
 import { verifyWebhookSecret } from "../../lib/webhook-auth.js";
+import { resolveWebhookProfile } from "../../lib/webhook-profile.js";
 
 const jellyfinWebhookRoutes: FastifyPluginAsync = async (app) => {
   app.post("/webhooks/jellyfin", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (request, reply) => {
@@ -17,6 +18,10 @@ const jellyfinWebhookRoutes: FastifyPluginAsync = async (app) => {
       Episode?: number;
       Provider_imdb?: string;
       SeriesId?: string;
+      // The webhook plugin's playback templates expose the viewer under
+      // NotificationUsername; older/custom templates send plain Username.
+      NotificationUsername?: string;
+      Username?: string;
     } | null;
 
     if (!body) {
@@ -34,6 +39,14 @@ const jellyfinWebhookRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(200).send({ status: "skipped", reason: "no_imdb_id" });
     }
 
+    // `??` alone would stop at a NotificationUsername the webhook template
+    // rendered as an empty string, never reaching the Username fallback.
+    const accountName = body.NotificationUsername?.trim() || body.Username;
+    const profile = await resolveWebhookProfile(request, accountName);
+    if (!profile.ok) {
+      return reply.code(profile.status).send({ error: profile.error });
+    }
+
     const now = new Date();
 
     if (body.ItemType === "Episode") {
@@ -47,7 +60,8 @@ const jellyfinWebhookRoutes: FastifyPluginAsync = async (app) => {
         episode,
         watchedAt: now,
         source: "Jellyfin",
-        request,
+        profileId: profile.profileId,
+        log: request.log,
       });
       return reply.code(201).send(result);
     }
@@ -57,7 +71,8 @@ const jellyfinWebhookRoutes: FastifyPluginAsync = async (app) => {
       imdbId,
       watchedAt: now,
       source: "Jellyfin",
-      request,
+      profileId: profile.profileId,
+      log: request.log,
     });
     return reply.code(201).send(result);
   });

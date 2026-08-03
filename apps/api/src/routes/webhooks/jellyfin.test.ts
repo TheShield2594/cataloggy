@@ -7,6 +7,9 @@ vi.mock("../../lib/webhook-auth.js", () => webhookAuthMock);
 const watchEventMock = { recordWatchEvent: vi.fn() };
 vi.mock("../../lib/watch-event.js", () => watchEventMock);
 
+const webhookProfileMock = { resolveWebhookProfile: vi.fn() };
+vi.mock("../../lib/webhook-profile.js", () => webhookProfileMock);
+
 const buildApp = async (): Promise<FastifyInstance> => {
   vi.resetModules();
   const { default: jellyfinWebhookRoutes } = await import("./jellyfin.js");
@@ -21,6 +24,7 @@ describe("POST /webhooks/jellyfin", () => {
     vi.clearAllMocks();
     webhookAuthMock.verifyWebhookSecret.mockReturnValue(true);
     watchEventMock.recordWatchEvent.mockResolvedValue({ watchEvent: { id: "we-1" }, wasCreated: true });
+    webhookProfileMock.resolveWebhookProfile.mockResolvedValue({ ok: true, profileId: "profile-1" });
   });
 
   it("rejects requests that fail webhook secret verification", async () => {
@@ -129,6 +133,86 @@ describe("POST /webhooks/jellyfin", () => {
         source: "Jellyfin",
       })
     );
+    await app.close();
+  });
+
+  it("records against the profile resolved from the Jellyfin username", async () => {
+    webhookProfileMock.resolveWebhookProfile.mockResolvedValue({ ok: true, profileId: "profile-sam" });
+    const app = await buildApp();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/webhooks/jellyfin",
+      payload: {
+        NotificationType: "PlaybackStop",
+        ItemType: "Movie",
+        Provider_imdb: "tt3333333",
+        NotificationUsername: "Sam",
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(webhookProfileMock.resolveWebhookProfile).toHaveBeenCalledWith(expect.anything(), "Sam");
+    expect(watchEventMock.recordWatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ imdbId: "tt3333333", profileId: "profile-sam" })
+    );
+    await app.close();
+  });
+
+  it("falls back to the plain Username field when NotificationUsername is absent", async () => {
+    const app = await buildApp();
+
+    await app.inject({
+      method: "POST",
+      url: "/webhooks/jellyfin",
+      payload: {
+        NotificationType: "PlaybackStop",
+        ItemType: "Movie",
+        Provider_imdb: "tt4444444",
+        Username: "Alex",
+      },
+    });
+
+    expect(webhookProfileMock.resolveWebhookProfile).toHaveBeenCalledWith(expect.anything(), "Alex");
+    await app.close();
+  });
+
+  it("falls back to Username when NotificationUsername renders empty", async () => {
+    const app = await buildApp();
+
+    await app.inject({
+      method: "POST",
+      url: "/webhooks/jellyfin",
+      payload: {
+        NotificationType: "PlaybackStop",
+        ItemType: "Movie",
+        Provider_imdb: "tt4444444",
+        NotificationUsername: "   ",
+        Username: "Alex",
+      },
+    });
+
+    expect(webhookProfileMock.resolveWebhookProfile).toHaveBeenCalledWith(expect.anything(), "Alex");
+    await app.close();
+  });
+
+  it("does not record anything when the profile can't be resolved", async () => {
+    webhookProfileMock.resolveWebhookProfile.mockResolvedValue({
+      ok: false,
+      status: 400,
+      error: "The profile query parameter must be a valid UUID",
+    });
+    const app = await buildApp();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/webhooks/jellyfin?profile=not-a-uuid",
+      payload: { NotificationType: "PlaybackStop", ItemType: "Movie", Provider_imdb: "tt1111111" },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "The profile query parameter must be a valid UUID" });
+    expect(watchEventMock.recordWatchEvent).not.toHaveBeenCalled();
     await app.close();
   });
 });

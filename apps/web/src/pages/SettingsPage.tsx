@@ -54,7 +54,7 @@ export function SettingsPage() {
             onClick={() => setTab(t.id)}
             className={`flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
               tab === t.id
-                ? "bg-claw-500 text-white shadow-lg shadow-claw-500/25"
+                ? "bg-claw-500 text-claw-on shadow-lg shadow-claw-500/25"
                 : "text-[var(--text-dim)] hover:text-[var(--text)]"
             }`}
           >
@@ -83,7 +83,7 @@ export function SettingsPage() {
 
           <Section title="About" icon={<Info size={20} />} storageKey="about">
             <div className="space-y-2 text-sm" style={{ color: "var(--text-dim)" }}>
-              <p className="text-base font-semibold" style={{ color: "var(--text)" }}>Cataloggy <span className="font-mono text-claw-600">v{APP_VERSION}</span></p>
+              <p className="text-base font-semibold" style={{ color: "var(--text)" }}>Cataloggy <span className="font-mono text-claw-text">v{APP_VERSION}</span></p>
               <p className="text-sm">A personal media catalog and watchlist manager.</p>
               <p className="text-2xs" style={{ color: "var(--text-mute)" }}>Cataloggy &middot; Personal Media Tracker</p>
             </div>

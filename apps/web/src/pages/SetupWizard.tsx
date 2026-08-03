@@ -15,7 +15,7 @@ function WizardShell({ step, children }: { step: Step; children: React.ReactNode
       <div className="w-full max-w-md space-y-6">
         <div className="flex items-center justify-center gap-2.5">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-claw-500">
-            <Clapperboard className="h-6 w-6 text-white" />
+            <Clapperboard className="h-6 w-6 text-claw-on" />
           </div>
           <span className="text-2xl font-bold">Cataloggy</span>
         </div>
@@ -103,7 +103,7 @@ function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => vo
       <button
         type="submit"
         disabled={verifying || !token.trim()}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-claw-600 disabled:opacity-50 shadow-lg shadow-claw-500/20"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all hover:bg-claw-600 disabled:opacity-50 shadow-lg shadow-claw-500/20"
       >
         {verifying ? <><Loader2 size={16} className="animate-spin" /> Verifying...</> : <>Continue <ArrowRight size={16} /></>}
       </button>
@@ -136,7 +136,7 @@ function TmdbStep({ configured, onContinue }: { configured: boolean; onContinue:
       <button
         type="button"
         onClick={onContinue}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-claw-600 shadow-lg shadow-claw-500/20"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all hover:bg-claw-600 shadow-lg shadow-claw-500/20"
       >
         Continue <ArrowRight size={16} />
       </button>
@@ -183,7 +183,7 @@ function DoneStep({ onFinish }: { onFinish: () => void }) {
       <button
         type="button"
         onClick={onFinish}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-claw-600 shadow-lg shadow-claw-500/20"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all hover:bg-claw-600 shadow-lg shadow-claw-500/20"
       >
         Get Started
       </button>

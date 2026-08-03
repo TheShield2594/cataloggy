@@ -41,14 +41,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <button
               type="button"
               onClick={this.resetErrorBoundary}
-              className="rounded-lg border border-claw-500 px-4 py-2 text-claw-500"
+              className="rounded-lg border border-claw-500 px-4 py-2 text-claw-text"
             >
               Try Again
             </button>
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="rounded-lg bg-claw-500 px-4 py-2 text-white"
+              className="rounded-lg bg-claw-500 px-4 py-2 text-claw-on"
             >
               Reload
             </button>
