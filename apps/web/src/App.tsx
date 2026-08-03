@@ -212,7 +212,7 @@ function AppShell({
               onClick={openSwitcher}
               aria-label={profile ? `Switch profile (currently ${profile.name})` : "Switch profile"}
               title={profile?.name}
-              className="flex h-11 w-11 flex-none items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2 sm:hidden"
+              className="flex h-11 w-11 flex-none items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset sm:hidden"
               style={{ color: "var(--text-mute)" }}
             >
               <User className="h-5 w-5" />

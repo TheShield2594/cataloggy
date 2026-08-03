@@ -109,7 +109,7 @@ export function Sidebar({
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
-                `group relative flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2 ${
+                `group relative flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset ${
                   isActive ? "" : "hover:bg-[var(--surface-strong)]"
                 }`
               }
@@ -154,7 +154,7 @@ export function Sidebar({
             <button
               type="button"
               onClick={onSwitchProfile}
-              className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
+              className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
               style={{ color: "var(--text-dim)" }}
               aria-label={profile ? `Switch profile (currently ${profile.name})` : "Switch profile"}
             >
@@ -169,7 +169,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={togglePin}
-            className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
+            className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
             style={{ color: "var(--text-dim)" }}
             aria-label={pinned ? "Unpin sidebar" : "Pin sidebar open"}
           >

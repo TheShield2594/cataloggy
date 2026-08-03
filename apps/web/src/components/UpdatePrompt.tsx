@@ -21,9 +21,14 @@ export function UpdatePrompt() {
   if (!needRefresh) return null;
 
   return (
+    // The max-sm offset clears the mobile tab bar the same way ToastContainer
+    // does, safe-area included since the nav accounts for it too. The max-width
+    // and wrapping keep the row inside a 320px viewport — a single-line flex
+    // row of copy + Reload + dismiss is wider than that and would otherwise
+    // run off both edges.
     <div
       role="status"
-      className="fixed bottom-6 left-1/2 z-[110] flex -translate-x-1/2 items-center gap-3 rounded-xl border px-5 py-3.5 shadow-md"
+      className="fixed bottom-6 left-1/2 z-[110] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-xl border px-5 py-3.5 shadow-md max-sm:bottom-[calc(5rem+env(safe-area-inset-bottom))]"
       style={{ borderLeftWidth: "4px", borderColor: "var(--border)", background: "var(--bg-1)" }}
     >
       <RefreshCw aria-hidden="true" className="h-5 w-5 flex-none text-claw-text" />

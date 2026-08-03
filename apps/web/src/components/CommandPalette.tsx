@@ -4,6 +4,7 @@ import { BarChart3, CalendarDays, Clapperboard, Film, Gamepad2, List, Search, Se
 import { api, SearchResult } from "../api";
 import { Poster } from "./Poster";
 import { DetailPanel, useDetailPanel } from "./MediaDetailPanel";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useToast } from "../hooks/useToast";
 
@@ -18,14 +19,14 @@ type Action = {
 export function useCommandPalette() {
   const [open, setOpen] = useState(false);
 
+  // Escape is deliberately not handled here — CommandPalette registers it with
+  // useEscapeKey so the palette takes its place in the layer stack instead of
+  // closing alongside whatever is on top of it.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const isK = e.key.toLowerCase() === "k";
-      if ((e.metaKey || e.ctrlKey) && isK) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setOpen((v) => !v);
-      } else if (e.key === "Escape") {
-        setOpen(false);
       }
     };
     window.addEventListener("keydown", handler);
@@ -45,8 +46,20 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [searchError, setSearchError] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const dialogRef = useFocusTrap<HTMLDivElement>(open);
+  const activeRowRef = useRef<HTMLButtonElement>(null);
   const { showToast } = useToast();
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
+
+  // Bottom of the stack relative to any DetailPanel opened from a result, so
+  // Escape closes the panel back to the palette rather than both at once.
+  useEscapeKey(onClose, open);
+
+  // Arrowing past the fold of the max-h-[60vh] scroller would otherwise move
+  // the highlight somewhere the user can't see. "nearest" makes this a no-op
+  // when the row is already visible, so mouse hover doesn't yank the list.
+  useEffect(() => {
+    activeRowRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [activeIndex]);
 
   useEffect(() => {
     if (open) {
@@ -145,7 +158,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         item={selectedItem}
         history={panelHistory}
         historyLoading={panelHistoryLoading}
-        onClose={() => { setSelectedItem(null); onClose(); }}
+        // Drops back to the palette rather than dismissing both layers — the
+        // palette keeps its query and results, so the next title is one click away.
+        onClose={() => setSelectedItem(null)}
         onShowToast={showToast}
         onHistoryChange={(events) => setPanelHistory(events)}
         onSelectItem={setSelectedItem}
@@ -214,6 +229,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               {results.map((r, i) => (
                 <button
                   key={r.imdbId}
+                  ref={activeIndex === i ? activeRowRef : undefined}
                   type="button"
                   onClick={() => openDetail(r)}
                   onMouseEnter={() => setActiveIndex(i)}
@@ -245,6 +261,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               return (
                 <button
                   key={action.id}
+                  ref={activeIndex === idx ? activeRowRef : undefined}
                   type="button"
                   onClick={action.run}
                   onMouseEnter={() => setActiveIndex(idx)}

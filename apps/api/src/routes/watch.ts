@@ -189,17 +189,25 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.get<{ Querystring: { limit?: string; offset?: string; imdbId?: string } }>(
+  app.get<{ Querystring: { limit?: string; offset?: string; imdbId?: string; type?: string } }>(
     "/watch/history",
     async (request) => {
       const limit = Math.min(Math.max(Number(request.query.limit) || 50, 1), 200);
       const offset = Math.max(Number(request.query.offset) || 0, 0);
       const imdbId = request.query.imdbId?.trim();
+      // Filtering here rather than client-side: the client paginates, so a
+      // filter applied to the loaded page only searches the rows already
+      // fetched and reports "nothing" for a type that's further back.
+      // Anything unrecognised is ignored rather than rejected.
+      const type = request.query.type === "movie" || request.query.type === "episode"
+        ? request.query.type
+        : undefined;
 
       const events = await prisma.watchEvent.findMany({
         where: {
           profileId: request.profileId!,
           ...(imdbId ? { OR: [{ imdbId }, { seriesImdbId: imdbId }] } : {}),
+          ...(type ? { type } : {}),
         },
         orderBy: { watchedAt: "desc" },
         take: limit,

@@ -171,7 +171,7 @@ export function CalendarPage() {
               key={opt.key}
               type="button"
               onClick={() => setView(opt.key)}
-              className="relative flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
+              className="relative flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
               style={view === opt.key ? { background: "var(--accent)", color: "var(--on-accent)" } : { color: "var(--text-dim)" }}
             >
               <opt.icon className="h-3.5 w-3.5" />
@@ -228,7 +228,7 @@ export function CalendarPage() {
                       key={`${entry.seriesImdbId}-s${entry.season}e${entry.episode}`}
                       type="button"
                       onClick={() => handleSelect(entry)}
-                      className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
+                      className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
                       style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
                     >
                       <div className="h-16 w-11 flex-none overflow-hidden rounded-lg" style={{ boxShadow: "0 0 0 1px var(--border)" }}>

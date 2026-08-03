@@ -306,6 +306,29 @@ describe("watch routes", () => {
       );
       await app.close();
     });
+
+    it("filters by type in the query, so paging doesn't hide older matches", async () => {
+      prismaMock.watchEvent.findMany.mockResolvedValue([]);
+      const app = await buildApp();
+      await app.inject({ method: "GET", url: "/watch/history?type=movie" });
+
+      expect(prismaMock.watchEvent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ type: "movie" }) })
+      );
+      await app.close();
+    });
+
+    it("ignores an unrecognised type rather than rejecting the request", async () => {
+      prismaMock.watchEvent.findMany.mockResolvedValue([]);
+      const app = await buildApp();
+      const response = await app.inject({ method: "GET", url: "/watch/history?type=banana" });
+
+      expect(response.statusCode).toBe(200);
+      expect(prismaMock.watchEvent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.not.objectContaining({ type: expect.anything() }) })
+      );
+      await app.close();
+    });
   });
 
   describe("GET /watch/stats", () => {

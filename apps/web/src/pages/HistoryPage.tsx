@@ -48,20 +48,29 @@ export function HistoryPage() {
   const { showToast } = useToast();
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
 
+  // The filter goes to the server, not to the loaded page: filtering in memory
+  // only ever saw the rows already fetched, so picking "Movies" on a history
+  // whose most recent 25 events are all episodes showed an empty list.
   const loadPage = useCallback(async (nextOffset: number) => {
-    const page = await api.getWatchHistory(PAGE_SIZE, nextOffset);
+    const page = await api.getWatchHistory(PAGE_SIZE, nextOffset, {
+      type: typeFilter === "all" ? undefined : typeFilter,
+    });
     setHasMore(page.length === PAGE_SIZE);
     return page;
-  }, []);
+  }, [typeFilter]);
 
+  // Re-runs when loadPage changes identity, i.e. whenever the filter changes —
+  // pagination has to restart from 0 against the new result set.
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     (async () => {
       try {
         const page = await loadPage(0);
         if (!cancelled) {
           setEvents(page);
           setOffset(page.length);
+          setError(null);
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load watch history");
@@ -110,15 +119,10 @@ export function HistoryPage() {
     }
   };
 
-  const filteredEvents = useMemo(
-    () => (typeFilter === "all" ? events : events.filter((e) => e.type === typeFilter)),
-    [events, typeFilter]
-  );
-
   const groups = useMemo(() => {
     const now = new Date();
     const result: { label: string; events: WatchEvent[] }[] = [];
-    for (const event of filteredEvents) {
+    for (const event of events) {
       const label = groupLabel(new Date(event.watchedAt), now);
       const last = result[result.length - 1];
       if (last && last.label === label) {
@@ -128,29 +132,7 @@ export function HistoryPage() {
       }
     }
     return result;
-  }, [filteredEvents]);
-
-  if (error && events.length === 0) {
-    return (
-      <div className="mx-auto max-w-lg rounded-2xl p-8 text-center" style={{ border: "1px solid rgba(244,63,94,0.2)", background: "rgba(244,63,94,0.05)" }}>
-        <AlertCircle className="mx-auto h-12 w-12 text-rose-500" />
-        <p className="mt-3 text-lg font-semibold text-rose-500">{error}</p>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="mx-auto max-w-3xl space-y-6">
-        <h2 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Watch History</h2>
-        <div className="space-y-2">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="skeleton h-16 rounded-xl" />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  }, [events]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -163,7 +145,7 @@ export function HistoryPage() {
               key={opt}
               type="button"
               onClick={() => setTypeFilter(opt)}
-              className="relative rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
+              className="relative rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
               style={
                 typeFilter === opt
                   ? { background: "var(--accent)", color: "var(--on-accent)" }
@@ -176,14 +158,34 @@ export function HistoryPage() {
         </div>
       </div>
 
-      {error && (
+      {error && events.length > 0 && (
         <p className="text-sm text-rose-500">{error}</p>
       )}
 
-      {filteredEvents.length === 0 ? (
+      {/* Skeletons and the failure card render in place of the list rather than
+          replacing the page: switching filters now refetches, and a failed
+          fetch used to take the filter pills with it, leaving no way back. */}
+      {loading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="skeleton h-16 rounded-xl" />
+          ))}
+        </div>
+      ) : error && events.length === 0 ? (
+        <div className="mx-auto max-w-lg rounded-2xl p-8 text-center" style={{ border: "1px solid rgba(244,63,94,0.2)", background: "rgba(244,63,94,0.05)" }}>
+          <AlertCircle className="mx-auto h-12 w-12 text-rose-500" />
+          <p className="mt-3 text-lg font-semibold text-rose-500">{error}</p>
+        </div>
+      ) : events.length === 0 ? (
         <div className="rounded-2xl p-8 text-center" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
           <Calendar className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
-          <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>No watch history yet.</p>
+          <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
+            {typeFilter === "movie"
+              ? "No movies in your watch history yet."
+              : typeFilter === "episode"
+                ? "No episodes in your watch history yet."
+                : "No watch history yet."}
+          </p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -199,7 +201,7 @@ export function HistoryPage() {
                   tabIndex={0}
                   onClick={() => setSelectedItem(toSearchResult(event))}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedItem(toSearchResult(event)); } }}
-                  className="group flex cursor-pointer items-center gap-3 rounded-xl p-3 transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
+                  className="group flex cursor-pointer items-center gap-3 rounded-xl p-3 transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
                   style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
                 >
                   <div
@@ -236,7 +238,7 @@ export function HistoryPage() {
                     type="button"
                     onClick={(e) => { e.stopPropagation(); void handleDelete(event.id); }}
                     disabled={deletingId === event.id}
-                    className="flex h-9 w-9 flex-none items-center justify-center rounded-lg opacity-100 transition-all sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/10 disabled:opacity-50 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2"
+                    className="flex h-9 w-9 flex-none items-center justify-center rounded-lg opacity-100 transition-all sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/10 disabled:opacity-50 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-ring-offset"
                     aria-label="Delete watch event"
                     title="Remove from history"
                   >

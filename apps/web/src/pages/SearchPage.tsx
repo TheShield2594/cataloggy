@@ -581,6 +581,7 @@ export function SearchPage() {
                 openDropdown={openDropdown}
                 dropdownRef={dropdownRef}
                 onToggleDropdown={(id) => setOpenDropdown(openDropdown === id ? null : id)}
+                onCloseDropdown={() => setOpenDropdown(null)}
                 onAdd={handleAdd}
                 onCreateAndAdd={handleCreateAndAdd}
                 onSelect={setSelectedItem}
@@ -662,6 +663,7 @@ function ResultCard({
   openDropdown,
   dropdownRef,
   onToggleDropdown,
+  onCloseDropdown,
   onAdd,
   onCreateAndAdd,
   onSelect,
@@ -674,6 +676,7 @@ function ResultCard({
   openDropdown: string | null;
   dropdownRef: React.RefObject<HTMLDivElement | null>;
   onToggleDropdown: (id: string) => void;
+  onCloseDropdown: () => void;
   onAdd: (listId: string, result: SearchResult) => Promise<void>;
   onCreateAndAdd: (name: string, result: SearchResult) => Promise<void>;
   onSelect: (result: SearchResult) => void;
@@ -682,11 +685,62 @@ function ResultCard({
   const [creating, setCreating] = useState(false);
   const [newListName, setNewListName] = useState("");
   const [savingNewList, setSavingNewList] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const createButtonRef = useRef<HTMLButtonElement>(null);
+  const restoreCreateFocus = useRef(false);
+  const panelId = useId();
 
   // Reset the inline create form whenever this card's menu closes.
   useEffect(() => {
     if (!isOpen) { setCreating(false); setNewListName(""); }
   }, [isOpen]);
+
+  // Move focus into the popup on open. Without this a keyboard user is left on
+  // the trigger with the panel hanging open behind them, and has to tab through
+  // the rest of the card to reach it.
+  useEffect(() => {
+    if (!isOpen) return;
+    panelRef.current?.querySelector<HTMLElement>("button:not([disabled]), input")?.focus();
+  }, [isOpen]);
+
+  const closeAndFocusTrigger = () => {
+    onCloseDropdown();
+    triggerRef.current?.focus();
+  };
+
+  // Backing out of the create field unmounts the focused input, so hand focus
+  // to the button that replaces it — otherwise the panel is left with no
+  // focused child and handlePanelBlur closes the whole dropdown.
+  const exitCreate = () => {
+    setCreating(false);
+    setNewListName("");
+    restoreCreateFocus.current = true;
+  };
+
+  useEffect(() => {
+    if (creating || !restoreCreateFocus.current) return;
+    restoreCreateFocus.current = false;
+    createButtonRef.current?.focus();
+  }, [creating]);
+
+  // Tab (or anything else) taking focus out of the panel closes it. Checked on
+  // the next frame rather than straight off relatedTarget, because toggling the
+  // inline create form unmounts the focused button and fires a focusout with a
+  // null relatedTarget before the new field has mounted to receive focus.
+  //
+  // The trigger is exempt from both checks: focus lands on it before its own
+  // click runs, and closing here first would leave that click to reopen the
+  // panel it was meant to dismiss.
+  const handlePanelBlur = (e: React.FocusEvent) => {
+    const next = e.relatedTarget as Node | null;
+    if (e.currentTarget.contains(next) || (next && next === triggerRef.current)) return;
+    requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active === triggerRef.current) return;
+      if (panelRef.current && !panelRef.current.contains(active)) onCloseDropdown();
+    });
+  };
 
   const submitNewList = async () => {
     if (!newListName.trim() || savingNewList) return;
@@ -707,7 +761,7 @@ function ResultCard({
       <div
         role="button"
         tabIndex={0}
-        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
+        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
         style={{ aspectRatio: "var(--poster-ratio)" }}
         onClick={() => onSelect(result)}
         onKeyDown={(e) => {
@@ -753,15 +807,21 @@ function ResultCard({
 
         {/* Quick-add button: same low-resting-opacity treatment so trackpad/keyboard users see it exists before hovering/focusing */}
         <button
+          ref={triggerRef}
           type="button"
+          // The outside-click handler is a document mousedown listener and the
+          // trigger sits outside the panel, so without this it closed the
+          // dropdown on mousedown and the click that followed reopened it —
+          // making the button unable to dismiss its own panel.
+          onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             onToggleDropdown(result.imdbId);
           }}
-          className="absolute bottom-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-claw-500 text-claw-on opacity-100 sm:opacity-60 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shadow-lg transition-all duration-300 hover:bg-claw-600 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-300 focus-visible:ring-offset-2"
+          className="absolute bottom-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-claw-500 text-claw-on opacity-100 sm:opacity-60 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shadow-lg transition-all duration-300 hover:bg-claw-600 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-300 focus-ring-offset"
           aria-label={`Add ${result.name} to a list`}
-          aria-haspopup="menu"
           aria-expanded={isOpen}
+          aria-controls={isOpen ? panelId : undefined}
         >
           <Plus className="h-4 w-4" strokeWidth={3} />
         </button>
@@ -777,7 +837,25 @@ function ResultCard({
       {/* Quick-add dropdown */}
       {isOpen && (
         <div ref={dropdownRef} className="relative z-30 mt-1">
-          <div role="menu" aria-label={`Add ${result.name} to a list`} className="absolute left-0 right-0 overflow-hidden rounded-xl shadow-lg" style={{ background: "var(--bg-0)", borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }}>
+          {/*
+            Deliberately not role="menu". The panel holds a text field and a
+            submit button for the inline create flow, which the ARIA menu
+            pattern doesn't allow — announcing a menu promised arrow-key
+            navigation that was never implemented, which is worse for
+            assistive-tech users than the plain disclosure this actually is.
+            Trigger keeps aria-expanded/aria-controls; the buttons stay in the
+            natural tab order, and Escape closes and restores focus.
+          */}
+          <div
+            ref={panelRef}
+            id={panelId}
+            role="group"
+            aria-label={`Add ${result.name} to a list`}
+            onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeAndFocusTrigger(); } }}
+            onBlur={handlePanelBlur}
+            className="absolute left-0 right-0 overflow-hidden rounded-xl shadow-lg"
+            style={{ background: "var(--bg-0)", borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }}
+          >
             <p className="px-3 py-2.5 text-2xs font-semibold uppercase tracking-wider" style={{ borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: "var(--border)", color: "var(--text-mute)" }}>
               Add to list
             </p>
@@ -794,7 +872,6 @@ function ResultCard({
                 <button
                   key={list.id}
                   type="button"
-                  role="menuitem"
                   disabled={already || pending}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -827,7 +904,10 @@ function ResultCard({
                   onChange={(e) => setNewListName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") { e.preventDefault(); void submitNewList(); }
-                    if (e.key === "Escape") { setCreating(false); setNewListName(""); }
+                    // stopPropagation so Escape backs out of the create field
+                    // only — the panel's handler would otherwise close the
+                    // whole dropdown in the same keystroke.
+                    if (e.key === "Escape") { e.stopPropagation(); exitCreate(); }
                   }}
                   placeholder="List name..."
                   aria-label="New list name"
@@ -845,6 +925,7 @@ function ResultCard({
               </div>
             ) : (
               <button
+                ref={createButtonRef}
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setCreating(true); }}
                 className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-claw-text transition-colors hover:bg-[var(--surface)]"
