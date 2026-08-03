@@ -17,19 +17,25 @@ export function Section({
   icon,
   defaultOpen,
   storageKey,
+  alwaysOpen = false,
   children,
 }: {
   title: string;
   icon: ReactNode;
+  /** Only consulted the first time a section is seen; after that the user's own choice wins. */
   defaultOpen?: boolean;
   storageKey: string;
+  /** Renders the section expanded and without a toggle (search results). */
+  alwaysOpen?: boolean;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(() => readStoredOpen(storageKey, defaultOpen ?? true));
+  const [storedOpen, setStoredOpen] = useState(() => readStoredOpen(storageKey, defaultOpen ?? false));
+  const open = alwaysOpen || storedOpen;
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | undefined>(open ? undefined : 0);
+  const animatable = useRef(false);
   const id = useId();
-  const buttonId = `${id}-toggle`;
+  const headerId = `${id}-header`;
   const panelId = `${id}-panel`;
 
   useEffect(() => {
@@ -38,6 +44,12 @@ export function Section({
 
   useEffect(() => {
     if (!contentRef.current) return;
+    // The initial height already matches `open`; animating on mount would flash
+    // a collapsed section's whole body open before sliding it shut again.
+    if (!animatable.current) {
+      animatable.current = true;
+      return;
+    }
     if (open) {
       setHeight(contentRef.current.scrollHeight);
       const timer = setTimeout(() => setHeight(undefined), 300);
@@ -49,40 +61,52 @@ export function Section({
   }, [open]);
 
   const toggle = () => {
-    setOpen((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(STORAGE_PREFIX + storageKey, next ? "1" : "0");
-      } catch {
-        // ignore storage errors (e.g. private browsing)
-      }
-      return next;
-    });
+    const next = !storedOpen;
+    try {
+      localStorage.setItem(STORAGE_PREFIX + storageKey, next ? "1" : "0");
+    } catch {
+      // ignore storage errors (e.g. private browsing)
+    }
+    setStoredOpen(next);
   };
 
-  return (
-    <div className="rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-      <button
-        id={buttonId}
-        type="button"
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={toggle}
-        className="flex w-full items-center gap-3 px-5 py-[1.125rem] text-left transition-colors hover:bg-[var(--surface)]"
-      >
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: "var(--surface-strong)", color: "var(--text-mute)" }}>{icon}</span>
-        <span className="flex-1 text-base font-semibold" style={{ color: "var(--text)" }}>{title}</span>
+  const header = (
+    <>
+      <span className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: "var(--surface-strong)", color: "var(--text-mute)" }}>{icon}</span>
+      <span className="flex-1 text-base font-semibold" style={{ color: "var(--text)" }}>{title}</span>
+      {!alwaysOpen && (
         <ChevronDown
           size={18}
           className={`transition-transform duration-300 ${open ? "rotate-180" : ""}`}
           style={{ color: "var(--text-mute)" }}
         />
-      </button>
+      )}
+    </>
+  );
+
+  return (
+    <div className="rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+      {alwaysOpen ? (
+        <div id={headerId} className="flex w-full items-center gap-3 px-5 py-[1.125rem]">
+          {header}
+        </div>
+      ) : (
+        <button
+          id={headerId}
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={toggle}
+          className="flex w-full items-center gap-3 px-5 py-[1.125rem] text-left transition-colors hover:bg-[var(--surface)]"
+        >
+          {header}
+        </button>
+      )}
       <div
         id={panelId}
         ref={contentRef}
         role="region"
-        aria-labelledby={buttonId}
+        aria-labelledby={headerId}
         style={{ height: height !== undefined ? `${height}px` : "auto" }}
         className="overflow-hidden transition-[height] duration-300 ease-in-out"
       >
