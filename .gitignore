@@ -8,6 +8,12 @@ dist
 coverage
 apps/api/prisma/*.db*
 
+# Database dumps from scripts/backup.sh. These contain every user's data,
+# including stored OAuth tokens — never commit one. (Prisma migrations are
+# also .sql, so only the compressed dumps are matched here.)
+backups/
+*.sql.gz
+
 *.tsbuildinfo
 package-lock.json
 .claude/

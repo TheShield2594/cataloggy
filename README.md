@@ -233,6 +233,12 @@ To schedule automatic backups, add a cron entry that runs `backup.sh` on a sched
 0 3 * * * cd /path/to/cataloggy && ./scripts/backup.sh >> backups/backup.log 2>&1
 ```
 
+A dump is a complete copy of your database — every profile's watch history and lists, plus the OAuth access/refresh tokens stored for Trakt, Twitch and Steam. Treat the file like a password:
+
+- `backup.sh` runs under `umask 077` and `chmod`s `$BACKUP_DIR` to `700` and each dump to `600`, so other local users on the host can't read them. Point `BACKUP_DIR` at a directory that only you own.
+- `backups/` and `*.sql.gz` are git-ignored, so a `git add -A` from the repo root can't sweep a dump into git history. If you move backups elsewhere within the repo, keep them ignored.
+- Backups you copy off the host (to a NAS, cloud storage, another machine) leave that protection behind — encrypt them, or store them somewhere with equivalent access control.
+
 ### Export / import your data
 
 In addition to full database backups, Settings → Data lets you export your lists, watch history, series progress, and ratings as a single JSON file, and re-import it later (e.g. after a fresh install, or to migrate to a new instance). The API also accepts CSV watch-history imports (columns: `imdbId`, `type`, `watchedAt`, with optional `season`/`episode`) for importing history exported from other tools.
