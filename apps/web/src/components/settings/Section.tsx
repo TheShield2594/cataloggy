@@ -61,15 +61,13 @@ export function Section({
   }, [open]);
 
   const toggle = () => {
-    setStoredOpen((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(STORAGE_PREFIX + storageKey, next ? "1" : "0");
-      } catch {
-        // ignore storage errors (e.g. private browsing)
-      }
-      return next;
-    });
+    const next = !storedOpen;
+    try {
+      localStorage.setItem(STORAGE_PREFIX + storageKey, next ? "1" : "0");
+    } catch {
+      // ignore storage errors (e.g. private browsing)
+    }
+    setStoredOpen(next);
   };
 
   const header = (

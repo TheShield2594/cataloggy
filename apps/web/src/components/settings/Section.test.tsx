@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Settings } from "lucide-react";
@@ -13,12 +13,13 @@ afterEach(() => {
   Reflect.deleteProperty(HTMLElement.prototype, "scrollHeight");
 });
 
-const renderSection = (props: Partial<Parameters<typeof Section>[0]> = {}) =>
-  render(
-    <Section title="Trakt Integration" icon={<Settings size={20} />} storageKey="trakt" {...props}>
-      <p>Panel body</p>
-    </Section>
-  );
+const sectionElement = (props: Partial<Parameters<typeof Section>[0]> = {}) => (
+  <Section title="Trakt Integration" icon={<Settings size={20} />} storageKey="trakt" {...props}>
+    <p>Panel body</p>
+  </Section>
+);
+
+const renderSection = (props: Partial<Parameters<typeof Section>[0]> = {}) => render(sectionElement(props));
 
 const header = () => screen.getByRole("button", { name: /trakt integration/i });
 const panel = () => screen.getByRole("region", { name: /trakt integration/i });
@@ -73,5 +74,26 @@ describe("Section", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.getByText("Panel body")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: /trakt integration/i })).toBeInTheDocument();
+  });
+
+  it("hands the section back to the user's own preference when it stops being held open", async () => {
+    localStorage.setItem("cataloggy:settings-section:trakt", "0");
+    const { rerender } = renderSection({ alwaysOpen: true });
+
+    rerender(sectionElement({ alwaysOpen: false }));
+
+    expect(header()).toHaveAttribute("aria-expanded", "false");
+    // Unlike the mount case this one animates: it was on screen a frame ago.
+    await waitFor(() => expect(panel()).toHaveStyle({ height: "0px" }));
+    expect(localStorage.getItem("cataloggy:settings-section:trakt")).toBe("0");
+  });
+
+  it("stays open after being held open, when that is what the user had chosen", () => {
+    localStorage.setItem("cataloggy:settings-section:trakt", "1");
+    const { rerender } = renderSection({ alwaysOpen: true });
+
+    rerender(sectionElement({ alwaysOpen: false }));
+
+    expect(header()).toHaveAttribute("aria-expanded", "true");
   });
 });

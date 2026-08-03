@@ -1,5 +1,23 @@
-import { describe, expect, it } from "vitest";
-import { INITIALLY_OPEN_SECTION_IDS, SETTINGS_SECTIONS, SETTINGS_TABS, matchesSearch, type SettingsTab } from "./SettingsPage";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router";
+import { INITIALLY_OPEN_SECTION_IDS, SETTINGS_SECTIONS, SETTINGS_TABS, SettingsPage, matchesSearch, type SettingsTab } from "./SettingsPage";
+
+// Each section's body is its own component's business, and most of them fetch
+// on mount. Stub them out: what this file tests is which sections the page
+// shows, which is decided entirely by the section list and the search box.
+vi.mock("../components/settings/PreferencesSettings", () => ({ PreferencesSettings: () => <p>preferences body</p> }));
+vi.mock("../components/settings/ProfileSettings", () => ({ ProfileSettings: () => <p>profile body</p> }));
+vi.mock("../components/settings/PushSettings", () => ({ PushSettings: () => <p>notifications body</p> }));
+vi.mock("../components/settings/JobStatusSettings", () => ({ JobStatusSettings: () => <p>sync status body</p> }));
+vi.mock("../components/settings/ApiTokenSettings", () => ({ ApiTokenSettings: () => <p>api token body</p> }));
+vi.mock("../components/settings/TraktSettings", () => ({ TraktSettings: () => <p>trakt body</p> }));
+vi.mock("../components/settings/AddonSettings", () => ({ AddonSettings: () => <p>addon body</p> }));
+vi.mock("../components/settings/OmdbSettings", () => ({ OmdbSettings: () => <p>omdb body</p> }));
+vi.mock("../components/settings/RpdbSettings", () => ({ RpdbSettings: () => <p>rpdb body</p> }));
+vi.mock("../components/settings/AiSettings", () => ({ AiSettings: () => <p>ai body</p> }));
+vi.mock("../components/settings/DataSettings", () => ({ DataSettings: () => <p>data body</p> }));
 
 const byTab = (tab: SettingsTab) => SETTINGS_SECTIONS.filter((s) => s.tab === tab);
 const find = (query: string) => SETTINGS_SECTIONS.filter((s) => matchesSearch(s, query)).map((s) => s.id);
@@ -51,5 +69,80 @@ describe("settings sections", () => {
 
   it("matches nothing when a term is absent", () => {
     expect(find("bluray")).toEqual([]);
+  });
+});
+
+const renderPage = () =>
+  render(
+    <MemoryRouter initialEntries={["/settings"]}>
+      <SettingsPage />
+    </MemoryRouter>
+  );
+
+// Each section renders a panel labelled by its own header, open or shut, so the
+// panels are what "is this section on screen?" comes down to.
+const onScreen = () => SETTINGS_SECTIONS.filter((s) => screen.queryByRole("region", { name: s.title })).map((s) => s.title);
+const searchBox = () => screen.getByLabelText("Search settings");
+const tabBar = () => screen.queryByRole("button", { name: SETTINGS_TABS[1].label });
+
+describe("SettingsPage", () => {
+  it("shows one tab's sections at a time, and the other tab's on request", async () => {
+    renderPage();
+    expect(onScreen()).toEqual(byTab("preferences").map((s) => s.title));
+
+    await userEvent.click(screen.getByRole("button", { name: SETTINGS_TABS[1].label }));
+    expect(onScreen()).toEqual(byTab("integrations").map((s) => s.title));
+  });
+
+  it("opens only the first section of a tab, leaving the rest to be asked for", () => {
+    renderPage();
+    const expanded = screen.getAllByRole("button", { expanded: true });
+
+    expect(expanded).toHaveLength(1);
+    expect(expanded[0]).toHaveAccessibleName(byTab("preferences")[0].title);
+  });
+
+  it("filters to matching sections, reaching the tab that isn't open", async () => {
+    renderPage();
+    await userEvent.type(searchBox(), "trakt");
+
+    expect(onScreen()).toEqual(["Sync Status", "Trakt Integration"]);
+    expect(tabBar()).not.toBeInTheDocument();
+  });
+
+  it("shows a match's body straight away, rather than one more thing to click", async () => {
+    renderPage();
+    await userEvent.type(searchBox(), "ollama");
+
+    expect(screen.getByText("ai body")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /AI Recommendations/i })).not.toBeInTheDocument();
+  });
+
+  it("says so when nothing matches", async () => {
+    renderPage();
+    await userEvent.type(searchBox(), "bluray");
+
+    expect(screen.getByRole("status")).toHaveTextContent('No settings match "bluray".');
+    expect(onScreen()).toEqual([]);
+  });
+
+  it("restores the tab on Escape", async () => {
+    renderPage();
+    await userEvent.type(searchBox(), "trakt");
+    await userEvent.keyboard("{Escape}");
+
+    expect(searchBox()).toHaveValue("");
+    expect(tabBar()).toBeInTheDocument();
+    expect(onScreen()).toEqual(byTab("preferences").map((s) => s.title));
+  });
+
+  it("restores the tab from the clear button", async () => {
+    renderPage();
+    await userEvent.type(searchBox(), "trakt");
+    await userEvent.click(screen.getByRole("button", { name: "Clear search" }));
+
+    expect(searchBox()).toHaveValue("");
+    expect(tabBar()).toBeInTheDocument();
+    expect(onScreen()).toEqual(byTab("preferences").map((s) => s.title));
   });
 });
