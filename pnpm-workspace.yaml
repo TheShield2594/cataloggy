@@ -1,3 +1,24 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# pnpm 11 reads these settings here; the `pnpm` field in package.json is ignored.
+overrides:
+  workbox-build: "^7.4.1"
+  workbox-window: "^7.4.1"
+  serialize-javascript: "^7.0.3"
+  find-my-way: "^9.7.0"
+  fast-uri: "^4.1.1"
+  "ajv>fast-uri": "^3.1.4"
+  brace-expansion: "^5.0.8"
+
+# pnpm does not run a dependency's install scripts unless it is approved here.
+# Prisma downloads its query engine that way, esbuild its platform binary.
+allowBuilds:
+  "@prisma/engines": true
+  esbuild: true
+  prisma: true
+
+# Mirrors `node-linker=hoisted` in .npmrc, which pnpm 11 no longer reads.
+# Without this the layout silently switches to the isolated default.
+nodeLinker: hoisted

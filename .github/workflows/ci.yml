@@ -39,10 +39,13 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
+      # Matches the `node:26-alpine` base image every app's Dockerfile ships on,
+      # so CI exercises the same runtime as production. Node 20 is also past
+      # end-of-life and too old for jsdom, which apps/web's tests run in.
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20
+          node-version: 26
           cache: pnpm
 
       - name: Install dependencies
