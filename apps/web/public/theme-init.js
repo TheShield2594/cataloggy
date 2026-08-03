@@ -15,7 +15,11 @@
     // localStorage unavailable (private browsing, disabled storage, etc.) — fall back to default theme.
   }
 
-  var theme = Object.prototype.hasOwnProperty.call(themeBg, stored) ? stored : "light";
+  // No stored choice: follow the OS the same way getInitialTheme() in
+  // useTheme.ts does. Defaulting to "light" here painted a full-screen cream
+  // flash over the loader for dark-mode visitors, then jumped once React mounted.
+  var prefersDark = typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  var theme = Object.prototype.hasOwnProperty.call(themeBg, stored) ? stored : prefersDark ? "dark" : "light";
   document.documentElement.setAttribute("data-theme", theme);
   document.documentElement.style.colorScheme = theme === "light" ? "light" : "dark";
   document.documentElement.style.backgroundColor = themeBg[theme];

@@ -211,7 +211,7 @@ function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => vo
       <div
         role="button"
         tabIndex={0}
-        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
+        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
         style={{ aspectRatio: "var(--poster-ratio)" }}
         onClick={() => onSelect(game)}
         onKeyDown={(e) => {

@@ -226,7 +226,10 @@ export function ListsPage() {
   const { showToast } = useToast();
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
 
+  // Every handler that can set `error` clears it first, so a transient failure
+  // doesn't pin the banner for the rest of the session once the retry succeeds.
   const loadLists = useCallback(async () => {
+    setError(null);
     try {
       const { lists: loaded } = await api.getLists();
       setLists(loaded);
@@ -239,6 +242,7 @@ export function ListsPage() {
 
   const loadItems = useCallback(async (listId: string) => {
     setLoadingItems(true);
+    setError(null);
     try {
       const { items: loaded } = await api.getListItems(listId);
       setItems(loaded);
@@ -270,6 +274,7 @@ export function ListsPage() {
   const handleCreateList = async (e: FormEvent) => {
     e.preventDefault();
     if (!newListName.trim()) return;
+    setError(null);
     try {
       const { list } = await api.createList(newListName.trim());
       setNewListName("");
@@ -282,6 +287,7 @@ export function ListsPage() {
 
   const handleDeleteList = async (listId: string) => {
     setDeletingListId(listId);
+    setError(null);
     try {
       await api.deleteList(listId);
       setConfirmDeleteId(null);
@@ -294,10 +300,15 @@ export function ListsPage() {
     }
   };
 
+  const cancelRename = () => {
+    setRenamingListId(null);
+    setRenameValue("");
+  };
+
   const handleRenameList = async (listId: string) => {
     const name = renameValue.trim();
     if (!name) {
-      setRenamingListId(null);
+      cancelRename();
       return;
     }
     try {
@@ -359,6 +370,7 @@ export function ListsPage() {
   const handleRemove = async (item: ListItemWithMeta) => {
     if (!selectedListId || removingIds[item.imdbId]) return;
     setRemovingIds((prev) => ({ ...prev, [item.imdbId]: true }));
+    setError(null);
     try {
       await api.removeFromList(selectedListId, { type: item.type, imdbId: item.imdbId });
       setItems((prev) => prev.filter((i) => i.imdbId !== item.imdbId));
@@ -493,11 +505,22 @@ export function ListsPage() {
                       autoFocus
                       value={renameValue}
                       onChange={(e) => setRenameValue(e.target.value)}
-                      onBlur={() => void handleRenameList(selectedList.id)}
+                      // Blur discards. Committing on blur meant any click, tab
+                      // or window switch silently saved a half-typed name, with
+                      // no way back to the original. Enter and ✓ commit instead.
+                      onBlur={cancelRename}
+                      onKeyDown={(e) => { if (e.key === "Escape") cancelRename(); }}
                       className="min-w-0 flex-1 rounded-lg border px-3 py-1.5 text-2xl font-bold focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
                       style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
                     />
-                    <button type="submit" aria-label="Save name" className="rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-500/10">
+                    <button
+                      type="submit"
+                      aria-label="Save name"
+                      // Keeps focus in the input, so the click isn't cancelled
+                      // by its own blur before it lands.
+                      onMouseDown={(e) => e.preventDefault()}
+                      className="rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-500/10"
+                    >
                       <Check className="h-5 w-5" />
                     </button>
                   </form>
@@ -638,7 +661,7 @@ export function ListsPage() {
                         type="button"
                         disabled={removingIds[item.imdbId]}
                         onClick={() => handleRemove(item)}
-                        className="absolute top-2.5 right-2.5 z-10 rounded-full bg-black/60 p-2 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-all duration-200 hover:bg-rose-500 hover:text-white disabled:opacity-50 backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2"
+                        className="absolute top-2.5 right-2.5 z-10 rounded-full bg-black/60 p-2 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-all duration-200 hover:bg-rose-500 hover:text-white disabled:opacity-50 backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-ring-offset"
                         aria-label="Remove from list"
                       >
                         <Trash2 className="h-4 w-4" />

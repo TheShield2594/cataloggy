@@ -592,9 +592,14 @@ export const api = {
     const res = await request<{ progress: SeriesProgress[] }>("/series/progress");
     return res.progress;
   },
-  async getWatchHistory(limit = 10, offset = 0, opts?: { imdbId?: string; signal?: AbortSignal }) {
+  async getWatchHistory(
+    limit = 10,
+    offset = 0,
+    opts?: { imdbId?: string; type?: "movie" | "episode"; signal?: AbortSignal }
+  ) {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (opts?.imdbId) params.set("imdbId", opts.imdbId);
+    if (opts?.type) params.set("type", opts.type);
     const res = await request<{ history: WatchEvent[] }>(`/watch/history?${params}`, { signal: opts?.signal });
     return res.history;
   },

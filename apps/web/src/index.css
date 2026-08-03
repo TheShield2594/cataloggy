@@ -205,6 +205,28 @@ body {
   }
 }
 
+@layer components {
+  /*
+   * Focus-ring offset. Use instead of `focus-visible:ring-offset-2`.
+   *
+   * Tailwind registers `--tw-ring-offset-color` with `inherits: false` and an
+   * initial value of `#fff`, so the offset colour cannot be themed once on
+   * :root alongside --bg-0 — a non-inheriting property never reaches the
+   * focused descendant, and the declaration has to land on the element itself.
+   * Left unset, the 2px "offset" paints a solid white band around every
+   * focused control on the four dark themes: a white box, not a focus ring.
+   *
+   * Bundling the width in keeps the two from drifting apart — anything that
+   * gets the offset gets a themed colour with it. --bg-0 rather than --bg-1
+   * because every theme's two backgrounds sit within a few percent luminance
+   * of each other, so a 2px band reads as a gap on panels either way.
+   */
+  .focus-ring-offset {
+    @apply focus-visible:ring-offset-2;
+    --tw-ring-offset-color: var(--bg-0);
+  }
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

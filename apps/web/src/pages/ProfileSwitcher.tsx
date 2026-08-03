@@ -1,19 +1,18 @@
 import { FormEvent, useEffect, useState } from "react";
 import { AlertCircle, ArrowRight, Clapperboard, Loader2, Lock, Plus, X } from "lucide-react";
 import { api, ApiError, Profile, runtimeConfig } from "../api";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useScrollLock } from "../hooks/useScrollLock";
 
 function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
-  const dialogRef = useFocusTrap<HTMLDivElement>(!!onClose);
-
-  useEffect(() => {
-    if (!onClose) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
+  // All three gated on `onClose`: without it this renders as a full page
+  // (first-run profile setup), not a modal, and must not lock scroll or
+  // swallow Escape.
+  const isModal = !!onClose;
+  const dialogRef = useFocusTrap<HTMLDivElement>(isModal);
+  useScrollLock(isModal);
+  useEscapeKey(() => onClose?.(), isModal);
 
   if (onClose) {
     return (
@@ -37,7 +36,7 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
+              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
               style={{ color: "var(--text-mute)" }}
             >
               <X className="h-4 w-4" />
