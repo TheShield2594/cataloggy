@@ -135,7 +135,7 @@ function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
 
 /* ─── Continue Watching card (used for every item after the hero) ─── */
 
-function computeProgressPct(s: SeriesProgress): number | null {
+export function computeProgressPct(s: SeriesProgress): number | null {
   return typeof s.watchedEpisodes === "number" && s.totalEpisodes && s.totalEpisodes > 0
     ? Math.min(Math.max((s.watchedEpisodes / s.totalEpisodes) * 100, 0), 100)
     : null;
