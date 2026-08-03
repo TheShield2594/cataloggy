@@ -264,9 +264,13 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
   // longer exempt from that gate, so they no longer hand a profile's library to
   // anyone who can reach the server.
   //
-  // Stricter limit than the global default since the secret-scoped routes answer
-  // unauthenticated callers.
-  const PUBLIC_STREMIO_RATE_LIMIT = { max: 60, timeWindow: "1 minute" };
+  // Sized for one Stremio home screen rather than one request: a client fetches
+  // a catalog per entry the manifest advertises — 4 core plus up to 20 discovery
+  // plus 2 per custom list — so a single refresh can be 25+ requests and the old
+  // 60/min budget turned a second refresh in the same minute into 429s and empty
+  // rows. Still well under the global default, and no help to anyone guessing at
+  // a 256-bit secret.
+  const PUBLIC_STREMIO_RATE_LIMIT = { max: 240, timeWindow: "1 minute" };
 
   const publicRoute = { config: { rateLimit: PUBLIC_STREMIO_RATE_LIMIT } };
 
@@ -380,6 +384,9 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
 
     if (catalogId.startsWith("list:")) {
       const listId = catalogId.slice(5);
+      // `List.id` is a Postgres uuid column, so a malformed id is a failed cast
+      // — a 500 — rather than a miss. Same guard the legacy list route applies.
+      if (!UUID_V4_PATTERN.test(listId)) return reply.code(404).send({ metas: [] });
       // Scoped to the resolved profile: the manifest only ever advertises that
       // profile's lists, so a UUID naming somebody else's list is not a list
       // this URL is entitled to serve.
@@ -400,6 +407,13 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
       const region = await getRegionSetting();
       cacheKey = `${cacheKey}:${region}`;
     }
+    // Trending/popular/anime/streaming are the same rows for everyone, so they
+    // share one cache entry. The two personal catalogs are not: they are derived
+    // from a profile's own history, so an unkeyed entry would serve whoever
+    // asked first to everyone else — including out of a PIN-protected profile.
+    if (cacheKey.startsWith("ai-recs:") || cacheKey.startsWith("recommended:")) {
+      cacheKey = `${cacheKey}:${profileId}`;
+    }
     const cached = trendingCacheGet(cacheKey);
     if (cached) return { metas: cached.data };
 
@@ -415,22 +429,25 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
         results = await tmdb.popular(metaType);
       } else if (cacheKey.startsWith("ai-recs:")) {
         const aiType = cacheKey.split(":")[1] as "movie" | "series";
-        const result = await getAiRecommendations(aiType, 20);
+        const result = await getAiRecommendations(aiType, 20, profileId);
         if (!result) return { metas: [] };
         return { metas: result.metas };
       } else if (cacheKey.startsWith("recommended:")) {
         if (await isAiConfigured()) {
-          const aiResult = await getAiRecommendations(discovery.type, 20);
+          const aiResult = await getAiRecommendations(discovery.type, 20, profileId);
           if (aiResult) {
             trendingCacheSet(cacheKey, { data: aiResult.metas });
             return { metas: aiResult.metas };
           }
         }
+        // Seeded from the requesting profile's own recent viewing — an
+        // unfiltered read would recommend one person's titles to another and
+        // leak what they have been watching.
         const recentItems =
           metaType === MetadataType.movie
             ? (
                 await prisma.watchEvent.findMany({
-                  where: { type: "movie" },
+                  where: { type: "movie", profileId },
                   orderBy: { watchedAt: "desc" },
                   take: 3,
                   distinct: ["imdbId"],
@@ -439,6 +456,7 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
               ).map((r) => r.imdbId)
             : (
                 await prisma.seriesProgress.findMany({
+                  where: { profileId },
                   orderBy: { lastWatchedAt: "desc" },
                   take: 3,
                   select: { seriesImdbId: true },

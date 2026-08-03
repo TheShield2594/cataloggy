@@ -68,10 +68,14 @@ describe("connect-src", () => {
     expect(buildConnectSrc({ apiBase: "not a url" })).toBe("'self' http://localhost:7000 http://localhost:7001");
   });
 
-  it("refuses an extra source that would inject another CSP directive", () => {
-    expect(() =>
-      buildConnectSrc({ extra: "https://ok.example; script-src 'unsafe-inline'" })
-    ).toThrow(/invalid source/);
+  it("keeps a wildcard host, which is a real origin", () => {
+    expect(buildConnectSrc({ extra: "https://*.example.com" })).toContain("https://*.example.com");
+  });
+
+  it("refuses extras that would re-open the any-host hole or split the directive", () => {
+    for (const extra of ["https:", "http:", "ws:", "wss:", "*", "https://ok.example; script-src 'unsafe-inline'"]) {
+      expect(() => buildConnectSrc({ extra })).toThrow(/invalid origin/);
+    }
   });
 });
 

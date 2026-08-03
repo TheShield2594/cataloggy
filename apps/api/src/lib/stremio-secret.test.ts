@@ -60,6 +60,13 @@ describe("stremio addon secret", () => {
 
     process.env.API_TOKEN = "rotated-api-token";
     await expect(resolveProfileFromStremioSecret(staleSecret)).resolves.toBeNull();
+
+    // With no token there is nothing to derive, so nothing can match — a
+    // resolver that treated the absent expected secret as a match would hand
+    // out a profile to any well-formed string.
+    delete process.env.API_TOKEN;
+    await expect(resolveProfileFromStremioSecret(staleSecret)).resolves.toBeNull();
+    await expect(resolveProfileFromStremioSecret("a".repeat(64))).resolves.toBeNull();
   });
 
   it("rejects malformed candidates without querying profiles", async () => {

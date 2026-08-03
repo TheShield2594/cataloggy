@@ -244,6 +244,18 @@ describe("stremio routes — the addon URL is gated by a per-profile secret", ()
     await app.close();
   });
 
+  it("404s a configure request carrying an unknown secret", async () => {
+    const app = await buildApp();
+
+    const response = await app.inject({ method: "GET", url: `/addon/stremio/${"f".repeat(64)}/configure` });
+
+    // The message distinguishes this from the 404 the redirect itself returns
+    // when CATALOGGY_WEB_PUBLIC is unset — the status code alone cannot.
+    expect(response.statusCode).toBe(404);
+    expect(response.json().error).toBe("Unknown addon URL");
+    await app.close();
+  });
+
   it("serves a catalog for a valid secret and 404s the same catalog without one", async () => {
     const app = await buildApp();
     const secret = await secretFor(PROFILE_ID);
@@ -286,6 +298,20 @@ describe("stremio routes — the addon URL is gated by a per-profile secret", ()
       url: `/addon/stremio/${secret}/catalog/movie/list:${OTHER_LIST_ID}.json`,
     });
     expect(foreign.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("404s a list catalog whose id is not a UUID rather than failing the uuid cast", async () => {
+    const app = await buildApp();
+    const secret = await secretFor(PROFILE_ID);
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/addon/stremio/${secret}/catalog/movie/list:not-a-uuid.json`,
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(prismaMock.list.findFirst).not.toHaveBeenCalled();
     await app.close();
   });
 

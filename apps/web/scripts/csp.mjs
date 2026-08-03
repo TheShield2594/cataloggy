@@ -16,12 +16,6 @@ const DEFAULT_ADDON_BASE = "http://localhost:7001";
 
 const PLACEHOLDER = "__CONNECT_SRC__";
 
-// A CSP source is a bare host/scheme expression: no whitespace (which would
-// split it into two sources) and no `;` (which would start a new directive).
-// Anything an operator adds via CSP_CONNECT_SRC_EXTRA is checked against this
-// before it reaches the header.
-const SOURCE_PATTERN = /^[A-Za-z0-9*.:/[\]_-]+$/;
-
 const originOf = (value) => {
   if (typeof value !== "string" || !value.trim()) return null;
   try {
@@ -52,15 +46,21 @@ export const buildConnectSrc = ({ apiBase, addonBase, sentryDsn, extra } = {}) =
   // Escape hatch for anything else this deployment's browser must reach —
   // most obviously an API base set per-browser via Settings → "API base URL",
   // which the container cannot know about.
+  // Every entry has to parse as an absolute origin. That rejects the two things
+  // worth rejecting: a whole scheme (`https:`) or a bare `*`, either of which
+  // would re-open the any-host hole this whole file exists to close, and any
+  // value carrying whitespace or a `;` that would split the directive. A
+  // wildcard host (`https://*.example.com`) still parses, so it still works.
   for (const entry of (extra ?? "").split(",")) {
     const trimmed = entry.trim();
     if (!trimmed) continue;
-    if (!SOURCE_PATTERN.test(trimmed)) {
+    const origin = originOf(trimmed);
+    if (!origin) {
       throw new Error(
-        `CSP_CONNECT_SRC_EXTRA contains an invalid source: "${trimmed}". Use space-free origins or schemes, e.g. "https://api.example.com,https://sentry.example.com".`
+        `CSP_CONNECT_SRC_EXTRA contains an invalid origin: "${trimmed}". Use absolute origins, e.g. "https://api.example.com,https://sentry.example.com" — a bare scheme or "*" would allow connections to every host.`
       );
     }
-    add(originOf(trimmed) ?? trimmed);
+    add(origin);
   }
 
   return sources.join(" ");
