@@ -3,12 +3,17 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 const API_TOKEN = process.env.API_TOKEN;
 
+// timingSafeEqual needs two equal-length buffers and the presented token can be
+// any length, so both sides are reduced to a fixed-width digest first. This is a
+// comparison aid, not password storage: API_TOKEN is a high-entropy shared
+// secret, nothing is persisted, and no KDF is wanted on a per-request auth path.
+//
+// CodeQL's js/insufficient-password-hash flags this (it wants bcrypt/argon2) and
+// will keep flagging it — an HMAC under a random key trips the same rule. The
+// alert predates this file's current shape; treat it as a known false positive
+// rather than reaching for a slow KDF on every request.
 const toSha256Digest = (value: string) => createHash("sha256").update(value).digest();
 
-// Hashed once at load, then compared in constant time against the digest of
-// whatever a request presents. The hashing exists only to hand timingSafeEqual
-// two equal-length buffers — this is not password storage, and API_TOKEN is a
-// high-entropy shared secret rather than a user-chosen password.
 const API_TOKEN_DIGEST = API_TOKEN ? toSha256Digest(API_TOKEN) : null;
 
 const bearerToken = (request: FastifyRequest): string | null => {
