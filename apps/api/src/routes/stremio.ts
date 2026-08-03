@@ -5,7 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { getTmdb } from "../lib/tmdb-client.js";
 import { getRegionSetting } from "../lib/settings.js";
 import { isAiConfigured, getAiRecommendations } from "../lib/ai.js";
-import { getAddonConfig, ALL_ADDON_CATALOGS, ADDON_CONFIG_KEY } from "../lib/addon.js";
+import { getAddonConfig, ALL_ADDON_CATALOGS, addonConfigKey } from "../lib/addon.js";
 import { trendingCacheGet, trendingCacheSet } from "../lib/cache.js";
 import {
   getWatchlistMetas,
@@ -14,7 +14,7 @@ import {
   getCustomListMetas,
 } from "../lib/stremio-helpers.js";
 import { upsertMetadata } from "../lib/metadata.js";
-import { getDefaultProfileId } from "../lib/profile.js";
+import { getDefaultProfileId, resolveProfile } from "../lib/profile.js";
 import { parseMetaType, parseCatalogLimit, UUID_V4_PATTERN } from "../lib/types.js";
 import type { StremioMetaPreview, StremioMetaType } from "../lib/types.js";
 import type { MetadataPayload } from "../tmdb.js";
@@ -190,24 +190,30 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
 
   // ─── Addon Config ───
 
-  app.get("/addon/config", async () => {
-    const config = await getAddonConfig();
+  // Both config routes are profile-scoped: the picker must only ever name the
+  // requesting profile's custom lists (a PIN-protected profile's list names are
+  // not the shared token holder's business), and enabling a catalog must not
+  // enable it for everyone else on the install.
+  app.get("/addon/config", { preHandler: resolveProfile }, async (request) => {
+    const profileId = request.profileId as string;
+    const config = await getAddonConfig(profileId);
     const userLists = await prisma.list.findMany({
-      where: { kind: ListKind.custom },
+      where: { kind: ListKind.custom, profileId },
       select: { id: true, name: true },
       orderBy: { createdAt: "asc" },
     });
     return { config, availableCatalogs: ALL_ADDON_CATALOGS, availableLists: userLists };
   });
 
-  app.post<{ Body: unknown }>("/addon/config", async (request, reply) => {
+  app.post<{ Body: unknown }>("/addon/config", { preHandler: resolveProfile }, async (request, reply) => {
     const body = request.body as { enabledCatalogs?: unknown } | null;
     if (!body || !Array.isArray(body.enabledCatalogs)) {
       return reply.code(400).send({ error: "enabledCatalogs must be an array of strings" });
     }
 
+    const profileId = request.profileId as string;
     const userLists = await prisma.list.findMany({
-      where: { kind: ListKind.custom },
+      where: { kind: ListKind.custom, profileId },
       select: { id: true },
     });
     const validListIds = new Set(userLists.map((l) => l.id));
@@ -220,9 +226,10 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
     });
 
     const config = { enabledCatalogs: enabled };
+    const key = addonConfigKey(profileId);
     await prisma.kV.upsert({
-      where: { key: ADDON_CONFIG_KEY },
-      create: { key: ADDON_CONFIG_KEY, value: JSON.stringify(config), updatedAt: new Date() },
+      where: { key },
+      create: { key, value: JSON.stringify(config), updatedAt: new Date() },
       update: { value: JSON.stringify(config), updatedAt: new Date() },
     });
     return { config };
@@ -241,56 +248,61 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
-  app.get("/addon/stremio/manifest.json", { config: { rateLimit: PUBLIC_STREMIO_RATE_LIMIT } }, async () => {
-    const [config, aiConfigured] = await Promise.all([getAddonConfig(), isAiConfigured()]);
+  app.get<{ Querystring: { profileId?: string } }>(
+    "/addon/stremio/manifest.json",
+    { config: { rateLimit: PUBLIC_STREMIO_RATE_LIMIT } },
+    async (request) => {
+      const profileId = await resolveStremioProfileId(request.query.profileId);
+      const [config, aiConfigured] = await Promise.all([getAddonConfig(profileId), isAiConfigured()]);
 
-    const enabledCatalogs = config.enabledCatalogs.filter((id) => {
-      if (id === "cataloggy-ai-movie" || id === "cataloggy-ai-series") return aiConfigured;
-      return true;
-    });
-
-    const catalogs: { id: string; type: string; name: string }[] = [
-      ...CORE_STREMIO_CATALOGS.map((c) => ({ id: c.id, type: c.type, name: c.name })),
-      ...enabledCatalogs
-        .filter((id) => DISCOVERY_CATALOG_MAP[id])
-        .map((id) => ({
-          id,
-          type: DISCOVERY_CATALOG_MAP[id].type,
-          name: DISCOVERY_CATALOG_LABELS[id] ?? id,
-        })),
-    ];
-
-    const listCatalogIds = enabledCatalogs.filter((id) => id.startsWith("list:"));
-    if (listCatalogIds.length > 0) {
-      const listIds = listCatalogIds.map((id) => id.slice(5));
-      const userLists = await prisma.list.findMany({
-        where: { id: { in: listIds } },
-        select: { id: true, name: true },
+      const enabledCatalogs = config.enabledCatalogs.filter((id) => {
+        if (id === "cataloggy-ai-movie" || id === "cataloggy-ai-series") return aiConfigured;
+        return true;
       });
-      const listById = new Map(userLists.map((l) => [l.id, l.name]));
-      for (const listId of listIds) {
-        const name = listById.get(listId);
-        if (!name) continue;
-        catalogs.push({ id: `list:${listId}`, type: "movie", name: `${name} – Movies` });
-        catalogs.push({ id: `list:${listId}`, type: "series", name: `${name} – Series` });
-      }
-    }
 
-    return {
-      id: STREMIO_ADDON_ID,
-      version: STREMIO_ADDON_VERSION,
-      name: "Cataloggy",
-      description: "Your personal media tracker – watchlists, history, and discovery catalogs.",
-      logo: "",
-      background: "",
-      resources: ["catalog"],
-      types: ["movie", "series"],
-      catalogs,
-      ...(CATALOGGY_WEB_PUBLIC
-        ? { behaviorHints: { configurable: true, configurationRequired: false } }
-        : {}),
-    };
-  });
+      const catalogs: { id: string; type: string; name: string }[] = [
+        ...CORE_STREMIO_CATALOGS.map((c) => ({ id: c.id, type: c.type, name: c.name })),
+        ...enabledCatalogs
+          .filter((id) => DISCOVERY_CATALOG_MAP[id])
+          .map((id) => ({
+            id,
+            type: DISCOVERY_CATALOG_MAP[id].type,
+            name: DISCOVERY_CATALOG_LABELS[id] ?? id,
+          })),
+      ];
+
+      const listCatalogIds = enabledCatalogs.filter((id) => id.startsWith("list:"));
+      if (listCatalogIds.length > 0) {
+        const listIds = listCatalogIds.map((id) => id.slice(5));
+        const userLists = await prisma.list.findMany({
+          where: { id: { in: listIds }, profileId },
+          select: { id: true, name: true },
+        });
+        const listById = new Map(userLists.map((l) => [l.id, l.name]));
+        for (const listId of listIds) {
+          const name = listById.get(listId);
+          if (!name) continue;
+          catalogs.push({ id: `list:${listId}`, type: "movie", name: `${name} – Movies` });
+          catalogs.push({ id: `list:${listId}`, type: "series", name: `${name} – Series` });
+        }
+      }
+
+      return {
+        id: STREMIO_ADDON_ID,
+        version: STREMIO_ADDON_VERSION,
+        name: "Cataloggy",
+        description: "Your personal media tracker – watchlists, history, and discovery catalogs.",
+        logo: "",
+        background: "",
+        resources: ["catalog"],
+        types: ["movie", "series"],
+        catalogs,
+        ...(CATALOGGY_WEB_PUBLIC
+          ? { behaviorHints: { configurable: true, configurationRequired: false } }
+          : {}),
+      };
+    }
+  );
 
   // ─── Stremio Catalog Handler ───
 

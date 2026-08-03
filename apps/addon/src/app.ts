@@ -224,9 +224,9 @@ type RpdbConfig = {
 
 // ─── Caching ───
 //
-// Caches for genuinely global data (genres, RPDB config, addon config, the
-// spoiler-protection preference) stay unkeyed. Anything derived from a
-// profile-scoped endpoint — the manifest, which lists that profile's lists,
+// Caches for genuinely global data (genres, RPDB config, the spoiler-protection
+// preference) stay unkeyed. Anything derived from a profile-scoped endpoint —
+// the manifest, which lists that profile's lists, the enabled-catalog config,
 // and the discovery catalogs, which include personal recommendations — is
 // keyed by profile so one profile never serves another's rows.
 
@@ -364,23 +364,26 @@ const fetchDiscoveryMetas = async (catalogId: string, profileId: string | null):
 
 // ─── Manifest ───
 
-// Fetch enabled catalogs from API
-let cachedEnabledCatalogs: CacheEntry<string[]> | null = null;
+// Fetch enabled catalogs from API. The config is per-profile, so the cache is
+// keyed by profile too — otherwise the first profile to build a manifest would
+// decide which catalogs every other profile sees for the next minute.
+const enabledCatalogsCache = new Map<string, CacheEntry<string[]>>();
 const ENABLED_CATALOGS_CACHE_TTL_MS = 60_000;
 
 const fetchEnabledCatalogs = async (profileId: string | null): Promise<string[] | null> => {
   const now = Date.now();
-  if (cachedEnabledCatalogs && now < cachedEnabledCatalogs.expiry) {
-    return cachedEnabledCatalogs.data;
-  }
+  const cacheKey = cacheKeyFor(profileId);
+  const cached = enabledCatalogsCache.get(cacheKey);
+  if (cached && now < cached.expiry) return cached.data;
+
   try {
     const res = await apiGet<{ config: { enabledCatalogs: string[] } }>("/addon/config", profileId);
     const catalogs = res.config.enabledCatalogs;
-    cachedEnabledCatalogs = { data: catalogs, expiry: now + ENABLED_CATALOGS_CACHE_TTL_MS };
+    cacheSet(enabledCatalogsCache, cacheKey, { data: catalogs, expiry: now + ENABLED_CATALOGS_CACHE_TTL_MS });
     return catalogs;
   } catch (error) {
     app.log.warn(error, "Failed to fetch enabled catalogs, using cached value");
-    return cachedEnabledCatalogs?.data ?? null;
+    return cached?.data ?? null;
   }
 };
 

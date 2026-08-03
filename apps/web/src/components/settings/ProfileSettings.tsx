@@ -179,6 +179,62 @@ function RemovePinForm({ profile, onSaved, onCancel }: { profile: Profile; onSav
   );
 }
 
+// Deleting a PIN-protected profile needs its PIN unless the browser already
+// holds a profile token for it (i.e. it is the profile you unlocked and are
+// using). We only ask after the server says it wants one, so deleting the
+// profile you are in stays a single confirm.
+function DeleteConfirmForm({ profile, onDeleted, onCancel }: { profile: Profile; onDeleted: (id: string) => void; onCancel: () => void }) {
+  const [pin, setPin] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const trimmed = pin.trim();
+    if (!trimmed) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await api.deleteProfile(profile.id, trimmed);
+      onDeleted(profile.id);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setError("Incorrect PIN.");
+      } else {
+        setError(err instanceof Error ? err.message : "Could not delete profile.");
+      }
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="flex flex-1 items-center gap-2">
+      <input
+        autoFocus
+        type="password"
+        inputMode="numeric"
+        value={pin}
+        onChange={(e) => setPin(e.target.value)}
+        placeholder={`PIN for ${profile.name} to confirm deletion`}
+        className="w-full min-w-0 rounded-lg border px-2.5 py-1.5 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+        style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
+      />
+      <button
+        type="submit"
+        disabled={deleting || !pin.trim()}
+        aria-label={`Confirm deletion of ${profile.name}`}
+        className="flex-none rounded-lg p-1.5 text-rose-600 hover:bg-rose-500/10 disabled:opacity-50"
+      >
+        {deleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+      </button>
+      <button type="button" onClick={onCancel} aria-label="Cancel deletion" className="flex-none rounded-lg p-1.5 hover:bg-[var(--surface-strong)]" style={{ color: "var(--text-mute)" }}>
+        <X size={16} />
+      </button>
+      {error && <p className="w-full text-xs text-rose-600">{error}</p>}
+    </form>
+  );
+}
+
 function ProfileRow({
   profile,
   isActive,
@@ -192,7 +248,7 @@ function ProfileRow({
   onUpdated: (p: Profile) => void;
   onDeleted: (id: string) => void;
 }) {
-  const [editing, setEditing] = useState<"none" | "name" | "pin" | "removePin">("none");
+  const [editing, setEditing] = useState<"none" | "name" | "pin" | "removePin" | "confirmDelete">("none");
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
@@ -211,7 +267,13 @@ function ProfileRow({
       await api.deleteProfile(profile.id);
       onDeleted(profile.id);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not delete profile.");
+      // 401 means the server wants proof of this profile's PIN — ask for it
+      // rather than reporting a failure the user can actually get past.
+      if (err instanceof ApiError && err.status === 401) {
+        setEditing("confirmDelete");
+      } else {
+        setError(err instanceof ApiError ? err.message : "Could not delete profile.");
+      }
       setDeleting(false);
     }
   };
@@ -242,6 +304,12 @@ function ProfileRow({
           <RemovePinForm
             profile={profile}
             onSaved={(p) => { onUpdated(p); setEditing("none"); showToast(`PIN removed for ${p.name}`); }}
+            onCancel={() => setEditing("none")}
+          />
+        ) : editing === "confirmDelete" ? (
+          <DeleteConfirmForm
+            profile={profile}
+            onDeleted={onDeleted}
             onCancel={() => setEditing("none")}
           />
         ) : (

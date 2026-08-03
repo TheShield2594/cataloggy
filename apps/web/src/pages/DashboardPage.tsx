@@ -27,7 +27,8 @@ import {
   WatchStats,
 } from "../api";
 import { Link } from "react-router";
-import { fadeMaskStyle, useHorizontalScroll } from "../components/carousel-utils";
+import { CarouselTrack } from "../components/CarouselTrack";
+import { useHorizontalScroll } from "../components/carousel-utils";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { Poster } from "../components/Poster";
 import { useToast } from "../hooks/useToast";
@@ -397,10 +398,11 @@ function DiscoverSubRow({
           ? <p className="text-sm italic" style={{ color: "var(--text-dim)" }}>Generating AI recommendations...</p>
           : <ContinueWatchingSkeleton />
       ) : (
-        <div
-          ref={scroll.ref}
-          className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
-          style={fadeMaskStyle(scroll.canScrollLeft, scroll.canScrollRight)}
+        <CarouselTrack
+          scrollRef={scroll.ref}
+          canScrollLeft={scroll.canScrollLeft}
+          canScrollRight={scroll.canScrollRight}
+          className="gap-4"
         >
           {items.map((item) => (
             <DiscoveryCard
@@ -416,7 +418,7 @@ function DiscoverSubRow({
               }
             />
           ))}
-        </div>
+        </CarouselTrack>
       )}
     </div>
   );
@@ -895,10 +897,11 @@ export function DashboardPage() {
               />
             )}
             {continueRowItems.length > 0 && (
-              <div
-                ref={continueScroll.ref}
-                className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
-                style={fadeMaskStyle(continueScroll.canScrollLeft, continueScroll.canScrollRight)}
+              <CarouselTrack
+                scrollRef={continueScroll.ref}
+                canScrollLeft={continueScroll.canScrollLeft}
+                canScrollRight={continueScroll.canScrollRight}
+                className="gap-4"
               >
                 {continueRowItems.map((s, index) => (
                   <ContinueWatchingCard
@@ -911,7 +914,7 @@ export function DashboardPage() {
                     onSelect={() => setSelectedItem(toSearchResult(s.imdbId, "series", s.name, { poster: s.poster, background: s.background }))}
                   />
                 ))}
-              </div>
+              </CarouselTrack>
             )}
           </>
         )}
@@ -1084,10 +1087,11 @@ export function DashboardPage() {
             <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>No watch history yet.</p>
           </div>
         ) : (
-          <div
-            ref={recentScroll.ref}
-            className="flex gap-4 overflow-x-auto pb-2 scroll-smooth scrollbar-hide"
-            style={fadeMaskStyle(recentScroll.canScrollLeft, recentScroll.canScrollRight)}
+          <CarouselTrack
+            scrollRef={recentScroll.ref}
+            canScrollLeft={recentScroll.canScrollLeft}
+            canScrollRight={recentScroll.canScrollRight}
+            className="gap-4"
           >
             {history.map((event) => (
               <div
@@ -1125,7 +1129,7 @@ export function DashboardPage() {
                 </p>
               </div>
             ))}
-          </div>
+          </CarouselTrack>
         )}
       </section>
 

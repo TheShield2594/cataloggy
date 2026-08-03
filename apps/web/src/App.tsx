@@ -1,9 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, Route, Routes, useLocation } from "react-router";
-import { BarChart3, CalendarDays, Clapperboard, Gamepad2, History, Loader2, Search, List, Settings, User } from "lucide-react";
+import { Clapperboard, Loader2, Search, User } from "lucide-react";
 import { api, Profile, runtimeConfig } from "./api";
 import { CommandPalette, useCommandPalette } from "./components/CommandPalette";
 import { InstallButton } from "./components/InstallButton";
+import { MobileTabBar } from "./components/MobileTabBar";
 import { Sidebar, PIN_KEY } from "./components/Sidebar";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useTheme } from "./hooks/useTheme";
@@ -25,17 +26,6 @@ const NotFoundPage = lazy(() => import("./pages/NotFoundPage").then((m) => ({ de
 const SearchPage = lazy(() => import("./pages/SearchPage").then((m) => ({ default: m.SearchPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const StatsPage = lazy(() => import("./pages/StatsPage").then((m) => ({ default: m.StatsPage })));
-
-const mobileNavItems = [
-  { to: "/", label: "Dashboard", icon: Clapperboard, end: true },
-  { to: "/search", label: "Search", icon: Search, end: false },
-  { to: "/lists", label: "Lists", icon: List, end: false },
-  { to: "/games", label: "Games", icon: Gamepad2, end: false },
-  { to: "/calendar", label: "Calendar", icon: CalendarDays, end: false },
-  { to: "/history", label: "History", icon: History, end: false },
-  { to: "/stats", label: "Stats", icon: BarChart3, end: false },
-  { to: "/settings", label: "Settings", icon: Settings, end: false },
-] as const;
 
 const LoadingFallback = ({ label = "Loading…" }: { label?: string }) => (
   <div
@@ -249,35 +239,7 @@ function AppShell({
       </main>
 
       {/* Mobile bottom tab bar */}
-      <nav
-        className="fixed bottom-0 left-0 right-0 z-40 flex sm:hidden backdrop-blur-xl"
-        style={{
-          borderTop: "1px solid var(--border)",
-          backgroundColor: "color-mix(in srgb, var(--bg-0) 96%, transparent)",
-          paddingBottom: "env(safe-area-inset-bottom)"
-        }}
-      >
-        {mobileNavItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = item.end
-            ? location.pathname === item.to
-            : location.pathname.startsWith(item.to);
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={`relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-2xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2 ${isActive ? "text-claw-text" : ""}`}
-              style={isActive ? {} : { color: "var(--text-dim)" }}
-            >
-              {isActive && (
-                <span className="absolute top-0 h-0.5 w-8 rounded-full bg-claw-500" aria-hidden="true" />
-              )}
-              <Icon className={`h-5 w-5 ${isActive ? "fill-claw-500/20" : ""}`} />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
+      <MobileTabBar pathname={location.pathname} />
     </div>
   );
 }

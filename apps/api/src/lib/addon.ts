@@ -1,7 +1,11 @@
 import { ListKind } from "@prisma/client";
 import { prisma } from "./prisma.js";
 
-export const ADDON_CONFIG_KEY = "addon:config";
+// One config row per profile, so two profiles can expose different catalogs to
+// Stremio (and so the Settings picker only ever names the requesting profile's
+// lists). The `addon:config` row this replaced is copied onto the default
+// profile by the 20260803160000_per_profile_addon_config migration.
+export const addonConfigKey = (profileId: string) => `addon:config:${profileId}`;
 
 export type AddonConfig = {
   enabledCatalogs: string[];
@@ -36,8 +40,8 @@ export const LEGACY_CATALOG_MAP: Record<string, string> = {
 export const migrateLegacyCatalogs = (catalogs: string[]): string[] =>
   catalogs.map((c) => LEGACY_CATALOG_MAP[c] ?? c);
 
-export const getAddonConfig = async (): Promise<AddonConfig> => {
-  const row = await prisma.kV.findUnique({ where: { key: ADDON_CONFIG_KEY } });
+export const getAddonConfig = async (profileId: string): Promise<AddonConfig> => {
+  const row = await prisma.kV.findUnique({ where: { key: addonConfigKey(profileId) } });
   if (!row) return { enabledCatalogs: DEFAULT_ADDON_CATALOGS };
   try {
     const parsed = JSON.parse(row.value) as AddonConfig;
@@ -49,7 +53,7 @@ export const getAddonConfig = async (): Promise<AddonConfig> => {
     let validListIds = new Set<string>();
     if (listEntries.length > 0) {
       const customLists = await prisma.list.findMany({
-        where: { kind: ListKind.custom },
+        where: { kind: ListKind.custom, profileId },
         select: { id: true },
       });
       validListIds = new Set(customLists.map((l) => l.id));
