@@ -161,7 +161,9 @@ export function AddonSettings() {
     <div className="space-y-4">
       <AddonManifestUrl profileName={profileName} multiProfile={multiProfile} />
       <p className="text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
-        Choose which catalogs appear in Stremio. Changes take effect after the manifest cache refreshes (~60s).
+        Choose which catalogs appear in Stremio
+        {multiProfile && profileName ? <> for <strong style={{ color: "var(--text-dim)" }}>{profileName}</strong> — each profile picks its own</> : null}.
+        Changes take effect after the manifest cache refreshes (~60s).
       </p>
 
       {/* Discovery catalogs */}
