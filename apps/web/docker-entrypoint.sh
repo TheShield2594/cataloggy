@@ -10,4 +10,9 @@ SENTRY_DSN_JSON=$(SENTRY_DSN="${SENTRY_DSN:-}" node -e 'console.log(JSON.stringi
   printf 'window.__CATALOGGY_SENTRY_DSN__ = %s;\n' "$SENTRY_DSN_JSON"
 } > /app/dist/config.js
 
+# The CSP's connect-src names the API/addon/Sentry origins this container was
+# configured with, so it is rendered here for the same reason config.js is —
+# those values only exist at container start.
+node /app/scripts/render-serve-json.mjs /app/serve.template.json /app/dist/serve.json
+
 exec "$@"

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
@@ -7,12 +7,19 @@ const OWN_LIST_ID = "33333333-3333-4333-8333-333333333333";
 const OTHER_LIST_ID = "44444444-4444-4444-8444-444444444444";
 
 const prismaMock = {
-  profile: { findUnique: vi.fn(), findFirst: vi.fn() },
-  list: { findMany: vi.fn(), findUnique: vi.fn() },
+  profile: { findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
+  list: { findMany: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn() },
   kV: { findUnique: vi.fn(), upsert: vi.fn() },
 };
 
 vi.mock("../lib/prisma.js", () => ({ prisma: prismaMock }));
+
+vi.mock("../lib/stremio-helpers.js", () => ({
+  getWatchlistMetas: async () => [{ id: "tt0000001" }],
+  getRecentMetas: async () => [],
+  getContinueMetas: async () => [],
+  getCustomListMetas: async () => [{ id: "tt0000002" }],
+}));
 
 vi.mock("../lib/profile.js", () => ({
   resolveProfile: async (request: { profileId?: string }) => {
@@ -31,9 +38,11 @@ vi.mock("../lib/tmdb-client.js", () => ({ getTmdb: async () => ({}) }));
 const resetMocks = () => {
   vi.clearAllMocks();
   prismaMock.list.findMany.mockResolvedValue([]);
+  prismaMock.list.findFirst.mockResolvedValue(null);
   prismaMock.kV.findUnique.mockResolvedValue(null);
   prismaMock.kV.upsert.mockResolvedValue({});
   prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID });
+  prismaMock.profile.findMany.mockResolvedValue([{ id: PROFILE_ID }, { id: OTHER_PROFILE_ID }]);
 };
 
 const buildApp = async (): Promise<FastifyInstance> => {
@@ -171,5 +180,149 @@ describe("stremio routes — addon config is per profile", () => {
       expect(catalogIds).not.toContain(`list:${OTHER_LIST_ID}`);
       await app.close();
     });
+  });
+});
+
+describe("stremio routes — the addon URL is gated by a per-profile secret", () => {
+  const originalToken = process.env.API_TOKEN;
+
+  beforeEach(() => {
+    resetMocks();
+    process.env.API_TOKEN = "test-api-token";
+  });
+
+  afterEach(() => {
+    if (originalToken === undefined) delete process.env.API_TOKEN;
+    else process.env.API_TOKEN = originalToken;
+  });
+
+  const secretFor = async (profileId: string): Promise<string> => {
+    const { deriveStremioSecret } = await import("../lib/stremio-secret.js");
+    return deriveStremioSecret(profileId) as string;
+  };
+
+  it("serves the manifest of the profile the secret was minted for", async () => {
+    const app = await buildApp();
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/addon/stremio/${await secretFor(OTHER_PROFILE_ID)}/manifest.json`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(prismaMock.kV.findUnique).toHaveBeenCalledWith({
+      where: { key: `addon:config:${OTHER_PROFILE_ID}` },
+    });
+    await app.close();
+  });
+
+  it("ignores ?profileId — the secret, not the query string, picks the profile", async () => {
+    const app = await buildApp();
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/addon/stremio/${await secretFor(PROFILE_ID)}/manifest.json?profileId=${OTHER_PROFILE_ID}`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(prismaMock.kV.findUnique).toHaveBeenCalledWith({
+      where: { key: `addon:config:${PROFILE_ID}` },
+    });
+    expect(prismaMock.kV.findUnique).not.toHaveBeenCalledWith({
+      where: { key: `addon:config:${OTHER_PROFILE_ID}` },
+    });
+    await app.close();
+  });
+
+  it("404s a manifest request carrying an unknown secret", async () => {
+    const app = await buildApp();
+
+    const response = await app.inject({ method: "GET", url: `/addon/stremio/${"f".repeat(64)}/manifest.json` });
+
+    expect(response.statusCode).toBe(404);
+    expect(prismaMock.kV.findUnique).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("404s a configure request carrying an unknown secret", async () => {
+    const app = await buildApp();
+
+    const response = await app.inject({ method: "GET", url: `/addon/stremio/${"f".repeat(64)}/configure` });
+
+    // The message distinguishes this from the 404 the redirect itself returns
+    // when CATALOGGY_WEB_PUBLIC is unset — the status code alone cannot.
+    expect(response.statusCode).toBe(404);
+    expect(response.json().error).toBe("Unknown addon URL");
+    await app.close();
+  });
+
+  it("serves a catalog for a valid secret and 404s the same catalog without one", async () => {
+    const app = await buildApp();
+    const secret = await secretFor(PROFILE_ID);
+
+    const ok = await app.inject({
+      method: "GET",
+      url: `/addon/stremio/${secret}/catalog/movie/my_watchlist_movies.json`,
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().metas).toEqual([{ id: "tt0000001" }]);
+
+    const rejected = await app.inject({
+      method: "GET",
+      url: `/addon/stremio/${"0".repeat(64)}/catalog/movie/my_watchlist_movies.json`,
+    });
+    expect(rejected.statusCode).toBe(404);
+    expect(rejected.json().metas).toEqual([]);
+    await app.close();
+  });
+
+  it("only serves a custom list catalog to the profile that owns the list", async () => {
+    const app = await buildApp();
+    const secret = await secretFor(PROFILE_ID);
+
+    prismaMock.list.findFirst.mockResolvedValue({ id: OWN_LIST_ID });
+    const own = await app.inject({
+      method: "GET",
+      url: `/addon/stremio/${secret}/catalog/movie/list:${OWN_LIST_ID}.json`,
+    });
+    expect(own.statusCode).toBe(200);
+    expect(prismaMock.list.findFirst).toHaveBeenCalledWith({
+      where: { id: OWN_LIST_ID, profileId: PROFILE_ID },
+      select: { id: true },
+    });
+
+    // A list belonging to someone else is not found under this profile's scope.
+    prismaMock.list.findFirst.mockResolvedValue(null);
+    const foreign = await app.inject({
+      method: "GET",
+      url: `/addon/stremio/${secret}/catalog/movie/list:${OTHER_LIST_ID}.json`,
+    });
+    expect(foreign.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("404s a list catalog whose id is not a UUID rather than failing the uuid cast", async () => {
+    const app = await buildApp();
+    const secret = await secretFor(PROFILE_ID);
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/addon/stremio/${secret}/catalog/movie/list:not-a-uuid.json`,
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(prismaMock.list.findFirst).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("hands the install URL for the requesting profile back from /addon/config", async () => {
+    const app = await buildApp();
+
+    const response = await app.inject({ method: "GET", url: "/addon/config" });
+
+    expect(response.json().stremioManifestPath).toBe(
+      `/addon/stremio/${await secretFor(PROFILE_ID)}/manifest.json`
+    );
+    await app.close();
   });
 });

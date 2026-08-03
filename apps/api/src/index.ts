@@ -12,6 +12,7 @@ import {
 import { prisma } from "./lib/prisma.js";
 import { applyCorsHeaders } from "./lib/cors.js";
 import { verifyToken } from "./lib/auth.js";
+import { isStremioSecretPath } from "./lib/stremio-secret.js";
 import { getAiRecommendations, isAiConfigured } from "./lib/ai.js";
 import { trendingCacheDeletePrefix } from "./lib/cache.js";
 import { pollTraktHistory, syncTraktWatchlist } from "./lib/trakt-client.js";
@@ -128,11 +129,17 @@ app.addHook("onRequest", async (request, reply) => {
   if (request.method === "OPTIONS") return reply.code(204).send();
 });
 
+// Routes that cannot carry a bearer token by construction: the health probe,
+// Stremio's addon URLs (the protocol sends no credentials — an unguessable
+// per-profile secret in the path stands in, verified by the route handler), the
+// Trakt OAuth callback (a browser redirect from trakt.tv, bound to the flow that
+// started it by its `state`), and the Plex/Jellyfin webhooks (their own shared
+// secret). Everything else needs `API_TOKEN`.
 app.addHook("onRequest", async (request, reply) => {
   const url = request.url;
   if (
     url === "/health" ||
-    url.startsWith("/addon/stremio") ||
+    isStremioSecretPath(url) ||
     url === "/addon" ||
     url.startsWith("/trakt/oauth/callback") ||
     url.startsWith("/webhooks/")
