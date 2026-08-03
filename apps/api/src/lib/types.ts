@@ -64,7 +64,10 @@ export type RecordWatchParams = {
   request: FastifyRequest;
 };
 
-export const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Re-exported so existing `../lib/types.js` imports keep working; the pattern
+// itself lives in @cataloggy/shared, which the addon service also validates
+// profile ids against.
+export { UUID_V4_PATTERN } from "@cataloggy/shared";
 
 export const DEFAULT_STREMIO_LIMIT = 50;
 export const MAX_STREMIO_LIMIT = 200;

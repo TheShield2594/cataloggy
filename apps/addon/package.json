@@ -8,7 +8,8 @@
     "start": "node dist/index.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "test": "vitest run"
   },
   "dependencies": {
     "@cataloggy/shared": "workspace:*",
@@ -16,6 +17,7 @@
     "fastify": "^5.10.0"
   },
   "devDependencies": {
-    "tsx": "^4.23.1"
+    "tsx": "^4.23.1",
+    "vitest": "^4.1.10"
   }
 }

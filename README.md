@@ -160,6 +160,18 @@ Cataloggy's add-on service speaks the standard Stremio add-on protocol, so it wo
 
 The web app itself also installs fine as a PWA on Android TV browsers that support it, but the Stremio app gives a better remote-control-friendly experience for browsing/playback on a TV.
 
+### Profiles and the add-on URL
+
+Stremio and Omni have no way to say *who* is watching — the installed URL is the only thing that distinguishes one installation from another. Cataloggy therefore binds a profile to the URL itself:
+
+```text
+http://LAN-IP:7001/p/PROFILE-ID/manifest.json
+```
+
+**Settings → Stremio Addon** always shows the URL for the profile you're currently using, so to install for someone else: switch to their profile, come back, and copy the URL again. Catalogs, "Mark Watched", and scrobbles from that installation all belong to that profile.
+
+The plain `http://LAN-IP:7001/manifest.json` URL keeps working and resolves to your oldest profile, so installs made before profiles existed are unaffected — but on a household with several profiles, each person should install their own URL.
+
 ## Nginx Proxy Manager Setup
 
 Configure Nginx Proxy Manager with one Proxy Host for your domain (for example, `cataloggy.domain.com`):
