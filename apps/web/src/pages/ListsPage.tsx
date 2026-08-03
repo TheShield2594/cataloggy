@@ -160,7 +160,7 @@ function AddItemModal({
                 type="button"
                 onClick={() => setType(opt)}
                 className="relative z-10 flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium"
-                style={{ color: type === opt ? "#fff" : "var(--text-dim)" }}
+                style={{ color: type === opt ? "var(--on-accent)" : "var(--text-dim)" }}
               >
                 {opt === "movie" ? <Film className="h-3 w-3" /> : <Tv className="h-3 w-3" />}
                 {opt === "movie" ? "Movie" : "Series"}
@@ -196,7 +196,7 @@ function AddItemModal({
                   <p className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>{r.name}</p>
                   <p className="text-xs" style={{ color: "var(--text-mute)" }}>{r.year ?? "Unknown"} &middot; {r.type}</p>
                 </div>
-                <Plus className="h-4 w-4 flex-none text-claw-600" />
+                <Plus className="h-4 w-4 flex-none text-claw-text" />
               </button>
             ))}
           </div>
@@ -418,7 +418,7 @@ export function ListsPage() {
                     type="button"
                     onClick={() => setSelectedListId(list.id)}
                     className={`min-w-0 flex-1 px-4 py-3.5 text-left text-sm font-medium ${
-                      selectedListId === list.id ? "text-claw-600" : ""
+                      selectedListId === list.id ? "text-claw-text" : ""
                     }`}
                     style={selectedListId === list.id ? undefined : { color: "var(--text-dim)" }}
                   >
@@ -454,7 +454,7 @@ export function ListsPage() {
           />
           <button
             type="submit"
-            className="rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 transition-colors"
+            className="rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on hover:bg-claw-600 transition-colors"
           >
             Create
           </button>
@@ -518,7 +518,7 @@ export function ListsPage() {
               <button
                 type="button"
                 onClick={() => setShowAddModal(true)}
-                className="ml-3 flex flex-none items-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 transition-colors"
+                className="ml-3 flex flex-none items-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on hover:bg-claw-600 transition-colors"
               >
                 <Plus className="h-4 w-4" />
                 Add
@@ -552,7 +552,7 @@ export function ListsPage() {
                       onClick={() => setSortBy(value)}
                       aria-pressed={sortBy === value}
                       className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-                        sortBy === value ? "bg-claw-500 text-white" : "hover:text-[var(--text)]"
+                        sortBy === value ? "bg-claw-500 text-claw-on" : "hover:text-[var(--text)]"
                       }`}
                       style={sortBy === value ? undefined : { color: "var(--text-mute)" }}
                     >
@@ -581,7 +581,7 @@ export function ListsPage() {
                 </div>
                 <p className="mt-4 text-lg font-semibold" style={{ color: "var(--text-dim)" }}>This list is empty</p>
                 <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>
-                  Click <span className="font-semibold text-claw-600">+ Add</span> to search and add titles.
+                  Click <span className="font-semibold text-claw-text">+ Add</span> to search and add titles.
                 </p>
               </div>
             ) : displayedItems.length === 0 ? (
@@ -619,7 +619,7 @@ export function ListsPage() {
                         <span
                           className={`absolute top-2.5 left-2.5 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-lg ring-1 ring-black/15 ${
                             item.type === "movie"
-                              ? "bg-claw-500/90 text-white"
+                              ? "bg-claw-500/90 text-claw-on"
                               : "bg-plum-500/90 text-white"
                           }`}
                           style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}

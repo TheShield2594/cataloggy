@@ -41,7 +41,7 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
           ) : toast.type === "error" ? (
             <X aria-hidden="true" className="h-5 w-5 flex-none text-rose-500" />
           ) : (
-            <Heart aria-hidden="true" className="h-5 w-5 flex-none text-claw-600" />
+            <Heart aria-hidden="true" className="h-5 w-5 flex-none text-claw-text" />
           )}
           <span className="text-sm font-medium" style={{ color: "var(--text)" }}>{toast.message}</span>
           <button

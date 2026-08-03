@@ -164,7 +164,7 @@ export function WatchDateModal({
                   const [y, m, d] = customDate.split("-").map(Number);
                   void submit(new Date(Date.UTC(y, m - 1, d, 12)).toISOString());
                 }}
-                className="flex-1 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 disabled:opacity-50 transition-colors"
+                className="flex-1 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on hover:bg-claw-600 disabled:opacity-50 transition-colors"
               >
                 {saving ? "Saving…" : "Log Watch"}
               </button>

@@ -68,7 +68,7 @@ export function RpdbSettings() {
         RPDB (Rating Poster Database) overlays rating badges directly onto poster images.
         When enabled, all posters across the web UI and Stremio will show rating badges on the artwork.
         Get an API key at{" "}
-        <a href="https://ratingposterdb.com/api-key/" target="_blank" rel="noopener noreferrer" className="text-claw-600 underline hover:text-claw-500">
+        <a href="https://ratingposterdb.com/api-key/" target="_blank" rel="noopener noreferrer" className="text-claw-text underline underline-offset-2 hover:decoration-2">
           ratingposterdb.com
         </a>.
       </p>
@@ -115,7 +115,7 @@ export function RpdbSettings() {
             className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
               saved
                 ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/20"
-                : "bg-claw-500 text-white hover:bg-claw-600 disabled:opacity-50"
+                : "bg-claw-500 text-claw-on hover:bg-claw-600 disabled:opacity-50"
             }`}
           >
             {saved ? <><Check size={16} /> Saved</> : saving ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : "Save RPDB Key"}

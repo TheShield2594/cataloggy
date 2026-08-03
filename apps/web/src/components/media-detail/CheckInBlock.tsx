@@ -26,7 +26,7 @@ export function CheckInBlock({
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-claw-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-claw-500" />
           </span>
-          <span className="text-sm font-semibold text-claw-600">Now Watching</span>
+          <span className="text-sm font-semibold text-claw-text">Now Watching</span>
           {activeCheckin.season != null && activeCheckin.episode != null && (
             <span className="text-xs" style={{ color: "var(--text-mute)" }}>S{String(activeCheckin.season).padStart(2, "0")}:E{String(activeCheckin.episode).padStart(2, "0")}</span>
           )}
@@ -43,7 +43,7 @@ export function CheckInBlock({
           <button
             type="button"
             onClick={() => onCheckout(true)}
-            className="flex-1 rounded-xl bg-claw-500 px-3 py-2 text-xs font-semibold text-white hover:bg-claw-600 transition-colors"
+            className="flex-1 rounded-xl bg-claw-500 px-3 py-2 text-xs font-semibold text-claw-on hover:bg-claw-600 transition-colors"
           >
             Finished &amp; Log
           </button>
@@ -62,7 +62,7 @@ export function CheckInBlock({
           onStartCheckin();
         }
       }}
-      className="flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors hover:border-claw-500/40 hover:bg-claw-500/5 hover:text-claw-600"
+      className="flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors hover:border-claw-500/40 hover:bg-claw-500/5 hover:text-claw-text"
       style={{ borderColor: "var(--border-strong)", background: "var(--surface)", color: "var(--text-dim)" }}
     >
       <Radio className="h-4 w-4" /> Check In

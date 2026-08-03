@@ -207,7 +207,7 @@ export function GameDetailPanel({
         <div className="-mt-10 relative z-20 min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-10 sm:mt-0 sm:p-8">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="flex items-center gap-1 rounded-md bg-claw-500/90 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-white">
+              <span className="flex items-center gap-1 rounded-md bg-claw-500/90 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-claw-on">
                 <Gamepad2 className="h-3 w-3" /> Game
               </span>
               {releaseYear && <span className="text-sm" style={{ color: "var(--text-mute)" }}>{releaseYear}</span>}

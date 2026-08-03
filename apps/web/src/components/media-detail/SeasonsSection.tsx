@@ -178,7 +178,7 @@ export function SeasonsSection({
                   type="button"
                   onClick={() => void markSeasonWatched(s)}
                   disabled={pendingSeason[s.seasonNumber]}
-                  className="flex-none rounded-full bg-claw-500/10 px-2.5 py-1 text-2xs font-semibold text-claw-600 ring-1 ring-claw-500/20 transition-colors hover:bg-claw-500/20 disabled:opacity-50"
+                  className="flex-none rounded-full bg-claw-500/10 px-2.5 py-1 text-2xs font-semibold text-claw-text ring-1 ring-claw-500/20 transition-colors hover:bg-claw-500/20 disabled:opacity-50"
                 >
                   Mark watched
                 </button>
@@ -211,7 +211,7 @@ export function SeasonsSection({
                               ? { background: "rgb(var(--accent-rgb))", borderColor: "transparent" }
                               : { borderColor: "var(--border-strong)" }}
                           >
-                            {isWatched && <Check className="h-3 w-3 text-white" />}
+                            {isWatched && <Check className="h-3 w-3 text-claw-on" />}
                           </span>
                           <span className="w-9 flex-none text-2xs font-semibold" style={{ color: "var(--text-mute)" }}>
                             E{String(ep.episodeNumber).padStart(2, "0")}

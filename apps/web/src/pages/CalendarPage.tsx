@@ -172,7 +172,7 @@ export function CalendarPage() {
               type="button"
               onClick={() => setView(opt.key)}
               className="relative flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2"
-              style={view === opt.key ? { background: "var(--accent)", color: "white" } : { color: "var(--text-dim)" }}
+              style={view === opt.key ? { background: "var(--accent)", color: "var(--on-accent)" } : { color: "var(--text-dim)" }}
             >
               <opt.icon className="h-3.5 w-3.5" />
               {opt.label}
@@ -194,7 +194,7 @@ export function CalendarPage() {
                 type="button"
                 onClick={() => setAgendaDays(d)}
                 className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-                  agendaDays === d ? "bg-claw-500 text-white" : "hover:text-[var(--text)]"
+                  agendaDays === d ? "bg-claw-500 text-claw-on" : "hover:text-[var(--text)]"
                 }`}
                 style={agendaDays === d ? undefined : { color: "var(--text-mute)", border: "1px solid var(--border)" }}
               >
@@ -325,7 +325,7 @@ export function CalendarPage() {
                             }}
                           >
                             <span
-                              className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-2xs font-semibold ${isToday ? "bg-claw-500 text-white" : ""}`}
+                              className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-2xs font-semibold ${isToday ? "bg-claw-500 text-claw-on" : ""}`}
                               style={isToday ? undefined : { color: "var(--text-mute)" }}
                             >
                               {day.getDate()}

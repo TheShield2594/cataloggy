@@ -192,7 +192,7 @@ function AppShell({
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-6 py-3">
           <Link to="/" className="flex items-center gap-2.5 text-lg font-bold sm:hidden" style={{ color: "var(--text)" }}>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-claw-500">
-              <Clapperboard className="h-4 w-4 text-white" />
+              <Clapperboard className="h-4 w-4 text-claw-on" />
             </div>
             <span>Cataloggy</span>
           </Link>
@@ -266,7 +266,7 @@ function AppShell({
             <Link
               key={item.to}
               to={item.to}
-              className={`relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-2xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2 ${isActive ? "text-claw-600" : ""}`}
+              className={`relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-2xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2 ${isActive ? "text-claw-text" : ""}`}
               style={isActive ? {} : { color: "var(--text-dim)" }}
             >
               {isActive && (

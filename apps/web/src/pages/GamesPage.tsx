@@ -192,7 +192,7 @@ function AddGameModal({
                 {r.inLibrary ? (
                   <Check className="h-4 w-4 flex-none text-emerald-600" />
                 ) : (
-                  <Plus className="h-4 w-4 flex-none text-claw-600" />
+                  <Plus className="h-4 w-4 flex-none text-claw-text" />
                 )}
               </button>
             ))}
@@ -381,7 +381,7 @@ export function GamesPage() {
         <button
           type="button"
           onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-claw-500 px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-claw-600"
+          className="flex items-center gap-1.5 rounded-lg bg-claw-500 px-3.5 py-2 text-sm font-semibold text-claw-on transition-colors hover:bg-claw-600"
         >
           <Plus className="h-4 w-4" /> Add game
         </button>
@@ -400,7 +400,7 @@ export function GamesPage() {
               else next.set("sort", opt.value);
               return next;
             }, { replace: true })}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${sort === opt.value ? "bg-claw-500 text-white" : ""}`}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${sort === opt.value ? "bg-claw-500 text-claw-on" : ""}`}
             style={sort === opt.value ? undefined : { color: "var(--text-mute)" }}
           >
             {opt.label}

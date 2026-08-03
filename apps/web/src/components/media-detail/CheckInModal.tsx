@@ -55,7 +55,7 @@ export function CheckInModal({
       >
         <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <div className="flex items-center gap-2">
-            <Radio className="h-4 w-4 text-claw-600" />
+            <Radio className="h-4 w-4 text-claw-text" />
             <h3 id="checkin-modal-title" className="text-base font-bold" style={{ color: "var(--text)" }}>Check In</h3>
           </div>
           <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 hover:bg-[var(--surface-strong)]" style={{ color: "var(--text-mute)" }}>
@@ -97,7 +97,7 @@ export function CheckInModal({
             </button>
             <button
               type="button" disabled={saving} onClick={() => void submit()}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-claw-600 disabled:opacity-50 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on hover:bg-claw-600 disabled:opacity-50 transition-colors"
             >
               <Radio className="h-3.5 w-3.5" />
               {saving ? "Checking in…" : "Check In"}

@@ -92,7 +92,7 @@ export function Sidebar({
       >
         <div className="flex items-center gap-2.5 px-4 pb-5">
           <div className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-claw-500">
-            <Clapperboard className="h-4.5 w-4.5 text-white" />
+            <Clapperboard className="h-4.5 w-4.5 text-claw-on" />
           </div>
           <span
             className="whitespace-nowrap text-base font-bold transition-opacity"
@@ -144,7 +144,7 @@ export function Sidebar({
               <button
                 type="button"
                 onClick={dismissHint}
-                className="mt-2 rounded-md bg-claw-500 px-2.5 py-1 text-2xs font-semibold text-white transition-colors hover:bg-claw-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400"
+                className="mt-2 rounded-md bg-claw-500 px-2.5 py-1 text-2xs font-semibold text-claw-on transition-colors hover:bg-claw-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400"
               >
                 Got it
               </button>

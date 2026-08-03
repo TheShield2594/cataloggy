@@ -48,7 +48,7 @@ export function ApiTokenSettings() {
         className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
           saved
             ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
-            : "bg-claw-500 text-white hover:bg-claw-600 shadow-lg shadow-claw-500/20"
+            : "bg-claw-500 text-claw-on hover:bg-claw-600 shadow-lg shadow-claw-500/20"
         }`}
       >
         {saved ? <><Check size={16} /> Saved</> : "Save token"}
