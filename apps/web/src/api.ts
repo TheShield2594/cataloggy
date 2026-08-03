@@ -879,8 +879,14 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
-  deleteProfile(profileId: string) {
-    return request<void>(`/profiles/${encodeURIComponent(profileId)}`, { method: "DELETE" });
+  // `currentPin` is required by the server for a PIN-protected profile unless
+  // the stored profile token was minted for that same profile — deleting one
+  // takes its whole history with it, so it is gated like a PIN change.
+  deleteProfile(profileId: string, currentPin?: string) {
+    return request<void>(`/profiles/${encodeURIComponent(profileId)}`, {
+      method: "DELETE",
+      ...(currentPin ? { body: JSON.stringify({ currentPin }) } : {}),
+    });
   },
   // Now playing (live Plex/Jellyfin scrobble sessions)
   getNowPlaying() {

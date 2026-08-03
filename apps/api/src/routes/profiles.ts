@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { mintProfileToken } from "../lib/profile-token.js";
-import { invalidateProfileCache } from "../lib/profile.js";
+import { hasValidProfileToken, invalidateProfileCache } from "../lib/profile.js";
 import { UUID_V4_PATTERN } from "../lib/types.js";
 
 const toSha256Digest = (value: string) => createHash("sha256").update(value).digest();
@@ -222,7 +222,7 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
     return { profile: { id: updated.id, name: updated.name, hasPin: updated.pinHash != null } };
   });
 
-  app.delete<{ Params: { id: string } }>("/profiles/:id", async (request, reply) => {
+  app.delete<{ Params: { id: string }; Body: unknown }>("/profiles/:id", async (request, reply) => {
     if (!UUID_V4_PATTERN.test(request.params.id)) {
       return reply.code(400).send({ error: "id must be a valid UUID" });
     }
@@ -233,6 +233,30 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
     const profileCount = await prisma.profile.count();
     if (profileCount === 1) {
       return reply.code(400).send({ error: "Cannot delete the last profile" });
+    }
+
+    // Deleting a locked profile destroys everything it owns — every child model
+    // cascades — so it needs at least the proof-of-PIN that changing that PIN
+    // requires. Otherwise the household member the PIN is meant to keep out
+    // could still wipe the profile, PIN and all, with the shared API token.
+    //
+    // An `x-profile-token` minted for *this* profile already proves the caller
+    // cleared the PIN gate, so deleting the profile you are currently in does
+    // not re-prompt; deleting someone else's locked profile needs its PIN.
+    if (profile.pinHash && !hasValidProfileToken(request, profile.id)) {
+      const lockout = await getPinLockout(profile.id);
+      if (lockout.locked) {
+        return reply
+          .code(429)
+          .send({ error: "Too many incorrect attempts. Try again later.", retryAfterSec: lockout.retryAfterSec });
+      }
+
+      const body = (request.body ?? {}) as { currentPin?: unknown };
+      const currentPin = typeof body.currentPin === "string" ? body.currentPin.trim() : "";
+      if (!currentPin || !pinMatches(currentPin, profile.pinHash)) {
+        await recordPinFailure(profile.id);
+        return reply.code(401).send({ error: "Incorrect current PIN" });
+      }
     }
 
     await prisma.profile.delete({ where: { id: profile.id } });

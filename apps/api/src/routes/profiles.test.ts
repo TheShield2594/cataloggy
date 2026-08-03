@@ -379,5 +379,100 @@ describe("profiles routes", () => {
       expect(prismaMock.profile.delete).toHaveBeenCalledWith({ where: { id: PROFILE_ID } });
       await app.close();
     });
+
+    describe("a PIN-protected profile requires proof of the PIN", () => {
+      const lockedProfile = { id: PROFILE_ID, name: "Alice", pinHash: hashPin("1234") };
+
+      beforeEach(() => {
+        prismaMock.profile.findUnique.mockResolvedValue(lockedProfile);
+        prismaMock.profile.count.mockResolvedValue(2);
+        process.env.API_TOKEN = "test-api-token";
+      });
+
+      it("refuses a delete with no currentPin and records a failed attempt", async () => {
+        const app = await buildApp();
+
+        const response = await app.inject({ method: "DELETE", url: `/profiles/${PROFILE_ID}` });
+
+        expect(response.statusCode).toBe(401);
+        expect(prismaMock.profile.delete).not.toHaveBeenCalled();
+        expect(prismaMock.$transaction).toHaveBeenCalled();
+        await app.close();
+      });
+
+      it("refuses an incorrect currentPin", async () => {
+        const app = await buildApp();
+
+        const response = await app.inject({
+          method: "DELETE",
+          url: `/profiles/${PROFILE_ID}`,
+          payload: { currentPin: "0000" },
+        });
+
+        expect(response.statusCode).toBe(401);
+        expect(prismaMock.profile.delete).not.toHaveBeenCalled();
+        await app.close();
+      });
+
+      it("deletes when the correct currentPin is given", async () => {
+        const app = await buildApp();
+
+        const response = await app.inject({
+          method: "DELETE",
+          url: `/profiles/${PROFILE_ID}`,
+          payload: { currentPin: "1234" },
+        });
+
+        expect(response.statusCode).toBe(204);
+        expect(prismaMock.profile.delete).toHaveBeenCalledWith({ where: { id: PROFILE_ID } });
+        await app.close();
+      });
+
+      it("deletes without a PIN when the caller holds this profile's access token", async () => {
+        const { mintProfileToken } = await import("../lib/profile-token.js");
+        const app = await buildApp();
+
+        const response = await app.inject({
+          method: "DELETE",
+          url: `/profiles/${PROFILE_ID}`,
+          headers: { "x-profile-token": mintProfileToken(PROFILE_ID) },
+        });
+
+        expect(response.statusCode).toBe(204);
+        await app.close();
+      });
+
+      it("ignores an access token minted for a different profile", async () => {
+        const { mintProfileToken } = await import("../lib/profile-token.js");
+        const app = await buildApp();
+
+        const response = await app.inject({
+          method: "DELETE",
+          url: `/profiles/${PROFILE_ID}`,
+          headers: { "x-profile-token": mintProfileToken("22222222-2222-4222-8222-222222222222") },
+        });
+
+        expect(response.statusCode).toBe(401);
+        expect(prismaMock.profile.delete).not.toHaveBeenCalled();
+        await app.close();
+      });
+
+      it("returns 429 while the profile is locked out", async () => {
+        prismaMock.kV.findUnique.mockResolvedValue({
+          value: JSON.stringify({ count: 0, lockedUntil: new Date(Date.now() + 60_000).toISOString() }),
+        });
+        const app = await buildApp();
+
+        const response = await app.inject({
+          method: "DELETE",
+          url: `/profiles/${PROFILE_ID}`,
+          payload: { currentPin: "1234" },
+        });
+
+        expect(response.statusCode).toBe(429);
+        expect(prismaMock.profile.delete).not.toHaveBeenCalled();
+        await app.close();
+      });
+    });
   });
 });
