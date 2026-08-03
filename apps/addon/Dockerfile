@@ -17,7 +17,7 @@ COPY packages/shared ./packages/shared
 RUN pnpm --filter @cataloggy/shared build
 RUN pnpm --filter @cataloggy/addon build
 
-RUN pnpm prune --prod
+RUN pnpm prune --prod --config.confirmModulesPurge=false
 
 FROM node:26-alpine AS runtime
 
