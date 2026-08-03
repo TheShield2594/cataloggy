@@ -37,9 +37,26 @@ const mobileNavItems = [
   { to: "/settings", label: "Settings", icon: Settings, end: false },
 ] as const;
 
-const LoadingFallback = () => (
-  <div className="flex items-center justify-center py-24" style={{ color: "var(--text-dim)" }}>
-    <Loader2 size={24} className="animate-spin" />
+const LoadingFallback = ({ label = "Loading…" }: { label?: string }) => (
+  <div
+    role="status"
+    aria-live="polite"
+    className="flex items-center justify-center py-24"
+    style={{ color: "var(--text-dim)" }}
+  >
+    <Loader2 size={24} className="animate-spin" aria-hidden="true" />
+    <span className="sr-only">{label}</span>
+  </div>
+);
+
+// The switcher is a full-screen modal, so suspending it to nothing would blank the
+// screen between the click and the chunk arriving. Hold the overlay instead.
+const ProfileSwitcherFallback = () => (
+  <div
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+    aria-busy="true"
+  >
+    <LoadingFallback label="Loading profiles…" />
   </div>
 );
 
@@ -162,7 +179,7 @@ function AppShell({
       />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       {switcherOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ProfileSwitcherFallback />}>
           <ProfileSwitcher onSelected={handleProfileSelected} onClose={closeSwitcher} />
         </Suspense>
       )}

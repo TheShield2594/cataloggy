@@ -55,6 +55,29 @@ describe("resolveProfile caching", () => {
     expect(prismaMock.profile.findUnique).toHaveBeenCalledTimes(1);
   });
 
+  it("collapses a parallel burst into one query, not one per request", async () => {
+    // The dashboard's requests all arrive before the first lookup resolves, so a
+    // plain read-through cache would let every one of them hit the database.
+    let release: (value: { id: string; pinHash: null }) => void = () => {};
+    prismaMock.profile.findUnique.mockReturnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      })
+    );
+    const { resolveProfile } = await loadProfileLib();
+
+    const requests = Array.from({ length: 11 }, () => makeRequest(PROFILE_ID));
+    const pending = Promise.all(
+      requests.map((request) => resolveProfile(request, new FakeReply() as unknown as FastifyReply))
+    );
+
+    release({ id: PROFILE_ID, pinHash: null });
+    await pending;
+
+    expect(prismaMock.profile.findUnique).toHaveBeenCalledTimes(1);
+    for (const request of requests) expect(request.profileId).toBe(PROFILE_ID);
+  });
+
   it("caches the single-profile fallback probe as well", async () => {
     prismaMock.profile.findMany.mockResolvedValue([{ id: PROFILE_ID, pinHash: null }]);
     const { resolveProfile } = await loadProfileLib();

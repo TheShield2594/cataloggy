@@ -57,7 +57,7 @@ describe("list catalog helpers", () => {
 
     const args = prismaMock.listItem.findMany.mock.calls[0][0];
     expect(args.where).toEqual({ listId: WATCHLIST_ID, type: "movie" });
-    expect(args.take).toBeGreaterThan(0);
+    expect(args.take).toBe(1000);
     expect(args.orderBy).toEqual({ addedAt: "desc" });
   });
 
@@ -78,7 +78,7 @@ describe("list catalog helpers", () => {
 
     const args = prismaMock.listItem.findMany.mock.calls[0][0];
     expect(args.where).toEqual({ listId: "list-1", type: "series" });
-    expect(args.take).toBeGreaterThan(0);
+    expect(args.take).toBe(1000);
     expect(metas.map((m) => m.name)).toEqual(["Alpha", "Bravo"]);
   });
 });

@@ -331,7 +331,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
           SELECT "imdbId", name, type, rating, poster
           FROM watched_metadata
           WHERE rating IS NOT NULL
-          ORDER BY rating DESC
+          ORDER BY rating DESC, "imdbId" ASC
           LIMIT 10
         )
         SELECT
@@ -342,7 +342,7 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
           COALESCE((
             SELECT json_agg(
               json_build_object('imdbId', "imdbId", 'name', name, 'type', type, 'rating', rating, 'poster', poster)
-              ORDER BY rating DESC
+              ORDER BY rating DESC, "imdbId" ASC
             )
             FROM top_rated
           ), '[]'::json) AS top_rated

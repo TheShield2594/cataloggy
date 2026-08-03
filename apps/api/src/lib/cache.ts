@@ -55,8 +55,16 @@ export const profileCache = new LRUCache<string, CachedProfile[]>({
   ttl: PROFILE_CACHE_TTL_MS,
 });
 
+// The dashboard fires its requests in parallel, so they all reach the cache
+// before the first lookup has resolved and a plain read-through cache would let
+// every one of them issue the same query. In-flight lookups are shared here so
+// the burst really does collapse to one round trip, rather than only the
+// requests that arrive after it completes.
+export const profileLookups = new Map<string, Promise<CachedProfile[]>>();
+
 export const profileCacheClear = () => {
   profileCache.clear();
+  profileLookups.clear();
 };
 
 // A metadata backfill that comes back empty — TMDB has no match for that IMDb ID
