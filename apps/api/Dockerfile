@@ -9,6 +9,7 @@ COPY apps/api/package.json ./apps/api/package.json
 COPY apps/addon/package.json ./apps/addon/package.json
 COPY apps/web/package.json ./apps/web/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
+COPY packages/migrate/package.json ./packages/migrate/package.json
 
 RUN pnpm install --frozen-lockfile
 
@@ -20,12 +21,12 @@ RUN pnpm --filter @cataloggy/shared build
 RUN pnpm --filter @cataloggy/api build
 
 # Two trees, because the Prisma CLI is only needed to apply migrations and is
-# far larger than everything the service itself loads. This one keeps
-# devDependencies so it has the CLI. It has to run before the --prod deploy
-# below, which leaves the workspace marked production-only — pnpm then tries to
-# re-install it before running any later command.
-RUN pnpm deploy --filter @cataloggy/api --legacy \
-      --config.confirmModulesPurge=false /migrate
+# far larger than everything the service itself loads. @cataloggy/migrate
+# depends on the CLI and nothing else, so this tree carries no test or build
+# tooling; the schema and migrations it works on are the API's, copied in.
+RUN pnpm deploy --filter @cataloggy/migrate --prod --legacy \
+      --config.confirmModulesPurge=false /migrate \
+ && cp -r apps/api/prisma apps/api/prisma.config.ts /migrate/
 
 # The service tree: production dependencies only, so no CLI. `pnpm deploy`
 # links a fresh @prisma/client from the store, so the client generated during
