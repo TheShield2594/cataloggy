@@ -15,7 +15,7 @@ import {
   getAiRecommendations,
 } from "../lib/ai.js";
 import { resolveProfile } from "../lib/profile.js";
-import { validateAiProviderUrl } from "../lib/ssrf.js";
+import { resolveAiProviderUrl, validateAiProviderUrl } from "../lib/ssrf.js";
 import { getMetadataType } from "../lib/types.js";
 import type { StremioMetaPreview, StremioMetaType } from "../lib/types.js";
 
@@ -370,6 +370,9 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
     const body = request.body as { config?: unknown } | null;
     const cfg = body?.config as Record<string, unknown> | undefined;
 
+    // Syntactic check only. The DNS-aware one runs immediately before each
+    // outbound request instead: records can change after a config is saved, and
+    // a resolver blip here would reject a perfectly good LAN LLM endpoint.
     if (!cfg || typeof cfg.url !== "string" || !validateAiProviderUrl(cfg.url)) {
       return reply.code(400).send({
         error:
@@ -445,6 +448,15 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
         success: false,
         error:
           "Invalid config: url (an http(s) URL not targeting the cloud-metadata/link-local range), headers, and payload.model are required",
+      };
+    }
+
+    // The syntactic check above only sees the literal hostname; resolve it too,
+    // so a public name pointing at the metadata service can't be tested through.
+    if (!(await resolveAiProviderUrl(cfg.url))) {
+      return {
+        success: false,
+        error: "Invalid config: url resolves to an address that is not an allowed outbound target",
       };
     }
 
