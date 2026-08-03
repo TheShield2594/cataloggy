@@ -243,14 +243,14 @@ Imports are sent as a single request body, capped at `MAX_BODY_SIZE_MB` (32 MB b
 
 ### Updating safely / if a migration fails
 
-The `api` container runs `prisma migrate deploy` automatically on every start, applying any new database migrations that shipped since your last update. This is usually seamless, but two things are worth knowing before you run `docker compose pull && docker compose up -d` on a long-unattended instance:
+The `migrate` container runs `prisma migrate deploy` and exits, applying any new database migrations that shipped since your last update. The `api` container waits for it to finish before starting, so every update applies its migrations before anything serves traffic. This is usually seamless, but two things are worth knowing before you run `docker compose pull && docker compose up -d` on a long-unattended instance:
 
 - **Back up first.** Run `./scripts/backup.sh` before pulling a new image. Prisma migrations aren't automatically reversible, so a backup taken right before updating is your fastest way back to a known-good state if something goes wrong.
-- **If `prisma migrate deploy` fails on startup**, the `api` container will exit and `docker compose ps` will show it restarting in a crash loop rather than serving traffic — check `docker compose logs api` for the failing migration. To recover:
+- **If `prisma migrate deploy` fails**, the `migrate` container exits non-zero and `docker compose ps` will show `api` as never having started rather than serving traffic — check `docker compose logs migrate` for the failing migration. To recover:
   1. Restore the database from the backup you took before updating (`./scripts/restore.sh <backup-file>`) — rolling back the image alone won't undo a partially-applied migration.
-  2. Roll back to the previous working image tag (see "Docker Compose install" above for pinning by `sha-<short-sha>` or a semver tag) and start it against the restored database.
+  2. Roll back to the previous working image tag (see "Docker Compose install" above for pinning by `sha-<short-sha>` or a semver tag) and start it against the restored database. The `migrate` image is tagged in lockstep with `api`, so roll both back together.
 
-If you don't have a recent backup when this happens, don't guess at manually editing the `_prisma_migrations` table — that's how partial-migration failures turn into data loss. Open an issue with the failing migration name and the error from `docker compose logs api` instead.
+If you don't have a recent backup when this happens, don't guess at manually editing the `_prisma_migrations` table — that's how partial-migration failures turn into data loss. Open an issue with the failing migration name and the error from `docker compose logs migrate` instead.
 
 ## Security
 

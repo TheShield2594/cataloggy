@@ -104,6 +104,22 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Same Dockerfile as the API, stopping at the `migrate` stage. It carries
+      # the Prisma CLI so the API image does not have to.
+      - name: Build and push Migrate image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          target: migrate
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-migrate:latest
+            ${{ env.IMAGE_PREFIX }}-migrate:sha-${{ steps.vars.outputs.sha }}
+            ${{ steps.vars.outputs.version && format('{0}-migrate:{1}', env.IMAGE_PREFIX, steps.vars.outputs.version) }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Build and push Addon image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
