@@ -55,19 +55,33 @@ export const buildMetasFromIds = async (
 const sortMetasByName = <T extends { name: string }>(metas: T[]): T[] =>
   [...metas].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
 
+// List catalogs sort by the metadata `name`, which lives on Metadata rather than
+// ListItem — so the sort (and therefore the `limit` slice) can only happen after
+// hydration, and every item in the list has to be hydrated to produce the
+// alphabetically-first page. That is a deliberate trade: keeping exact ordering
+// costs work proportional to list size.
+//
+// This cap bounds that work. A list longer than the cap alphabetizes only its
+// most recently added items, which at personal-tracker scale (hundreds of items,
+// not thousands) never happens. It exists so a pathological list can't turn a
+// single Stremio catalog refresh — an unauthenticated route any client can hit
+// repeatedly — into thousands of metadata lookups plus a TMDB backfill burst.
+const CATALOG_SCAN_LIMIT = 1000;
+
+const fetchListItemIds = async (listId: string, type: StremioMetaType) => {
+  const listItems = await prisma.listItem.findMany({
+    where: { listId, type: type === "movie" ? ListItemType.movie : ListItemType.series },
+    select: { imdbId: true },
+    orderBy: { addedAt: "desc" },
+    take: CATALOG_SCAN_LIMIT,
+  });
+  return listItems.map((item) => item.imdbId);
+};
+
 export const getWatchlistMetas = async (type: StremioMetaType, limit: number, profileId: string) => {
   const watchlist = await getDefaultWatchlist(profileId);
-  const listItemType = type === "movie" ? ListItemType.movie : ListItemType.series;
-
-  const watchlistItems = await prisma.listItem.findMany({
-    where: { listId: watchlist.id, type: listItemType },
-    select: { imdbId: true },
-  });
-
-  const metas = await buildMetasFromIds(
-    watchlistItems.map((item) => item.imdbId),
-    type
-  );
+  const ids = await fetchListItemIds(watchlist.id, type);
+  const metas = await buildMetasFromIds(ids, type);
   return sortMetasByName(metas).slice(0, limit);
 };
 
@@ -139,15 +153,7 @@ export const getCustomListMetas = async (
   type: StremioMetaType,
   limit: number
 ) => {
-  const listItemType = type === "movie" ? ListItemType.movie : ListItemType.series;
-  const listItems = await prisma.listItem.findMany({
-    where: { listId, type: listItemType },
-    select: { imdbId: true },
-  });
-
-  const metas = await buildMetasFromIds(
-    listItems.map((item) => item.imdbId),
-    type
-  );
+  const ids = await fetchListItemIds(listId, type);
+  const metas = await buildMetasFromIds(ids, type);
   return sortMetasByName(metas).slice(0, limit);
 };

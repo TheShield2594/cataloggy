@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { mintProfileToken } from "../lib/profile-token.js";
+import { invalidateProfileCache } from "../lib/profile.js";
 import { UUID_V4_PATTERN } from "../lib/types.js";
 
 const toSha256Digest = (value: string) => createHash("sha256").update(value).digest();
@@ -114,6 +115,7 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
     const pinHash = pin ? hashPin(pin) : null;
 
     const profile = await prisma.profile.create({ data: { name, pinHash } });
+    invalidateProfileCache();
 
     return reply.code(201).send({ profile: { id: profile.id, name: profile.name, hasPin: pinHash != null } });
   });
@@ -209,6 +211,7 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const updated = await prisma.profile.update({ where: { id: profile.id }, data });
+    invalidateProfileCache();
 
     // The PIN just changed (or was removed) — any outstanding lockout/attempt
     // count from the old PIN no longer applies.
@@ -233,6 +236,7 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
     }
 
     await prisma.profile.delete({ where: { id: profile.id } });
+    invalidateProfileCache();
 
     // Clean up any PIN attempt records for the deleted profile
     await clearPinAttempts(profile.id);

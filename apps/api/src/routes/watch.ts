@@ -8,6 +8,25 @@ function serializeWatchEvent<T extends { traktHistoryId: bigint | null }>(event:
   return { ...event, traktHistoryId: event.traktHistoryId != null ? event.traktHistoryId.toString() : null };
 }
 
+// Shapes returned by the two aggregate queries behind /watch/stats/detailed.
+// The `json_agg` columns arrive already parsed, so they are plain arrays here.
+type EventStatsRow = {
+  longest_streak: bigint;
+  current_streak: bigint;
+  monthly: { month: string; movies: number; episodes: number }[] | null;
+};
+
+type MetadataStatsRow = {
+  genres: { genre: string; count: number }[] | null;
+  top_rated: {
+    imdbId: string;
+    name: string;
+    type: string;
+    rating: number | null;
+    poster: string | null;
+  }[] | null;
+};
+
 const watchRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", resolveProfile);
 
@@ -249,22 +268,12 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     twelveMonthsAgo.setUTCDate(1);
     twelveMonthsAgo.setUTCHours(0, 0, 0, 0);
 
-    const [monthlyEvents, distinctMovieIds, distinctSeriesIds, streaks] = await Promise.all([
-      prisma.watchEvent.findMany({
-        where: { profileId, watchedAt: { gte: twelveMonthsAgo } },
-        select: { type: true, watchedAt: true, plays: true },
-      }),
-      prisma.watchEvent.findMany({
-        where: { profileId, type: "movie" },
-        select: { imdbId: true },
-        distinct: ["imdbId"],
-      }),
-      prisma.watchEvent.findMany({
-        where: { profileId, type: "episode", seriesImdbId: { not: null } },
-        select: { seriesImdbId: true },
-        distinct: ["seriesImdbId"],
-      }),
-      prisma.$queryRaw<{ longest_streak: bigint; current_streak: bigint }[]>(Prisma.sql`
+    // Everything here is aggregated in Postgres rather than in Node: the inputs
+    // (every event in the window, every distinct title ever watched) grow without
+    // bound with watch history, but the outputs are fixed-size — 12 monthly
+    // buckets, 15 genres, 10 titles. Two round trips, one per source table.
+    const [eventStats, metadataStats] = await Promise.all([
+      prisma.$queryRaw<EventStatsRow[]>(Prisma.sql`
         WITH distinct_days AS (
           SELECT DISTINCT DATE("watchedAt" AT TIME ZONE 'UTC') AS day
           FROM "WatchEvent"
@@ -278,24 +287,74 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
           SELECT grp, COUNT(*) AS streak_len, MAX(day) AS streak_end
           FROM grouped
           GROUP BY grp
+        ),
+        monthly AS (
+          SELECT
+            to_char(date_trunc('month', "watchedAt" AT TIME ZONE 'UTC'), 'YYYY-MM') AS month,
+            COALESCE(SUM(plays) FILTER (WHERE type = 'movie'), 0)::int AS movies,
+            COALESCE(SUM(plays) FILTER (WHERE type <> 'movie'), 0)::int AS episodes
+          FROM "WatchEvent"
+          WHERE "profileId" = ${profileId}::uuid AND "watchedAt" >= ${twelveMonthsAgo}
+          GROUP BY 1
         )
         SELECT
           COALESCE((SELECT MAX(streak_len) FROM run_lengths), 0) AS longest_streak,
-          COALESCE((SELECT streak_len FROM run_lengths WHERE streak_end = (now() AT TIME ZONE 'UTC')::date), 0) AS current_streak
+          COALESCE((SELECT streak_len FROM run_lengths WHERE streak_end = (now() AT TIME ZONE 'UTC')::date), 0) AS current_streak,
+          COALESCE((SELECT json_agg(m) FROM monthly m), '[]'::json) AS monthly
+      `),
+      // Joined on imdbId alone (not imdbId + type) to match the historical
+      // behaviour: a title with both a movie and a series metadata row
+      // contributes both to the genre histogram and to the top-rated list.
+      prisma.$queryRaw<MetadataStatsRow[]>(Prisma.sql`
+        WITH watched AS (
+          SELECT DISTINCT "imdbId" AS imdb_id
+          FROM "WatchEvent"
+          WHERE "profileId" = ${profileId}::uuid AND type = 'movie'
+          UNION
+          SELECT DISTINCT "seriesImdbId"
+          FROM "WatchEvent"
+          WHERE "profileId" = ${profileId}::uuid AND type = 'episode' AND "seriesImdbId" IS NOT NULL
+        ),
+        watched_metadata AS (
+          SELECT m."imdbId", m.name, m.type, m.rating, m.poster, m.genres
+          FROM watched w
+          JOIN "Metadata" m ON m."imdbId" = w.imdb_id
+        ),
+        genre_counts AS (
+          SELECT genre, COUNT(*)::int AS count
+          FROM watched_metadata wm, unnest(wm.genres) AS genre
+          GROUP BY genre
+          ORDER BY count DESC, genre ASC
+          LIMIT 15
+        ),
+        top_rated AS (
+          SELECT "imdbId", name, type, rating, poster
+          FROM watched_metadata
+          WHERE rating IS NOT NULL
+          ORDER BY rating DESC, "imdbId" ASC
+          LIMIT 10
+        )
+        SELECT
+          COALESCE((
+            SELECT json_agg(json_build_object('genre', genre, 'count', count) ORDER BY count DESC, genre ASC)
+            FROM genre_counts
+          ), '[]'::json) AS genres,
+          COALESCE((
+            SELECT json_agg(
+              json_build_object('imdbId', "imdbId", 'name', name, 'type', type, 'rating', rating, 'poster', poster)
+              ORDER BY rating DESC, "imdbId" ASC
+            )
+            FROM top_rated
+          ), '[]'::json) AS top_rated
       `),
     ]);
 
-    const monthlyMap = new Map<string, { movies: number; episodes: number }>();
-    for (const event of monthlyEvents) {
-      const key = `${event.watchedAt.getUTCFullYear()}-${String(event.watchedAt.getUTCMonth() + 1).padStart(2, "0")}`;
-      let entry = monthlyMap.get(key);
-      if (!entry) {
-        entry = { movies: 0, episodes: 0 };
-        monthlyMap.set(key, entry);
-      }
-      if (event.type === "movie") entry.movies += event.plays;
-      else entry.episodes += event.plays;
-    }
+    const monthlyMap = new Map(
+      (eventStats[0]?.monthly ?? []).map((row) => [
+        row.month,
+        { movies: row.movies, episodes: row.episodes },
+      ])
+    );
 
     const monthly: { month: string; movies: number; episodes: number }[] = [];
     const now = new Date();
@@ -306,54 +365,12 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
       monthly.push({ month: key, ...entry });
     }
 
-    const movieImdbIds = distinctMovieIds.map((e) => e.imdbId);
-    const seriesImdbIds = distinctSeriesIds.map((e) => e.seriesImdbId!);
-    const allMetadataIds = [...movieImdbIds, ...seriesImdbIds];
-
-    const metadata =
-      allMetadataIds.length > 0
-        ? await prisma.metadata.findMany({
-            where: { imdbId: { in: allMetadataIds } },
-            select: { genres: true },
-          })
-        : [];
-
-    const genreCounts = new Map<string, number>();
-    for (const m of metadata) {
-      for (const g of m.genres) {
-        genreCounts.set(g, (genreCounts.get(g) ?? 0) + 1);
-      }
-    }
-    const genreDistribution = [...genreCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 15)
-      .map(([genre, count]) => ({ genre, count }));
-
-    const longestStreak = Number(streaks[0]?.longest_streak ?? 0);
-    const currentStreak = Number(streaks[0]?.current_streak ?? 0);
-
-    const topRated =
-      allMetadataIds.length > 0
-        ? await prisma.metadata.findMany({
-            where: { imdbId: { in: allMetadataIds }, rating: { not: null } },
-            select: { imdbId: true, name: true, type: true, rating: true, poster: true },
-            orderBy: { rating: "desc" },
-            take: 10,
-          })
-        : [];
-
     return {
       monthly,
-      genreDistribution,
-      currentStreak,
-      longestStreak,
-      topRated: topRated.map((m) => ({
-        imdbId: m.imdbId,
-        name: m.name,
-        type: m.type,
-        rating: m.rating,
-        poster: m.poster,
-      })),
+      genreDistribution: metadataStats[0]?.genres ?? [],
+      currentStreak: Number(eventStats[0]?.current_streak ?? 0),
+      longestStreak: Number(eventStats[0]?.longest_streak ?? 0),
+      topRated: metadataStats[0]?.top_rated ?? [],
     };
   });
 

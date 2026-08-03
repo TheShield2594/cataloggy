@@ -1,7 +1,14 @@
 import { Sentry } from "./lib/sentry.js";
-import Fastify from "fastify";
+import Fastify, { type FastifyRequest } from "fastify";
 import rateLimit from "@fastify/rate-limit";
-import { parseProxyPathPrefixes, normalizeProxyPath, parseTrustProxy } from "@cataloggy/shared";
+import {
+  parseProxyPathPrefixes,
+  normalizeProxyPath,
+  parseTrustProxy,
+  deriveServiceToken,
+  matchesServiceToken,
+  SERVICE_TOKEN_HEADER,
+} from "@cataloggy/shared";
 import { prisma } from "./lib/prisma.js";
 import { applyCorsHeaders } from "./lib/cors.js";
 import { verifyToken } from "./lib/auth.js";
@@ -73,12 +80,38 @@ const app = Fastify({
 });
 
 // ─── Rate limiting ───
+//
+// The store is in-memory and per-process, so this limiter assumes the documented
+// single-container deployment: run more than one API replica and each replica
+// enforces its own independent budget.
+//
+// Keying purely on `request.ip` also lumps all Stremio traffic into one bucket.
+// The addon is a single container on the internal Docker network, so a phone, an
+// Apple TV and a desktop all reach the API from the same address — and a Stremio
+// home screen fans out to one request per enabled catalog, so a few clients
+// refreshing at once is a burst against a single key. Service-to-service calls
+// therefore get their own key and a larger budget.
+//
+// Identification is a token derived from API_TOKEN rather than API_TOKEN itself.
+// The addon authenticates with the same token the browser uses, so the raw token
+// can't tell them apart — only something the addon can compute and the browser is
+// never given. That also means a leaked browser token can't be used to drain the
+// addon's budget, and it needs no extra configuration on either side.
+
+const BROWSER_RATE_LIMIT_MAX = 200;
+const SERVICE_RATE_LIMIT_MAX = 1000;
+const SERVICE_RATE_LIMIT_KEY = "service:addon";
+
+const SERVICE_TOKEN = process.env.API_TOKEN ? deriveServiceToken(process.env.API_TOKEN) : null;
+
+const isServiceRequest = (request: FastifyRequest): boolean =>
+  matchesServiceToken(request.headers[SERVICE_TOKEN_HEADER], SERVICE_TOKEN);
 
 app.register(rateLimit, {
   global: true,
-  max: 200,
+  max: (request) => (isServiceRequest(request) ? SERVICE_RATE_LIMIT_MAX : BROWSER_RATE_LIMIT_MAX),
   timeWindow: "1 minute",
-  keyGenerator: (request) => request.ip,
+  keyGenerator: (request) => (isServiceRequest(request) ? SERVICE_RATE_LIMIT_KEY : request.ip),
 });
 
 // ─── Global hooks ───

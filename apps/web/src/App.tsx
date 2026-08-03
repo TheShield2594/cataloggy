@@ -10,8 +10,12 @@ import { useTheme } from "./hooks/useTheme";
 import { ToastProvider } from "./hooks/useToast";
 import { ProfileProvider, useProfile } from "./hooks/useProfile";
 import { DashboardPage } from "./pages/DashboardPage";
-import { ProfileSwitcher } from "./pages/ProfileSwitcher";
-import { SetupWizard } from "./pages/SetupWizard";
+
+// DashboardPage stays eager — it is the landing route. The profile switcher and
+// the setup wizard are first-run/occasional surfaces, so they ride in their own
+// chunks rather than in the entry bundle every visit pays for.
+const ProfileSwitcher = lazy(() => import("./pages/ProfileSwitcher").then((m) => ({ default: m.ProfileSwitcher })));
+const SetupWizard = lazy(() => import("./pages/SetupWizard").then((m) => ({ default: m.SetupWizard })));
 
 const CalendarPage = lazy(() => import("./pages/CalendarPage").then((m) => ({ default: m.CalendarPage })));
 const GamesPage = lazy(() => import("./pages/GamesPage").then((m) => ({ default: m.GamesPage })));
@@ -32,6 +36,29 @@ const mobileNavItems = [
   { to: "/stats", label: "Stats", icon: BarChart3, end: false },
   { to: "/settings", label: "Settings", icon: Settings, end: false },
 ] as const;
+
+const LoadingFallback = ({ label = "Loading…" }: { label?: string }) => (
+  <div
+    role="status"
+    aria-live="polite"
+    className="flex items-center justify-center py-24"
+    style={{ color: "var(--text-dim)" }}
+  >
+    <Loader2 size={24} className="animate-spin" aria-hidden="true" />
+    <span className="sr-only">{label}</span>
+  </div>
+);
+
+// The switcher is a full-screen modal, so suspending it to nothing would blank the
+// screen between the click and the chunk arriving. Hold the overlay instead.
+const ProfileSwitcherFallback = () => (
+  <div
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+    aria-busy="true"
+  >
+    <LoadingFallback label="Loading profiles…" />
+  </div>
+);
 
 export function App() {
   const location = useLocation();
@@ -58,23 +85,27 @@ export function App() {
 
   if (needsSetup) {
     return (
-      <SetupWizard
-        onComplete={() => {
-          setNeedsSetup(false);
-          setNeedsProfile(!runtimeConfig.getProfileId());
-        }}
-      />
+      <Suspense fallback={<LoadingFallback />}>
+        <SetupWizard
+          onComplete={() => {
+            setNeedsSetup(false);
+            setNeedsProfile(!runtimeConfig.getProfileId());
+          }}
+        />
+      </Suspense>
     );
   }
 
   if (needsProfile) {
     return (
-      <ProfileSwitcher
-        onSelected={(profile) => {
-          runtimeConfig.setProfileId(profile.id);
-          setNeedsProfile(false);
-        }}
-      />
+      <Suspense fallback={<LoadingFallback />}>
+        <ProfileSwitcher
+          onSelected={(profile) => {
+            runtimeConfig.setProfileId(profile.id);
+            setNeedsProfile(false);
+          }}
+        />
+      </Suspense>
     );
   }
 
@@ -148,7 +179,9 @@ function AppShell({
       />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       {switcherOpen && (
-        <ProfileSwitcher onSelected={handleProfileSelected} onClose={closeSwitcher} />
+        <Suspense fallback={<ProfileSwitcherFallback />}>
+          <ProfileSwitcher onSelected={handleProfileSelected} onClose={closeSwitcher} />
+        </Suspense>
       )}
 
       {/* Slim top bar */}
@@ -200,13 +233,7 @@ function AppShell({
 
       {/* Main content */}
       <main className={`mx-auto max-w-[1400px] px-6 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[76px] sm:pb-10 transition-[padding] duration-200 ${sidebarPad}`}>
-        <Suspense
-          fallback={
-            <div className="flex items-center justify-center py-24" style={{ color: "var(--text-dim)" }}>
-              <Loader2 size={24} className="animate-spin" />
-            </div>
-          }
-        >
+        <Suspense fallback={<LoadingFallback />}>
           <Routes key={profile?.id ?? runtimeConfig.getProfileId() ?? "default"}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/search" element={<SearchPage />} />
