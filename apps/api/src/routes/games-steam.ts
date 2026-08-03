@@ -1,11 +1,12 @@
 import type { FastifyPluginAsync } from "fastify";
 import { getSteam } from "../lib/steam-client.js";
 import { isSteamSyncConfigured, syncSteamLibrary } from "../lib/steam-sync.js";
-import { getDefaultProfileId } from "../lib/profile.js";
+import { resolveProfile } from "../lib/profile.js";
 
-// Steam sync targets a single, env-configured account (STEAM_ID), not the
-// caller's profile, so these routes intentionally skip resolveProfile —
-// same reasoning as /trakt/poll in routes/trakt.ts.
+// The Steam *account* is env-configured (STEAM_ID), but the library it syncs
+// into belongs to whichever profile pressed the button, so the sync route
+// resolves the caller's profile. The scheduled sync in index.ts has no request
+// to resolve and still falls back to the default profile.
 const gamesSteamRoutes: FastifyPluginAsync = async (app) => {
   app.get("/games/steam/status", async (_request, reply) => {
     const configured = isSteamSyncConfigured();
@@ -26,14 +27,13 @@ const gamesSteamRoutes: FastifyPluginAsync = async (app) => {
     return reply.send({ configured: true, player });
   });
 
-  app.post("/games/steam/sync", async (request, reply) => {
+  app.post("/games/steam/sync", { preHandler: resolveProfile }, async (request, reply) => {
     if (!isSteamSyncConfigured()) {
       return reply.code(500).send({ error: "Steam integration is not configured" });
     }
 
     try {
-      const profileId = await getDefaultProfileId();
-      const summary = await syncSteamLibrary(request.log, profileId);
+      const summary = await syncSteamLibrary(request.log, request.profileId!);
       return reply.code(200).send(summary);
     } catch (error) {
       request.log.error(error, "Steam sync failed");

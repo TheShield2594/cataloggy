@@ -13,7 +13,7 @@ import {
   computeTokenExpiresAt,
 } from "../lib/trakt-client.js";
 import { renderOAuthHtml } from "../lib/html.js";
-import { getDefaultProfileId } from "../lib/profile.js";
+import { getDefaultProfileId, resolveProfile } from "../lib/profile.js";
 import type { SeriesProgressCandidate } from "../lib/types.js";
 
 const traktRoutes: FastifyPluginAsync = async (app) => {
@@ -147,7 +147,9 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
     return reply.send({ disconnected: true });
   });
 
-  app.post("/trakt/import", async (request, reply) => {
+  // Imports land in the profile that asked for them, so this route — unlike the
+  // OAuth dance and the request-less /trakt/poll below — resolves the caller.
+  app.post("/trakt/import", { preHandler: resolveProfile }, async (request, reply) => {
     let client: Awaited<ReturnType<typeof getTraktClient>>;
     try {
       client = await getTraktClient();
@@ -164,7 +166,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
     ]);
 
     const imported = { movies: 0, episodes: 0, watchlistMovies: 0, watchlistShows: 0 };
-    const profileId = await getDefaultProfileId();
+    const profileId = request.profileId!;
     const watchlist = await getDefaultWatchlist(profileId);
 
     for (const entry of watchlistMovies) {
