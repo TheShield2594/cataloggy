@@ -22,3 +22,12 @@ allowBuilds:
 # Mirrors `node-linker=hoisted` in .npmrc, which pnpm 11 no longer reads.
 # Without this the layout silently switches to the isolated default.
 nodeLinker: hoisted
+
+# Peers have to be declared by the project that needs them, rather than pnpm
+# adding them on its own. Auto-installing turns them into real dependencies of
+# the package that named them, so `@prisma/client` — which only names the
+# `prisma` CLI so that `prisma generate` is available — dragged the CLI and its
+# Studio/dev tooling into every production install of the API, roughly 250 MB
+# that nothing loads at runtime. The peers this repo does need are in the
+# devDependencies of the projects using them.
+autoInstallPeers: false

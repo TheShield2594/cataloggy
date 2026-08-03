@@ -55,8 +55,9 @@ jobs:
         run: pnpm --filter @cataloggy/api prisma:generate
 
       # Applies every migration against a real Postgres so a broken migration
-      # fails CI instead of crashing a self-hoster's api container on update
-      # (the same `prisma migrate deploy` command runs at container start).
+      # fails CI instead of stopping a self-hoster's update (the same
+      # `prisma migrate deploy` command runs in the migrate container, which
+      # the api container waits on).
       - name: Run database migrations
         run: pnpm --filter @cataloggy/api exec prisma migrate deploy
 

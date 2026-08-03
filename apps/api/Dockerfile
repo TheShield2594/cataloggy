@@ -19,19 +19,38 @@ RUN pnpm exec prisma generate --schema=apps/api/prisma/schema.prisma
 RUN pnpm --filter @cataloggy/shared build
 RUN pnpm --filter @cataloggy/api build
 
-# Collect just this app into /deploy: its own production dependencies plus
-# @cataloggy/shared, and nothing else. A workspace-wide `pnpm prune --prod`
-# keeps the union of every project's production deps, so the API image would
-# otherwise carry the web app's React/Sentry/workbox tree as well.
-# `--legacy` selects the pre-v10 deploy that does not need injected workspace
-# packages; `confirmModulesPurge` keeps pnpm from asking for a TTY it will
-# never get inside a builder.
-RUN pnpm deploy --filter @cataloggy/api --prod --legacy \
-      --config.confirmModulesPurge=false /deploy
+# Two trees, because the Prisma CLI is only needed to apply migrations and is
+# far larger than everything the service itself loads. This one keeps
+# devDependencies so it has the CLI. It has to run before the --prod deploy
+# below, which leaves the workspace marked production-only — pnpm then tries to
+# re-install it before running any later command.
+RUN pnpm deploy --filter @cataloggy/api --legacy \
+      --config.confirmModulesPurge=false /migrate
 
-# /deploy links a fresh @prisma/client from the store, so the client generated
-# during the build above is not the one that ships. Generate it again in place.
-RUN cd /deploy && ./node_modules/.bin/prisma generate
+# The service tree: production dependencies only, so no CLI. `pnpm deploy`
+# links a fresh @prisma/client from the store, so the client generated during
+# the build has to come across separately — it lives in node_modules/.prisma,
+# which @prisma/client re-exports.
+RUN pnpm deploy --filter @cataloggy/api --prod --legacy \
+      --config.confirmModulesPurge=false /deploy \
+ && cp -r node_modules/.prisma /deploy/node_modules/.prisma
+
+# Applies pending migrations and exits. Built as its own image (build target
+# `migrate`) and run to completion before the service starts — see the `migrate`
+# service in docker-compose.yml.
+FROM node:26-alpine AS migrate
+
+WORKDIR /app
+RUN apk add --no-cache openssl
+
+COPY --from=build /migrate ./
+
+RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
+USER app
+
+ENV NODE_ENV=production
+
+CMD ["./node_modules/.bin/prisma", "migrate", "deploy"]
 
 FROM node:26-alpine AS runtime
 
@@ -47,4 +66,4 @@ ENV NODE_ENV=production
 
 EXPOSE 7000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s CMD wget -q --spider http://127.0.0.1:7000/health || exit 1
-CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node dist/index.js"]
+CMD ["node", "dist/index.js"]

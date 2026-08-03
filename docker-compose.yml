@@ -32,6 +32,22 @@ services:
     networks:
       - cataloggy
 
+  # Applies pending database migrations, then exits. The api service waits for
+  # it to finish. It ships as a separate image because it needs the Prisma CLI,
+  # which is around 250 MB of tooling the api service never loads — keeping the
+  # CLI out of that image is what lets it stay small.
+  migrate:
+    image: ghcr.io/theshield2594/cataloggy-migrate:latest
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in a .env file next to docker-compose.yml — see README.md}@db:5432/${POSTGRES_DB:-cataloggy}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    logging: *default-logging
+    networks:
+      - cataloggy
+
   api:
     image: ghcr.io/theshield2594/cataloggy-api:latest
     environment:
@@ -66,6 +82,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:7000/health || exit 1"]
