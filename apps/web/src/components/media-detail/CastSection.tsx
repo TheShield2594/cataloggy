@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, User } from "lucide-react";
-import { fadeMaskStyle, useHorizontalScroll } from "../carousel-utils";
+import { CarouselTrack } from "../CarouselTrack";
+import { useHorizontalScroll } from "../carousel-utils";
 
 export interface CastMember {
   name: string;
@@ -59,10 +60,11 @@ export function CastSection({ cast, loading }: { cast: CastMember[]; loading: bo
           </div>
         )}
       </div>
-      <div
-        ref={ref}
-        className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide"
-        style={fadeMaskStyle(canScrollLeft, canScrollRight)}
+      <CarouselTrack
+        scrollRef={ref}
+        canScrollLeft={canScrollLeft}
+        canScrollRight={canScrollRight}
+        className="gap-3"
       >
         {cast.map((member, i) => (
           <div key={`${i}-${member.name}`} className="flex-none w-16 text-center">
@@ -86,7 +88,7 @@ export function CastSection({ cast, loading }: { cast: CastMember[]; loading: bo
             <p className="text-2xs truncate" style={{ color: "var(--text-mute)" }}>{member.character}</p>
           </div>
         ))}
-      </div>
+      </CarouselTrack>
     </div>
   );
 }

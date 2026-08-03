@@ -2,7 +2,6 @@ import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
   FALLBACK_GRADIENTS,
-  fadeMaskStyle,
   getGradient,
   getInitials,
   useHorizontalScroll,
@@ -60,32 +59,6 @@ describe("getGradient", () => {
   it("stays in range for names whose hash overflows to a negative int", () => {
     const long = "x".repeat(500);
     expect(FALLBACK_GRADIENTS).toContain(getGradient(long));
-  });
-});
-
-describe("fadeMaskStyle", () => {
-  it("applies no mask when the row fits entirely on screen", () => {
-    expect(fadeMaskStyle(false, false)).toEqual({});
-  });
-
-  it("fades only the right edge at the start of a scrollable row", () => {
-    const style = fadeMaskStyle(false, true);
-    expect(style.maskImage).toBe(
-      "linear-gradient(to right, black 0, black calc(100% - 32px), transparent 100%)"
-    );
-    expect(style.WebkitMaskImage).toBe(style.maskImage);
-  });
-
-  it("fades only the left edge at the end of a scrollable row", () => {
-    expect(fadeMaskStyle(true, false).maskImage).toBe(
-      "linear-gradient(to right, transparent 0, black 32px, black 100%)"
-    );
-  });
-
-  it("fades both edges mid-scroll", () => {
-    expect(fadeMaskStyle(true, true).maskImage).toBe(
-      "linear-gradient(to right, transparent 0, black 32px, black calc(100% - 32px), transparent 100%)"
-    );
   });
 });
 

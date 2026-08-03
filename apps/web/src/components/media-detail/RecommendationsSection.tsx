@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { Poster } from "../Poster";
-import { fadeMaskStyle, useHorizontalScroll } from "../carousel-utils";
+import { CarouselTrack } from "../CarouselTrack";
+import { useHorizontalScroll } from "../carousel-utils";
 import type { TrendingMeta } from "../../api";
 
 export function RecommendationsSection({
@@ -63,10 +64,11 @@ export function RecommendationsSection({
           </div>
         )}
       </div>
-      <div
-        ref={ref}
-        className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide"
-        style={fadeMaskStyle(canScrollLeft, canScrollRight)}
+      <CarouselTrack
+        scrollRef={ref}
+        canScrollLeft={canScrollLeft}
+        canScrollRight={canScrollRight}
+        className="gap-3"
       >
         {items.map((item) => (
           <button
@@ -88,7 +90,7 @@ export function RecommendationsSection({
             </p>
           </button>
         ))}
-      </div>
+      </CarouselTrack>
     </div>
   );
 }
