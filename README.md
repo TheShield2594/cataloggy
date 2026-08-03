@@ -39,8 +39,8 @@ cataloggy/
 
 ### Requirements
 
-- Node.js 20+
-- pnpm 9+
+- Node.js 22.12+ (the Docker images and CI run Node 26)
+- pnpm 11+ (`corepack enable` picks up the pinned version automatically)
 - Docker + Docker Compose
 
 ## Docker Compose install (recommended)
