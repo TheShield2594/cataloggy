@@ -11,21 +11,14 @@ export function DropShowButton({
 }) {
   if (loading) return null;
 
-  const handleClick = () => {
-    if (isDropped) {
-      onToggle();
-      return;
-    }
-    if (window.confirm("Drop this show? Your progress will be marked as dropped and it will no longer count toward continue watching.")) {
-      onToggle();
-    }
-  };
-
+  // No confirm: dropping is reversible from the toast the panel raises, and a
+  // native dialog here was the only blocking confirm in an otherwise
+  // toast-driven flow.
   return (
     <div className="flex justify-end pt-1">
       <button
         type="button"
-        onClick={handleClick}
+        onClick={onToggle}
         aria-pressed={isDropped}
         title={isDropped ? "Undrop this show" : "Mark this show as dropped"}
         className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors ${

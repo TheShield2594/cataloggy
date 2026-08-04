@@ -102,7 +102,7 @@ export function Sidebar({
           </span>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 px-2.5">
+        <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 px-2.5">
           {navItems.map((item) => (
             <NavLink
               key={item.to}

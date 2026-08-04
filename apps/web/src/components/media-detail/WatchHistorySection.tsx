@@ -11,7 +11,7 @@ export function WatchHistorySection({
   history: WatchEvent[];
   loading: boolean;
   onLogWatch: () => void;
-  onDeleteEvent: (eventId: string) => void;
+  onDeleteEvent: (event: WatchEvent) => void;
 }) {
   return (
     <div>
@@ -77,7 +77,7 @@ export function WatchHistorySection({
               </time>
               <button
                 type="button"
-                onClick={() => onDeleteEvent(event.id)}
+                onClick={() => onDeleteEvent(event)}
                 className="shrink-0 rounded p-1 text-[var(--text-mute)] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 hover:bg-rose-500/10 hover:text-rose-500 transition-all"
                 aria-label="Remove watch event"
               >

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Clock, Film, Star, Tv, TvMinimalPlay, X,
 } from "lucide-react";
@@ -19,6 +19,8 @@ import { formatRuntime, statusColor, WatchLogTarget } from "./detailPanelUtils";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useScrollLock } from "../../hooks/useScrollLock";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
+import type { ShowToast } from "../../hooks/useToast";
+import { relogWatchEvent } from "../../utils/watchEvents";
 
 /* ─── Detail Panel ────────────────────────────────────────── */
 
@@ -35,11 +37,20 @@ export function DetailPanel({
   history: WatchEvent[];
   historyLoading: boolean;
   onClose: () => void;
-  onShowToast: (message: string, type: "success" | "error" | "info") => void;
+  onShowToast: ShowToast;
   onHistoryChange: (events: WatchEvent[]) => void;
   onSelectItem: (item: SearchResult) => void;
 }) {
   const dialogRef = useFocusTrap<HTMLDivElement>();
+
+  // Undo runs from a toast that outlives the interaction that raised it: the
+  // panel can have moved on to a recommendation, or the history behind it can
+  // have changed. Both handlers read current values rather than the ones closed
+  // over at click time.
+  const currentImdbIdRef = useRef(item.imdbId);
+  currentImdbIdRef.current = item.imdbId;
+  const historyRef = useRef(history);
+  historyRef.current = history;
 
   useScrollLock();
   useEscapeKey(onClose);
@@ -119,25 +130,61 @@ export function DetailPanel({
     return () => { cancelled = true; controller.abort(); };
   }, [item.imdbId, item.type]);
 
-  const handleDeleteEvent = async (eventId: string) => {
+  const handleUndoDeleteEvent = async (event: WatchEvent, imdbId: string) => {
     try {
-      await api.deleteWatchEvent(eventId);
-      onHistoryChange(history.filter((e) => e.id !== eventId));
+      const restored = await relogWatchEvent(event);
+      // The panel may have followed a recommendation since the toast went up;
+      // the re-log is what matters then, and pushing the event into a different
+      // title's history would only corrupt what's on screen. A re-log can also
+      // fold into an event already listed, so the insert is keyed on id.
+      if (currentImdbIdRef.current !== imdbId) return;
+      onHistoryChange(
+        historyRef.current.some((e) => e.id === restored.id)
+          ? historyRef.current
+          : [...historyRef.current, restored].sort(
+              (a, b) => new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime()
+            )
+      );
+    } catch {
+      onShowToast("Could not restore watch event", "error");
+    }
+  };
+
+  const handleDeleteEvent = async (event: WatchEvent) => {
+    const imdbId = item.imdbId;
+    try {
+      await api.deleteWatchEvent(event.id);
+      onHistoryChange(history.filter((e) => e.id !== event.id));
+      onShowToast("Watch removed", "info", {
+        action: { label: "Undo", onAction: () => void handleUndoDeleteEvent(event, imdbId) },
+      });
     } catch {
       onShowToast("Failed to remove watch event", "error");
     }
   };
 
+  const handleUndrop = async (imdbId: string) => {
+    try {
+      await api.undropShow(imdbId);
+      if (currentImdbIdRef.current === imdbId) setIsDropped(false);
+    } catch {
+      onShowToast("Failed to update drop status", "error");
+    }
+  };
+
   const handleToggleDrop = async () => {
+    const imdbId = item.imdbId;
     try {
       if (isDropped) {
-        await api.undropShow(item.imdbId);
+        await api.undropShow(imdbId);
         setIsDropped(false);
         onShowToast("Removed from dropped shows", "info");
       } else {
-        await api.dropShow(item.imdbId);
+        await api.dropShow(imdbId);
         setIsDropped(true);
-        onShowToast("Marked as dropped", "info");
+        onShowToast("Marked as dropped", "info", {
+          action: { label: "Undo", onAction: () => void handleUndrop(imdbId) },
+        });
       }
     } catch {
       onShowToast("Failed to update drop status", "error");
@@ -349,15 +396,18 @@ export function DetailPanel({
             )}
           </div>
 
-          {/* Lists */}
-          <ListsSection
-            imdbId={item.imdbId}
-            type={item.type}
-            name={item.name}
-            initialListIds={item.lists}
-            onError={(msg) => onShowToast(msg, "error")}
-            onToast={(msg, type) => onShowToast(msg, type)}
-          />
+          {/* ─── What it is ───────────────────────────────────────
+              Opening a title you don't recognise has to answer "what is
+              this?" before it offers anywhere to file it, so everything
+              descriptive leads and the tracking controls follow. */}
+
+          {/* Description */}
+          {item.description && (
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Overview</h3>
+              <p className="text-sm leading-relaxed" style={{ color: "var(--text-dim)" }}>{item.description}</p>
+            </div>
+          )}
 
           {/* External Ratings */}
           <ExternalRatings imdbRating={item.imdbRating} rtScore={item.rtScore} mcScore={item.mcScore} />
@@ -365,11 +415,19 @@ export function DetailPanel({
           {/* External Links */}
           <ExternalLinks imdbId={item.imdbId} tmdbId={item.tmdbId} type={item.type} />
 
-          {/* User Rating */}
-          <StarRating imdbId={item.imdbId} type={item.type} onError={(msg) => onShowToast(msg, "error")} />
+          {/* Where to watch */}
+          <ProvidersSection providers={providers} loading={providersLoading} />
 
-          {/* Tags */}
-          <TagsSection imdbId={item.imdbId} type={item.type} onError={(msg) => onShowToast(msg, "error")} />
+          {/* Cast */}
+          <CastSection cast={cast} loading={castLoading} />
+
+          {/* ─── Your tracking ──────────────────────────────────── */}
+          <div className="flex items-center gap-3 pt-1">
+            <span className="text-2xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+              Your tracking
+            </span>
+            <span aria-hidden="true" className="h-px flex-1" style={{ background: "var(--border)" }} />
+          </div>
 
           {/* Check-in / Now Watching */}
           <CheckInBlock
@@ -381,19 +439,21 @@ export function DetailPanel({
             onCheckout={(logWatch) => void handleCheckout(logWatch)}
           />
 
-          {/* Description */}
-          {item.description && (
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Overview</h3>
-              <p className="text-sm leading-relaxed" style={{ color: "var(--text-dim)" }}>{item.description}</p>
-            </div>
-          )}
+          {/* Lists */}
+          <ListsSection
+            imdbId={item.imdbId}
+            type={item.type}
+            name={item.name}
+            initialListIds={item.lists}
+            onError={(msg) => onShowToast(msg, "error")}
+            onToast={(msg, type) => onShowToast(msg, type)}
+          />
 
-          {/* Where to watch */}
-          <ProvidersSection providers={providers} loading={providersLoading} />
+          {/* User Rating */}
+          <StarRating imdbId={item.imdbId} type={item.type} onError={(msg) => onShowToast(msg, "error")} />
 
-          {/* Cast */}
-          <CastSection cast={cast} loading={castLoading} />
+          {/* Tags */}
+          <TagsSection imdbId={item.imdbId} type={item.type} onError={(msg) => onShowToast(msg, "error")} />
 
           {/* Season Breakdown (series only) */}
           {item.type === "series" && (
@@ -411,7 +471,7 @@ export function DetailPanel({
             history={history}
             loading={historyLoading}
             onLogWatch={openWatchModal}
-            onDeleteEvent={(eventId) => void handleDeleteEvent(eventId)}
+            onDeleteEvent={(event) => void handleDeleteEvent(event)}
           />
 
           {/* More Like This */}

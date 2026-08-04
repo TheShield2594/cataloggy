@@ -11,7 +11,7 @@ const renderBar = (pathname = "/") =>
     </MemoryRouter>
   );
 
-const tabBar = () => screen.getByRole("navigation", { name: "Main" });
+const tabBar = () => screen.getByRole("navigation", { name: "Mobile navigation" });
 
 describe("MobileTabBar", () => {
   it("shows five tabs, the count the bar can fit at 320px", () => {

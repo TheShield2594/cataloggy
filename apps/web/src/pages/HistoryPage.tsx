@@ -3,6 +3,7 @@ import { AlertCircle, Calendar, Film, Trash2, Tv } from "lucide-react";
 import { api, SearchResult, WatchEvent } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useToast } from "../hooks/useToast";
+import { relogWatchEvent } from "../utils/watchEvents";
 
 const PAGE_SIZE = 25;
 
@@ -106,13 +107,45 @@ export function HistoryPage() {
     return () => observer.disconnect();
   }, [hasMore, loading, loadingMore, loadMore]);
 
-  const handleDelete = async (eventId: string) => {
-    setDeletingId(eventId);
+  // A re-logged event can come back as one already on screen — the server folds
+  // same-day identical plays into a single row's play count — so the insert is
+  // keyed on id rather than appending blindly.
+  const restoreEvent = (event: WatchEvent) => {
+    setEvents((prev) =>
+      prev.some((e) => e.id === event.id)
+        ? prev
+        : [...prev, event].sort(
+            (a, b) => new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime()
+          )
+    );
+    setOffset((prev) => prev + 1);
+  };
+
+  const handleUndoDelete = async (event: WatchEvent) => {
     try {
-      await api.deleteWatchEvent(eventId);
-      setEvents((prev) => prev.filter((e) => e.id !== eventId));
-      setOffset((prev) => prev - 1);
+      restoreEvent(await relogWatchEvent(event));
     } catch (err) {
+      showToast(err instanceof Error ? err.message : "Could not restore watch event", "error");
+    }
+  };
+
+  // The delete button sits on a row whose whole surface is also a tap target and
+  // renders at full opacity on touch, so a mis-tap is easy. The removal is
+  // optimistic and the toast carries the way back, rather than a confirm dialog
+  // gating every removal.
+  const handleDelete = async (event: WatchEvent) => {
+    setDeletingId(event.id);
+    setEvents((prev) => prev.filter((e) => e.id !== event.id));
+    setOffset((prev) => prev - 1);
+    try {
+      await api.deleteWatchEvent(event.id);
+      // Metadata is backfilled in the background, so a row can reach here
+      // without a name.
+      showToast(event.name ? `Removed ${event.name} from history` : "Removed from history", "info", {
+        action: { label: "Undo", onAction: () => void handleUndoDelete(event) },
+      });
+    } catch (err) {
+      restoreEvent(event);
       showToast(err instanceof Error ? err.message : "Failed to delete watch event", "error");
     } finally {
       setDeletingId(null);
@@ -236,7 +269,7 @@ export function HistoryPage() {
 
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); void handleDelete(event.id); }}
+                    onClick={(e) => { e.stopPropagation(); void handleDelete(event); }}
                     disabled={deletingId === event.id}
                     className="flex h-9 w-9 flex-none items-center justify-center rounded-lg opacity-100 transition-all sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/10 disabled:opacity-50 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-ring-offset"
                     aria-label="Delete watch event"

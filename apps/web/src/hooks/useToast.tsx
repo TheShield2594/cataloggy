@@ -1,14 +1,29 @@
-import { Check, Heart, X } from "lucide-react";
-import { createContext, ReactNode, useCallback, useContext, useState } from "react";
+import { Check, Heart, Undo2, X } from "lucide-react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 
-export type Toast = { id: number; message: string; type: "success" | "error" | "info" };
+export type ToastAction = { label: string; onAction: () => void };
+
+export type Toast = {
+  id: number;
+  message: string;
+  type: "success" | "error" | "info";
+  action?: ToastAction;
+};
+
+export type ShowToastOptions = { action?: ToastAction; duration?: number };
+
+export type ShowToast = (message: string, type?: Toast["type"], options?: ShowToastOptions) => void;
 
 let toastId = 0;
 
 const MAX_VISIBLE_TOASTS = 3;
+const DEFAULT_DURATION_MS = 3000;
+// A toast carrying an Undo is the only way back from a destructive action, so
+// it has to outlive the glance that notices the action happened at all.
+const ACTION_DURATION_MS = 8000;
 
 type ToastContextValue = {
-  showToast: (message: string, type?: Toast["type"]) => void;
+  showToast: ShowToast;
 };
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -44,6 +59,19 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
             <Heart aria-hidden="true" className="h-5 w-5 flex-none text-claw-text" />
           )}
           <span className="text-sm font-medium" style={{ color: "var(--text)" }}>{toast.message}</span>
+          {toast.action && (
+            <button
+              type="button"
+              onClick={() => {
+                toast.action?.onAction();
+                onDismiss(toast.id);
+              }}
+              className="ml-1 flex flex-none items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-claw-text transition-colors hover:bg-claw-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+            >
+              <Undo2 aria-hidden="true" className="h-3.5 w-3.5" />
+              {toast.action.label}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onDismiss(toast.id)}
@@ -61,16 +89,34 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  // Undo toasts are long-lived, so their dismiss timers are worth tracking:
+  // acting on one (or closing it) should cancel the pending expiry rather than
+  // leave a timer running against an id that is already gone.
+  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
 
   const dismissToast = useCallback((id: number) => {
+    const timer = timers.current.get(id);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      timers.current.delete(id);
+    }
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const showToast = useCallback((message: string, type: Toast["type"] = "success") => {
+  const showToast = useCallback<ShowToast>((message, type = "success", options) => {
     const id = ++toastId;
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => dismissToast(id), 3000);
+    setToasts((prev) => [...prev, { id, message, type, action: options?.action }]);
+    const duration = options?.duration ?? (options?.action ? ACTION_DURATION_MS : DEFAULT_DURATION_MS);
+    timers.current.set(id, setTimeout(() => dismissToast(id), duration));
   }, [dismissToast]);
+
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      pending.forEach((timer) => clearTimeout(timer));
+      pending.clear();
+    };
+  }, []);
 
   return (
     <ToastContext.Provider value={{ showToast }}>
