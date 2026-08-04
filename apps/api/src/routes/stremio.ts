@@ -1,6 +1,6 @@
 import { ListKind, MetadataType } from "@prisma/client";
 import { STREAMING_PROVIDERS } from "../tmdb.js";
-import type { FastifyPluginAsync, FastifyReply } from "fastify";
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { getTmdb } from "../lib/tmdb-client.js";
 import { getRegionSetting } from "../lib/settings.js";
@@ -15,7 +15,12 @@ import {
 } from "../lib/stremio-helpers.js";
 import { upsertMetadata } from "../lib/metadata.js";
 import { deriveStremioSecret, resolveProfileFromStremioSecret } from "../lib/stremio-secret.js";
-import { getDefaultProfileId, resolveProfile } from "../lib/profile.js";
+import {
+  getDefaultProfileId,
+  isProfileLocked,
+  PROFILE_LOCKED_RESPONSE,
+  resolveProfile,
+} from "../lib/profile.js";
 import { parseMetaType, parseCatalogLimit, UUID_V4_PATTERN } from "../lib/types.js";
 import type { StremioMetaPreview, StremioMetaType } from "../lib/types.js";
 import type { MetadataPayload } from "../tmdb.js";
@@ -93,48 +98,67 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
   // manifest URL could embed) and otherwise falling back to the default
   // (oldest) profile, so existing single-profile installs keep working
   // unchanged.
-  const resolveStremioProfileId = async (queryProfileId: unknown): Promise<string> => {
+  //
+  // Returns null when the chosen profile is PIN-protected and the request has
+  // not verified that PIN — the selector names a profile, it does not authorise
+  // one. Holding `API_TOKEN` was otherwise enough to read a locked profile's
+  // library through `?profileId=`, which is the boundary `resolveProfile`
+  // enforces on the header path. Callers turn null into a 401.
+  //
+  // The `/addon/stremio/:secret/…` routes are deliberately not affected: they
+  // resolve their profile from the secret in the path, which *is* the
+  // credential — Stremio sends no headers and could never carry a PIN token.
+  const resolveStremioProfileId = async (
+    request: FastifyRequest,
+    queryProfileId: unknown
+  ): Promise<string | null> => {
+    let profileId: string | null = null;
     if (typeof queryProfileId === "string" && UUID_V4_PATTERN.test(queryProfileId)) {
       const profile = await prisma.profile.findUnique({ where: { id: queryProfileId } });
-      if (profile) return profile.id;
+      if (profile) profileId = profile.id;
     }
-    return getDefaultProfileId();
+    profileId ??= await getDefaultProfileId();
+    return (await isProfileLocked(request, profileId)) ? null : profileId;
   };
 
   // ─── Legacy stremio routes ───
 
   app.get<{ Querystring: { limit?: string; profileId?: string } }>(
     "/stremio/catalog/my_watchlist_movies",
-    async (request) => {
+    async (request, reply) => {
       const limit = parseCatalogLimit(request.query.limit);
-      const profileId = await resolveStremioProfileId(request.query.profileId);
+      const profileId = await resolveStremioProfileId(request, request.query.profileId);
+      if (!profileId) return reply.code(401).send(PROFILE_LOCKED_RESPONSE);
       return { metas: await getWatchlistMetas("movie", limit, profileId) };
     }
   );
 
   app.get<{ Querystring: { limit?: string; profileId?: string } }>(
     "/stremio/catalog/my_watchlist_series",
-    async (request) => {
+    async (request, reply) => {
       const limit = parseCatalogLimit(request.query.limit);
-      const profileId = await resolveStremioProfileId(request.query.profileId);
+      const profileId = await resolveStremioProfileId(request, request.query.profileId);
+      if (!profileId) return reply.code(401).send(PROFILE_LOCKED_RESPONSE);
       return { metas: await getWatchlistMetas("series", limit, profileId) };
     }
   );
 
   app.get<{ Querystring: { limit?: string; profileId?: string } }>(
     "/stremio/catalog/my_recent_movies",
-    async (request) => {
+    async (request, reply) => {
       const limit = parseCatalogLimit(request.query.limit);
-      const profileId = await resolveStremioProfileId(request.query.profileId);
+      const profileId = await resolveStremioProfileId(request, request.query.profileId);
+      if (!profileId) return reply.code(401).send(PROFILE_LOCKED_RESPONSE);
       return { metas: await getRecentMetas("movie", limit, profileId) };
     }
   );
 
   app.get<{ Querystring: { limit?: string; profileId?: string } }>(
     "/stremio/catalog/my_continue_series",
-    async (request) => {
+    async (request, reply) => {
       const limit = parseCatalogLimit(request.query.limit);
-      const profileId = await resolveStremioProfileId(request.query.profileId);
+      const profileId = await resolveStremioProfileId(request, request.query.profileId);
+      if (!profileId) return reply.code(401).send(PROFILE_LOCKED_RESPONSE);
       return { metas: await getContinueMetas(limit, profileId) };
     }
   );
@@ -153,7 +177,8 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
       // contents. Looking a list up by id alone made this an IDOR: a caller who
       // knew (or guessed) a UUID could read a list belonging to a profile it was
       // not acting as, including a PIN-protected one.
-      const profileId = await resolveStremioProfileId(request.query.profileId);
+      const profileId = await resolveStremioProfileId(request, request.query.profileId);
+      if (!profileId) return reply.code(401).send(PROFILE_LOCKED_RESPONSE);
       const list = await prisma.list.findFirst({
         where: { id: request.params.listId, profileId },
         select: { id: true, kind: true },
@@ -176,14 +201,16 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
       const type = parseMetaType(request.query.type);
       if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
       const limit = parseCatalogLimit(request.query.limit);
-      const profileId = await resolveStremioProfileId(request.query.profileId);
+      const profileId = await resolveStremioProfileId(request, request.query.profileId);
+      if (!profileId) return reply.code(401).send(PROFILE_LOCKED_RESPONSE);
       return { metas: await getWatchlistMetas(type, limit, profileId) };
     }
   );
 
-  app.get<{ Querystring: { limit?: string; profileId?: string } }>("/continue", async (request) => {
+  app.get<{ Querystring: { limit?: string; profileId?: string } }>("/continue", async (request, reply) => {
     const limit = parseCatalogLimit(request.query.limit);
-    const profileId = await resolveStremioProfileId(request.query.profileId);
+    const profileId = await resolveStremioProfileId(request, request.query.profileId);
+    if (!profileId) return reply.code(401).send(PROFILE_LOCKED_RESPONSE);
     return { metas: await getContinueMetas(limit, profileId) };
   });
 
@@ -193,7 +220,8 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
       const type = parseMetaType(request.query.type);
       if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
       const limit = parseCatalogLimit(request.query.limit);
-      const profileId = await resolveStremioProfileId(request.query.profileId);
+      const profileId = await resolveStremioProfileId(request, request.query.profileId);
+      if (!profileId) return reply.code(401).send(PROFILE_LOCKED_RESPONSE);
       return { metas: await getRecentMetas(type, limit, profileId) };
     }
   );
@@ -349,7 +377,11 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { profileId?: string } }>(
     "/addon/stremio/manifest.json",
     publicRoute,
-    async (request) => buildManifest(await resolveStremioProfileId(request.query.profileId))
+    async (request, reply) => {
+      const profileId = await resolveStremioProfileId(request, request.query.profileId);
+      if (!profileId) return reply.code(401).send(PROFILE_LOCKED_RESPONSE);
+      return buildManifest(profileId);
+    }
   );
 
   app.get<{ Params: { secret: string } }>(
@@ -529,7 +561,8 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
     "/addon/stremio/catalog/:type/:id.json",
     publicRoute,
     async (request, reply) => {
-      const profileId = await resolveStremioProfileId(request.query.profileId);
+      const profileId = await resolveStremioProfileId(request, request.query.profileId);
+      if (!profileId) return reply.code(401).send(PROFILE_LOCKED_RESPONSE);
       return buildCatalog(profileId, request.params.type, request.params.id, reply);
     }
   );

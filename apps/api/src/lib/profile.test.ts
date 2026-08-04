@@ -147,3 +147,42 @@ describe("resolveProfile caching", () => {
     expect(prismaMock.profile.findUnique).not.toHaveBeenCalled();
   });
 });
+
+describe("isProfileLocked", () => {
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    const { profileCacheClear } = await import("./cache.js");
+    profileCacheClear();
+  });
+
+  it("leaves a profile without a PIN open", async () => {
+    prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, pinHash: null });
+    const { isProfileLocked } = await loadProfileLib();
+
+    expect(await isProfileLocked(makeRequest(), PROFILE_ID)).toBe(false);
+  });
+
+  it("locks a PIN-protected profile against a request carrying no profile token", async () => {
+    prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, pinHash: "scrypt$..." });
+    const { isProfileLocked } = await loadProfileLib();
+
+    expect(await isProfileLocked(makeRequest(), PROFILE_ID)).toBe(true);
+  });
+
+  it("opens it again for a request whose profile token verifies", async () => {
+    prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, pinHash: "scrypt$..." });
+    const { verifyProfileToken } = await import("./profile-token.js");
+    vi.mocked(verifyProfileToken).mockReturnValue(true);
+    const { isProfileLocked } = await loadProfileLib();
+
+    expect(await isProfileLocked(makeRequest(), PROFILE_ID)).toBe(false);
+  });
+
+  it("treats an unknown profile as unlocked, leaving the 404 to the caller", async () => {
+    prismaMock.profile.findUnique.mockResolvedValue(null);
+    const { isProfileLocked } = await loadProfileLib();
+
+    expect(await isProfileLocked(makeRequest(), OTHER_PROFILE_ID)).toBe(false);
+  });
+});

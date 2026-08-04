@@ -21,11 +21,26 @@ vi.mock("../lib/stremio-helpers.js", () => ({
   getCustomListMetas: async () => [{ id: "tt0000002" }],
 }));
 
+// Profiles the fake `isProfileLocked` treats as PIN-protected. A request clears
+// the lock by carrying that profile's access token, the way the real one does.
+const { lockedProfileIds } = vi.hoisted(() => ({ lockedProfileIds: new Set<string>() }));
+const tokenFor = (profileId: string) => `verified-${profileId}`;
+
 vi.mock("../lib/profile.js", () => ({
   resolveProfile: async (request: { profileId?: string }) => {
     request.profileId = PROFILE_ID;
   },
   getDefaultProfileId: async () => PROFILE_ID,
+  PROFILE_LOCKED_RESPONSE: {
+    error: "Profile PIN verification required",
+    code: "profile_verification_required",
+  },
+  isProfileLocked: async (
+    request: { headers: Record<string, string | undefined> },
+    profileId: string
+  ) =>
+    lockedProfileIds.has(profileId) &&
+    request.headers["x-profile-token"] !== tokenFor(profileId),
 }));
 
 vi.mock("../lib/ai.js", () => ({
@@ -37,6 +52,7 @@ vi.mock("../lib/tmdb-client.js", () => ({ getTmdb: async () => ({}) }));
 
 const resetMocks = () => {
   vi.clearAllMocks();
+  lockedProfileIds.clear();
   prismaMock.list.findMany.mockResolvedValue([]);
   prismaMock.list.findFirst.mockResolvedValue(null);
   prismaMock.kV.findUnique.mockResolvedValue(null);
@@ -236,6 +252,90 @@ describe("stremio routes — the legacy list route is profile-scoped", () => {
 
     expect(response.statusCode).toBe(404);
     expect(prismaMock.list.findUnique).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe("stremio routes — ?profileId names a profile, it does not unlock one", () => {
+  beforeEach(() => {
+    resetMocks();
+  });
+
+  it("401s a catalog naming a PIN-protected profile", async () => {
+    const app = await buildApp();
+    lockedProfileIds.add(OTHER_PROFILE_ID);
+    prismaMock.profile.findUnique.mockResolvedValue({ id: OTHER_PROFILE_ID });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/watchlist?type=movie&profileId=${OTHER_PROFILE_ID}`,
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json().code).toBe("profile_verification_required");
+    await app.close();
+  });
+
+  it("serves that same catalog once the PIN has been verified", async () => {
+    const app = await buildApp();
+    lockedProfileIds.add(OTHER_PROFILE_ID);
+    prismaMock.profile.findUnique.mockResolvedValue({ id: OTHER_PROFILE_ID });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/watchlist?type=movie&profileId=${OTHER_PROFILE_ID}`,
+      headers: { "x-profile-token": tokenFor(OTHER_PROFILE_ID) },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().metas).toEqual([{ id: "tt0000001" }]);
+    await app.close();
+  });
+
+  it("401s the default-profile fallback when that profile is locked", async () => {
+    const app = await buildApp();
+    // No ?profileId at all: omitting the selector must not be a way around the
+    // PIN either, since it resolves to a real profile just the same.
+    lockedProfileIds.add(PROFILE_ID);
+
+    const response = await app.inject({ method: "GET", url: "/continue" });
+
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("401s the legacy list route for a locked profile before it looks the list up", async () => {
+    const app = await buildApp();
+    lockedProfileIds.add(PROFILE_ID);
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/stremio/list/${OWN_LIST_ID}?type=movie`,
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(prismaMock.list.findFirst).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("leaves the secret addon URL alone, which is the credential Stremio can actually send", async () => {
+    const app = await buildApp();
+    lockedProfileIds.add(PROFILE_ID);
+    const { deriveStremioSecret } = await import("../lib/stremio-secret.js");
+    const originalToken = process.env.API_TOKEN;
+    process.env.API_TOKEN = "test-api-token";
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: `/addon/stremio/${deriveStremioSecret(PROFILE_ID)}/manifest.json`,
+      });
+
+      expect(response.statusCode).toBe(200);
+    } finally {
+      if (originalToken === undefined) delete process.env.API_TOKEN;
+      else process.env.API_TOKEN = originalToken;
+    }
     await app.close();
   });
 });
