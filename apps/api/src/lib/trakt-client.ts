@@ -141,6 +141,19 @@ export const pushTraktWatchlistChange = async (
 
 const TRAKT_WATCHLIST_SNAPSHOT_KEY = "trakt:watchlistSnapshot";
 
+/**
+ * Whether a removal on Trakt is allowed to remove the item locally too.
+ *
+ * Off by default: Trakt is an optional mirror, not the system of record. A
+ * self-hoster's library should never shrink because a third-party service
+ * decided it should — least of all one they are keeping at arm's length
+ * precisely because it might go away.
+ *
+ * Turning this on restores the old two-way behaviour for anyone who does want
+ * Trakt driving their watchlist.
+ */
+const TRAKT_WATCHLIST_MIRROR_DELETES = process.env.TRAKT_WATCHLIST_MIRROR_DELETES?.trim() === "true";
+
 const watchlistSnapshotKey = (item: WatchlistItemRef) => `${item.type}:${item.imdbId}`;
 
 const readWatchlistSnapshot = async (): Promise<Set<string> | null> => {
@@ -163,19 +176,26 @@ const writeWatchlistSnapshot = async (keys: Set<string>): Promise<void> => {
 };
 
 /**
- * Two-way reconciliation between Trakt's watchlist and the local default
- * watchlist. Items present on Trakt but missing locally are added; items
- * that disappeared from Trakt since the last sync (and are still present
- * locally) are removed to mirror the removal. Local items that were never
- * confirmed on Trakt (e.g. a push that failed at add-time) are retried
+ * Reconciliation between Trakt's watchlist and the local default watchlist.
+ * Items present on Trakt but missing locally are added. Local items that were
+ * never confirmed on Trakt (e.g. a push that failed at add-time) are retried
  * instead of deleted, so a transient failure can't silently drop an item.
+ *
+ * Items that disappeared from Trakt since the last sync are only removed
+ * locally when TRAKT_WATCHLIST_MIRROR_DELETES is on; otherwise they are kept
+ * and counted in `keptLocally`. See that constant for why off is the default.
  */
 export const syncTraktWatchlist = async (
   logger: FastifyRequest["log"],
   profileId: string
-): Promise<{ addedLocally: number; removedLocally: number; pushedToTrakt: number }> => {
+): Promise<{
+  addedLocally: number;
+  removedLocally: number;
+  keptLocally: number;
+  pushedToTrakt: number;
+}> => {
   if (!(await isTraktConnected())) {
-    return { addedLocally: 0, removedLocally: 0, pushedToTrakt: 0 };
+    return { addedLocally: 0, removedLocally: 0, keptLocally: 0, pushedToTrakt: 0 };
   }
 
   const client = await getTraktClient();
@@ -210,8 +230,25 @@ export const syncTraktWatchlist = async (
     ? new Set([...previousSnapshot].filter((key) => traktKeys.has(key) && !localByKey.has(key)))
     : new Set<string>();
 
+  // A Trakt watchlist that has gone *entirely* empty since the last sync is far
+  // more likely to be a service that broke, an account that was reset, or a
+  // token now pointing somewhere else than a user who deliberately cleared
+  // every item. Errors can't reach this point (the client throws on any
+  // non-2xx), but a healthy-looking 200 carrying `[]` can — and honouring it
+  // would empty the local watchlist too. Refuse the whole deletion pass in that
+  // case, whatever TRAKT_WATCHLIST_MIRROR_DELETES says.
+  const traktWentEmpty = traktKeys.size === 0 && !!previousSnapshot && previousSnapshot.size > 0;
+  if (traktWentEmpty) {
+    logger.warn(
+      { previouslyOnTrakt: previousSnapshot.size },
+      "Trakt returned an empty watchlist where it previously had items — skipping mirror deletions"
+    );
+  }
+  const mirrorDeletes = TRAKT_WATCHLIST_MIRROR_DELETES && !traktWentEmpty;
+
   let addedLocally = 0;
   let removedLocally = 0;
+  let keptLocally = 0;
   let pushedToTrakt = 0;
 
   for (const item of traktItems) {
@@ -241,11 +278,24 @@ export const syncTraktWatchlist = async (
     }
   }
 
+  // Items kept locally despite being gone from Trakt. They are written into the
+  // snapshot alongside the live Trakt keys so the next run still classifies them
+  // as "was on Trakt, isn't now" and keeps them again. Leaving them out would
+  // make the next run read them as a local add that never reached Trakt and
+  // push them straight back up — resurrecting on Trakt exactly what the user
+  // removed there.
+  const keptKeys = new Set<string>();
+
   if (previousSnapshot) {
     for (const [key, item] of localByKey) {
       if (traktKeys.has(key)) continue;
 
       if (previousSnapshot.has(key)) {
+        if (!mirrorDeletes) {
+          keptKeys.add(key);
+          keptLocally += 1;
+          continue;
+        }
         await prisma.listItem.delete({
           where: { listId_type_imdbId: { listId: item.listId, type: item.type, imdbId: item.imdbId } },
         });
@@ -261,9 +311,9 @@ export const syncTraktWatchlist = async (
     }
   }
 
-  await writeWatchlistSnapshot(traktKeys);
+  await writeWatchlistSnapshot(new Set([...traktKeys, ...keptKeys]));
 
-  return { addedLocally, removedLocally, pushedToTrakt };
+  return { addedLocally, removedLocally, keptLocally, pushedToTrakt };
 };
 
 export const TRAKT_LAST_POLLED_AT_KEY = "trakt:lastPolledAt";

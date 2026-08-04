@@ -9,6 +9,7 @@ const JOB_STATUS_KEY_PREFIX = "job-status:";
 export type JobName =
   | "trakt-history-poll"
   | "trakt-watchlist-sync"
+  | "stremio-library-sync"
   | "scrobble-cleanup"
   | "episode-notifications"
   | "ai-recommendations"

@@ -16,6 +16,7 @@ import { isStremioSecretPath } from "./lib/stremio-secret.js";
 import { getAiRecommendations, isAiConfigured } from "./lib/ai.js";
 import { trendingCacheDeletePrefix } from "./lib/cache.js";
 import { pollTraktHistory, syncTraktWatchlist } from "./lib/trakt-client.js";
+import { isStremioConnected, syncStremioLibrary } from "./lib/stremio-library.js";
 import { ensureDefaultWatchlist } from "./lib/watchlist.js";
 import { ensureDefaultCollection } from "./lib/collection.js";
 import { getDefaultProfileId } from "./lib/profile.js";
@@ -41,6 +42,7 @@ import streamingRoutes from "./routes/streaming.js";
 import settingsRoutes from "./routes/settings.js";
 import aiRoutes from "./routes/ai.js";
 import stremioRoutes from "./routes/stremio.js";
+import stremioLibraryRoutes from "./routes/stremio-library.js";
 import traktRoutes from "./routes/trakt.js";
 import scrobbleRoutes from "./routes/scrobble.js";
 import pushRoutes from "./routes/push.js";
@@ -52,6 +54,14 @@ import gamesRoutes from "./routes/games.js";
 import gamesSteamRoutes from "./routes/games-steam.js";
 
 const TRAKT_POLL_INTERVAL_SEC = Number(process.env.TRAKT_POLL_INTERVAL_SEC ?? 300);
+
+// Shorter than the Trakt poll because it costs far less: when nothing has been
+// watched, a sync is a single small `datastoreMeta` call that fetches no items
+// at all. The interval also bounds the one real gap in this sync — Stremio
+// reports the episode you are *on*, so episodes finished within a single
+// interval collapse into the latest one. Two minutes is well under any real
+// episode length.
+const STREMIO_POLL_INTERVAL_SEC = Number(process.env.STREMIO_POLL_INTERVAL_SEC ?? 120);
 const AI_REFRESH_INTERVAL_SEC = Number(process.env.AI_REFRESH_INTERVAL_SEC ?? 86400);
 const NOTIFICATION_CHECK_INTERVAL_SEC = Number(process.env.NOTIFICATION_CHECK_INTERVAL_SEC ?? 3600);
 
@@ -195,6 +205,7 @@ app.register(streamingRoutes);
 app.register(settingsRoutes);
 app.register(aiRoutes);
 app.register(stremioRoutes);
+app.register(stremioLibraryRoutes);
 app.register(traktRoutes);
 app.register(scrobbleRoutes);
 app.register(pushRoutes);
@@ -269,6 +280,26 @@ const start = async () => {
     }, TRAKT_POLL_INTERVAL_SEC * 1000);
   } else {
     app.log.info("Scheduled Trakt poll disabled because TRAKT_POLL_INTERVAL_SEC is set to 0");
+  }
+
+  if (STREMIO_POLL_INTERVAL_SEC > 0) {
+    setInterval(() => {
+      void (async () => {
+        // Checked every tick rather than at boot, so connecting an account from
+        // Settings starts syncing without a restart.
+        if (!(await isStremioConnected())) return;
+        const profileId = await getDefaultProfileId();
+        await syncStremioLibrary(app.log, profileId, "incremental")
+          .then(() => reportJobSuccess("stremio-library-sync"))
+          .catch((error) => {
+            reportBackgroundError(error, "Scheduled Stremio library sync failed", "stremio-library-sync");
+          });
+      })().catch((error) => {
+        reportBackgroundError(error, "Scheduled Stremio library sync failed");
+      });
+    }, STREMIO_POLL_INTERVAL_SEC * 1000);
+  } else {
+    app.log.info("Scheduled Stremio library sync disabled because STREMIO_POLL_INTERVAL_SEC is set to 0");
   }
 
   setInterval(() => {

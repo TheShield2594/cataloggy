@@ -7,7 +7,8 @@ Self-host it on your home server, open it on your phone or Apple TV, and keep tr
 ## Why you might like it
 
 - **One home screen for everything** — continue watching, recently watched, and upcoming episodes, all in one place
-- **Works with the tools you already use** — pairs with Plex, Jellyfin, Trakt, and Stremio/Omni add-ons
+- **Works with the tools you already use** — pairs with Stremio, Plex, Jellyfin, Trakt, and Stremio/Omni add-ons
+- **No account you can't walk away from** — watch history comes straight from Stremio, Plex or Jellyfin, and every third-party service is optional and replaceable
 - **Yours, not the cloud's** — runs on your own hardware, your data stays on your network
 - **Phone and TV friendly** — installs as an app on your phone (PWA) and works great on Apple TV and Android TV
 
@@ -206,6 +207,45 @@ Plex and Jellyfin don't send Cataloggy's profile header either, so a scrobble's 
 2. **The media-server account name.** With no `profile` parameter, the Plex account title (or the Jellyfin username) is matched against your profile names, ignoring case — so a Plex user named `Sam` scrobbles into the Cataloggy profile named `Sam` with nothing to configure.
 3. **Your oldest profile**, if neither applies. This is what single-profile installs get, and what every webhook did before profiles were taken into account.
 
+## Where watch history comes from
+
+Cataloggy records what you've watched from whichever of these you set up — none is required, and they can run side by side:
+
+| Source | How it reaches Cataloggy |
+| --- | --- |
+| **Stremio** | Reads your Stremio account library directly — see below |
+| **Plex** | Webhook, as it happens |
+| **Jellyfin** | Webhook, as it happens |
+| **The web app** | Marking watched by hand, check-ins, the scrobble API |
+| **Stremio add-on** | The "Cataloggy: Mark Watched" entry in the subtitle menu |
+| **Trakt** | Optional — see [Trakt is optional](#trakt-is-optional) |
+| **Other trackers** | One-off CSV/JSON imports (Letterboxd, IMDb, Simkl) — see [Export / import your data](#export--import-your-data) |
+
+### Stremio watched sync
+
+Stremio's add-on protocol is read-only: an add-on serves catalogs and metadata, and is never told what you watched. But every Stremio client signed in to a **Stremio account** syncs its library — including watched state — to Stremio's servers, and Cataloggy can read that directly.
+
+Connect the account under **Settings → Stremio Watched Sync**. One connection covers every client on that account: desktop, mobile, Android TV, the web app, and third-party clients that sign in with a Stremio account. There's nothing to install per device.
+
+- Your password is exchanged for an access key once and **never stored** — only the key is.
+- Connecting starts tracking from that moment. Use **Import watch history** once to pull in what the account already has marked as watched, dated from Stremio's own watch history rather than from today.
+- The scheduled check costs a single small request when nothing has been watched, which is why it defaults to every 120 seconds (`STREMIO_POLL_INTERVAL_SEC`; set to `0` to disable and sync only on demand).
+- Only IMDb-keyed content is matched. Items from add-ons using their own ID schemes, and live-TV entries, are skipped rather than guessed at.
+- Stremio reports the episode you're *on*, not a full play log, so episodes finished within a single poll interval collapse into the most recent one. At the default interval that needs you to clear an episode in under two minutes.
+- Guest mode has no synced library, so there's nothing to read — the account is what makes this work.
+
+### Trakt is optional
+
+Trakt is supported but is not a system of record, and nothing depends on it:
+
+- **Metadata** comes from TMDB, never Trakt.
+- **Importing** your Trakt history is a one-time action (**Settings → Trakt Integration → Run Import**) and keeps working whether or not you leave the ongoing poll on.
+- **Ongoing polling** (`TRAKT_POLL_INTERVAL_SEC`) is off-switchable: set it to `0`. With Stremio watched sync connected, the poll is no longer the only thing catching what you watch in Stremio.
+- **Removals on Trakt never remove anything locally** unless you opt in with `TRAKT_WATCHLIST_MIRROR_DELETES=true`. Even then, a Trakt watchlist that has gone entirely empty is treated as a fault and never mirrored — so a broken or discontinued Trakt cannot empty your library.
+- **Scrobbles and watchlist changes still push out to Trakt** when it's connected. That direction is a mirror: if Trakt stops answering, the pushes fail quietly and nothing local is affected.
+
+Everything Cataloggy knows can be exported as a single JSON file (lists, watch history, series progress, ratings) — see [Export / import your data](#export--import-your-data).
+
 ## Nginx Proxy Manager Setup
 
 Configure Nginx Proxy Manager with one Proxy Host for your domain (for example, `cataloggy.domain.com`):
@@ -247,7 +287,7 @@ To schedule automatic backups, add a cron entry that runs `backup.sh` on a sched
 0 3 * * * cd /path/to/cataloggy && ./scripts/backup.sh >> backups/backup.log 2>&1
 ```
 
-A dump is a complete copy of your database — every profile's watch history and lists, plus the OAuth access/refresh tokens stored for Trakt, Twitch and Steam. Treat the file like a password:
+A dump is a complete copy of your database — every profile's watch history and lists, plus the OAuth access/refresh tokens stored for Trakt, Twitch and Steam and the access key for a connected Stremio account. Treat the file like a password:
 
 - `backup.sh` runs under `umask 077` and `chmod`s `$BACKUP_DIR` to `700` and each dump to `600`, so other local users on the host can't read them. Point `BACKUP_DIR` at a directory that only you own.
 - `backups/` and `*.sql.gz` are git-ignored, so a `git add -A` from the repo root can't sweep a dump into git history. If you move backups elsewhere within the repo, keep them ignored.
@@ -280,6 +320,7 @@ Cataloggy is designed for self-hosting on a trusted local network (LAN), not for
 - That CSP's `connect-src` names only the origins this deployment actually talks to — `'self'` plus `VITE_API_BASE`, `VITE_ADDON_BASE` and (if set) the `SENTRY_DSN` host — rather than allowing every host, so script injected into the page cannot post your token to an arbitrary server. The header is rendered from `apps/web/serve.template.json` when the `web` container starts, since those origins are only known then. If some browser needs to reach an origin the container doesn't know about (most likely a per-browser API base set in Settings), add it to `CSP_CONNECT_SRC_EXTRA` — otherwise the browser will block the request. `style-src` still allows `'unsafe-inline'`, which the app's inline React styles require; style injection is far lower-risk than script injection, so that one is an accepted weakening.
 - The Stremio add-on protocol sends no credentials, so the API's built-in catalog manifest (`/addon/stremio/...`) cannot sit behind `API_TOKEN`. It is instead gated by an unguessable per-profile secret in the URL path (`/addon/stremio/<secret>/manifest.json`), derived from `API_TOKEN` and served to that profile from `GET /addon/config`; requests without a valid secret get the token check like any other route, and the secret decides which profile's lists are served, so one add-on URL cannot read another profile's library. Rotating `API_TOKEN` invalidates every add-on URL — reinstall from Settings afterwards.
 - The separate add-on service (port `7001`, the full-featured one Settings links to) is still unauthenticated: anyone who can reach it can read the lists of the profile named in its URL (or the oldest profile, for the prefix-less URL). That is inherent to the protocol — Stremio cannot send a token — so keep that port on your LAN, and do not proxy it to the internet unless you are comfortable with your watchlist being public. Its write endpoints ("Mark Watched", scrobbles) are separately protected by a token derived from `API_TOKEN`.
+- Connecting a Stremio account stores only the access key Stremio issues, never your password — the password is sent once to Stremio's login endpoint, exchanged for the key, and discarded. The key is not scoped: it grants the same library access a signed-in Stremio client has, so it belongs to the same "treat your database dump like a password" bracket as the Trakt and Steam tokens. Disconnecting from Settings deletes it. `POST /stremio/library/connect` is rate-limited to 10/min/IP like the other credential-accepting routes.
 - Linking a Trakt account is CSRF-protected: `GET /trakt/oauth/authorize` (which requires the API token) mints a single-use `state` that expires in 10 minutes, and the callback rejects anything else — so a link someone else sends you cannot silently bind your install to their Trakt account.
 - If you do expose Cataloggy beyond your LAN, put it behind a reverse proxy with TLS (e.g. Nginx Proxy Manager) and consider implementing a proper session-based auth flow.
 - All API routes are rate-limited globally (200 req/min/IP), with tighter per-route limits on sensitive endpoints: PIN verification (`POST /profiles/:id/verify`, 10/min/IP), the Trakt OAuth authorize/callback routes (10/min/IP), the Plex/Jellyfin webhooks (60/min/IP) and the built-in Stremio manifest/catalog routes (240/min/IP — they answer unauthenticated callers, but a Stremio home screen fetches one request per catalog, so the budget covers several refreshes a minute rather than a single request). Calls from the Stremio addon service get their own 1000 req/min bucket rather than sharing the browser's — every Stremio client reaches the API from that one container's IP. The addon identifies itself with a token derived from `API_TOKEN` (never the raw token, which the browser also holds), so nothing extra needs configuring and a leaked browser token cannot drain the addon's budget. The limiter's counters are in-memory and per-process, so they assume the documented single-`api`-container deployment; running multiple API replicas would give each its own independent budget.

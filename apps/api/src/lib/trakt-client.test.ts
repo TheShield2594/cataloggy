@@ -332,7 +332,7 @@ describe("trakt-client", () => {
       );
     });
 
-    it("removes an item locally when it disappeared from Trakt and was present in the previous snapshot", async () => {
+    it("keeps an item that disappeared from Trakt, by default", async () => {
       prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
       prismaMock.kV.findUnique.mockResolvedValue({ value: JSON.stringify(["movie:tt5"]) });
       watchlistMock.getDefaultWatchlist.mockResolvedValue({ id: "watchlist-1" });
@@ -346,12 +346,81 @@ describe("trakt-client", () => {
       const { syncTraktWatchlist } = await import("./trakt-client.js");
       const result = await syncTraktWatchlist(makeLogger(), "profile-1");
 
+      expect(result.keptLocally).toBe(1);
+      expect(result.removedLocally).toBe(0);
+      expect(prismaMock.listItem.delete).not.toHaveBeenCalled();
+    });
+
+    it("keeps a kept item in the snapshot so the next sync does not push it back to Trakt", async () => {
+      prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
+      prismaMock.kV.findUnique.mockResolvedValue({ value: JSON.stringify(["movie:tt5"]) });
+      watchlistMock.getDefaultWatchlist.mockResolvedValue({ id: "watchlist-1" });
+      prismaMock.listItem.findMany.mockResolvedValue([
+        { listId: "watchlist-1", type: "movie", imdbId: "tt5" },
+      ]);
+
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, headers: new Headers(), json: async () => [] });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { syncTraktWatchlist } = await import("./trakt-client.js");
+      await syncTraktWatchlist(makeLogger(), "profile-1");
+
+      const snapshotWrite = prismaMock.kV.upsert.mock.calls.at(-1)?.[0];
+      expect(JSON.parse(snapshotWrite.update.value)).toEqual(["movie:tt5"]);
+    });
+
+    it("removes an item locally when mirror deletes are explicitly enabled", async () => {
+      process.env.TRAKT_WATCHLIST_MIRROR_DELETES = "true";
+      prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
+      prismaMock.kV.findUnique.mockResolvedValue({
+        value: JSON.stringify(["movie:tt5", "movie:tt6"]),
+      });
+      watchlistMock.getDefaultWatchlist.mockResolvedValue({ id: "watchlist-1" });
+      prismaMock.listItem.findMany.mockResolvedValue([
+        { listId: "watchlist-1", type: "movie", imdbId: "tt5" },
+        { listId: "watchlist-1", type: "movie", imdbId: "tt6" },
+      ]);
+
+      // tt6 is still on Trakt, so the watchlist has not "gone empty" — only tt5
+      // was genuinely removed there.
+      const fetchMock = vi.fn().mockImplementation(async (url: URL) => {
+        const href = url.toString();
+        if (href.includes("/sync/watchlist/movies")) {
+          return { ok: true, status: 200, headers: new Headers(), json: async () => [movieItem("tt6")] };
+        }
+        return { ok: true, status: 200, headers: new Headers(), json: async () => [] };
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { syncTraktWatchlist } = await import("./trakt-client.js");
+      const result = await syncTraktWatchlist(makeLogger(), "profile-1");
+
       expect(result.removedLocally).toBe(1);
       expect(prismaMock.listItem.delete).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { listId_type_imdbId: { listId: "watchlist-1", type: "movie", imdbId: "tt5" } },
         })
       );
+    });
+
+    it("refuses to mirror deletions when Trakt reports an empty watchlist, even with mirroring on", async () => {
+      process.env.TRAKT_WATCHLIST_MIRROR_DELETES = "true";
+      prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
+      prismaMock.kV.findUnique.mockResolvedValue({ value: JSON.stringify(["movie:tt5"]) });
+      watchlistMock.getDefaultWatchlist.mockResolvedValue({ id: "watchlist-1" });
+      prismaMock.listItem.findMany.mockResolvedValue([
+        { listId: "watchlist-1", type: "movie", imdbId: "tt5" },
+      ]);
+
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, headers: new Headers(), json: async () => [] });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { syncTraktWatchlist } = await import("./trakt-client.js");
+      const result = await syncTraktWatchlist(makeLogger(), "profile-1");
+
+      expect(result.keptLocally).toBe(1);
+      expect(result.removedLocally).toBe(0);
+      expect(prismaMock.listItem.delete).not.toHaveBeenCalled();
     });
 
     it("pushes a locally-added item to Trakt when it wasn't in the previous snapshot at all", async () => {
@@ -381,7 +450,7 @@ describe("trakt-client", () => {
 
       const result = await syncTraktWatchlist(makeLogger(), "profile-1");
 
-      expect(result).toEqual({ addedLocally: 0, removedLocally: 0, pushedToTrakt: 0 });
+      expect(result).toEqual({ addedLocally: 0, removedLocally: 0, keptLocally: 0, pushedToTrakt: 0 });
       expect(watchlistMock.getDefaultWatchlist).not.toHaveBeenCalled();
     });
   });

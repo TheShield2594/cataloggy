@@ -211,6 +211,19 @@ model TraktToken {
   updatedAt    DateTime @updatedAt @db.Timestamptz(6)
 }
 
+// Stremio's account API issues a long-lived authKey rather than an OAuth token
+// pair, so there is nothing to refresh and no expiry to track — the key is valid
+// until the user signs out of that session on Stremio's side. The password is
+// never stored: it is exchanged for the authKey once and discarded.
+//
+// `email` is kept only so Settings can show which account is connected.
+model StremioAuth {
+  id        String   @id @default("default")
+  authKey   String
+  email     String?
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+}
+
 model ScrobbleSession {
   id           String          @id @default(uuid()) @db.Uuid
   type         WatchEventType

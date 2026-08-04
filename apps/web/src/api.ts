@@ -223,6 +223,20 @@ export type AddonConfig = {
   enabledCatalogs: string[];
 };
 
+export type StremioLibraryStatus = {
+  connected: boolean;
+  email: string | null;
+  apiBase: string;
+  connectedAt: string | null;
+};
+
+export type StremioSyncSummary = {
+  scanned: number;
+  fetched: number;
+  recorded: number;
+  skipped: number;
+};
+
 export type TrendingMeta = {
   id: string;
   type: MediaType;
@@ -660,6 +674,24 @@ export const api = {
   },
   traktDisconnect() {
     return request<{ disconnected: boolean }>("/trakt/disconnect", { method: "POST" });
+  },
+  getStremioLibraryStatus() {
+    return request<StremioLibraryStatus>("/stremio/library/status");
+  },
+  stremioLibraryConnect(email: string, password: string) {
+    return request<StremioLibraryStatus>("/stremio/library/connect", {
+      method: "POST",
+      body: JSON.stringify({ email, password })
+    });
+  },
+  stremioLibraryDisconnect() {
+    return request<{ connected: boolean }>("/stremio/library/disconnect", { method: "POST" });
+  },
+  stremioLibraryImport() {
+    return request<StremioSyncSummary>("/stremio/library/import", { method: "POST", timeoutMs: 120000 });
+  },
+  stremioLibrarySync() {
+    return request<StremioSyncSummary>("/stremio/library/sync", { method: "POST", timeoutMs: 60000 });
   },
   refreshAllMetadata() {
     return request<{ refreshed: number; total: number }>("/metadata/refresh-all", { method: "POST", timeoutMs: 120000 });

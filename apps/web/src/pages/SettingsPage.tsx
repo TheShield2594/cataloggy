@@ -7,6 +7,7 @@ import { TraktSettings } from "../components/settings/TraktSettings";
 import { OmdbSettings } from "../components/settings/OmdbSettings";
 import { RpdbSettings } from "../components/settings/RpdbSettings";
 import { AddonSettings } from "../components/settings/AddonSettings";
+import { StremioSyncSettings } from "../components/settings/StremioSyncSettings";
 import { AiSettings } from "../components/settings/AiSettings";
 import { DataSettings } from "../components/settings/DataSettings";
 import { PreferencesSettings } from "../components/settings/PreferencesSettings";
@@ -104,6 +105,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: <Clapperboard size={20} />,
     keywords: "stremio catalogs manifest install url",
     content: <AddonSettings />,
+  },
+  {
+    id: "stremio-sync",
+    tab: "integrations",
+    title: "Stremio Watched Sync",
+    icon: <Clapperboard size={20} />,
+    keywords: "stremio watched history sync library account import scrobble",
+    content: <StremioSyncSettings />,
   },
   {
     id: "omdb",
