@@ -20,6 +20,14 @@ import { parseCsv } from "./export.js";
 
 const TMDB_LOOKUP_CONCURRENCY = 5;
 
+/**
+ * The Letterboxd formats carry no IMDb ids, so every unique title costs a TMDB
+ * search — outbound work against someone else's rate-limited API, not just a
+ * local row. They get a much lower ceiling than the id-carrying formats; 10k
+ * films is well past any real diary export.
+ */
+const MAX_TMDB_LOOKUP_ROWS = 10_000;
+
 const parseDate = (v: string | undefined): Date | null => {
   if (!v?.trim()) return null;
   const d = new Date(v.trim());
@@ -71,11 +79,12 @@ const importRoutes: FastifyPluginAsync = async (app) => {
 
     const header = rows[0].map((h) => h.trim().toLowerCase());
     const dataRows = rows.slice(1).filter((r) => r.length > 0 && !r.every((c) => c.trim() === ""));
-    // Bounded on top of MAX_BODY_SIZE_MB: the Letterboxd path runs a TMDB
-    // search per unique title, so row count — not payload size — is what a
-    // single request's work scales with.
-    if (dataRows.length > MAX_IMPORT_ROWS) {
-      return reply.code(413).send({ error: tooManyRowsMessage("CSV rows"), code: "too_many_rows" });
+    // Bounded on top of MAX_BODY_SIZE_MB: row count, not payload size, is what
+    // a single request's work scales with — and for Letterboxd that work
+    // includes a TMDB search per unique title.
+    const rowLimit = format.startsWith("letterboxd") ? MAX_TMDB_LOOKUP_ROWS : MAX_IMPORT_ROWS;
+    if (dataRows.length > rowLimit) {
+      return reply.code(413).send({ error: tooManyRowsMessage("CSV rows", rowLimit), code: "too_many_rows" });
     }
     const col = (name: string) => header.indexOf(name);
 

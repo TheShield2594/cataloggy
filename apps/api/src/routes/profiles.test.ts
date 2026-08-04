@@ -442,6 +442,33 @@ describe("profiles routes", () => {
         await app.close();
       });
 
+      it("does not derive a hash for the new PIN when the currentPin is wrong", async () => {
+        prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: hashPin("1234") });
+
+        // scrypt is deliberately expensive, so a rejected request must not buy
+        // a derivation for a PIN that is never going to be stored.
+        const actual = await vi.importActual<typeof import("../lib/pin-hash.js")>("../lib/pin-hash.js");
+        const hashSpy = vi.fn(actual.hashPin);
+        vi.doMock("../lib/pin-hash.js", () => ({ ...actual, hashPin: hashSpy }));
+
+        try {
+          const app = await buildApp();
+          const response = await app.inject({
+            method: "PATCH",
+            url: `/profiles/${PROFILE_ID}`,
+            payload: { pin: "9999", currentPin: "0000" },
+          });
+
+          expect(response.statusCode).toBe(401);
+          expect(hashSpy).not.toHaveBeenCalled();
+          expect(prismaMock.profile.update).not.toHaveBeenCalled();
+          await app.close();
+        } finally {
+          vi.doUnmock("../lib/pin-hash.js");
+          vi.resetModules();
+        }
+      });
+
       it("changes the PIN when the correct currentPin is given", async () => {
         prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: hashPin("1234") });
         prismaMock.profile.update.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: hashPin("9999") });

@@ -35,8 +35,8 @@ export const MAX_RATING = 10;
  */
 export const MAX_IMPORT_ROWS = 200_000;
 
-export const tooManyRowsMessage = (collection: string) =>
-  `Too many ${collection} in one import (limit ${MAX_IMPORT_ROWS.toLocaleString("en-US")}). Split the file and import it in parts.`;
+export const tooManyRowsMessage = (collection: string, limit: number = MAX_IMPORT_ROWS) =>
+  `Too many ${collection} in one import (limit ${limit.toLocaleString("en-US")}). Split the file and import it in parts.`;
 
 /** Narrows to a plain object, so `.field` access on an array element is safe. */
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -85,7 +85,3 @@ export const boundedNumber = (value: unknown, min: number, max: number): number 
   if (!Number.isFinite(parsed) || parsed < min || parsed > max) return null;
   return parsed;
 };
-
-/** A season/episode pair as stored on optional (nullable) columns. */
-export const optionalSeason = (value: unknown): number | null => boundedInt(value, 0, MAX_SEASON);
-export const optionalEpisode = (value: unknown): number | null => boundedInt(value, 0, MAX_EPISODE);

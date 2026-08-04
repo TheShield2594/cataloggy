@@ -102,9 +102,16 @@ export const pinMatches = async (pin: string, pinHash: string): Promise<boolean>
 };
 
 /**
- * True for a stored hash that verified but isn't in the current format. The
- * caller re-hashes the PIN it just proved and writes it back, so legacy hashes
- * disappear on first use rather than needing every household to re-enter their
- * PIN.
+ * True for a stored hash that verified but wasn't produced by the current
+ * configuration — a legacy SHA-256 digest, or scrypt at cost parameters we've
+ * since moved off. The caller re-hashes the PIN it just proved and writes it
+ * back, so old hashes disappear on first use rather than needing every
+ * household to re-enter their PIN. This is what makes raising the parameters
+ * above a one-line change.
  */
-export const needsRehash = (pinHash: string): boolean => !pinHash.startsWith(`${SCRYPT_PREFIX}$`);
+export const needsRehash = (pinHash: string): boolean => {
+  if (!pinHash.startsWith(`${SCRYPT_PREFIX}$`)) return true;
+  const [, rawN, rawR, rawP] = pinHash.split("$");
+  // A malformed encoding parses to NaN and so counts as needing a rehash.
+  return Number(rawN) !== SCRYPT_N || Number(rawR) !== SCRYPT_R || Number(rawP) !== SCRYPT_P;
+};

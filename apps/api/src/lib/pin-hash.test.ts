@@ -43,6 +43,18 @@ describe("needsRehash", () => {
     expect(needsRehash(legacyHash("1234"))).toBe(true);
     expect(needsRehash(await hashPin("1234"))).toBe(false);
   });
+
+  it("flags a hash written at different scrypt cost parameters", async () => {
+    const [prefix, n, r, p, salt, key] = (await hashPin("1234")).split("$");
+    expect(needsRehash([prefix, Number(n) / 2, r, p, salt, key].join("$"))).toBe(true);
+    expect(needsRehash([prefix, n, Number(r) + 1, p, salt, key].join("$"))).toBe(true);
+    expect(needsRehash([prefix, n, r, Number(p) + 1, salt, key].join("$"))).toBe(true);
+  });
+
+  it("flags a malformed encoding rather than treating it as current", () => {
+    expect(needsRehash("scrypt$nope$8$1$aa$bb")).toBe(true);
+    expect(needsRehash("scrypt$")).toBe(true);
+  });
 });
 
 describe("isValidPinFormat", () => {

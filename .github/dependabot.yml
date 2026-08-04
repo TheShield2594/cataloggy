@@ -25,8 +25,9 @@ updates:
           - "version-update:semver-major"
           - "version-update:semver-minor"
 
-  # docker-compose.yml, for the digest-pinned postgres image.
-  - package-ecosystem: "docker"
+  # docker-compose.yml, for the digest-pinned postgres image. Compose files are
+  # their own ecosystem — the "docker" one below only reads Dockerfiles.
+  - package-ecosystem: "docker-compose"
     directory: "/"
     schedule:
       interval: "weekly"

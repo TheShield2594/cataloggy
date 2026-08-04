@@ -216,14 +216,14 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
 
     // pin: omitted = leave as-is, null = remove PIN protection, string = set/change PIN.
     if (body.pin !== undefined) {
+      let nextPin: string | null = null;
       if (body.pin === null) {
         data.pinHash = null;
       } else if (typeof body.pin === "string" && body.pin.trim()) {
-        const nextPin = body.pin.trim();
+        nextPin = body.pin.trim();
         if (!isValidPinFormat(nextPin)) {
           return reply.code(400).send({ error: pinLengthError });
         }
-        data.pinHash = await hashPin(nextPin);
       } else {
         return reply.code(400).send({ error: "pin must be a non-empty string or null when provided" });
       }
@@ -246,6 +246,10 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
           return reply.code(401).send({ error: "Incorrect current PIN" });
         }
       }
+
+      // Derived only once the caller has proved the current PIN — scrypt is
+      // deliberately expensive, and a rejected request shouldn't buy any of it.
+      if (nextPin) data.pinHash = await hashPin(nextPin);
     }
 
     if (Object.keys(data).length === 0) {
