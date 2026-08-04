@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import { CalendarDays, ChevronLeft, ChevronRight, List, LayoutGrid, X } from "lucide-react";
 import { api, CalendarEntry, SearchResult } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
@@ -329,8 +330,17 @@ export function CalendarPage() {
             <div className="rounded-2xl p-8 text-center" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
               <CalendarDays className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
               <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
-                No upcoming episodes in the next {agendaDays} days for your in-progress series.
+                No upcoming episodes in the next {agendaDays} days.
               </p>
+              {/* Which is the expected state for a new install, not a fault —
+                  but nothing on screen said so, leaving no way to tell an empty
+                  calendar from a broken one. */}
+              <p className="mt-1 text-xs" style={{ color: "var(--text-mute)" }}>
+                The calendar only tracks series you have already started watching.
+              </p>
+              <Link to="/search" className="mt-2 inline-block text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
+                Find a series to follow &rarr;
+              </Link>
             </div>
           ) : (
             <div className="space-y-6">

@@ -201,6 +201,8 @@ Plex and Jellyfin don't send Cataloggy's profile header either, so a scrobble's 
    ```
 
    Both servers let you set the target URL per user, so this is the reliable option for a shared server. An unknown or malformed profile ID is rejected rather than quietly redirected.
+
+   On Jellyfin, send the secret as an `x-webhook-secret` header instead and leave only `profile` in the URL — see [Webhook secret placement](#webhook-secret-placement) below.
 2. **The media-server account name.** With no `profile` parameter, the Plex account title (or the Jellyfin username) is matched against your profile names, ignoring case — so a Plex user named `Sam` scrobbles into the Cataloggy profile named `Sam` with nothing to configure.
 3. **Your oldest profile**, if neither applies. This is what single-profile installs get, and what every webhook did before profiles were taken into account.
 
@@ -281,8 +283,27 @@ Cataloggy is designed for self-hosting on a trusted local network (LAN), not for
 - Linking a Trakt account is CSRF-protected: `GET /trakt/oauth/authorize` (which requires the API token) mints a single-use `state` that expires in 10 minutes, and the callback rejects anything else — so a link someone else sends you cannot silently bind your install to their Trakt account.
 - If you do expose Cataloggy beyond your LAN, put it behind a reverse proxy with TLS (e.g. Nginx Proxy Manager) and consider implementing a proper session-based auth flow.
 - All API routes are rate-limited globally (200 req/min/IP), with tighter per-route limits on sensitive endpoints: PIN verification (`POST /profiles/:id/verify`, 10/min/IP), the Trakt OAuth authorize/callback routes (10/min/IP), the Plex/Jellyfin webhooks (60/min/IP) and the built-in Stremio manifest/catalog routes (240/min/IP — they answer unauthenticated callers, but a Stremio home screen fetches one request per catalog, so the budget covers several refreshes a minute rather than a single request). Calls from the Stremio addon service get their own 1000 req/min bucket rather than sharing the browser's — every Stremio client reaches the API from that one container's IP. The addon identifies itself with a token derived from `API_TOKEN` (never the raw token, which the browser also holds), so nothing extra needs configuring and a leaked browser token cannot drain the addon's budget. The limiter's counters are in-memory and per-process, so they assume the documented single-`api`-container deployment; running multiple API replicas would give each its own independent budget.
-- The Plex/Jellyfin webhook endpoints (`/webhooks/plex`, `/webhooks/jellyfin`) authenticate with a single shared secret (`WEBHOOK_SECRET`) sent as a query param or header — neither Plex nor Jellyfin support signing outgoing webhooks, so this is the strongest verification available. Treat `WEBHOOK_SECRET` like a password and **do not expose these endpoints to the public internet**; keep them reachable only from your LAN/reverse-proxy-internal network, where Plex/Jellyfin themselves run. If you must route them through a reverse proxy, set `WEBHOOK_ALLOWED_IPS` to a comma-separated allowlist of your Plex/Jellyfin server IPs (requires `TRUST_PROXY` to be configured correctly) as a second layer of defense.
+- The Plex/Jellyfin webhook endpoints (`/webhooks/plex`, `/webhooks/jellyfin`) authenticate with a single shared secret (`WEBHOOK_SECRET`) sent as a query param or header — neither Plex nor Jellyfin support signing outgoing webhooks, so this is the strongest verification available. Treat `WEBHOOK_SECRET` like a password and **do not expose these endpoints to the public internet**; keep them reachable only from your LAN/reverse-proxy-internal network, where Plex/Jellyfin themselves run. If you must route them through a reverse proxy, set `WEBHOOK_ALLOWED_IPS` to a comma-separated allowlist of your Plex/Jellyfin server IPs (requires `TRUST_PROXY` to be configured correctly) as a second layer of defense. Where you put the secret matters — see [Webhook secret placement](#webhook-secret-placement).
 - Container logs are capped at 10MB × 3 files per service (`docker-compose.yml`'s `x-logging` block) so they can't grow unbounded on the host over a long-running, unattended deployment.
+
+### Webhook secret placement
+
+`WEBHOOK_SECRET` can travel two ways, and they are not equally safe:
+
+| Form | Use it when | Why |
+| --- | --- | --- |
+| `x-webhook-secret` header | Your media server can set custom headers — **Jellyfin can** | Headers are not part of the URL, so nothing logs them |
+| `?token=` query parameter | Your media server cannot — **Plex cannot** | The URL is written to every access log on the way in |
+
+Anything in a query string ends up in access logs in plaintext, and those logs are kept far longer than the request. Cataloggy redacts `token` from its own logs (`?token=REDACTED`), but a reverse proxy in front of it keeps its own copy that Cataloggy cannot reach. **Prefer the header wherever the sender supports it.** If both are sent, the header is what's checked; the API also logs a one-time warning per process when a webhook authenticates via the query string.
+
+Jellyfin's Webhook plugin has a *Headers* section — add `x-webhook-secret` with your secret there and drop `token` from the URL:
+
+```text
+http://LAN-IP:7000/webhooks/jellyfin?profile=PROFILE-ID
+```
+
+Plex has no such field, so `?token=WEBHOOK_SECRET` is the only form it can send. If your proxy logs concern you, either keep the Plex webhook off the proxy entirely (point it straight at the API on your LAN) or configure the proxy to strip query strings from its access log format.
 
 ## Useful Commands
 

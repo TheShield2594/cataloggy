@@ -8,6 +8,9 @@ export type Toast = {
   message: string;
   type: "success" | "error" | "info";
   action?: ToastAction;
+  // Set the moment a toast is dismissed, so it can play its exit animation
+  // before the state update that actually removes it from the DOM.
+  exiting?: boolean;
 };
 
 export type ShowToastOptions = { action?: ToastAction; duration?: number };
@@ -21,6 +24,16 @@ const DEFAULT_DURATION_MS = 3000;
 // A toast carrying an Undo is the only way back from a destructive action, so
 // it has to outlive the glance that notices the action happened at all.
 const ACTION_DURATION_MS = 8000;
+// An error toast is often the only copy of a failure reason — `Created "X", but
+// couldn't add "Y" (reason)` and the like — and a sentence that long can't be
+// read in the three seconds a "Saved" confirmation deserves.
+const ERROR_DURATION_MS = 10000;
+// Kept in step with the `.toast-exit` animation in index.css. The unmount is
+// driven by animationend; this only backstops the cases where that event never
+// arrives — a toast pushed out of the visible slice mid-exit, say, or a browser
+// that skips the animation entirely.
+const EXIT_ANIMATION_MS = 300;
+const EXIT_FALLBACK_MS = EXIT_ANIMATION_MS + 200;
 
 type ToastContextValue = {
   showToast: ShowToast;
@@ -28,12 +41,37 @@ type ToastContextValue = {
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
-function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
+function ToastContainer({
+  toasts,
+  onDismiss,
+  onExited,
+  onPause,
+  onResume,
+}: {
+  toasts: Toast[];
+  onDismiss: (id: number) => void;
+  onExited: (id: number) => void;
+  onPause: () => void;
+  onResume: () => void;
+}) {
   const visible = toasts.slice(-MAX_VISIBLE_TOASTS);
   const hiddenCount = toasts.length - visible.length;
 
   return (
-    <div role="status" aria-live="polite" aria-atomic="true" className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 sm:bottom-6 max-sm:bottom-20 max-sm:right-4">
+    <div
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 sm:bottom-6 max-sm:bottom-20 max-sm:right-4"
+      // Holding the pointer over the stack — or tabbing into it — stops the
+      // clock on every toast in it. Reaching for Undo or the close button was
+      // otherwise a race against a timer that could pull the button out from
+      // under the click, and a long error message couldn't be re-read at all.
+      onMouseEnter={onPause}
+      onMouseLeave={onResume}
+      onFocus={onPause}
+      onBlur={onResume}
+    >
       {hiddenCount > 0 && (
         <span className="self-end text-xs font-medium" style={{ color: "var(--text-mute)" }}>
           +{hiddenCount} more
@@ -42,7 +80,13 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
       {visible.map((toast) => (
         <div
           key={toast.id}
-          className={`toast-enter flex items-center gap-3 rounded-xl border px-5 py-3.5 shadow-md ${
+          // The enter animation has long since finished by the time a toast is
+          // dismissed, so swapping the class is what starts the exit; the
+          // animationend it raises is what unmounts the toast.
+          onAnimationEnd={toast.exiting ? () => onExited(toast.id) : undefined}
+          // `pointer-events-none` while fading: a toast on its way out must not
+          // take a second Undo click during the animation.
+          className={`${toast.exiting ? "toast-exit pointer-events-none" : "toast-enter"} flex items-center gap-3 rounded-xl border px-5 py-3.5 shadow-md ${
             toast.type === "success"
               ? "border-emerald-500/30"
               : toast.type === "error"
@@ -87,41 +131,118 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
   );
 }
 
+// A toast's dismiss timer, tracked so it can be cancelled (acting on an Undo, or
+// closing the toast, should not leave a timer running against an id that is
+// already gone) and so it can be paused: `handle` is null while the stack is
+// hovered, with `remaining` holding what was left of the countdown at that
+// moment and `startedAt` marking when the current leg of it began.
+type ToastTimer = {
+  handle: ReturnType<typeof setTimeout> | null;
+  remaining: number;
+  startedAt: number;
+};
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  // Undo toasts are long-lived, so their dismiss timers are worth tracking:
-  // acting on one (or closing it) should cancel the pending expiry rather than
-  // leave a timer running against an id that is already gone.
-  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  const timers = useRef(new Map<number, ToastTimer>());
+  const exitTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  const isPaused = useRef(false);
+
+  const clearTimer = useCallback((id: number) => {
+    const timer = timers.current.get(id);
+    if (timer?.handle != null) clearTimeout(timer.handle);
+    timers.current.delete(id);
+  }, []);
+
+  // The end of the line: the toast leaves the DOM here, once its exit animation
+  // has played (or the fallback has given up waiting for one).
+  const removeToast = useCallback((id: number) => {
+    const exitTimer = exitTimers.current.get(id);
+    if (exitTimer !== undefined) clearTimeout(exitTimer);
+    exitTimers.current.delete(id);
+    clearTimer(id);
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, [clearTimer]);
 
   const dismissToast = useCallback((id: number) => {
-    const timer = timers.current.get(id);
-    if (timer !== undefined) {
-      clearTimeout(timer);
-      timers.current.delete(id);
-    }
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
+    // Already on its way out — a second dismiss must not restart the animation
+    // or queue a second fallback.
+    if (exitTimers.current.has(id)) return;
+    clearTimer(id);
+    setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, exiting: true } : t)));
+    exitTimers.current.set(id, setTimeout(() => removeToast(id), EXIT_FALLBACK_MS));
+  }, [clearTimer, removeToast]);
 
   const showToast = useCallback<ShowToast>((message, type = "success", options) => {
     const id = ++toastId;
     setToasts((prev) => [...prev, { id, message, type, action: options?.action }]);
-    const duration = options?.duration ?? (options?.action ? ACTION_DURATION_MS : DEFAULT_DURATION_MS);
-    timers.current.set(id, setTimeout(() => dismissToast(id), duration));
+    const duration =
+      options?.duration ??
+      (options?.action ? ACTION_DURATION_MS : type === "error" ? ERROR_DURATION_MS : DEFAULT_DURATION_MS);
+    // A toast raised while the stack is already hovered starts out paused —
+    // otherwise it would be the one toast the hover doesn't hold still.
+    timers.current.set(id, {
+      handle: isPaused.current ? null : setTimeout(() => dismissToast(id), duration),
+      remaining: duration,
+      startedAt: Date.now(),
+    });
   }, [dismissToast]);
+
+  const pauseTimers = useCallback(() => {
+    if (isPaused.current) return;
+    isPaused.current = true;
+    const now = Date.now();
+    timers.current.forEach((timer) => {
+      if (timer.handle == null) return;
+      clearTimeout(timer.handle);
+      timer.handle = null;
+      timer.remaining = Math.max(0, timer.remaining - (now - timer.startedAt));
+    });
+  }, []);
+
+  const resumeTimers = useCallback(() => {
+    if (!isPaused.current) return;
+    isPaused.current = false;
+    const now = Date.now();
+    timers.current.forEach((timer, id) => {
+      if (timer.handle != null) return;
+      timer.startedAt = now;
+      timer.handle = setTimeout(() => dismissToast(id), timer.remaining);
+    });
+  }, [dismissToast]);
+
+  // Dismissing the last toast while hovering it shrinks the stack to nothing
+  // under the pointer, and a mouseleave for an element that is no longer there
+  // is not something to count on. With the stack empty there is nothing left to
+  // hold still, so drop the pause rather than let it outlive its cause and
+  // freeze the next toast on screen indefinitely.
+  useEffect(() => {
+    if (toasts.length === 0) isPaused.current = false;
+  }, [toasts.length]);
 
   useEffect(() => {
     const pending = timers.current;
+    const pendingExits = exitTimers.current;
     return () => {
-      pending.forEach((timer) => clearTimeout(timer));
+      pending.forEach((timer) => {
+        if (timer.handle != null) clearTimeout(timer.handle);
+      });
       pending.clear();
+      pendingExits.forEach((timer) => clearTimeout(timer));
+      pendingExits.clear();
     };
   }, []);
 
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      <ToastContainer
+        toasts={toasts}
+        onDismiss={dismissToast}
+        onExited={removeToast}
+        onPause={pauseTimers}
+        onResume={resumeTimers}
+      />
     </ToastContext.Provider>
   );
 }

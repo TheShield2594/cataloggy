@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SeriesProgress } from "../api";
-import { computeProgressPct } from "./DashboardPage";
+import { computeProgressPct, msUntilNextBoundary, timeOfDayGreeting } from "./DashboardPage";
 
 const series = (overrides: Partial<SeriesProgress> = {}): SeriesProgress => ({
   imdbId: "tt0903747",
@@ -38,5 +38,60 @@ describe("computeProgressPct", () => {
   it("returns null when the watched count is missing", () => {
     expect(computeProgressPct(series({ watchedEpisodes: null }))).toBeNull();
     expect(computeProgressPct(series({ watchedEpisodes: undefined }))).toBeNull();
+  });
+});
+
+// Local time, deliberately: the greeting is about the hour the reader is living
+// in, not UTC.
+const at = (hour: number, minute = 0) => new Date(2026, 6, 15, hour, minute, 0, 0);
+
+describe("timeOfDayGreeting", () => {
+  it("names each part of the day", () => {
+    expect(timeOfDayGreeting(at(2))).toBe("Good night");
+    expect(timeOfDayGreeting(at(8))).toBe("Good morning");
+    expect(timeOfDayGreeting(at(14))).toBe("Good afternoon");
+    expect(timeOfDayGreeting(at(21))).toBe("Good evening");
+  });
+
+  it("switches exactly on the cutoff hours", () => {
+    expect(timeOfDayGreeting(at(4, 59))).toBe("Good night");
+    expect(timeOfDayGreeting(at(5))).toBe("Good morning");
+    expect(timeOfDayGreeting(at(11, 59))).toBe("Good morning");
+    expect(timeOfDayGreeting(at(12))).toBe("Good afternoon");
+    expect(timeOfDayGreeting(at(17, 59))).toBe("Good afternoon");
+    expect(timeOfDayGreeting(at(18))).toBe("Good evening");
+  });
+});
+
+describe("msUntilNextBoundary", () => {
+  const MINUTE = 60_000;
+  const HOUR = 60 * MINUTE;
+
+  it("waits for the next greeting cutoff", () => {
+    expect(msUntilNextBoundary(at(9, 30))).toBe(2 * HOUR + 30 * MINUTE); // → 12:00
+    expect(msUntilNextBoundary(at(13))).toBe(5 * HOUR); // → 18:00
+    expect(msUntilNextBoundary(at(2, 15))).toBe(2 * HOUR + 45 * MINUTE); // → 05:00
+  });
+
+  it("rolls over to midnight after the last cutoff of the day", () => {
+    // Which is the boundary that also changes the date, the half of this the
+    // greeting alone would miss.
+    expect(msUntilNextBoundary(at(23, 30))).toBe(30 * MINUTE);
+    expect(msUntilNextBoundary(at(18, 1))).toBe(5 * HOUR + 59 * MINUTE);
+  });
+
+  it("lands on the cutoff itself rather than firing again immediately", () => {
+    // Woken exactly at 12:00, the next wake is 18:00 — not a zero-delay loop.
+    expect(msUntilNextBoundary(at(12))).toBe(6 * HOUR);
+  });
+
+  it("never schedules a spin, whatever the clock does", () => {
+    // A DST jump can put the computed boundary in the past; the floor keeps a
+    // timer that would otherwise fire in a tight loop off the event loop.
+    for (let hour = 0; hour < 24; hour++) {
+      for (const minute of [0, 1, 30, 59]) {
+        expect(msUntilNextBoundary(at(hour, minute))).toBeGreaterThanOrEqual(MINUTE);
+      }
+    }
   });
 });

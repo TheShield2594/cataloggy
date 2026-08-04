@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router";
 import { AlertCircle, Calendar, Film, Trash2, Tv } from "lucide-react";
 import { api, SearchResult, WatchEvent } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
@@ -218,7 +219,13 @@ export function HistoryPage() {
               : typeFilter === "episode"
                 ? "No episodes in your watch history yet."
                 : "No watch history yet."}
+            {" "}Anything you mark watched is logged here.
           </p>
+          {/* The search page is the way out of this one: a brand-new install
+              lands here with nothing to filter and no other route onward. */}
+          <Link to="/search" className="mt-1 inline-block text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
+            Find something to watch &rarr;
+          </Link>
         </div>
       ) : (
         <div className="space-y-6">
