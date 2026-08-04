@@ -197,11 +197,19 @@ body {
 }
 
 @layer base {
+  /*
+   * Colours only. `transition-all` here animated layout properties too —
+   * width, height, padding, top/left — so anything that resized on a state
+   * change eased into it over 200ms instead of snapping, and it fought the
+   * narrower `transition-colors` / `transition-transform` declared at
+   * individual call sites. Components that genuinely need transform or size
+   * animation opt in themselves.
+   */
   button,
   a,
   input,
   select {
-    @apply transition-all duration-200 ease-in-out;
+    @apply transition-colors duration-200 ease-in-out;
   }
 }
 

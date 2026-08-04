@@ -1,14 +1,37 @@
 import { FormEvent, useState } from "react";
-import { Check, Clapperboard, Eye, EyeOff, Loader2, AlertCircle, ArrowRight } from "lucide-react";
+import { Check, Clapperboard, Eye, EyeOff, Loader2, AlertCircle, ArrowLeft, ArrowRight } from "lucide-react";
 import { api, ApiError, runtimeConfig } from "../api";
 import { StatusBadge } from "../components/settings/StatusBadge";
 import { TraktSettings } from "../components/settings/TraktSettings";
 
 type Step = "token" | "tmdb" | "trakt" | "done";
 
+export const WIZARD_STEPS: Step[] = ["token", "tmdb", "trakt", "done"];
+
+/** The step to return to from `step`, or null if it is the entry point. */
+export function previousStep(step: Step): Step | null {
+  const index = WIZARD_STEPS.indexOf(step);
+  return index > 0 ? WIZARD_STEPS[index - 1] : null;
+}
+
+function BackButton({ onBack }: { onBack: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onBack}
+      className="flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
+      style={{ color: "var(--text-dim)", border: "1px solid var(--border)" }}
+    >
+      <ArrowLeft size={16} /> Back
+    </button>
+  );
+}
+
 function WizardShell({ step, children }: { step: Step; children: React.ReactNode }) {
-  const steps: Step[] = ["token", "tmdb", "trakt", "done"];
-  const index = steps.indexOf(step);
+  const index = WIZARD_STEPS.indexOf(step);
+  const position = index + 1;
+  const total = WIZARD_STEPS.length;
+  const label = `Step ${position} of ${total}`;
 
   return (
     <div className="flex min-h-screen items-center justify-center px-6 py-12">
@@ -20,14 +43,30 @@ function WizardShell({ step, children }: { step: Step; children: React.ReactNode
           <span className="text-2xl font-bold">Cataloggy</span>
         </div>
 
-        <div className="flex items-center justify-center gap-2">
-          {steps.map((s, i) => (
-            <span
-              key={s}
-              className={`h-1.5 w-8 rounded-full transition-colors ${i <= index ? "bg-claw-500" : ""}`}
-              style={i <= index ? undefined : { backgroundColor: "var(--surface)" }}
-            />
-          ))}
+        {/* The bars alone say nothing to a screen reader and give no sense of
+            how much is left to anyone else, so the count carries the meaning
+            and the bars are decoration on top of it. */}
+        <div className="space-y-2">
+          <div
+            className="flex items-center justify-center gap-2"
+            role="progressbar"
+            aria-label="Setup progress"
+            aria-valuemin={1}
+            aria-valuemax={total}
+            aria-valuenow={position}
+            aria-valuetext={label}
+          >
+            {WIZARD_STEPS.map((s, i) => (
+              <span
+                key={s}
+                className={`h-1.5 w-8 rounded-full transition-colors ${i <= index ? "bg-claw-500" : ""}`}
+                style={i <= index ? undefined : { backgroundColor: "var(--surface)" }}
+              />
+            ))}
+          </div>
+          <p className="text-center text-xs font-medium" style={{ color: "var(--text-mute)" }} aria-hidden="true">
+            {label}
+          </p>
         </div>
 
         <div
@@ -42,7 +81,9 @@ function WizardShell({ step, children }: { step: Step; children: React.ReactNode
 }
 
 function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => void }) {
-  const [token, setToken] = useState("");
+  // Prefilled so stepping back from tmdb lands on the token that got you here,
+  // ready to be corrected rather than retyped from scratch.
+  const [token, setToken] = useState(() => runtimeConfig.getToken());
   const [showToken, setShowToken] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +153,7 @@ function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => vo
   );
 }
 
-function TmdbStep({ configured, onContinue }: { configured: boolean; onContinue: () => void }) {
+function TmdbStep({ configured, onContinue, onBack }: { configured: boolean; onContinue: () => void; onBack: () => void }) {
   return (
     <div className="space-y-4">
       <div>
@@ -141,11 +182,12 @@ function TmdbStep({ configured, onContinue }: { configured: boolean; onContinue:
       >
         Continue <ArrowRight size={16} />
       </button>
+      <BackButton onBack={onBack} />
     </div>
   );
 }
 
-function TraktStep({ onContinue }: { onContinue: () => void }) {
+function TraktStep({ onContinue, onBack }: { onContinue: () => void; onBack: () => void }) {
   return (
     <div className="space-y-4">
       <div>
@@ -165,11 +207,12 @@ function TraktStep({ onContinue }: { onContinue: () => void }) {
       >
         Continue <ArrowRight size={16} />
       </button>
+      <BackButton onBack={onBack} />
     </div>
   );
 }
 
-function DoneStep({ onFinish }: { onFinish: () => void }) {
+function DoneStep({ onFinish, onBack }: { onFinish: () => void; onBack: () => void }) {
   return (
     <div className="space-y-4 text-center">
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/20">
@@ -188,6 +231,7 @@ function DoneStep({ onFinish }: { onFinish: () => void }) {
       >
         Get Started
       </button>
+      <BackButton onBack={onBack} />
     </div>
   );
 }
@@ -195,6 +239,11 @@ function DoneStep({ onFinish }: { onFinish: () => void }) {
 export function SetupWizard({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState<Step>("token");
   const [tmdbConfigured, setTmdbConfigured] = useState(false);
+
+  // Every step past the first is reachable in both directions: a token that
+  // verified against the wrong server, or a Trakt connection started by
+  // mistake, was otherwise only undoable by clearing localStorage.
+  const goBack = () => setStep((current) => previousStep(current) ?? current);
 
   return (
     <WizardShell step={step}>
@@ -206,9 +255,9 @@ export function SetupWizard({ onComplete }: { onComplete: () => void }) {
           }}
         />
       )}
-      {step === "tmdb" && <TmdbStep configured={tmdbConfigured} onContinue={() => setStep("trakt")} />}
-      {step === "trakt" && <TraktStep onContinue={() => setStep("done")} />}
-      {step === "done" && <DoneStep onFinish={onComplete} />}
+      {step === "tmdb" && <TmdbStep configured={tmdbConfigured} onContinue={() => setStep("trakt")} onBack={goBack} />}
+      {step === "trakt" && <TraktStep onContinue={() => setStep("done")} onBack={goBack} />}
+      {step === "done" && <DoneStep onFinish={onComplete} onBack={goBack} />}
     </WizardShell>
   );
 }
