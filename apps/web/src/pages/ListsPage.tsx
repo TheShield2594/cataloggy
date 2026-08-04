@@ -7,6 +7,7 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useToast } from "../hooks/useToast";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import { mergeByRelevance } from "../utils/mergeSearchResults";
 
 type SortOption = "added" | "name" | "year" | "rating";
 
@@ -46,26 +47,46 @@ function toSearchResult(item: ListItemWithMeta, list?: CatalogList): SearchResul
   };
 }
 
+// Same three-way choice the search page offers, rather than the movie-or-series
+// toggle this modal used to force — one task should not have two models.
+type AddFilter = "all" | MediaType;
+
+const ADD_FILTERS: { value: AddFilter; label: string; icon?: typeof Film }[] = [
+  { value: "all", label: "All" },
+  { value: "movie", label: "Movies", icon: Film },
+  { value: "series", label: "Series", icon: Tv },
+];
+
+const resultKey = (type: string, imdbId: string) => `${type}:${imdbId}`;
+
 function AddItemModal({
   listId,
   listName,
+  existingKeys,
   onClose,
   onAdded,
 }: {
   listId: string;
   listName: string;
+  /** `type:imdbId` for everything already in the list, so results can say so. */
+  existingKeys: Set<string>;
   onClose: () => void;
   onAdded: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [type, setType] = useState<MediaType>("movie");
+  const [filter, setFilter] = useState<AddFilter>("all");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState<Record<string, boolean>>({});
+  // Added during this modal's lifetime. `existingKeys` is a snapshot taken when
+  // the modal opened and the parent's refetch is in flight behind it, so without
+  // this a row would sit unchanged for as long as the reload took.
+  const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useFocusTrap<HTMLDivElement>();
+  const { showToast } = useToast();
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -74,7 +95,7 @@ function AddItemModal({
   useScrollLock();
   useEscapeKey(onClose);
 
-  const doSearch = useCallback(async (q: string, t: MediaType) => {
+  const doSearch = useCallback(async (q: string, f: AddFilter) => {
     if (!q.trim()) {
       setResults([]);
       return;
@@ -82,8 +103,12 @@ function AddItemModal({
     setSearching(true);
     setError(null);
     try {
-      const res = await api.search(t, q);
-      setResults(res);
+      if (f === "all") {
+        const [movies, series] = await Promise.all([api.search("movie", q), api.search("series", q)]);
+        setResults(mergeByRelevance(movies, series, q));
+      } else {
+        setResults(await api.search(f, q));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed");
     } finally {
@@ -97,22 +122,28 @@ function AddItemModal({
       return;
     }
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => void doSearch(query, type), 350);
+    debounceRef.current = setTimeout(() => void doSearch(query, filter), 350);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, type, doSearch]);
+  }, [query, filter, doSearch]);
 
   const handleAdd = async (result: SearchResult) => {
-    if (adding[result.imdbId]) return;
-    setAdding((prev) => ({ ...prev, [result.imdbId]: true }));
+    const key = resultKey(result.type, result.imdbId);
+    if (adding[key] || addedKeys.has(key) || existingKeys.has(key)) return;
+    setAdding((prev) => ({ ...prev, [key]: true }));
+    setError(null);
     try {
       await api.addToList(listId, { type: result.type, imdbId: result.imdbId, title: result.name });
+      setAddedKeys((prev) => new Set(prev).add(key));
+      showToast(`Added "${result.name}" to ${listName}`, "success");
       onAdded();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add item");
+      const message = err instanceof Error ? err.message : "Failed to add item";
+      setError(message);
+      showToast(`Couldn't add "${result.name}" (${message})`, "error");
     } finally {
-      setAdding((prev) => ({ ...prev, [result.imdbId]: false }));
+      setAdding((prev) => ({ ...prev, [key]: false }));
     }
   };
 
@@ -137,8 +168,8 @@ function AddItemModal({
         </div>
 
         {/* Search input */}
-        <div className="flex gap-2 border-b px-5 py-3" style={{ borderColor: "var(--border)" }}>
-          <div className="relative flex-1">
+        <div className="border-b px-5 py-3" style={{ borderColor: "var(--border)" }}>
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--text-mute)" }} />
             <input
               ref={inputRef}
@@ -150,23 +181,30 @@ function AddItemModal({
               style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)" }}
             />
           </div>
-          <div className="relative inline-flex rounded-full p-0.5 border" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)" }}>
-            <div
-              className="absolute top-0.5 h-[calc(100%-0.25rem)] w-[calc(50%-0.125rem)] rounded-full bg-claw-500 transition-transform duration-200"
-              style={{ transform: type === "series" ? "translateX(100%)" : "translateX(0)" }}
-            />
-            {(["movie", "series"] as const).map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => setType(opt)}
-                className="relative z-10 flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium"
-                style={{ color: type === opt ? "var(--on-accent)" : "var(--text-dim)" }}
-              >
-                {opt === "movie" ? <Film className="h-3 w-3" /> : <Tv className="h-3 w-3" />}
-                {opt === "movie" ? "Movie" : "Series"}
-              </button>
-            ))}
+          <div
+            role="group"
+            aria-label="Filter by type"
+            className="mt-2.5 inline-flex rounded-full bg-[var(--surface)] p-1"
+            style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)" }}
+          >
+            {ADD_FILTERS.map((opt) => {
+              const Icon = opt.icon;
+              const active = filter === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setFilter(opt.value)}
+                  aria-pressed={active}
+                  className={`flex items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-medium transition-all ${
+                    active ? "bg-claw-500 text-claw-on shadow-sm" : "text-[var(--text-mute)] hover:text-[var(--text)]"
+                  }`}
+                >
+                  {Icon && <Icon className="h-3 w-3" />}
+                  {opt.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -178,28 +216,48 @@ function AddItemModal({
             <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>No results found.</p>
           )}
           <div className="space-y-1">
-            {results.map((r) => (
-              <button
-                key={`${r.type}:${r.imdbId}`}
-                type="button"
-                disabled={adding[r.imdbId]}
-                onClick={() => handleAdd(r)}
-                className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-[var(--surface)] disabled:opacity-50 transition-colors"
-              >
-                <div className="h-14 w-10 flex-none overflow-hidden rounded-lg ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border)" } as React.CSSProperties}>
-                  {r.poster ? (
-                    <img src={r.poster} alt="" className="h-full w-full object-cover" />
+            {results.map((r) => {
+              const key = resultKey(r.type, r.imdbId);
+              const already = existingKeys.has(key) || addedKeys.has(key);
+              const pending = adding[key];
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  // Nothing distinguished an item already in the list, so adding
+                  // the same title twice looked exactly like adding it once.
+                  disabled={pending || already}
+                  onClick={() => handleAdd(r)}
+                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-[var(--surface)] disabled:opacity-60 disabled:hover:bg-transparent transition-colors"
+                >
+                  <div className="h-14 w-10 flex-none overflow-hidden rounded-lg ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border)" } as React.CSSProperties}>
+                    {r.poster ? (
+                      <img src={r.poster} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center"><Film className="h-4 w-4" style={{ color: "var(--text-mute)" }} /></div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold" style={{ color: already ? "var(--text-mute)" : "var(--text)" }}>{r.name}</p>
+                    <p className="text-xs" style={{ color: "var(--text-mute)" }}>{r.year ?? "Unknown"} &middot; {r.type}</p>
+                  </div>
+                  {pending ? (
+                    <span
+                      role="status"
+                      aria-label={`Adding ${r.name}`}
+                      className="h-4 w-4 flex-none animate-spin rounded-full border-2 border-claw-500 border-t-transparent"
+                    />
+                  ) : already ? (
+                    <span className="flex flex-none items-center gap-1 text-2xs font-semibold" style={{ color: "var(--text-mute)" }}>
+                      <Check className="h-4 w-4 text-emerald-600" />
+                      Added
+                    </span>
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center"><Film className="h-4 w-4" style={{ color: "var(--text-mute)" }} /></div>
+                    <Plus className="h-4 w-4 flex-none text-claw-text" />
                   )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>{r.name}</p>
-                  <p className="text-xs" style={{ color: "var(--text-mute)" }}>{r.year ?? "Unknown"} &middot; {r.type}</p>
-                </div>
-                <Plus className="h-4 w-4 flex-none text-claw-text" />
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -357,6 +415,14 @@ export function ListsPage() {
       showToast(err instanceof Error ? err.message : "Failed to rename list", "error");
     }
   };
+
+  // What the add modal marks as "Added". Built from the full list rather than
+  // `displayedItems`, which the search box narrows — an item hidden by a filter
+  // is still in the list.
+  const existingItemKeys = useMemo(
+    () => new Set(items.map((item) => resultKey(item.type, item.imdbId))),
+    [items]
+  );
 
   const displayedItems = useMemo(() => {
     let result = items;
@@ -763,6 +829,7 @@ export function ListsPage() {
         <AddItemModal
           listId={selectedListId}
           listName={selectedList.name}
+          existingKeys={existingItemKeys}
           onClose={() => setShowAddModal(false)}
           onAdded={() => void loadItems(selectedListId)}
         />

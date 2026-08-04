@@ -5,6 +5,7 @@ import { api, Profile, runtimeConfig } from "./api";
 import { CommandPalette, useCommandPalette } from "./components/CommandPalette";
 import { InstallButton } from "./components/InstallButton";
 import { MobileTabBar } from "./components/MobileTabBar";
+import { OfflineBanner } from "./components/OfflineBanner";
 import { Sidebar, PIN_KEY } from "./components/Sidebar";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useTheme } from "./hooks/useTheme";
@@ -256,6 +257,7 @@ function AppShell({
         aria-label="Main content"
         className={`mx-auto max-w-[1400px] px-6 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[76px] focus:outline-none sm:pb-10 transition-[padding] duration-200 ${sidebarPad}`}
       >
+        <OfflineBanner />
         <Suspense fallback={<LoadingFallback />}>
           <Routes key={profile?.id ?? runtimeConfig.getProfileId() ?? "default"}>
             <Route path="/" element={<DashboardPage />} />

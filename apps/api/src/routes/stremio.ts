@@ -139,7 +139,7 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
-  app.get<{ Params: { listId: string }; Querystring: { type?: string; limit?: string } }>(
+  app.get<{ Params: { listId: string }; Querystring: { type?: string; limit?: string; profileId?: string } }>(
     "/stremio/list/:listId",
     async (request, reply) => {
       const type = parseMetaType(request.query.type);
@@ -149,8 +149,13 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: "listId must be a valid UUID" });
       }
 
-      const list = await prisma.list.findUnique({
-        where: { id: request.params.listId },
+      // Scoped to the resolved profile, like every other route that serves list
+      // contents. Looking a list up by id alone made this an IDOR: a caller who
+      // knew (or guessed) a UUID could read a list belonging to a profile it was
+      // not acting as, including a PIN-protected one.
+      const profileId = await resolveStremioProfileId(request.query.profileId);
+      const list = await prisma.list.findFirst({
+        where: { id: request.params.listId, profileId },
         select: { id: true, kind: true },
       });
 
@@ -387,6 +392,12 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
       // `List.id` is a Postgres uuid column, so a malformed id is a failed cast
       // — a 500 — rather than a miss. Same guard the legacy list route applies.
       if (!UUID_V4_PATTERN.test(listId)) return reply.code(404).send({ metas: [] });
+      // Two checks, because ownership alone is not entitlement. The manifest
+      // only advertises list catalogs the profile has explicitly enabled, so a
+      // catalog id naming a list that is merely *owned* — never enabled — is a
+      // URL no client should have, and one the addon never promised to serve.
+      const config = await getAddonConfig(profileId);
+      if (!config.enabledCatalogs.includes(catalogId)) return reply.code(404).send({ metas: [] });
       // Scoped to the resolved profile: the manifest only ever advertises that
       // profile's lists, so a UUID naming somebody else's list is not a list
       // this URL is entitled to serve.

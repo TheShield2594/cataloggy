@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
@@ -171,5 +171,107 @@ describe("ListsPage selection in the URL", () => {
     // Nothing was fetched for an ID the sidebar doesn't know.
     expect(getListItems).not.toHaveBeenCalled();
     expect(currentSearch()).toBe("?list=l-deleted");
+  });
+});
+
+describe("ListsPage add-item modal", () => {
+  const search = vi.mocked(api.search);
+  const addToList = vi.mocked(api.addToList);
+
+  const result = (name: string, type: "movie" | "series" = "movie") => ({
+    imdbId: `tt-${name.toLowerCase()}`,
+    type,
+    name,
+    year: 2001,
+    poster: null,
+    description: null,
+    genres: [],
+    rating: null,
+    inWatchlist: false,
+    inCollection: false,
+    lists: [],
+  });
+
+  // Scoped to the dialog: the list behind it renders its own buttons for the
+  // same titles, so an unscoped query can match the page instead of the modal.
+  const openModal = async (user: ReturnType<typeof userEvent.setup>) => {
+    renderPage(`/lists?list=${SCIFI.id}`);
+    await screen.findByText("Solaris");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    const dialog = within(screen.getByRole("dialog"));
+    await user.type(dialog.getByLabelText("Search movies and series"), "sol");
+    return dialog;
+  };
+
+  beforeEach(() => {
+    // "Solaris" is already in Sci-Fi Night per the shared fixture, so the same
+    // title coming back from search is the already-added case.
+    search.mockImplementation(async (type) =>
+      type === "movie" ? [result("Solaris"), result("Sunshine")] : []
+    );
+    addToList.mockResolvedValue(undefined as never);
+  });
+
+  it("searches both types at once, because the filter starts on All", async () => {
+    const user = userEvent.setup();
+    await openModal(user);
+
+    await waitFor(() => expect(search).toHaveBeenCalledWith("movie", "sol"));
+    expect(search).toHaveBeenCalledWith("series", "sol");
+  });
+
+  it("marks a title already in the list as added, and won't add it twice", async () => {
+    const user = userEvent.setup();
+    const dialog = await openModal(user);
+
+    const alreadyAdded = await dialog.findByRole("button", { name: /Solaris/ });
+    expect(alreadyAdded).toBeDisabled();
+    expect(alreadyAdded).toHaveTextContent("Added");
+
+    await user.click(alreadyAdded);
+    expect(addToList).not.toHaveBeenCalled();
+  });
+
+  it("confirms an add with a toast and flips the row to Added", async () => {
+    const user = userEvent.setup();
+    const dialog = await openModal(user);
+
+    const row = await dialog.findByRole("button", { name: /Sunshine/ });
+    expect(row).not.toHaveTextContent("Added");
+
+    await user.click(row);
+
+    expect(await screen.findByText(/Added "Sunshine" to Sci-Fi Night/)).toBeInTheDocument();
+    expect(addToList).toHaveBeenCalledWith(SCIFI.id, {
+      type: "movie",
+      imdbId: "tt-sunshine",
+      title: "Sunshine",
+    });
+    await waitFor(() =>
+      expect(dialog.getByRole("button", { name: /Sunshine/ })).toHaveTextContent("Added")
+    );
+  });
+
+  it("says so when the add fails, rather than leaving the row looking untouched", async () => {
+    const user = userEvent.setup();
+    addToList.mockRejectedValue(new Error("list is full"));
+    const dialog = await openModal(user);
+
+    await user.click(await dialog.findByRole("button", { name: /Sunshine/ }));
+
+    expect(await screen.findByText(/Couldn't add "Sunshine" \(list is full\)/)).toBeInTheDocument();
+    expect(dialog.getByRole("button", { name: /Sunshine/ })).not.toHaveTextContent("Added");
+  });
+
+  it("searches only the chosen type once the filter narrows", async () => {
+    const user = userEvent.setup();
+    const dialog = await openModal(user);
+    await waitFor(() => expect(search).toHaveBeenCalledWith("series", "sol"));
+
+    search.mockClear();
+    await user.click(dialog.getByRole("button", { name: "Series" }));
+
+    await waitFor(() => expect(search).toHaveBeenCalledWith("series", "sol"));
+    expect(search).not.toHaveBeenCalledWith("movie", "sol");
   });
 });
