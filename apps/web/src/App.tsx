@@ -260,7 +260,7 @@ function AppShell({
           <Routes key={profile?.id ?? runtimeConfig.getProfileId() ?? "default"}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/search" element={<SearchPage />} />
-            <Route path="/lists/*" element={<ListsPage />} />
+            <Route path="/lists" element={<ListsPage />} />
             <Route path="/games" element={<GamesPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/history" element={<HistoryPage />} />

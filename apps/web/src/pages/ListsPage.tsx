@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 import { AlertTriangle, Check, Film, FolderOpen, Pencil, Plus, Search, Trash2, Tv, X } from "lucide-react";
 import { api, CatalogList, ListItemWithMeta, MediaType, SearchResult } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
@@ -208,7 +209,11 @@ function AddItemModal({
 
 export function ListsPage() {
   const [lists, setLists] = useState<CatalogList[]>([]);
-  const [selectedListId, setSelectedListId] = useState<string | null>(null);
+  // The selection lives in the URL so a list can be linked, bookmarked and
+  // reloaded, and so Back undoes a list switch instead of leaving the page.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedListId = searchParams.get("list");
+  const [listsLoaded, setListsLoaded] = useState(false);
   const [items, setItems] = useState<ListItemWithMeta[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -229,6 +234,20 @@ export function ListsPage() {
   const { showToast } = useToast();
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
 
+  // Pushing (rather than replacing) is what makes Back undo a list switch. The
+  // one exception is the initial default, which the user never chose.
+  const selectList = (listId: string | null, options?: { replace?: boolean }) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (listId) next.set("list", listId);
+        else next.delete("list");
+        return next;
+      },
+      { replace: options?.replace ?? false }
+    );
+  };
+
   // Every handler that can set `error` clears it first, so a transient failure
   // doesn't pin the banner for the rest of the session once the retry succeeds.
   const loadLists = useCallback(async () => {
@@ -240,6 +259,8 @@ export function ListsPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load lists");
       return [];
+    } finally {
+      setListsLoaded(true);
     }
   }, []);
 
@@ -257,22 +278,30 @@ export function ListsPage() {
   }, []);
 
   useEffect(() => {
-    void loadLists().then((loaded) => {
-      if (loaded.length > 0 && !selectedListId) {
-        setSelectedListId(loaded[0].id);
-      }
-    });
-  }, []);
+    void loadLists();
+  }, [loadLists]);
+
+  const selectedList = lists.find((l) => l.id === selectedListId);
+  const activeListId = selectedList?.id ?? null;
+  // A link can outlive the list it points at. The sidebar is the only thing
+  // that knows which IDs are real, so say nothing until it has loaded.
+  const listNotFound = listsLoaded && selectedListId !== null && !selectedList;
+
+  // Landing on /lists with no list named picks the first one, replacing rather
+  // than pushing so Back still leaves the page.
+  useEffect(() => {
+    if (listsLoaded && !selectedListId && lists.length > 0) {
+      selectList(lists[0].id, { replace: true });
+    }
+  }, [listsLoaded, selectedListId, lists]);
 
   useEffect(() => {
-    if (selectedListId) {
-      void loadItems(selectedListId);
+    if (activeListId) {
+      void loadItems(activeListId);
     } else {
       setItems([]);
     }
-  }, [selectedListId, loadItems]);
-
-  const selectedList = lists.find((l) => l.id === selectedListId);
+  }, [activeListId, loadItems]);
 
   const handleCreateList = async (e: FormEvent) => {
     e.preventDefault();
@@ -282,7 +311,7 @@ export function ListsPage() {
       const { list } = await api.createList(newListName.trim());
       setNewListName("");
       await loadLists();
-      setSelectedListId(list.id);
+      selectList(list.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create list");
     }
@@ -294,7 +323,7 @@ export function ListsPage() {
     try {
       await api.deleteList(listId);
       setConfirmDeleteId(null);
-      if (selectedListId === listId) setSelectedListId(null);
+      if (selectedListId === listId) selectList(null, { replace: true });
       await loadLists();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete list");
@@ -461,7 +490,8 @@ export function ListsPage() {
                 >
                   <button
                     type="button"
-                    onClick={() => setSelectedListId(list.id)}
+                    onClick={() => selectList(list.id)}
+                    aria-current={selectedListId === list.id ? "true" : undefined}
                     className={`min-w-0 flex-1 px-4 py-3.5 text-left text-sm font-medium ${
                       selectedListId === list.id ? "text-claw-text" : ""
                     }`}
@@ -524,8 +554,14 @@ export function ListsPage() {
             <div className="flex h-20 w-20 items-center justify-center rounded-full ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border)" } as React.CSSProperties}>
               <FolderOpen className="h-10 w-10" style={{ color: "var(--text-mute)" }} />
             </div>
-            <p className="mt-4 text-lg font-semibold" style={{ color: "var(--text-dim)" }}>No list selected</p>
-            <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>Select a list from the sidebar or create a new one.</p>
+            <p className="mt-4 text-lg font-semibold" style={{ color: "var(--text-dim)" }}>
+              {listNotFound ? "That list no longer exists" : "No list selected"}
+            </p>
+            <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>
+              {listNotFound
+                ? "It may have been deleted since you saved the link. Pick another from the sidebar."
+                : "Select a list from the sidebar or create a new one."}
+            </p>
           </div>
         ) : (
           <>

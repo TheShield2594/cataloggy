@@ -1,13 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, List, LayoutGrid } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, List, LayoutGrid, X } from "lucide-react";
 import { api, CalendarEntry, SearchResult } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { Poster } from "../components/Poster";
+import { useEscapeKey } from "../hooks/useEscapeKey";
+import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useScrollLock } from "../hooks/useScrollLock";
 import { useToast } from "../hooks/useToast";
 
 type ViewMode = "agenda" | "month";
 const AGENDA_RANGES = [14, 30, 60, 90] as const;
 const MAX_CALENDAR_DAYS = 90;
+// Tailwind's `sm`. Below it a seven-column grid gives each day ~50px, which
+// holds nothing legible, so the month view isn't offered at all.
+const COMPACT_QUERY = "(max-width: 639px)";
+// Entries a month cell shows before collapsing the rest into "+N more".
+const MONTH_CELL_ENTRIES = 2;
 
 function toSearchResult(entry: CalendarEntry): SearchResult {
   return {
@@ -55,6 +64,95 @@ function dateLabelFor(airDate: Date, today: Date): string {
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+function entryKey(entry: CalendarEntry): string {
+  return `${entry.seriesImdbId}-s${entry.season}e${entry.episode}`;
+}
+
+function EntryRow({ entry, onSelect }: { entry: CalendarEntry; onSelect: (entry: CalendarEntry) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(entry)}
+      className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+      style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
+    >
+      <div className="h-16 w-11 flex-none overflow-hidden rounded-lg" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
+        <Poster src={entry.poster ?? undefined} alt={entry.seriesName} className="h-full w-full" sizes="44px" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>{entry.seriesName}</p>
+        <p className="mt-0.5 truncate text-xs" style={{ color: "var(--text-dim)" }}>
+          S{entry.season}:E{entry.episode}{entry.episodeName ? ` — ${entry.episodeName}` : ""}
+        </p>
+        {entry.overview && (
+          <p className="mt-1 line-clamp-2 text-xs" style={{ color: "var(--text-mute)" }}>{entry.overview}</p>
+        )}
+      </div>
+    </button>
+  );
+}
+
+/**
+ * The month grid can only show a couple of episodes per cell. This is where the
+ * rest of them live — without it "+N more" names episodes with no way to reach
+ * them.
+ */
+function DayEntriesModal({
+  date,
+  entries,
+  onSelect,
+  onClose,
+}: {
+  date: Date;
+  entries: CalendarEntry[];
+  onSelect: (entry: CalendarEntry) => void;
+  onClose: () => void;
+}) {
+  const dialogRef = useFocusTrap<HTMLDivElement>();
+  useScrollLock();
+  useEscapeKey(onClose);
+
+  const heading = date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm px-4 pt-[10vh]" onClick={onClose}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="calendar-day-modal-title"
+        tabIndex={-1}
+        className="w-full max-w-md rounded-2xl shadow-sm"
+        style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
+          <div className="min-w-0">
+            <h2 id="calendar-day-modal-title" className="truncate text-base font-bold" style={{ color: "var(--text)" }}>{heading}</h2>
+            <p className="text-xs" style={{ color: "var(--text-mute)" }}>
+              {entries.length} {entries.length === 1 ? "episode" : "episodes"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close dialog"
+            className="ml-3 rounded-lg p-1.5 hover:bg-[var(--surface)] hover:text-[var(--text)]"
+            style={{ color: "var(--text-mute)" }}
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="max-h-[60vh] space-y-2 overflow-y-auto px-5 py-4">
+          {entries.map((entry) => (
+            <EntryRow key={entryKey(entry)} entry={entry} onSelect={onSelect} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CalendarPage() {
   const [view, setView] = useState<ViewMode>("agenda");
   const [agendaDays, setAgendaDays] = useState<(typeof AGENDA_RANGES)[number]>(30);
@@ -62,28 +160,37 @@ export function CalendarPage() {
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [openDay, setOpenDay] = useState<Date | null>(null);
   const { showToast } = useToast();
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
 
   const today = useMemo(() => startOfDay(new Date()), []);
+  // The month grid needs width the phone doesn't have, so on narrow screens
+  // agenda is the only view — the toggle isn't offered either.
+  const compact = useMediaQuery(COMPACT_QUERY);
+  const activeView: ViewMode = compact ? "agenda" : view;
 
   // How many days ahead to request from the API depends on the active view:
   // agenda uses the selected range directly, month view needs enough days to
   // cover the last day of the displayed month (capped at what the API allows).
   const daysNeeded = useMemo(() => {
-    if (view === "agenda") return agendaDays;
+    if (activeView === "agenda") return agendaDays;
     const monthEnd = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
     const diff = Math.round((startOfDay(monthEnd).getTime() - today.getTime()) / 86_400_000);
     return Math.min(Math.max(diff, 1), MAX_CALENDAR_DAYS);
-  }, [view, agendaDays, monthCursor, today]);
+  }, [activeView, agendaDays, monthCursor, today]);
 
   // The displayed month is entirely beyond what the API can return.
   const monthOutOfRange = useMemo(() => {
-    if (view !== "month") return false;
+    if (activeView !== "month") return false;
     const monthStart = startOfMonth(monthCursor);
     const diff = Math.round((monthStart.getTime() - today.getTime()) / 86_400_000);
     return diff > MAX_CALENDAR_DAYS;
-  }, [view, monthCursor, today]);
+  }, [activeView, monthCursor, today]);
+
+  // The API only ever returns upcoming episodes, so stepping back past the
+  // current month can only ever produce an empty grid.
+  const atEarliestMonth = startOfMonth(monthCursor).getTime() <= startOfMonth(today).getTime();
 
   const load = useCallback(async (days: number) => {
     setLoading(true);
@@ -152,6 +259,12 @@ export function CalendarPage() {
     return weeks;
   }, [monthCursor]);
 
+  // The day list belongs to one month cell; leaving that grid — by paging
+  // months, switching view, or narrowing to a phone — leaves it behind too.
+  useEffect(() => {
+    setOpenDay(null);
+  }, [activeView, monthCursor]);
+
   const handleSelect = (entry: CalendarEntry) => setSelectedItem(toSearchResult(entry));
 
   return (
@@ -162,30 +275,33 @@ export function CalendarPage() {
           <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Calendar</h1>
         </div>
 
-        <div className="relative inline-flex rounded-full p-0.5" style={{ background: "var(--surface-strong)", border: "1px solid var(--border)" }}>
-          {([
-            { key: "agenda" as const, label: "Agenda", icon: List },
-            { key: "month" as const, label: "Month", icon: LayoutGrid },
-          ]).map((opt) => (
-            <button
-              key={opt.key}
-              type="button"
-              onClick={() => setView(opt.key)}
-              className="relative flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
-              style={view === opt.key ? { background: "var(--accent)", color: "var(--on-accent)" } : { color: "var(--text-dim)" }}
-            >
-              <opt.icon className="h-3.5 w-3.5" />
-              {opt.label}
-            </button>
-          ))}
-        </div>
+        {!compact && (
+          <div className="relative inline-flex rounded-full p-0.5" style={{ background: "var(--surface-strong)", border: "1px solid var(--border)" }}>
+            {([
+              { key: "agenda" as const, label: "Agenda", icon: List },
+              { key: "month" as const, label: "Month", icon: LayoutGrid },
+            ]).map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setView(opt.key)}
+                aria-pressed={activeView === opt.key}
+                className="relative flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+                style={activeView === opt.key ? { background: "var(--accent)", color: "var(--on-accent)" } : { color: "var(--text-dim)" }}
+              >
+                <opt.icon className="h-3.5 w-3.5" />
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {error && (
         <p className="rounded-xl bg-rose-500/5 border border-rose-500/20 px-4 py-3 text-rose-600 text-sm">{error}</p>
       )}
 
-      {view === "agenda" ? (
+      {activeView === "agenda" ? (
         <>
           <div className="flex items-center gap-1.5">
             {AGENDA_RANGES.map((d) => (
@@ -224,26 +340,7 @@ export function CalendarPage() {
                     {group.label}
                   </h2>
                   {group.entries.map((entry) => (
-                    <button
-                      key={`${entry.seriesImdbId}-s${entry.season}e${entry.episode}`}
-                      type="button"
-                      onClick={() => handleSelect(entry)}
-                      className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
-                      style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
-                    >
-                      <div className="h-16 w-11 flex-none overflow-hidden rounded-lg" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
-                        <Poster src={entry.poster ?? undefined} alt={entry.seriesName} className="h-full w-full" sizes="44px" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>{entry.seriesName}</p>
-                        <p className="mt-0.5 truncate text-xs" style={{ color: "var(--text-dim)" }}>
-                          S{entry.season}:E{entry.episode}{entry.episodeName ? ` — ${entry.episodeName}` : ""}
-                        </p>
-                        {entry.overview && (
-                          <p className="mt-1 line-clamp-2 text-xs" style={{ color: "var(--text-mute)" }}>{entry.overview}</p>
-                        )}
-                      </div>
-                    </button>
+                    <EntryRow key={entryKey(entry)} entry={entry} onSelect={handleSelect} />
                   ))}
                 </div>
               ))}
@@ -256,9 +353,12 @@ export function CalendarPage() {
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
+                disabled={atEarliestMonth}
                 onClick={() => setMonthCursor((prev) => addMonths(prev, -1))}
                 aria-label="Previous month"
-                className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-strong)]"
+                aria-describedby={atEarliestMonth ? "calendar-forward-only" : undefined}
+                title={atEarliestMonth ? "The calendar only shows upcoming episodes" : undefined}
+                className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--surface-strong)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 style={{ border: "1px solid var(--border)", color: "var(--text-dim)" }}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -285,6 +385,13 @@ export function CalendarPage() {
               {monthCursor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
             </p>
           </div>
+
+          {atEarliestMonth && (
+            <p id="calendar-forward-only" className="-mt-3 text-xs" style={{ color: "var(--text-mute)" }}>
+              The calendar is forward-looking — it only lists episodes that haven't aired yet, so earlier months aren't
+              available.
+            </p>
+          )}
 
           {monthOutOfRange ? (
             <div className="rounded-2xl p-8 text-center" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
@@ -331,9 +438,9 @@ export function CalendarPage() {
                               {day.getDate()}
                             </span>
                             <div className="mt-1 space-y-1">
-                              {dayEntries.slice(0, 2).map((entry) => (
+                              {dayEntries.slice(0, MONTH_CELL_ENTRIES).map((entry) => (
                                 <button
-                                  key={`${entry.seriesImdbId}-s${entry.season}e${entry.episode}`}
+                                  key={entryKey(entry)}
                                   type="button"
                                   onClick={() => handleSelect(entry)}
                                   title={`${entry.seriesName} S${entry.season}:E${entry.episode}`}
@@ -343,8 +450,16 @@ export function CalendarPage() {
                                   {entry.seriesName}
                                 </button>
                               ))}
-                              {dayEntries.length > 2 && (
-                                <p className="px-1 text-2xs" style={{ color: "var(--text-mute)" }}>+{dayEntries.length - 2} more</p>
+                              {dayEntries.length > MONTH_CELL_ENTRIES && (
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenDay(day)}
+                                  aria-label={`Show all ${dayEntries.length} episodes on ${day.toLocaleDateString(undefined, { month: "long", day: "numeric" })}`}
+                                  className="block w-full rounded px-1 py-0.5 text-left text-2xs font-medium underline-offset-2 transition-colors hover:bg-[var(--surface-strong)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400"
+                                  style={{ color: "var(--text-mute)" }}
+                                >
+                                  +{dayEntries.length - MONTH_CELL_ENTRIES} more
+                                </button>
                               )}
                             </div>
                           </div>
@@ -357,6 +472,17 @@ export function CalendarPage() {
             </div>
           )}
         </>
+      )}
+
+      {openDay && (
+        <DayEntriesModal
+          date={openDay}
+          entries={entriesByDate.get(dateKey(openDay)) ?? []}
+          // One overlay at a time: the detail panel replaces the day list
+          // rather than stacking on top of it.
+          onSelect={(entry) => { setOpenDay(null); handleSelect(entry); }}
+          onClose={() => setOpenDay(null)}
+        />
       )}
 
       {selectedItem && (
