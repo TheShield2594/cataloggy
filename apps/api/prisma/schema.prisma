@@ -256,9 +256,17 @@ model PlaySignal {
 }
 
 model StremioAuth {
-  id        String   @id @default("default")
-  authKey   String
-  email     String?
+  id      String  @id @default("default")
+  authKey String
+  email   String?
+  // The profile that connected the account. The scheduled sync has no request
+  // to resolve one from, and defaulting to the oldest profile would file a
+  // second profile's viewing under someone else's name — the connect and import
+  // routes already act as the requesting profile, so the background job has to
+  // agree with them. Null on rows predating this column; those fall back to the
+  // default profile, which is what they were already doing.
+  profileId String? @db.Uuid
+
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
 }
 

@@ -16,7 +16,7 @@ import { isStremioSecretPath } from "./lib/stremio-secret.js";
 import { getAiRecommendations, isAiConfigured } from "./lib/ai.js";
 import { trendingCacheDeletePrefix } from "./lib/cache.js";
 import { pollTraktHistory, syncTraktWatchlist } from "./lib/trakt-client.js";
-import { isStremioConnected, syncStremioLibrary } from "./lib/stremio-library.js";
+import { isStremioConnected, getStremioProfileId, syncStremioLibrary } from "./lib/stremio-library.js";
 import { isPlayDetectionEnabled, settleDuePlaySignals } from "./lib/play-signal.js";
 import { ensureDefaultWatchlist } from "./lib/watchlist.js";
 import { ensureDefaultCollection } from "./lib/collection.js";
@@ -294,7 +294,10 @@ const start = async () => {
         // Checked every tick rather than at boot, so connecting an account from
         // Settings starts syncing without a restart.
         if (!(await isStremioConnected())) return;
-        const profileId = await getDefaultProfileId();
+        // The profile that connected the account, so scheduled watches land
+        // where the connect and import routes put theirs. Rows predating that
+        // column report null and keep the old default-profile behaviour.
+        const profileId = (await getStremioProfileId()) ?? (await getDefaultProfileId());
         await syncStremioLibrary(app.log, profileId, "incremental")
           .then(() => reportJobSuccess("stremio-library-sync"))
           .catch((error) => {

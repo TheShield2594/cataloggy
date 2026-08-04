@@ -24,6 +24,9 @@ import { UUID_V4_PATTERN } from "../lib/types.js";
 // token — and so a mistyped password doesn't retry in a loop.
 const CONNECT_RATE_LIMIT = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
 
+// Client identifiers are attacker-controlled strings kept only for display.
+const MAX_CLIENT_LENGTH = 200;
+
 const stremioLibraryRoutes: FastifyPluginAsync = async (app) => {
   app.get("/stremio/library/status", async (_request, reply) => {
     return reply.send(await getStremioStatus());
@@ -46,7 +49,7 @@ const stremioLibraryRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        await connectStremio(email, password, request.log);
+        await connectStremio(email, password, request.profileId as string, request.log);
       } catch (error) {
         if (error instanceof StremioApiError) {
           // Stremio's own wording is the useful part here ("Wrong password",
@@ -132,6 +135,7 @@ const stremioLibraryRoutes: FastifyPluginAsync = async (app) => {
       episode?: unknown;
       resource?: unknown;
       profileId?: unknown;
+      client?: unknown;
     } | null;
 
     if (!Object.values(WatchEventType).includes(body?.type as WatchEventType)) {
@@ -156,7 +160,13 @@ const stremioLibraryRoutes: FastifyPluginAsync = async (app) => {
       season: typeof body.season === "number" ? body.season : null,
       episode: typeof body.episode === "number" ? body.episode : null,
       resource: body.resource as PlaySignalResource,
-      client: request.headers["user-agent"] ?? null,
+      // The addon forwards the *player's* user-agent. This request's own header
+      // is the addon service's fetch agent, which identifies nothing useful —
+      // it is only a fallback for an addon too old to send the field.
+      client:
+        typeof body.client === "string" && body.client.trim()
+          ? body.client.trim().slice(0, MAX_CLIENT_LENGTH)
+          : (request.headers["user-agent"] ?? null),
       profileId,
       log: request.log,
     });

@@ -68,7 +68,7 @@ describe("play-signal", () => {
     process.env.STREMIO_PLAY_DETECTION = "true";
     prismaMock.playSignal.findUnique.mockResolvedValue(null);
     prismaMock.playSignal.findMany.mockResolvedValue([]);
-    prismaMock.playSignal.deleteMany.mockResolvedValue({ count: 0 });
+    prismaMock.playSignal.deleteMany.mockResolvedValue({ count: 1 });
     prismaMock.metadata.findUnique.mockResolvedValue({ runtime: 50 });
     watchEventMock.recordWatchEvent.mockResolvedValue({ status: "recorded" });
   });
@@ -192,7 +192,7 @@ describe("play-signal", () => {
     expect(watchEventMock.recordWatchEvent).toHaveBeenCalledWith(expect.objectContaining({ watchedAt: lastSeenAt }));
   });
 
-  it("keeps a signal for retry when recording its watch fails", async () => {
+  it("restores a claimed signal for retry when recording its watch fails", async () => {
     watchEventMock.recordWatchEvent.mockRejectedValue(new Error("boom"));
     prismaMock.playSignal.findMany.mockResolvedValue([pending({ dueAt: new Date(Date.now() - MINUTE) })]);
     const { settleDuePlaySignals } = await import("./play-signal.js");
@@ -200,7 +200,56 @@ describe("play-signal", () => {
     const result = await settleDuePlaySignals(makeLogger());
 
     expect(result.settled).toBe(0);
-    expect(prismaMock.playSignal.deleteMany).not.toHaveBeenCalledWith({ where: { id: "signal-1" } });
+    expect(prismaMock.playSignal.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ id: "signal-1" }) })
+    );
+  });
+
+  it("records nothing when another settler claimed the signal first", async () => {
+    // The delete doubles as the claim, so a zero count means someone else took
+    // it — the timer meeting a next-episode promotion, or a previous pass whose
+    // watch already landed. Recording again would inflate the play count.
+    prismaMock.playSignal.deleteMany.mockResolvedValue({ count: 0 });
+    prismaMock.playSignal.findMany.mockResolvedValue([pending({ dueAt: new Date(Date.now() - MINUTE) })]);
+    const { settleDuePlaySignals } = await import("./play-signal.js");
+
+    const result = await settleDuePlaySignals(makeLogger());
+
+    expect(result.settled).toBe(0);
+    expect(watchEventMock.recordWatchEvent).not.toHaveBeenCalled();
+  });
+
+  it("discards a stranded signal instead of recording it, however overdue it is", async () => {
+    // Left behind by an outage: due for a day, but nothing says it was watched.
+    // The backstop has to clear it before the due sweep can promote it.
+    const stranded = pending({
+      firstSeenAt: new Date(Date.now() - 48 * 60 * MINUTE),
+      dueAt: new Date(Date.now() - 47 * 60 * MINUTE),
+    });
+
+    // A real table, small enough to fit here: deletes have to actually affect
+    // what a later query sees, or this passes whichever order the two run in
+    // and proves nothing.
+    let rows = [stranded];
+    prismaMock.playSignal.deleteMany.mockImplementation(
+      async ({ where }: { where: { id?: string; firstSeenAt?: { lt: Date } } }) => {
+        const before = rows.length;
+        if (where.id) rows = rows.filter((row) => row.id !== where.id);
+        else if (where.firstSeenAt) rows = rows.filter((row) => row.firstSeenAt >= where.firstSeenAt!.lt);
+        return { count: before - rows.length };
+      }
+    );
+    prismaMock.playSignal.findMany.mockImplementation(
+      async ({ where }: { where?: { dueAt?: { lte: Date } } }) =>
+        where?.dueAt ? rows.filter((row) => row.dueAt <= where.dueAt!.lte) : rows
+    );
+    const { settleDuePlaySignals } = await import("./play-signal.js");
+
+    const result = await settleDuePlaySignals(makeLogger());
+
+    expect(result.expired).toBe(1);
+    expect(result.settled).toBe(0);
+    expect(watchEventMock.recordWatchEvent).not.toHaveBeenCalled();
   });
 
   it("falls back to a default runtime when metadata carries none", async () => {

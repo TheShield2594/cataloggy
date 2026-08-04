@@ -91,15 +91,27 @@ export const getStremioStatus = async (): Promise<{
 export const connectStremio = async (
   email: string,
   password: string,
+  profileId: string,
   logger: FastifyBaseLogger
 ): Promise<void> => {
   const authKey = await getStremioClient().login(email, password, logger);
   await prisma.stremioAuth.upsert({
     where: { id: AUTH_ROW_ID },
-    create: { id: AUTH_ROW_ID, authKey, email },
-    update: { authKey, email },
+    create: { id: AUTH_ROW_ID, authKey, email, profileId },
+    update: { authKey, email, profileId },
   });
-  logger.info({ email }, "Stremio account connected");
+  logger.info({ email, profileId }, "Stremio account connected");
+};
+
+/**
+ * The profile the connected account belongs to, for callers with no request to
+ * resolve one from. Null when nothing is connected, or when the row predates
+ * the column — the scheduler then falls back to the default profile, which is
+ * what it did before.
+ */
+export const getStremioProfileId = async (): Promise<string | null> => {
+  const row = await prisma.stremioAuth.findUnique({ where: { id: AUTH_ROW_ID } });
+  return row?.profileId ?? null;
 };
 
 export const disconnectStremio = async (): Promise<void> => {

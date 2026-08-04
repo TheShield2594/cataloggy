@@ -407,10 +407,15 @@ describe("stremio-library", () => {
     );
     const { connectStremio } = await import("./stremio-library.js");
 
-    await connectStremio("me@example.com", "hunter2", makeLogger());
+    await connectStremio("me@example.com", "hunter2", PROFILE, makeLogger());
 
     const upsert = prismaMock.stremioAuth.upsert.mock.calls[0][0];
-    expect(upsert.create).toEqual({ id: "default", authKey: "secret-key", email: "me@example.com" });
+    expect(upsert.create).toEqual({
+      id: "default",
+      authKey: "secret-key",
+      email: "me@example.com",
+      profileId: PROFILE,
+    });
     expect(JSON.stringify(upsert)).not.toContain("hunter2");
   });
 });

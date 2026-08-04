@@ -50,7 +50,7 @@ describe("settings sections", () => {
 
   it("finds a section by a word in its title, ignoring case", () => {
     expect(find("region")).toEqual(["preferences"]);
-    expect(find("STREMIO")).toEqual(["addon", "stremio-sync"]);
+    expect(find("STREMIO")).toEqual(["addon", "stremio-sync", "play-detection"]);
   });
 
   it("finds a section by what it does, not only by what it is called", () => {

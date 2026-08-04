@@ -726,11 +726,16 @@ addonGet<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async
 // entirely unless play detection is enabled there) — this side only observes.
 const PLAY_DETECTION = process.env.STREMIO_PLAY_DETECTION?.trim() === "true";
 
+// Bounded here rather than at the API: this string is whatever a client chose
+// to send, and it exists only to be read back in Settings.
+const MAX_CLIENT_LENGTH = 200;
+
 const forwardPlaySignal = (
   resource: "stream" | "subtitles",
   type: "movie" | "series",
   id: string,
-  profileId: string | null
+  profileId: string | null,
+  client: string | undefined
 ): void => {
   if (!PLAY_DETECTION) return;
 
@@ -753,6 +758,10 @@ const forwardPlaySignal = (
       imdbId,
       ...(isEpisode ? { seriesImdbId: imdbId, season, episode } : {}),
       resource,
+      // The player's own user-agent. Without forwarding it the API would only
+      // ever see this service's fetch agent, which says nothing about which app
+      // is actually watching — the one thing this field is for.
+      ...(client?.trim() ? { client: client.trim().slice(0, MAX_CLIENT_LENGTH) } : {}),
     },
     profileId
   ).catch((error) => {
@@ -768,7 +777,7 @@ addonGet<{ Params: { type: string; id: string } }>("/stream/:type/:id.json", asy
   const { type, id } = request.params;
   if (type === "movie" || type === "series") {
     const scope = await resolveProfileScope(request);
-    if (scope.ok) forwardPlaySignal("stream", type, id, scope.profileId);
+    if (scope.ok) forwardPlaySignal("stream", type, id, scope.profileId, request.headers["user-agent"]);
   }
 
   return reply.send({ streams: [] });
@@ -797,7 +806,7 @@ addonGet<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", 
 
   // A subtitles request means a player actually loaded, which is a stronger
   // play signal than the stream request that preceded it.
-  forwardPlaySignal("subtitles", type, id, scope.profileId);
+  forwardPlaySignal("subtitles", type, id, scope.profileId, request.headers["user-agent"]);
 
   const addonBase = ADDON_PUBLIC_BASE ?? `http://localhost:${process.env.PORT ?? 7001}`;
   const tokenQuery = MUTATION_TOKEN ? `?token=${MUTATION_TOKEN}` : "";

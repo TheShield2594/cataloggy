@@ -120,7 +120,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     tab: "integrations",
     title: "Play Detection",
     icon: <Activity size={20} />,
-    keywords: "vidi omni nuvio addon apps automatic watched inferred signals",
+    keywords: "stremio vidi omni nuvio addon apps automatic watched inferred signals",
     content: <PlayDetectionSettings />,
   },
   {

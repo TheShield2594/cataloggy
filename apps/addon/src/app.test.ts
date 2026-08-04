@@ -275,6 +275,26 @@ describe("play detection", () => {
       expect(signal.headers["x-profile-id"]).toBe(OTHER_PROFILE_ID);
     });
 
+    it("forwards the player's own user-agent, not this service's", async () => {
+      // Without this the API would only ever see the addon's fetch agent, which
+      // says nothing about which app is watching — the one thing the field is for.
+      await app.inject({
+        method: "GET",
+        url: "/stream/movie/tt0111161.json",
+        headers: { "user-agent": "Vidi/2.1 (Apple TV)" },
+      });
+
+      const [signal] = await waitForSignals(1);
+      expect((signal.body as { client?: string }).client).toBe("Vidi/2.1 (Apple TV)");
+    });
+
+    it("sends no client at all rather than an empty one when the request carries no user-agent", async () => {
+      await app.inject({ method: "GET", url: "/stream/movie/tt0111161.json", headers: { "user-agent": "" } });
+
+      const [signal] = await waitForSignals(1);
+      expect(signal.body).not.toHaveProperty("client");
+    });
+
     it("forwards a signal from the subtitles request too", async () => {
       await app.inject({ method: "GET", url: "/subtitles/series/tt0903747:2:7.json" });
 

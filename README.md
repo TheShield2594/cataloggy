@@ -251,9 +251,9 @@ Connect the account under **Settings → Stremio Watched Sync**. One connection 
 
 - Your password is exchanged for an access key once and **never stored** — only the key is.
 - Connecting starts tracking from that moment. Use **Import watch history** once to pull in what the account already has marked as watched, dated from Stremio's own watch history rather than from today. Play detection can't do this — it only ever sees things going forward — so this import is the way to bring existing history across without routing through Trakt.
-- The scheduled poll is **off by default** (`STREMIO_POLL_INTERVAL_SEC=0`), since play detection already covers these clients. Turn it on (120 is sensible) if you'd rather have Stremio's own exact watched state than an inference; a check costs a single small request when nothing has been watched.
+- The scheduled poll is **off by default** (`STREMIO_POLL_INTERVAL_SEC=0`). Nothing syncs on its own until you enable it — set it to `120`, or enable play detection above, or use **Sync now** in Settings by hand. Turn the poll on if you'd rather have Stremio's own exact watched state than an inference; a check costs a single small request when nothing has been watched.
 - Only IMDb-keyed content is matched. Items from add-ons using their own ID schemes, and live-TV entries, are skipped rather than guessed at.
-- Stremio reports the episode you're *on*, not a full play log, so episodes finished within a single poll interval collapse into the most recent one. At the default interval that needs you to clear an episode in under two minutes.
+- Stremio reports the episode you're *on*, not a full play log, so episodes finished within a single poll interval collapse into the most recent one. At a 120-second interval that needs you to clear an episode in under two minutes.
 - Guest mode has no synced library, so there's nothing to read — the account is what makes this work.
 
 ### Trakt is optional

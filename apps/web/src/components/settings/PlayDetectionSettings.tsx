@@ -21,7 +21,10 @@ const dueLabel = (dueAt: string): string => {
 // clients send, and which pending titles are about to be counted, before
 // deciding to trust it.
 export function PlayDetectionSettings() {
-  const [enabled, setEnabled] = useState(false);
+  // null means "not known yet" — a failed request must not be reported as
+  // "Disabled", which reads as a settled fact and sends people off to change
+  // config that was never the problem.
+  const [enabled, setEnabled] = useState<boolean | null>(null);
   const [signals, setSignals] = useState<PlaySignal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +36,7 @@ export function PlayDetectionSettings() {
       setSignals(result.signals);
       setError(null);
     } catch (err) {
+      setEnabled(null);
       setError(err instanceof Error ? err.message : "Failed to load play signals");
     } finally {
       setLoading(false);
@@ -54,7 +58,13 @@ export function PlayDetectionSettings() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <StatusBadge ok={enabled} label={enabled ? "Enabled" : "Disabled"} />
+        {enabled === null ? (
+          <span className="text-sm" style={{ color: "var(--text-dim)" }}>
+            Status unavailable
+          </span>
+        ) : (
+          <StatusBadge ok={enabled} label={enabled ? "Enabled" : "Disabled"} />
+        )}
       </div>
 
       <p className="text-xs" style={{ color: "var(--text-dim)" }}>
@@ -64,7 +74,7 @@ export function PlayDetectionSettings() {
         This covers apps that keep their library to themselves, like Vidi, Omni and Nuvio.
       </p>
 
-      {!enabled && (
+      {enabled === false && (
         <p className="text-xs" style={{ color: "var(--text-dim)" }}>
           Off by default, because it infers watches instead of observing them. Set{" "}
           <code className="select-all">STREMIO_PLAY_DETECTION=true</code> on both the <code>api</code> and{" "}
@@ -72,7 +82,7 @@ export function PlayDetectionSettings() {
         </p>
       )}
 
-      {enabled && (
+      {enabled === true && (
         <>
           <div className="flex flex-wrap gap-2">
             <button
@@ -126,9 +136,22 @@ export function PlayDetectionSettings() {
       )}
 
       {error && (
-        <p className="flex items-center gap-2 text-sm text-rose-600">
-          <AlertCircle size={16} /> {error}
-        </p>
+        <div className="space-y-2">
+          <p className="flex items-center gap-2 text-sm text-rose-600">
+            <AlertCircle size={16} /> {error}
+          </p>
+          {/* Reachable whatever `enabled` is: when the request failed there is
+              no other control on screen, so without this the panel is a dead
+              end until the whole page is reloaded. */}
+          <button
+            type="button"
+            onClick={fetchSignals}
+            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)] border border-[var(--border-strong)]"
+            style={{ color: "var(--text-dim)", background: "var(--bg-1)" }}
+          >
+            <RefreshCw size={16} /> Retry
+          </button>
+        </div>
       )}
     </div>
   );

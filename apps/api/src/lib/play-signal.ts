@@ -87,7 +87,26 @@ const isLaterEpisode = (
   return nSeason > pSeason || (nSeason === pSeason && nEpisode > pEpisode);
 };
 
+/**
+ * Promotes one pending signal to a watch, exactly once.
+ *
+ * The delete comes *first*, and doubles as the claim: it is a single atomic
+ * statement, so of two settlers racing for the same row — the timer meeting a
+ * next-episode promotion — only one sees a non-zero count and only one records.
+ *
+ * It also decides which way a crash falls. Recording first would mean a failure
+ * to delete afterwards leaves the row to be settled again on the next pass,
+ * turning one watch into an incrementing play count. Claiming first means an
+ * interruption loses the watch instead, which is the direction this whole
+ * feature is biased: it would rather miss a watch than invent one.
+ *
+ * A failed write is not an interruption, and still retries — the claimed row is
+ * put back exactly as it was.
+ */
 const settleSignal = async (signal: PlaySignal, log: FastifyBaseLogger, reason: string): Promise<boolean> => {
+  const { count } = await prisma.playSignal.deleteMany({ where: { id: signal.id } });
+  if (count === 0) return false;
+
   try {
     await recordWatchEvent({
       type: signal.type,
@@ -101,13 +120,18 @@ const settleSignal = async (signal: PlaySignal, log: FastifyBaseLogger, reason: 
       log,
     });
   } catch (error) {
-    // Keep the row so the next settle pass retries it rather than losing the
-    // watch to one bad write.
     log.warn({ error, imdbId: signal.imdbId }, "Failed to record an inferred watch from a play signal");
+    // Restore the claim so the next pass retries, rather than losing the watch
+    // to one bad write. Best-effort: if this fails too, the signal is simply
+    // dropped, which is the safe direction.
+    try {
+      await prisma.playSignal.create({ data: { ...signal } });
+    } catch (restoreError) {
+      log.warn({ error: restoreError, imdbId: signal.imdbId }, "Could not restore a play signal for retry");
+    }
     return false;
   }
 
-  await prisma.playSignal.deleteMany({ where: { id: signal.id } });
   log.info(
     { imdbId: signal.imdbId, season: signal.season, episode: signal.episode, reason },
     "Play signal settled as watched"
@@ -199,14 +223,18 @@ export const settleDuePlaySignals = async (
   const now = new Date();
   let settled = 0;
 
+  // Stranded rows go first. A signal this old is due by definition — dueAt is
+  // only ever a fraction of a runtime past firstSeenAt — so settling before
+  // clearing would let a day-old intent, left behind by an outage, be recorded
+  // as a watch. The backstop has to run for it to be a backstop.
+  const { count: expired } = await prisma.playSignal.deleteMany({
+    where: { firstSeenAt: { lt: new Date(now.getTime() - MAX_PENDING_MS) } },
+  });
+
   const due = await prisma.playSignal.findMany({ where: { dueAt: { lte: now } } });
   for (const signal of due) {
     if (await settleSignal(signal, log, "runtime elapsed")) settled += 1;
   }
-
-  const { count: expired } = await prisma.playSignal.deleteMany({
-    where: { firstSeenAt: { lt: new Date(now.getTime() - MAX_PENDING_MS) } },
-  });
 
   return { settled, expired };
 };
