@@ -61,7 +61,7 @@ export function MobileTabBar({ pathname }: { pathname: string }) {
       {moreOpen && <MoreSheet pathname={pathname} onClose={closeMore} />}
 
       <nav
-        aria-label="Main"
+        aria-label="Mobile navigation"
         className="fixed bottom-0 left-0 right-0 z-40 flex sm:hidden backdrop-blur-xl"
         style={{
           borderTop: "1px solid var(--border)",

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, Route, Routes, useLocation } from "react-router";
 import { Clapperboard, Loader2, Search, User } from "lucide-react";
 import { api, Profile, runtimeConfig } from "./api";
@@ -137,6 +137,20 @@ function AppShell({
   location: ReturnType<typeof useLocation>;
 }) {
   const { profile, setProfile, switcherOpen, openSwitcher, closeSwitcher } = useProfile();
+  const mainRef = useRef<HTMLElement>(null);
+
+  // Client-side navigation leaves focus on the nav item that was clicked, so a
+  // screen reader stays parked in the sidebar while the page behind it swaps
+  // out. Move focus into the new content instead — but only on an actual route
+  // change, not on the first render (where it would steal focus from the page
+  // the user just loaded) and not on a hash change from the skip link, which
+  // already lands there.
+  const previousPathname = useRef(location.pathname);
+  useEffect(() => {
+    if (previousPathname.current === location.pathname) return;
+    previousPathname.current = location.pathname;
+    mainRef.current?.focus();
+  }, [location.pathname]);
 
   useEffect(() => {
     let cancelled = false;
@@ -161,6 +175,17 @@ function AppShell({
 
   return (
     <div className="min-h-screen w-full">
+      {/* First focusable element in the shell: without it, reaching content
+          means tabbing the whole sidebar and top bar on every route. */}
+      <a
+        href="#main-content"
+        // `not-sr-only` zeroes the padding it restores, so the box has to be
+        // rebuilt under the same variant rather than set unconditionally.
+        className="sr-only rounded-xl text-sm font-semibold shadow-lg focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:px-4 focus:py-2.5 focus:outline-none focus:ring-2 focus:ring-claw-400"
+        style={{ background: "var(--bg-1)", color: "var(--text)", border: "1px solid var(--border-strong)" }}
+      >
+        Skip to main content
+      </a>
       <Sidebar
         pinned={sidebarPinned}
         onPinnedChange={setSidebarPinned}
@@ -222,7 +247,15 @@ function AppShell({
       </header>
 
       {/* Main content */}
-      <main className={`mx-auto max-w-[1400px] px-6 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[76px] sm:pb-10 transition-[padding] duration-200 ${sidebarPad}`}>
+      <main
+        id="main-content"
+        ref={mainRef}
+        // Not reachable by Tab — `-1` only makes it a valid target for the skip
+        // link and for the focus move on route change.
+        tabIndex={-1}
+        aria-label="Main content"
+        className={`mx-auto max-w-[1400px] px-6 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[76px] focus:outline-none sm:pb-10 transition-[padding] duration-200 ${sidebarPad}`}
+      >
         <Suspense fallback={<LoadingFallback />}>
           <Routes key={profile?.id ?? runtimeConfig.getProfileId() ?? "default"}>
             <Route path="/" element={<DashboardPage />} />

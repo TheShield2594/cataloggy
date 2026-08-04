@@ -223,6 +223,9 @@ export function ListsPage() {
   const [filterQuery, setFilterQuery] = useState("");
   const [renderLimit, setRenderLimit] = useState(RENDER_PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  // Read by the undo handler, which can fire long after the selection changed.
+  const selectedListIdRef = useRef(selectedListId);
+  selectedListIdRef.current = selectedListId;
   const { showToast } = useToast();
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
 
@@ -367,14 +370,41 @@ export function ListsPage() {
 
   const visibleItems = displayedItems.slice(0, renderLimit);
 
+  // Restoring only makes sense while the same list is still on screen; the undo
+  // can land after the user has clicked away, and the server-side re-add is what
+  // actually matters then.
+  const restoreItem = (listId: string, item: ListItemWithMeta) => {
+    if (selectedListIdRef.current !== listId) return;
+    setItems((prev) => (prev.some((i) => i.type === item.type && i.imdbId === item.imdbId) ? prev : [...prev, item]));
+  };
+
+  const handleUndoRemove = async (listId: string, item: ListItemWithMeta) => {
+    try {
+      await api.addToList(listId, { type: item.type, imdbId: item.imdbId, title: itemName(item) });
+      restoreItem(listId, item);
+      await loadLists();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Could not restore item", "error");
+    }
+  };
+
+  // The remove button overlaps a poster whose whole surface opens the detail
+  // panel, and it renders at full opacity on touch, so a mis-tap is easy. The
+  // removal is optimistic and the toast carries the way back.
   const handleRemove = async (item: ListItemWithMeta) => {
     if (!selectedListId || removingIds[item.imdbId]) return;
+    const listId = selectedListId;
     setRemovingIds((prev) => ({ ...prev, [item.imdbId]: true }));
     setError(null);
+    setItems((prev) => prev.filter((i) => i.imdbId !== item.imdbId));
     try {
-      await api.removeFromList(selectedListId, { type: item.type, imdbId: item.imdbId });
-      setItems((prev) => prev.filter((i) => i.imdbId !== item.imdbId));
+      await api.removeFromList(listId, { type: item.type, imdbId: item.imdbId });
+      showToast(`Removed ${itemName(item)}`, "info", {
+        action: { label: "Undo", onAction: () => void handleUndoRemove(listId, item) },
+      });
+      await loadLists();
     } catch (err) {
+      restoreItem(listId, item);
       setError(err instanceof Error ? err.message : "Failed to remove item");
     } finally {
       setRemovingIds((prev) => ({ ...prev, [item.imdbId]: false }));
@@ -482,7 +512,9 @@ export function ListsPage() {
       </aside>
 
       {/* Main content area */}
-      <main className="min-w-0 flex-1">
+      {/* A plain div, not a second <main>: the shell already owns that landmark
+          and a nested one would give the page two. */}
+      <div className="min-w-0 flex-1">
         {error && (
           <p className="mb-4 rounded-xl bg-rose-500/5 border border-rose-500/20 px-4 py-3 text-rose-600 text-sm">{error}</p>
         )}
@@ -682,7 +714,7 @@ export function ListsPage() {
             {!loadingItems && renderLimit < displayedItems.length && <div ref={sentinelRef} className="h-4" />}
           </>
         )}
-      </main>
+      </div>
 
       {/* Add item modal */}
       {showAddModal && selectedListId && selectedList && (
