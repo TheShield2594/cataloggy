@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
+import { MAX_IMPORT_ROWS } from "../lib/import-validation.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -8,7 +9,7 @@ const prismaMock = {
   list: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
   watchEvent: { findMany: vi.fn(), update: vi.fn(), createMany: vi.fn() },
   seriesProgress: { findMany: vi.fn() },
-  rating: { findMany: vi.fn(), upsert: vi.fn() },
+  rating: { findMany: vi.fn(), createMany: vi.fn(), updateMany: vi.fn() },
   listItem: { createMany: vi.fn() },
 };
 
@@ -23,7 +24,10 @@ vi.mock("../lib/profile.js", () => ({
 const watchlistMock = { getDefaultWatchlist: vi.fn() };
 vi.mock("../lib/watchlist.js", () => watchlistMock);
 
-const seriesProgressLibMock = { upsertSeriesProgressIfNewer: vi.fn() };
+const seriesProgressLibMock = {
+  upsertSeriesProgressIfNewer: vi.fn(),
+  batchUpsertSeriesProgressIfNewer: vi.fn(),
+};
 vi.mock("../lib/series-progress.js", () => seriesProgressLibMock);
 
 const resetMocks = () => {
@@ -35,12 +39,17 @@ const resetMocks = () => {
   prismaMock.listItem.createMany.mockResolvedValue({ count: 0 });
   prismaMock.seriesProgress.findMany.mockResolvedValue([]);
   prismaMock.rating.findMany.mockResolvedValue([]);
+  prismaMock.rating.createMany.mockResolvedValue({ count: 0 });
+  prismaMock.rating.updateMany.mockResolvedValue({ count: 0 });
 };
 
-const buildApp = async (): Promise<FastifyInstance> => {
+// `bodyLimit` mirrors the configurable ceiling index.ts sets from
+// MAX_BODY_SIZE_MB; the row caps below it only come into play once a
+// deployment has raised the byte ceiling enough to fit that many rows.
+const buildApp = async (bodyLimit?: number): Promise<FastifyInstance> => {
   vi.resetModules();
   const { default: exportRoutes } = await import("./export.js");
-  const app = Fastify();
+  const app = Fastify(bodyLimit ? { bodyLimit } : {});
   await app.register(exportRoutes);
   await app.ready();
   return app;
@@ -197,16 +206,16 @@ describe("export routes", () => {
       await app.close();
     });
 
-    it("handles quoted fields containing embedded commas and escaped quotes", async () => {
+    it("imports a quoted field", async () => {
       prismaMock.watchEvent.findMany.mockResolvedValue([]);
       const app = await buildApp();
 
-      const csv = 'imdbId,type,watchedAt\n"tt,1",movie,2024-01-01T00:00:00Z';
+      const csv = 'imdbId,type,watchedAt\n"tt1",movie,2024-01-01T00:00:00Z';
       const response = await app.inject({ method: "POST", url: "/import/csv", payload: { csv } });
 
       expect(response.statusCode).toBe(200);
       expect(prismaMock.watchEvent.createMany).toHaveBeenCalledWith({
-        data: [expect.objectContaining({ imdbId: "tt,1" })],
+        data: [expect.objectContaining({ imdbId: "tt1" })],
       });
       await app.close();
     });
@@ -249,8 +258,8 @@ describe("export routes", () => {
         {
           id: "existing-ep",
           type: "episode",
-          imdbId: "tt-show",
-          seriesImdbId: "tt-show",
+          imdbId: "tt900",
+          seriesImdbId: "tt900",
           season: 1,
           episode: 2,
           watchedAt: new Date("2024-01-01T00:00:00Z"),
@@ -258,7 +267,7 @@ describe("export routes", () => {
       ]);
       const app = await buildApp();
 
-      const csv = "imdbId,type,season,episode,watchedAt\ntt-show,episode,1,2,2024-01-01T00:00:00Z";
+      const csv = "imdbId,type,season,episode,watchedAt\ntt900,episode,1,2,2024-01-01T00:00:00Z";
       const response = await app.inject({ method: "POST", url: "/import/csv", payload: { csv } });
 
       expect(response.statusCode).toBe(200);
@@ -279,6 +288,183 @@ describe("export routes", () => {
       expect(response.statusCode).toBe(200);
       expect(response.json().summary).toEqual({ imported: 0, skipped: 0 });
       await app.close();
+    });
+  });
+
+  describe("POST /import — input validation", () => {
+    it("survives a null element in every array instead of crashing", async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: "POST",
+        url: "/import",
+        payload: {
+          version: 1,
+          lists: [null, "nope", 7],
+          watchEvents: [null],
+          seriesProgress: [null],
+          ratings: [null],
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().summary).toEqual({
+        lists: 0,
+        listItems: 0,
+        watchEvents: 0,
+        seriesProgress: 0,
+        ratings: 0,
+      });
+      await app.close();
+    });
+
+    it("skips rows whose imdbId isn't an IMDb id", async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: "POST",
+        url: "/import",
+        payload: {
+          version: 1,
+          lists: [{ name: "Faves", kind: "custom", items: [{ type: "movie", imdbId: "../../etc/passwd" }] }],
+          watchEvents: [{ type: "movie", imdbId: "not-an-id", watchedAt: "2024-01-01T00:00:00Z" }],
+          seriesProgress: [
+            { seriesImdbId: "nope", lastSeason: 1, lastEpisode: 1, lastWatchedAt: "2024-01-01T00:00:00Z" },
+          ],
+          ratings: [{ imdbId: "42", type: "movie", rating: 8, ratedAt: "2024-01-01T00:00:00Z" }],
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().summary).toEqual(
+        expect.objectContaining({ listItems: 0, watchEvents: 0, seriesProgress: 0, ratings: 0 })
+      );
+      expect(prismaMock.listItem.createMany).not.toHaveBeenCalled();
+      expect(prismaMock.rating.createMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it("skips a season/episode that would overflow the 32-bit column", async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: "POST",
+        url: "/import",
+        payload: {
+          version: 1,
+          watchEvents: [
+            { type: "episode", imdbId: "tt1", season: 1e20, episode: 1, watchedAt: "2024-01-01T00:00:00Z" },
+          ],
+          seriesProgress: [
+            { seriesImdbId: "tt1", lastSeason: 1e20, lastEpisode: 1, lastWatchedAt: "2024-01-01T00:00:00Z" },
+          ],
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().summary).toEqual(
+        expect.objectContaining({ watchEvents: 0, seriesProgress: 0 })
+      );
+      await app.close();
+    });
+
+    it("skips a rating outside the 0-10 scale", async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: "POST",
+        url: "/import",
+        payload: {
+          version: 1,
+          ratings: [
+            { imdbId: "tt1", type: "movie", rating: 1e20, ratedAt: "2024-01-01T00:00:00Z" },
+            { imdbId: "tt2", type: "movie", rating: -5, ratedAt: "2024-01-01T00:00:00Z" },
+            { imdbId: "tt3", type: "movie", rating: 7.5, ratedAt: "2024-01-01T00:00:00Z" },
+          ],
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().summary.ratings).toBe(1);
+      expect(prismaMock.rating.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: [expect.objectContaining({ imdbId: "tt3", rating: 7.5 })],
+        })
+      );
+      await app.close();
+    });
+
+    it("rejects a collection with more rows than the import limit", async () => {
+      const app = await buildApp(256 * 1024 * 1024);
+      const watchEvents = Array.from({ length: MAX_IMPORT_ROWS + 1 }, () => ({
+        type: "movie",
+        imdbId: "tt1",
+        watchedAt: "2024-01-01T00:00:00Z",
+      }));
+
+      const response = await app.inject({ method: "POST", url: "/import", payload: { version: 1, watchEvents } });
+
+      expect(response.statusCode).toBe(413);
+      expect(response.json().code).toBe("too_many_rows");
+      expect(prismaMock.watchEvent.createMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it("writes ratings in one batch rather than one round trip each", async () => {
+      const app = await buildApp();
+      prismaMock.rating.findMany.mockResolvedValue([
+        { type: "movie", imdbId: "tt2", season: 0, episode: 0 },
+      ]);
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/import",
+        payload: {
+          version: 1,
+          ratings: [
+            { imdbId: "tt1", type: "movie", rating: 8, ratedAt: "2024-01-01T00:00:00Z" },
+            { imdbId: "tt2", type: "movie", rating: 9, ratedAt: "2024-01-01T00:00:00Z" },
+          ],
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      // One insert for the new rating, one update for the one that existed.
+      expect(prismaMock.rating.createMany).toHaveBeenCalledTimes(1);
+      expect(prismaMock.rating.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: [expect.objectContaining({ imdbId: "tt1" })] })
+      );
+      expect(prismaMock.rating.updateMany).toHaveBeenCalledTimes(1);
+      expect(prismaMock.rating.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ imdbId: "tt2" }), data: expect.objectContaining({ rating: 9 }) })
+      );
+      await app.close();
+    });
+  });
+
+  describe("POST /import/csv — input validation", () => {
+    it("skips a row whose imdbId isn't an IMDb id", async () => {
+      const app = await buildApp();
+      const csv = "imdbId,type,watchedAt\nnot-an-id,movie,2024-01-01T00:00:00Z";
+      const response = await app.inject({ method: "POST", url: "/import/csv", payload: { csv } });
+
+      expect(response.json().summary).toEqual({ imported: 0, skipped: 1 });
+      await app.close();
+    });
+
+    it("skips a row whose season would overflow the column", async () => {
+      const app = await buildApp();
+      const csv = "imdbId,type,season,episode,watchedAt\ntt1,episode,1e20,1,2024-01-01T00:00:00Z";
+      const response = await app.inject({ method: "POST", url: "/import/csv", payload: { csv } });
+
+      expect(response.json().summary).toEqual({ imported: 0, skipped: 1 });
+      await app.close();
+    });
+  });
+
+  describe("parseCsv", () => {
+    it("keeps commas and escaped quotes inside a quoted field", async () => {
+      const { parseCsv } = await import("./export.js");
+      expect(parseCsv('a,b\n"x,y","he said ""hi"""')).toEqual([
+        ["a", "b"],
+        ["x,y", 'he said "hi"'],
+      ]);
     });
   });
 

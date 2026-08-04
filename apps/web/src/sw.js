@@ -34,6 +34,9 @@ const CACHEABLE_API_PATH_RE = new RegExp(
     ")$"
 );
 
+// Kept in sync with API_CACHE_NAME in api.ts, which deletes this cache
+// directly on sign-out — the page can't count on a controlling service worker
+// being there to take the INVALIDATE_API_CACHE message below.
 const API_CACHE_NAME = "api-runtime-v1";
 
 // Two profiles (or two accounts) sharing this app must never see each

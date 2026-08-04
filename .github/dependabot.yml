@@ -25,6 +25,12 @@ updates:
           - "version-update:semver-major"
           - "version-update:semver-minor"
 
+  # docker-compose.yml, for the digest-pinned postgres image.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
   - package-ecosystem: "docker"
     directory: "/apps/api"
     schedule:

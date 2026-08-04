@@ -1,3 +1,16 @@
+# All four app images move together, so the version they run is one setting:
+# CATALOGGY_IMAGE_TAG in .env. It defaults to `latest`, which follows whatever
+# was last built from main — fine for trying Cataloggy out, but it means
+# `docker compose pull` can move you onto an untested build, and there is no
+# version to roll back to. Once the stack works, pin it: every image is also
+# published as `sha-<short-sha>` and, for tagged releases, `vX.Y.Z`.
+#
+#     CATALOGGY_IMAGE_TAG=v1.2.0
+#
+# Rolling back is the same edit with the previous tag, followed by
+# `docker compose pull && docker compose up -d`. Keep the four images on the
+# same tag — the migrate image applies the schema the api image expects.
+
 x-logging: &default-logging
   driver: json-file
   options:
@@ -6,7 +19,10 @@ x-logging: &default-logging
 
 services:
   db:
-    image: postgres:16
+    # Digest-pinned so a rebuild pulls the exact image this stack was tested
+    # against; the tag is kept alongside it for readability. Dependabot bumps
+    # the pair together (see .github/dependabot.yml).
+    image: postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-cataloggy}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -23,6 +39,11 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
+    # The database entrypoint still needs the capabilities it uses to chown
+    # the data directory and drop to the postgres user at init, so only the
+    # privilege-escalation block applies here.
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d cataloggy"]
       interval: 5s
@@ -37,19 +58,25 @@ services:
   # which is around 250 MB of tooling the api service never loads — keeping the
   # CLI out of that image is what lets it stay small.
   migrate:
-    image: ghcr.io/theshield2594/cataloggy-migrate:latest
+    image: ghcr.io/theshield2594/cataloggy-migrate:${CATALOGGY_IMAGE_TAG:-latest}
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in a .env file next to docker-compose.yml — see README.md}@db:5432/${POSTGRES_DB:-cataloggy}
     depends_on:
       db:
         condition: service_healthy
     restart: "no"
+    # Nothing in these services runs as root, binds a low port, or changes
+    # file ownership, so they need no Linux capabilities at all.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     logging: *default-logging
     networks:
       - cataloggy
 
   api:
-    image: ghcr.io/theshield2594/cataloggy-api:latest
+    image: ghcr.io/theshield2594/cataloggy-api:${CATALOGGY_IMAGE_TAG:-latest}
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in a .env file next to docker-compose.yml — see README.md}@db:5432/${POSTGRES_DB:-cataloggy}
       PORT: "7000"
@@ -85,6 +112,12 @@ services:
       migrate:
         condition: service_completed_successfully
     restart: unless-stopped
+    # Nothing in these services runs as root, binds a low port, or changes
+    # file ownership, so they need no Linux capabilities at all.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:7000/health || exit 1"]
       interval: 10s
@@ -96,7 +129,7 @@ services:
       - cataloggy
 
   addon:
-    image: ghcr.io/theshield2594/cataloggy-addon:latest
+    image: ghcr.io/theshield2594/cataloggy-addon:${CATALOGGY_IMAGE_TAG:-latest}
     environment:
       PORT: "7001"
       CATALOGGY_API_BASE: http://api:7000
@@ -112,6 +145,12 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
+    # Nothing in these services runs as root, binds a low port, or changes
+    # file ownership, so they need no Linux capabilities at all.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:7001/health || exit 1"]
       interval: 10s
@@ -123,7 +162,7 @@ services:
       - cataloggy
 
   web:
-    image: ghcr.io/theshield2594/cataloggy-web:latest
+    image: ghcr.io/theshield2594/cataloggy-web:${CATALOGGY_IMAGE_TAG:-latest}
     environment:
       VITE_API_BASE: ${VITE_API_BASE:-http://192.168.1.25:7000}
       # Public URL of the dedicated addon service — the full-featured
@@ -146,6 +185,12 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
+    # Nothing in these services runs as root, binds a low port, or changes
+    # file ownership, so they need no Linux capabilities at all.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:7002/ || exit 1"]
       interval: 10s

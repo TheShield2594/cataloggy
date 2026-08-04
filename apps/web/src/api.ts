@@ -57,6 +57,13 @@ export const runtimeConfig = {
   },
   setToken(value: string) {
     const trimmed = value.trim();
+    // Cached GET responses are partitioned by a digest of the token, so a new
+    // token can never *read* the old one's entries — but they stay in Cache
+    // Storage, readable by any same-origin script, until they expire a day
+    // later. Signing out or rotating the token has to take them with it, so
+    // the next person on a shared device inherits nothing.
+    if (trimmed !== runtimeConfig.getToken()) void purgeApiCache();
+
     if (!trimmed) {
       window.localStorage.removeItem(TOKEN_KEY);
       return;
@@ -77,6 +84,9 @@ export const runtimeConfig = {
     window.localStorage.setItem(PROFILE_ID_KEY, trimmed);
   },
   clearProfileId() {
+    // Leaving a profile (its access token expired, or it locked) is a sign-out
+    // of that profile — its cached responses go with it.
+    void purgeApiCache();
     window.localStorage.removeItem(PROFILE_ID_KEY);
     window.localStorage.removeItem(PROFILE_TOKEN_KEY);
   },
@@ -424,6 +434,27 @@ const authHeaders = (hasBody: boolean) => {
   }
   return headers;
 };
+
+/** Mirrors `API_CACHE_NAME` in `sw.js` — the runtime cache of GET API responses. */
+const API_CACHE_NAME = "api-runtime-v1";
+
+/**
+ * Drops every cached API response, whether or not a service worker is around
+ * to be asked. `notifyServiceWorkerToInvalidateApiCache` is a no-op when no SW
+ * controls the page (first load, a hard reload, an unregistered worker), which
+ * is fine for the freshness case it exists for but not for signing out: the
+ * previous token's responses have to leave Cache Storage even then. Cache
+ * Storage is same-origin, so the page can delete the cache itself.
+ */
+export async function purgeApiCache(): Promise<void> {
+  await notifyServiceWorkerToInvalidateApiCache();
+  try {
+    if (typeof caches !== "undefined") await caches.delete(API_CACHE_NAME);
+  } catch {
+    // Cache Storage is unavailable (private mode in some browsers, non-secure
+    // origin) — there is nothing cached to purge in that case either.
+  }
+}
 
 export function notifyServiceWorkerToInvalidateApiCache(): Promise<void> {
   const sw = navigator.serviceWorker?.controller;

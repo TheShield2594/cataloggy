@@ -3,7 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
+/**
+ * How PINs were stored before the salted KDF. Fixtures still use it, because
+ * an existing install's PINs are in exactly this shape and have to keep
+ * working — see the legacy-hash tests below.
+ */
 const hashPin = (pin: string) => createHash("sha256").update(pin).digest("hex");
+/** What a PIN written today looks like: `scrypt$N$r$p$salt$key`. */
+const SCRYPT_HASH = expect.stringMatching(/^scrypt\$\d+\$\d+\$\d+\$[0-9a-f]+\$[0-9a-f]+$/);
 
 const prismaMock = {
   profile: { findMany: vi.fn(), create: vi.fn(), findUnique: vi.fn(), count: vi.fn(), delete: vi.fn(), update: vi.fn() },
@@ -83,6 +90,16 @@ describe("profiles routes", () => {
       await app.close();
     });
 
+    it("rejects a PIN shorter than the minimum length", async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: "POST", url: "/profiles", payload: { name: "Alice", pin: "12" } });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toMatch(/at least|between/i);
+      expect(prismaMock.profile.create).not.toHaveBeenCalled();
+      await app.close();
+    });
+
     it("creates a profile with a hashed pin", async () => {
       prismaMock.profile.create.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: hashPin("1234") });
       const app = await buildApp();
@@ -90,7 +107,7 @@ describe("profiles routes", () => {
       await app.inject({ method: "POST", url: "/profiles", payload: { name: "Alice", pin: "1234" } });
 
       expect(prismaMock.profile.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ pinHash: hashPin("1234") }) })
+        expect.objectContaining({ data: expect.objectContaining({ pinHash: SCRYPT_HASH }) })
       );
       await app.close();
     });
@@ -150,15 +167,69 @@ describe("profiles routes", () => {
       await app.close();
     });
 
+    it("verifies a PIN stored under the pre-scrypt hash and rewrites it in the new format", async () => {
+      prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: hashPin("4321") });
+      prismaMock.profile.update.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: "scrypt$..." });
+      const app = await buildApp();
+
+      const response = await app.inject({
+        method: "POST",
+        url: `/profiles/${PROFILE_ID}/verify`,
+        payload: { pin: "4321" },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(prismaMock.profile.update).toHaveBeenCalledWith({
+        where: { id: PROFILE_ID },
+        data: { pinHash: SCRYPT_HASH },
+      });
+      await app.close();
+    });
+
+    it("still verifies when rewriting the legacy hash fails", async () => {
+      prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: hashPin("4321") });
+      prismaMock.profile.update.mockRejectedValue(new Error("database is read-only"));
+      const app = await buildApp();
+
+      const response = await app.inject({
+        method: "POST",
+        url: `/profiles/${PROFILE_ID}/verify`,
+        payload: { pin: "4321" },
+      });
+
+      expect(response.statusCode).toBe(200);
+      await app.close();
+    });
+
+    it("leaves an already-scrypt hash alone on a successful verify", async () => {
+      const { hashPin: scryptHashPin } = await import("../lib/pin-hash.js");
+      prismaMock.profile.findUnique.mockResolvedValue({
+        id: PROFILE_ID,
+        name: "Alice",
+        pinHash: await scryptHashPin("4321"),
+      });
+      const app = await buildApp();
+
+      const response = await app.inject({
+        method: "POST",
+        url: `/profiles/${PROFILE_ID}/verify`,
+        payload: { pin: "4321" },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(prismaMock.profile.update).not.toHaveBeenCalled();
+      await app.close();
+    });
+
     it("locks out after MAX_PIN_ATTEMPTS (5) failures and returns 429 on the next attempt", async () => {
       prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: hashPin("4321") });
 
       // Simulate the KV row state machine across repeated failures.
-      let kvState: { count: number; lockedUntil: string } | null = null;
+      let kvState: { count: number; lockedUntil: string; lockouts?: number } | null = null;
       const txObj = {
         $executeRaw: vi.fn(),
         kV: {
-          findUnique: vi.fn(async () => (kvState ? { value: JSON.stringify(kvState) } : null)),
+          findUnique: vi.fn(async () => (kvState ? { value: JSON.stringify(kvState), updatedAt: new Date() } : null)),
           upsert: vi.fn(async ({ create, update }: { create?: { value: string }; update?: { value: string } }) => {
             const value = update?.value ?? create?.value;
             if (value) kvState = JSON.parse(value);
@@ -168,7 +239,7 @@ describe("profiles routes", () => {
       };
       prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof txObj) => unknown) => callback(txObj));
       prismaMock.kV.findUnique.mockImplementation(async () =>
-        kvState ? { value: JSON.stringify(kvState) } : null
+        kvState ? { value: JSON.stringify(kvState), updatedAt: new Date() } : null
       );
 
       const app = await buildApp();
@@ -195,6 +266,44 @@ describe("profiles routes", () => {
       expect(lockedResponse.json()).toEqual(
         expect.objectContaining({ error: expect.stringContaining("Too many incorrect attempts") })
       );
+      await app.close();
+    });
+
+    it("makes each successive lockout longer instead of re-locking for the same five minutes", async () => {
+      prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: hashPin("4321") });
+
+      let kvState: { count: number; lockedUntil: string; lockouts?: number } | null = null;
+      const txObj = {
+        $executeRaw: vi.fn(),
+        kV: {
+          findUnique: vi.fn(async () => (kvState ? { value: JSON.stringify(kvState), updatedAt: new Date() } : null)),
+          upsert: vi.fn(async ({ create, update }: { create?: { value: string }; update?: { value: string } }) => {
+            const value = update?.value ?? create?.value;
+            if (value) kvState = JSON.parse(value);
+            return {};
+          }),
+        },
+      };
+      prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof txObj) => unknown) => callback(txObj));
+      // getPinLockout reads the same row, but this test drives failures
+      // directly, so report "not locked" and let each lockout land.
+      prismaMock.kV.findUnique.mockResolvedValue(null);
+
+      const app = await buildApp();
+
+      const lockoutDurations: number[] = [];
+      for (let round = 0; round < 3; round++) {
+        for (let attempt = 0; attempt < 5; attempt++) {
+          await app.inject({ method: "POST", url: `/profiles/${PROFILE_ID}/verify`, payload: { pin: "wrong" } });
+        }
+        lockoutDurations.push(new Date(kvState!.lockedUntil).getTime() - Date.now());
+        // Wait the lockout out, as a griefer with the shared token would.
+        kvState = { ...kvState!, lockedUntil: new Date(Date.now() - 1000).toISOString() };
+      }
+
+      expect(lockoutDurations[1]).toBeGreaterThan(lockoutDurations[0] * 1.5);
+      expect(lockoutDurations[2]).toBeGreaterThan(lockoutDurations[1] * 1.5);
+      expect(kvState!.lockouts).toBe(3);
       await app.close();
     });
   });
@@ -259,7 +368,7 @@ describe("profiles routes", () => {
       expect(response.json().profile.hasPin).toBe(true);
       expect(prismaMock.profile.update).toHaveBeenCalledWith({
         where: { id: PROFILE_ID },
-        data: { pinHash: hashPin("9999") },
+        data: { pinHash: SCRYPT_HASH },
       });
       expect(prismaMock.kV.deleteMany).toHaveBeenCalled();
       await app.close();
@@ -283,6 +392,16 @@ describe("profiles routes", () => {
         data: { pinHash: null },
       });
       expect(prismaMock.kV.deleteMany).toHaveBeenCalled();
+      await app.close();
+    });
+
+    it("rejects a new PIN shorter than the minimum length", async () => {
+      prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: null });
+      const app = await buildApp();
+      const response = await app.inject({ method: "PATCH", url: `/profiles/${PROFILE_ID}`, payload: { pin: "1" } });
+
+      expect(response.statusCode).toBe(400);
+      expect(prismaMock.profile.update).not.toHaveBeenCalled();
       await app.close();
     });
 
@@ -337,7 +456,7 @@ describe("profiles routes", () => {
         expect(response.statusCode).toBe(200);
         expect(prismaMock.profile.update).toHaveBeenCalledWith({
           where: { id: PROFILE_ID },
-          data: { pinHash: hashPin("9999") },
+          data: { pinHash: SCRYPT_HASH },
         });
         await app.close();
       });
