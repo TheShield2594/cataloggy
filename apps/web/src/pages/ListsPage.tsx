@@ -255,12 +255,14 @@ export function ListsPage() {
     try {
       const { lists: loaded } = await api.getLists();
       setLists(loaded);
+      // Only a *successful* load can be used to judge an unknown ID: marking
+      // this on failure too would report a list missing when what failed was
+      // the request that would have found it.
+      setListsLoaded(true);
       return loaded;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load lists");
       return [];
-    } finally {
-      setListsLoaded(true);
     }
   }, []);
 
@@ -323,8 +325,12 @@ export function ListsPage() {
     try {
       await api.deleteList(listId);
       setConfirmDeleteId(null);
-      if (selectedListId === listId) selectList(null, { replace: true });
-      await loadLists();
+      const remaining = await loadLists();
+      // Picked from the reloaded set. Clearing the selection and leaving it to
+      // the default-to-first effect would run that effect against the sidebar
+      // as it was *before* the delete, landing straight back on the list that
+      // was just deleted.
+      if (selectedListId === listId) selectList(remaining[0]?.id ?? null, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete list");
     } finally {

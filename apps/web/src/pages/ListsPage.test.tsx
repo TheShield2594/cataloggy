@@ -128,6 +128,42 @@ describe("ListsPage selection in the URL", () => {
     expect(await screen.findByText("Alien")).toBeInTheDocument();
   });
 
+  it("moves to a list that still exists after deleting the selected one", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.deleteList).mockResolvedValue(undefined as never);
+    // The custom list is the one with a delete button, so it goes first here:
+    // deleting the *selected* list is the case that has to land somewhere real.
+    getLists.mockResolvedValueOnce({ lists: [SCIFI, WATCHLIST] });
+    renderPage();
+    await waitFor(() => expect(currentSearch()).toBe(`?list=${SCIFI.id}`));
+
+    // Deferred, as a real reload is: an instantly-resolved one lets the
+    // selection and the refreshed sidebar land in the same render and hides
+    // the window where the page holds a list set that no longer exists.
+    getLists.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve({ lists: [WATCHLIST] }), 20))
+    );
+    // Only fetches made from here on say where the selection landed; the ones
+    // before belong to the list that was open.
+    getListItems.mockClear();
+    await user.click(screen.getByRole("button", { name: /delete list sci-fi night/i }));
+    await user.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    // Never back onto the list just deleted, whose ID the pre-delete sidebar
+    // still held.
+    await waitFor(() => expect(currentSearch()).toBe(`?list=${WATCHLIST.id}`));
+    expect(screen.queryByText(/no longer exists/i)).not.toBeInTheDocument();
+    expect(getListItems).not.toHaveBeenCalledWith(SCIFI.id);
+  });
+
+  it("doesn't call a list missing when it was the request that failed", async () => {
+    getLists.mockRejectedValue(new Error("Network down"));
+    renderPage(`/lists?list=${SCIFI.id}`);
+
+    expect(await screen.findByText(/network down/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no longer exists/i)).not.toBeInTheDocument();
+  });
+
   it("says so when the link points at a list that is gone", async () => {
     renderPage("/lists?list=l-deleted");
 
