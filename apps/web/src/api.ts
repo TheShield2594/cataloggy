@@ -237,6 +237,19 @@ export type StremioSyncSummary = {
   skipped: number;
 };
 
+export type PlaySignal = {
+  id: string;
+  type: "movie" | "episode";
+  imdbId: string;
+  season: number | null;
+  episode: number | null;
+  resource: "stream" | "subtitles";
+  client: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  dueAt: string;
+};
+
 export type TrendingMeta = {
   id: string;
   type: MediaType;
@@ -692,6 +705,9 @@ export const api = {
   },
   stremioLibrarySync() {
     return request<StremioSyncSummary>("/stremio/library/sync", { method: "POST", timeoutMs: 60000 });
+  },
+  getStremioPlaySignals() {
+    return request<{ enabled: boolean; signals: PlaySignal[] }>("/stremio/play-signals");
   },
   refreshAllMetadata() {
     return request<{ refreshed: number; total: number }>("/metadata/refresh-all", { method: "POST", timeoutMs: 120000 });

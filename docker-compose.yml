@@ -95,8 +95,9 @@ services:
       TRAKT_POLL_INTERVAL_SEC: ${TRAKT_POLL_INTERVAL_SEC:-300}
       TRAKT_POLL_MAX_PAGES: ${TRAKT_POLL_MAX_PAGES:-20}
       TRAKT_WATCHLIST_MIRROR_DELETES: ${TRAKT_WATCHLIST_MIRROR_DELETES:-false}
-      STREMIO_POLL_INTERVAL_SEC: ${STREMIO_POLL_INTERVAL_SEC:-120}
+      STREMIO_POLL_INTERVAL_SEC: ${STREMIO_POLL_INTERVAL_SEC:-0}
       STREMIO_API_BASE: ${STREMIO_API_BASE:-https://api.strem.io}
+      STREMIO_PLAY_DETECTION: ${STREMIO_PLAY_DETECTION:-false}
       TMDB_API_KEY: ${TMDB_API_KEY}
       AI_REFRESH_INTERVAL_SEC: ${AI_REFRESH_INTERVAL_SEC:-86400}
       TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID}
@@ -141,6 +142,10 @@ services:
       # Public URL of the web service — used to build the "Configure" link
       # Stremio shows for this addon's manifest (redirects to /settings).
       CATALOGGY_WEB_PUBLIC: ${CATALOGGY_WEB_PUBLIC:-http://192.168.1.25:7002}
+      # Must match the api service's value — the addon observes the signals and
+      # the api decides what to do with them, so enabling it on only one side
+      # does nothing.
+      STREMIO_PLAY_DETECTION: ${STREMIO_PLAY_DETECTION:-false}
       SENTRY_DSN: ${SENTRY_DSN}
     ports:
       - "7001:7001"

@@ -56,6 +56,7 @@ model Profile {
   tags              Tag[]
   checkIn           CheckIn?
   games             Game[]
+  playSignals       PlaySignal[]
 }
 
 model Item {
@@ -217,6 +218,43 @@ model TraktToken {
 // never stored: it is exchanged for the authKey once and discarded.
 //
 // `email` is kept only so Settings can show which account is connected.
+// A title an addon-consuming client asked about in a way that means "the user
+// is about to watch this" — a `stream` or `subtitles` request against the addon.
+//
+// This is the only automatic watch signal the Stremio addon protocol exposes:
+// addons are never told what was watched, only asked for things. A signal is
+// therefore an *intent*, not a completion, and is held here until it either
+// earns promotion to a real watch (its runtime elapses, or the next episode
+// shows up) or is discarded as browsing. Nothing here is user-visible history —
+// only what survives becomes a WatchEvent.
+model PlaySignal {
+  id String @id @default(uuid()) @db.Uuid
+  // "movie:tt0111161" / "episode:tt0903747:2:7". An explicit key rather than a
+  // compound unique over the nullable season/episode columns: Postgres treats
+  // NULLs as distinct, so a compound unique would not actually stop a movie
+  // from opening two pending signals at once.
+  key      String
+  type     WatchEventType
+  imdbId   String
+  season   Int?
+  episode  Int?
+  // Which addon resource produced the signal, and the client that asked, kept
+  // so a self-hoster can see what their apps actually send before trusting it.
+  resource String
+  client   String?
+
+  firstSeenAt DateTime @default(now()) @db.Timestamptz(6)
+  lastSeenAt  DateTime @db.Timestamptz(6)
+  // When this becomes a watch if nothing contradicts it first.
+  dueAt       DateTime @db.Timestamptz(6)
+
+  profileId String  @db.Uuid
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, key])
+  @@index([dueAt])
+}
+
 model StremioAuth {
   id        String   @id @default("default")
   authKey   String

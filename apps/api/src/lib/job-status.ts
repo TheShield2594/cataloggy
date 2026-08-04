@@ -10,6 +10,7 @@ export type JobName =
   | "trakt-history-poll"
   | "trakt-watchlist-sync"
   | "stremio-library-sync"
+  | "stremio-play-signals"
   | "scrobble-cleanup"
   | "episode-notifications"
   | "ai-recommendations"

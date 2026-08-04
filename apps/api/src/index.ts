@@ -17,6 +17,7 @@ import { getAiRecommendations, isAiConfigured } from "./lib/ai.js";
 import { trendingCacheDeletePrefix } from "./lib/cache.js";
 import { pollTraktHistory, syncTraktWatchlist } from "./lib/trakt-client.js";
 import { isStremioConnected, syncStremioLibrary } from "./lib/stremio-library.js";
+import { isPlayDetectionEnabled, settleDuePlaySignals } from "./lib/play-signal.js";
 import { ensureDefaultWatchlist } from "./lib/watchlist.js";
 import { ensureDefaultCollection } from "./lib/collection.js";
 import { getDefaultProfileId } from "./lib/profile.js";
@@ -61,7 +62,12 @@ const TRAKT_POLL_INTERVAL_SEC = Number(process.env.TRAKT_POLL_INTERVAL_SEC ?? 30
 // reports the episode you are *on*, so episodes finished within a single
 // interval collapse into the latest one. Two minutes is well under any real
 // episode length.
-const STREMIO_POLL_INTERVAL_SEC = Number(process.env.STREMIO_POLL_INTERVAL_SEC ?? 120);
+// Off by default: with play detection covering every addon-consuming client,
+// the library poll is for people who want Stremio's own exact watched state
+// rather than an inference. The one-time import stays available either way.
+const STREMIO_POLL_INTERVAL_SEC = Number(process.env.STREMIO_POLL_INTERVAL_SEC ?? 0);
+
+const PLAY_SIGNAL_SETTLE_INTERVAL_MS = 60 * 1000;
 const AI_REFRESH_INTERVAL_SEC = Number(process.env.AI_REFRESH_INTERVAL_SEC ?? 86400);
 const NOTIFICATION_CHECK_INTERVAL_SEC = Number(process.env.NOTIFICATION_CHECK_INTERVAL_SEC ?? 3600);
 
@@ -300,6 +306,18 @@ const start = async () => {
     }, STREMIO_POLL_INTERVAL_SEC * 1000);
   } else {
     app.log.info("Scheduled Stremio library sync disabled because STREMIO_POLL_INTERVAL_SEC is set to 0");
+  }
+
+  // A pending play signal becomes a watch once its title's runtime has elapsed,
+  // so this only needs to run often enough to keep that promotion punctual.
+  if (isPlayDetectionEnabled()) {
+    setInterval(() => {
+      void settleDuePlaySignals(app.log)
+        .then(() => reportJobSuccess("stremio-play-signals"))
+        .catch((error) => {
+          reportBackgroundError(error, "Settling Stremio play signals failed", "stremio-play-signals");
+        });
+    }, PLAY_SIGNAL_SETTLE_INTERVAL_MS);
   }
 
   setInterval(() => {

@@ -1,3 +1,4 @@
+import { WatchEventType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import {
   connectStremio,
@@ -8,7 +9,14 @@ import {
   syncStremioLibrary,
   StremioApiError,
 } from "../lib/stremio-library.js";
-import { getDefaultProfileId } from "../lib/profile.js";
+import {
+  getPendingPlaySignals,
+  isPlayDetectionEnabled,
+  recordPlaySignal,
+  type PlaySignalResource,
+} from "../lib/play-signal.js";
+import { getDefaultProfileId, resolveProfile } from "../lib/profile.js";
+import { UUID_V4_PATTERN } from "../lib/types.js";
 
 // The connect route takes a password. Rate-limited like the other
 // credential-accepting routes (PIN verification, the Trakt OAuth pair) so this
@@ -90,6 +98,61 @@ const stremioLibraryRoutes: FastifyPluginAsync = async (app) => {
       request.log.error(error, "Stremio library sync failed");
       return reply.code(502).send({ error: "Stremio library sync failed" });
     }
+  });
+
+  // ─── Play signals ───
+  //
+  // Written only by the addon service, which is the only thing that sees these
+  // requests. The profile comes from the addon's own resolution (the installed
+  // URL), not from a header, so it is validated here rather than trusted.
+  app.post<{ Body: unknown }>("/stremio/play-signal", async (request, reply) => {
+    if (!isPlayDetectionEnabled()) return reply.code(202).send({ status: "disabled" });
+
+    const body = request.body as {
+      type?: unknown;
+      imdbId?: unknown;
+      seriesImdbId?: unknown;
+      season?: unknown;
+      episode?: unknown;
+      resource?: unknown;
+      profileId?: unknown;
+    } | null;
+
+    if (!Object.values(WatchEventType).includes(body?.type as WatchEventType)) {
+      return reply.code(400).send({ error: "type must be one of: movie, episode" });
+    }
+    if (typeof body?.imdbId !== "string" || !body.imdbId.trim()) {
+      return reply.code(400).send({ error: "imdbId is required" });
+    }
+    if (body.resource !== "stream" && body.resource !== "subtitles") {
+      return reply.code(400).send({ error: "resource must be one of: stream, subtitles" });
+    }
+
+    const profileId =
+      typeof body.profileId === "string" && UUID_V4_PATTERN.test(body.profileId)
+        ? body.profileId
+        : await getDefaultProfileId();
+
+    const result = await recordPlaySignal({
+      type: body.type as WatchEventType,
+      imdbId: body.imdbId.trim(),
+      seriesImdbId: typeof body.seriesImdbId === "string" ? body.seriesImdbId.trim() : null,
+      season: typeof body.season === "number" ? body.season : null,
+      episode: typeof body.episode === "number" ? body.episode : null,
+      resource: body.resource as PlaySignalResource,
+      client: request.headers["user-agent"] ?? null,
+      profileId,
+      log: request.log,
+    });
+
+    return reply.code(202).send(result);
+  });
+
+  // Diagnostics: what the addon has seen but not yet acted on, so a self-hoster
+  // can check what their clients actually send before trusting the inference.
+  app.get("/stremio/play-signals", { preHandler: resolveProfile }, async (request) => {
+    const signals = await getPendingPlaySignals(request.profileId as string);
+    return { enabled: isPlayDetectionEnabled(), signals };
   });
 };
 

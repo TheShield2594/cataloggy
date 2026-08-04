@@ -213,6 +213,7 @@ Cataloggy records what you've watched from whichever of these you set up — non
 
 | Source | How it reaches Cataloggy |
 | --- | --- |
+| **Any Stremio-add-on app** | Play detection — see below |
 | **Stremio** | Reads your Stremio account library directly — see below |
 | **Plex** | Webhook, as it happens |
 | **Jellyfin** | Webhook, as it happens |
@@ -221,6 +222,27 @@ Cataloggy records what you've watched from whichever of these you set up — non
 | **Trakt** | Optional — see [Trakt is optional](#trakt-is-optional) |
 | **Other trackers** | One-off CSV/JSON imports (Letterboxd, IMDb, Simkl) — see [Export / import your data](#export--import-your-data) |
 
+### Play detection (any app that supports Stremio add-ons)
+
+Stremio add-ons are strictly read-only: a client *asks* an add-on for catalogs, metadata, streams and subtitles, and is never able to report back what was watched. There is no callback and no webhook in the protocol. That's why marking watched from an add-on app has always meant picking the fake "Cataloggy: Mark Watched" subtitle by hand.
+
+But the asking itself leaks intent. Two requests mean "the user is about to watch this":
+
+- **`stream`** — they opened a title's stream list
+- **`subtitles`** — a player actually loaded
+
+Cataloggy's add-on now declares the `stream` resource purely to receive that request (it always answers with an empty list, so nothing extra shows up in your client) and forwards both signals to the API. This is the only automatic mechanism available for apps that keep their library entirely to themselves — **Vidi, Omni, Nuvio** and other add-on-consuming clients that never sync to a Stremio account.
+
+Because it infers completion rather than observing it, it's **off by default**. Set `STREMIO_PLAY_DETECTION=true` on **both** the `api` and `addon` services — the add-on observes, the API decides.
+
+How a signal becomes a watch:
+
+1. A signal opens a **pending play**, due once 80% of the title's runtime has passed (the same threshold a real scrobble uses).
+2. It's promoted to a watch when that time elapses, **or** immediately when the next episode of the same series starts — moving on is the strongest completion evidence the protocol can offer.
+3. It's discarded if a different title is opened within two minutes. That's browsing, not watching.
+
+Nothing pending is user-visible history; only what survives becomes a watch event. **Settings → Play Detection** lists what's pending, which resource produced each signal, and which client sent it — so you can confirm your apps actually signal, and see what's about to be counted, before trusting it.
+
 ### Stremio watched sync
 
 Stremio's add-on protocol is read-only: an add-on serves catalogs and metadata, and is never told what you watched. But every Stremio client signed in to a **Stremio account** syncs its library — including watched state — to Stremio's servers, and Cataloggy can read that directly.
@@ -228,8 +250,8 @@ Stremio's add-on protocol is read-only: an add-on serves catalogs and metadata, 
 Connect the account under **Settings → Stremio Watched Sync**. One connection covers every client on that account: desktop, mobile, Android TV, the web app, and third-party clients that sign in with a Stremio account. There's nothing to install per device.
 
 - Your password is exchanged for an access key once and **never stored** — only the key is.
-- Connecting starts tracking from that moment. Use **Import watch history** once to pull in what the account already has marked as watched, dated from Stremio's own watch history rather than from today.
-- The scheduled check costs a single small request when nothing has been watched, which is why it defaults to every 120 seconds (`STREMIO_POLL_INTERVAL_SEC`; set to `0` to disable and sync only on demand).
+- Connecting starts tracking from that moment. Use **Import watch history** once to pull in what the account already has marked as watched, dated from Stremio's own watch history rather than from today. Play detection can't do this — it only ever sees things going forward — so this import is the way to bring existing history across without routing through Trakt.
+- The scheduled poll is **off by default** (`STREMIO_POLL_INTERVAL_SEC=0`), since play detection already covers these clients. Turn it on (120 is sensible) if you'd rather have Stremio's own exact watched state than an inference; a check costs a single small request when nothing has been watched.
 - Only IMDb-keyed content is matched. Items from add-ons using their own ID schemes, and live-TV entries, are skipped rather than guessed at.
 - Stremio reports the episode you're *on*, not a full play log, so episodes finished within a single poll interval collapse into the most recent one. At the default interval that needs you to clear an episode in under two minutes.
 - Guest mode has no synced library, so there's nothing to read — the account is what makes this work.
