@@ -24,8 +24,13 @@ class FakeReply {
   }
 }
 
-const makeRequest = (profileId?: string): FastifyRequest =>
-  ({ headers: profileId ? { "x-profile-id": profileId } : {} }) as unknown as FastifyRequest;
+const makeRequest = (profileId?: string, profileToken?: string): FastifyRequest =>
+  ({
+    headers: {
+      ...(profileId ? { "x-profile-id": profileId } : {}),
+      ...(profileToken ? { "x-profile-token": profileToken } : {}),
+    },
+  }) as unknown as FastifyRequest;
 
 const loadProfileLib = async () => import("./profile.js");
 
@@ -145,5 +150,54 @@ describe("resolveProfile caching", () => {
 
     expect(reply.statusCode).toBe(400);
     expect(prismaMock.profile.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe("isProfileLocked", () => {
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    const { profileCacheClear } = await import("./cache.js");
+    profileCacheClear();
+    // `clearAllMocks` clears calls but not implementations, so state the
+    // starting point rather than depending on the mock factory being
+    // re-evaluated — one test below sets this to true.
+    const { verifyProfileToken } = await import("./profile-token.js");
+    vi.mocked(verifyProfileToken).mockReturnValue(false);
+  });
+
+  it("leaves a profile without a PIN open", async () => {
+    prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, pinHash: null });
+    const { isProfileLocked } = await loadProfileLib();
+
+    expect(await isProfileLocked(makeRequest(), PROFILE_ID)).toBe(false);
+  });
+
+  it("locks a PIN-protected profile against a request carrying no profile token", async () => {
+    prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, pinHash: "scrypt$..." });
+    const { isProfileLocked } = await loadProfileLib();
+
+    expect(await isProfileLocked(makeRequest(), PROFILE_ID)).toBe(true);
+  });
+
+  it("opens it again for a request whose profile token verifies", async () => {
+    prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, pinHash: "scrypt$..." });
+    const { verifyProfileToken } = await import("./profile-token.js");
+    vi.mocked(verifyProfileToken).mockReturnValue(true);
+    const { isProfileLocked } = await loadProfileLib();
+
+    const request = makeRequest(PROFILE_ID, "signed-profile-token");
+    expect(await isProfileLocked(request, PROFILE_ID)).toBe(false);
+    // The token actually off this request, checked against the profile being
+    // opened — reading the wrong header, or verifying against some other id,
+    // would still have returned false above.
+    expect(verifyProfileToken).toHaveBeenCalledWith("signed-profile-token", PROFILE_ID);
+  });
+
+  it("treats an unknown profile as unlocked, leaving the 404 to the caller", async () => {
+    prismaMock.profile.findUnique.mockResolvedValue(null);
+    const { isProfileLocked } = await loadProfileLib();
+
+    expect(await isProfileLocked(makeRequest(), OTHER_PROFILE_ID)).toBe(false);
   });
 });

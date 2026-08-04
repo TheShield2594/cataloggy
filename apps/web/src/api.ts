@@ -505,6 +505,13 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
     if (timedOut) {
       throw new Error(`Request timed out – is the API server running at ${runtimeConfig.getApiBase()}?`, { cause: err });
     }
+    // The device has no network at all, so the server-misconfiguration message
+    // below would send the user to debug an install that is working fine. Only
+    // `onLine === false` is trustworthy here: `true` covers "on Wi-Fi that
+    // can't see the API", which really is the case that message is for.
+    if (navigator.onLine === false) {
+      throw new Error("You're offline – this needs a connection. Try again once you're back online.", { cause: err });
+    }
     throw new Error(`Network error – cannot reach ${runtimeConfig.getApiBase()}. Check that the API server is running and the URL is correct.`, { cause: err });
   } finally {
     // Clear stale cache entries for attempted mutations even if the request

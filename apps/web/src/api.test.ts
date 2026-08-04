@@ -174,6 +174,18 @@ describe("request error reporting", () => {
     await expect(api.getLists()).rejects.toThrow(/cannot reach/);
   });
 
+  it("says the device is offline instead of blaming the server when there is no network", async () => {
+    const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    try {
+      await expect(api.getLists()).rejects.toThrow(/You're offline/);
+      await expect(api.getLists()).rejects.not.toThrow(/API server is running/);
+    } finally {
+      onLine.mockRestore();
+    }
+  });
+
   it("rethrows the caller's AbortError untouched when a request is cancelled on purpose", async () => {
     const controller = new AbortController();
     const abortError = new DOMException("The operation was aborted.", "AbortError");

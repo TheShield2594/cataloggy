@@ -21,11 +21,26 @@ vi.mock("../lib/stremio-helpers.js", () => ({
   getCustomListMetas: async () => [{ id: "tt0000002" }],
 }));
 
-vi.mock("../lib/profile.js", () => ({
+// Profiles the fake `isProfileLocked` treats as PIN-protected. A request clears
+// the lock by carrying that profile's access token, the way the real one does.
+const { lockedProfileIds } = vi.hoisted(() => ({ lockedProfileIds: new Set<string>() }));
+const tokenFor = (profileId: string) => `verified-${profileId}`;
+
+// Only the profile *resolution* is faked; PROFILE_LOCKED_RESPONSE stays the
+// real constant, so a change to the error code these routes send has to be a
+// deliberate one rather than something a duplicated literal here hides.
+vi.mock("../lib/profile.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/profile.js")>()),
   resolveProfile: async (request: { profileId?: string }) => {
     request.profileId = PROFILE_ID;
   },
   getDefaultProfileId: async () => PROFILE_ID,
+  isProfileLocked: async (
+    request: { headers: Record<string, string | undefined> },
+    profileId: string
+  ) =>
+    lockedProfileIds.has(profileId) &&
+    request.headers["x-profile-token"] !== tokenFor(profileId),
 }));
 
 vi.mock("../lib/ai.js", () => ({
@@ -37,6 +52,7 @@ vi.mock("../lib/tmdb-client.js", () => ({ getTmdb: async () => ({}) }));
 
 const resetMocks = () => {
   vi.clearAllMocks();
+  lockedProfileIds.clear();
   prismaMock.list.findMany.mockResolvedValue([]);
   prismaMock.list.findFirst.mockResolvedValue(null);
   prismaMock.kV.findUnique.mockResolvedValue(null);
@@ -183,6 +199,164 @@ describe("stremio routes — addon config is per profile", () => {
   });
 });
 
+describe("stremio routes — the legacy list route is profile-scoped", () => {
+  beforeEach(() => {
+    resetMocks();
+  });
+
+  it("looks the list up under the default profile when no profileId is given", async () => {
+    const app = await buildApp();
+    prismaMock.list.findFirst.mockResolvedValue({ id: OWN_LIST_ID, kind: "custom" });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/stremio/list/${OWN_LIST_ID}?type=movie`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(prismaMock.list.findFirst).toHaveBeenCalledWith({
+      where: { id: OWN_LIST_ID, profileId: PROFILE_ID },
+      select: { id: true, kind: true },
+    });
+    await app.close();
+  });
+
+  it("looks the list up under the profile named in the query string", async () => {
+    const app = await buildApp();
+    prismaMock.profile.findUnique.mockResolvedValue({ id: OTHER_PROFILE_ID });
+    prismaMock.list.findFirst.mockResolvedValue({ id: OTHER_LIST_ID, kind: "custom" });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/stremio/list/${OTHER_LIST_ID}?type=movie&profileId=${OTHER_PROFILE_ID}`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(prismaMock.list.findFirst).toHaveBeenCalledWith({
+      where: { id: OTHER_LIST_ID, profileId: OTHER_PROFILE_ID },
+      select: { id: true, kind: true },
+    });
+    await app.close();
+  });
+
+  it("404s a list belonging to a profile other than the resolved one", async () => {
+    const app = await buildApp();
+    // Out of scope, so the scoped lookup misses — the same answer a genuinely
+    // nonexistent list gets, which is what keeps the UUID from being an oracle.
+    prismaMock.list.findFirst.mockResolvedValue(null);
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/stremio/list/${OTHER_LIST_ID}?type=movie`,
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(prismaMock.list.findUnique).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe("stremio routes — ?profileId names a profile, it does not unlock one", () => {
+  beforeEach(() => {
+    resetMocks();
+  });
+
+  it("401s a catalog naming a PIN-protected profile", async () => {
+    const app = await buildApp();
+    lockedProfileIds.add(OTHER_PROFILE_ID);
+    prismaMock.profile.findUnique.mockResolvedValue({ id: OTHER_PROFILE_ID });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/watchlist?type=movie&profileId=${OTHER_PROFILE_ID}`,
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json().code).toBe("profile_verification_required");
+    await app.close();
+  });
+
+  it("serves that same catalog once the PIN has been verified", async () => {
+    const app = await buildApp();
+    lockedProfileIds.add(OTHER_PROFILE_ID);
+    prismaMock.profile.findUnique.mockResolvedValue({ id: OTHER_PROFILE_ID });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/watchlist?type=movie&profileId=${OTHER_PROFILE_ID}`,
+      headers: { "x-profile-token": tokenFor(OTHER_PROFILE_ID) },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().metas).toEqual([{ id: "tt0000001" }]);
+    await app.close();
+  });
+
+  it("does not accept another profile's token as verification for this one", async () => {
+    const app = await buildApp();
+    lockedProfileIds.add(OTHER_PROFILE_ID);
+    prismaMock.profile.findUnique.mockResolvedValue({ id: OTHER_PROFILE_ID });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/watchlist?type=movie&profileId=${OTHER_PROFILE_ID}`,
+      // A token minted for the profile the caller *can* open, aimed at one it
+      // cannot — the check has to be bound to the profile being served.
+      headers: { "x-profile-token": tokenFor(PROFILE_ID) },
+    });
+
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("401s the default-profile fallback when that profile is locked", async () => {
+    const app = await buildApp();
+    // No ?profileId at all: omitting the selector must not be a way around the
+    // PIN either, since it resolves to a real profile just the same.
+    lockedProfileIds.add(PROFILE_ID);
+
+    const response = await app.inject({ method: "GET", url: "/continue" });
+
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("401s the legacy list route for a locked profile before it looks the list up", async () => {
+    const app = await buildApp();
+    lockedProfileIds.add(PROFILE_ID);
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/stremio/list/${OWN_LIST_ID}?type=movie`,
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(prismaMock.list.findFirst).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("leaves the secret addon URL alone, which is the credential Stremio can actually send", async () => {
+    const app = await buildApp();
+    lockedProfileIds.add(PROFILE_ID);
+    const { deriveStremioSecret } = await import("../lib/stremio-secret.js");
+    const originalToken = process.env.API_TOKEN;
+    process.env.API_TOKEN = "test-api-token";
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: `/addon/stremio/${deriveStremioSecret(PROFILE_ID)}/manifest.json`,
+      });
+
+      expect(response.statusCode).toBe(200);
+    } finally {
+      if (originalToken === undefined) delete process.env.API_TOKEN;
+      else process.env.API_TOKEN = originalToken;
+    }
+    await app.close();
+  });
+});
+
 describe("stremio routes — the addon URL is gated by a per-profile secret", () => {
   const originalToken = process.env.API_TOKEN;
 
@@ -280,6 +454,12 @@ describe("stremio routes — the addon URL is gated by a per-profile secret", ()
     const app = await buildApp();
     const secret = await secretFor(PROFILE_ID);
 
+    prismaMock.kV.findUnique.mockResolvedValue({
+      value: JSON.stringify({ enabledCatalogs: [`list:${OWN_LIST_ID}`, `list:${OTHER_LIST_ID}`] }),
+    });
+    // `getAddonConfig` drops list entries the profile doesn't own, so both ids
+    // have to look owned for the enabled-catalog check to be the thing under test.
+    prismaMock.list.findMany.mockResolvedValue([{ id: OWN_LIST_ID }, { id: OTHER_LIST_ID }]);
     prismaMock.list.findFirst.mockResolvedValue({ id: OWN_LIST_ID });
     const own = await app.inject({
       method: "GET",
@@ -298,6 +478,25 @@ describe("stremio routes — the addon URL is gated by a per-profile secret", ()
       url: `/addon/stremio/${secret}/catalog/movie/list:${OTHER_LIST_ID}.json`,
     });
     expect(foreign.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("404s a list catalog the profile owns but has not enabled", async () => {
+    const app = await buildApp();
+    const secret = await secretFor(PROFILE_ID);
+
+    // No config row: the profile falls back to the default catalogs, which
+    // never include a list. The list is the profile's own — enablement, not
+    // ownership, is what is missing.
+    prismaMock.list.findFirst.mockResolvedValue({ id: OWN_LIST_ID });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/addon/stremio/${secret}/catalog/movie/list:${OWN_LIST_ID}.json`,
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(prismaMock.list.findFirst).not.toHaveBeenCalled();
     await app.close();
   });
 

@@ -4,6 +4,7 @@ import { Check, ChevronDown, ChevronUp, Film, Filter, Heart, MonitorPlay, Plus, 
 import { api, CatalogList, SearchResult, WatchProvider } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useToast } from "../hooks/useToast";
+import { mergeByRelevance } from "../utils/mergeSearchResults";
 import {
   useSearchFilters,
   FilterType,
@@ -13,44 +14,6 @@ import {
 } from "../hooks/useSearchFilters";
 
 /* ─── Helpers ─── */
-
-// How closely a result's title matches the raw query, as a coarse relevance tier.
-// Exact hit > prefix > word-start > substring > no title hit. Used to rank the
-// combined movie+series list so a strong match of either type floats to the top.
-function titleMatchScore(name: string, query: string): number {
-  const n = name.trim().toLowerCase();
-  const q = query.trim().toLowerCase();
-  if (!q) return 0;
-  if (n === q) return 4;
-  if (n.startsWith(q)) return 3;
-  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  if (new RegExp(`\\b${escaped}`).test(n)) return 2;
-  if (n.includes(q)) return 1;
-  return 0;
-}
-
-// The `all` search fires movie and series queries separately, each already returned
-// in the provider's relevance order. A naive one-for-one interleave lets a weak series
-// match sit above a strong movie match. Instead, rank by title-match tier first, then by
-// each result's original per-type position, falling back to movies-before-series so
-// equally-good matches still alternate the way the old interleave did.
-function mergeByRelevance(
-  movies: SearchResult[],
-  series: SearchResult[],
-  query: string,
-): SearchResult[] {
-  const tagged = [
-    ...movies.map((r, rank) => ({ r, rank, order: 0 })),
-    ...series.map((r, rank) => ({ r, rank, order: 1 })),
-  ];
-  tagged.sort((a, b) => {
-    const scoreDiff = titleMatchScore(b.r.name, query) - titleMatchScore(a.r.name, query);
-    if (scoreDiff !== 0) return scoreDiff;
-    if (a.rank !== b.rank) return a.rank - b.rank;
-    return a.order - b.order;
-  });
-  return tagged.map((t) => t.r);
-}
 
 function applyFiltersAndSort(
   results: SearchResult[],

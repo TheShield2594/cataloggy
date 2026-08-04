@@ -77,7 +77,7 @@ type DiscoveryItem = {
   description?: string;
 };
 
-function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
+export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
   item: DiscoveryItem;
   badge?: React.ReactNode;
   reason?: string;
@@ -88,14 +88,22 @@ function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
 }) {
   return (
     <div
-      role="button"
-      tabIndex={0}
-      className={`group cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset ${fill ? "w-full" : "flex-none"}`}
+      className={`group relative rounded-xl ${fill ? "w-full" : "flex-none"}`}
       style={fill ? undefined : { width: "11rem" }}
-      onClick={() => onSelect?.(item)}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect?.(item); } }}
-      aria-label={`View details for ${item.name}`}
     >
+      {/* A real button rather than a `role="button"` div: it inherits Enter and
+          Space, the disabled/active semantics, and the announcement assistive
+          tech expects, instead of re-implementing the first and forgoing the
+          rest. It stretches over the whole card because the card is one action
+          — there is nothing else here to overlap with. */}
+      {onSelect && (
+        <button
+          type="button"
+          className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+          onClick={() => onSelect(item)}
+          aria-label={`View details for ${item.name}`}
+        />
+      )}
       <div
         className="relative aspect-poster overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:scale-[1.03] group-hover:shadow-card-hover"
         style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
@@ -133,13 +141,27 @@ function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
 
 /* ─── Continue Watching card (used for every item after the hero) ─── */
 
+/**
+ * The IMDb id the detail panel should open for a history row.
+ *
+ * An episode row carries the episode's own id in `imdbId` and its series' in
+ * `seriesImdbId`. The panel is about the series — opening it on the episode id
+ * looks up a title that isn't there. `HistoryPage` has always made this
+ * distinction; the dashboard's Recently Watched carousel did not.
+ */
+export function historyItemImdbId(
+  event: Pick<WatchEvent, "type" | "imdbId" | "seriesImdbId">
+): string {
+  return event.type === "episode" ? (event.seriesImdbId ?? event.imdbId) : event.imdbId;
+}
+
 export function computeProgressPct(s: SeriesProgress): number | null {
   return typeof s.watchedEpisodes === "number" && s.totalEpisodes && s.totalEpisodes > 0
     ? Math.min(Math.max((s.watchedEpisodes / s.totalEpisodes) * 100, 0), 100)
     : null;
 }
 
-function ContinueWatchingCard({
+export function ContinueWatchingCard({
   s,
   eager,
   isMarking,
@@ -156,54 +178,60 @@ function ContinueWatchingCard({
 }) {
   const progressPct = computeProgressPct(s);
   return (
-    <div className="flex-none group" style={{ width: "13rem" }}>
+    // One card, two controls — grouped and labelled so a screen reader announces
+    // them as belonging to this series rather than as loose buttons in a row.
+    <div role="group" aria-label={s.name} className="flex-none group" style={{ width: "13rem" }}>
       <div
         className="relative aspect-poster overflow-hidden rounded-2xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
         style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
       >
-        <Poster src={s.poster} alt={s.name} className="h-full w-full" eager={eager} sizes="208px" />
-        <button
-          type="button"
-          className="absolute inset-0 cursor-pointer"
-          aria-label={`View details for ${s.name}`}
-          onClick={onSelect}
-        />
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/80 to-transparent px-3 pb-3 pt-16">
-          {progressPct !== null && (
-            <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-white/20">
-              <div className="h-full rounded-full bg-claw-500 transition-all duration-500" style={{ width: `${progressPct}%` }} />
-            </div>
-          )}
-          <p className="text-xs text-white/70">
-            S{s.lastSeason}:E{s.lastEpisode}
-            {s.totalSeasons ? ` · ${s.totalSeasons} seasons` : ""}
-          </p>
+        <Poster src={s.poster} alt={s.name} className="absolute inset-0 h-full w-full" eager={eager} sizes="208px" />
+        {/* The poster is a backdrop and the two controls are siblings in a
+            column above it: "view details" takes the space the overlay doesn't,
+            "mark next" lives inside the overlay. Neither covers the other, so
+            which one a click lands on is a matter of layout rather than z-order. */}
+        <div className="relative flex h-full flex-col">
           <button
             type="button"
-            disabled={isMarking || isDone}
-            onClick={onMarkNext}
-            aria-label={isMarking ? "Marking" : isDone ? "Marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
-            className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-claw-300 ${
-              isMarking ? "bg-white/10 text-white/50" : isDone ? "bg-emerald-500/20 text-emerald-400" : "bg-white/15 text-white backdrop-blur-sm hover:bg-white/25"
-            }`}
-          >
-            {isDone ? (
-              <><Check className="h-3.5 w-3.5" /> Marked</>
-            ) : isMarking ? (
-              <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: "rgba(255,255,255,0.4)", borderTopColor: "transparent" }} />
-            ) : (
-              <><ChevronRight className="h-3.5 w-3.5" /> Mark S{s.nextSeason}:E{s.nextEpisode}</>
+            className="flex-1 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-claw-300"
+            aria-label={`View details for ${s.name}`}
+            onClick={onSelect}
+          />
+          <div className="bg-gradient-to-t from-black via-black/80 to-transparent px-3 pb-3 pt-16">
+            {progressPct !== null && (
+              <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-white/20">
+                <div className="h-full rounded-full bg-claw-500 transition-all duration-500" style={{ width: `${progressPct}%` }} />
+              </div>
             )}
-          </button>
+            <p className="text-xs text-white/70">
+              S{s.lastSeason}:E{s.lastEpisode}
+              {s.totalSeasons ? ` · ${s.totalSeasons} seasons` : ""}
+            </p>
+            <button
+              type="button"
+              disabled={isMarking || isDone}
+              onClick={onMarkNext}
+              aria-label={isMarking ? "Marking" : isDone ? "Marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
+              className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-claw-300 ${
+                isMarking ? "bg-white/10 text-white/50" : isDone ? "bg-emerald-500/20 text-emerald-400" : "bg-white/15 text-white backdrop-blur-sm hover:bg-white/25"
+              }`}
+            >
+              {isDone ? (
+                <><Check className="h-3.5 w-3.5" /> Marked</>
+              ) : isMarking ? (
+                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: "rgba(255,255,255,0.4)", borderTopColor: "transparent" }} />
+              ) : (
+                <><ChevronRight className="h-3.5 w-3.5" /> Mark S{s.nextSeason}:E{s.nextEpisode}</>
+              )}
+            </button>
+          </div>
         </div>
       </div>
-      <button
-        type="button"
-        className="mt-2.5 block truncate text-sm font-semibold text-[var(--text)] transition-colors text-left w-full hover:text-claw-text"
-        onClick={onSelect}
-      >
+      {/* Plain text, not a third control: it opened the same panel the poster
+          already opens, which cost a keyboard user an extra stop per card. */}
+      <p className="mt-2.5 truncate text-sm font-semibold text-[var(--text)] transition-colors group-hover:text-claw-text">
         {s.name}
-      </button>
+      </p>
       {progressPct !== null && (
         <p className="text-2xs" style={{ color: "var(--text-dim)" }}>
           {s.watchedEpisodes} of {s.totalEpisodes} episodes
@@ -1318,14 +1346,17 @@ export function DashboardPage() {
             {history.map((event) => (
               <div
                 key={event.id}
-                role="button"
-                tabIndex={0}
-                className="flex-none group cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+                className="flex-none group relative rounded-xl"
                 style={{ width: "11rem" }}
-                onClick={() => setSelectedItem(toSearchResult(event.imdbId, event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster }))}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedItem(toSearchResult(event.imdbId, event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster })); } }}
-                aria-label={`View details for ${event.name}`}
               >
+                {/* Same treatment as DiscoveryCard: one real button covering a
+                    card that has exactly one action. */}
+                <button
+                  type="button"
+                  className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+                  onClick={() => setSelectedItem(toSearchResult(historyItemImdbId(event), event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster }))}
+                  aria-label={`View details for ${event.name}`}
+                />
                 <div
                   className="relative aspect-poster overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:scale-[1.03] group-hover:shadow-card-hover"
                   style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
