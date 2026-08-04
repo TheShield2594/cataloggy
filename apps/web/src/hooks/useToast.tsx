@@ -51,14 +51,23 @@ function ToastContainer({
   toasts: Toast[];
   onDismiss: (id: number) => void;
   onExited: (id: number) => void;
-  onPause: () => void;
-  onResume: () => void;
+  onPause: (reason: PauseReason) => void;
+  onResume: (reason: PauseReason) => void;
 }) {
   const visible = toasts.slice(-MAX_VISIBLE_TOASTS);
   const hiddenCount = toasts.length - visible.length;
+  const stackRef = useRef<HTMLDivElement>(null);
+
+  // React's onFocus/onBlur are focusin/focusout, so they also fire when focus
+  // merely moves from one button in the stack to another — Undo to Dismiss, say.
+  // That is not focus leaving, and treating it as such would restart the timers
+  // under a keyboard user mid-traversal.
+  const staysWithinStack = (event: React.FocusEvent<HTMLDivElement>) =>
+    event.relatedTarget instanceof Node && stackRef.current?.contains(event.relatedTarget) === true;
 
   return (
     <div
+      ref={stackRef}
       role="status"
       aria-live="polite"
       aria-atomic="true"
@@ -67,10 +76,10 @@ function ToastContainer({
       // clock on every toast in it. Reaching for Undo or the close button was
       // otherwise a race against a timer that could pull the button out from
       // under the click, and a long error message couldn't be re-read at all.
-      onMouseEnter={onPause}
-      onMouseLeave={onResume}
-      onFocus={onPause}
-      onBlur={onResume}
+      onMouseEnter={() => onPause("hover")}
+      onMouseLeave={() => onResume("hover")}
+      onFocus={() => onPause("focus")}
+      onBlur={(event) => { if (!staysWithinStack(event)) onResume("focus"); }}
     >
       {hiddenCount > 0 && (
         <span className="self-end text-xs font-medium" style={{ color: "var(--text-mute)" }}>
@@ -106,7 +115,15 @@ function ToastContainer({
           {toast.action && (
             <button
               type="button"
+              // `pointer-events-none` on the toast stops a second *click*, but a
+              // button reached by keyboard is still focused and still fires on
+              // Enter — so an Undo activated twice inside the exit animation
+              // would run its action twice. Disabled closes that, and the guard
+              // closes the gap between the click and the re-render that
+              // disables the button.
+              disabled={toast.exiting}
               onClick={() => {
+                if (toast.exiting) return;
                 toast.action?.onAction();
                 onDismiss(toast.id);
               }}
@@ -118,6 +135,7 @@ function ToastContainer({
           )}
           <button
             type="button"
+            disabled={toast.exiting}
             onClick={() => onDismiss(toast.id)}
             aria-label="Dismiss notification"
             className="ml-1 flex-none rounded-md p-1 hover:bg-[var(--surface-strong)]"
@@ -142,11 +160,17 @@ type ToastTimer = {
   startedAt: number;
 };
 
+// Hover and focus hold the timers independently: clicking Undo puts focus in a
+// stack the pointer is already over, and the blur that follows must not restart
+// a countdown the pointer is still holding. Tracked as a set of reasons so the
+// timers resume only when the last one lets go.
+type PauseReason = "hover" | "focus";
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timers = useRef(new Map<number, ToastTimer>());
   const exitTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
-  const isPaused = useRef(false);
+  const pauseReasons = useRef(new Set<PauseReason>());
 
   const clearTimer = useCallback((id: number) => {
     const timer = timers.current.get(id);
@@ -182,15 +206,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     // A toast raised while the stack is already hovered starts out paused —
     // otherwise it would be the one toast the hover doesn't hold still.
     timers.current.set(id, {
-      handle: isPaused.current ? null : setTimeout(() => dismissToast(id), duration),
+      handle: pauseReasons.current.size > 0 ? null : setTimeout(() => dismissToast(id), duration),
       remaining: duration,
       startedAt: Date.now(),
     });
   }, [dismissToast]);
 
-  const pauseTimers = useCallback(() => {
-    if (isPaused.current) return;
-    isPaused.current = true;
+  const pauseTimers = useCallback((reason: PauseReason) => {
+    // Only the transition from "nothing holding" to "something holding" stops
+    // the clock; a second reason arriving on top changes nothing.
+    const wasRunning = pauseReasons.current.size === 0;
+    pauseReasons.current.add(reason);
+    if (!wasRunning) return;
     const now = Date.now();
     timers.current.forEach((timer) => {
       if (timer.handle == null) return;
@@ -200,9 +227,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const resumeTimers = useCallback(() => {
-    if (!isPaused.current) return;
-    isPaused.current = false;
+  const resumeTimers = useCallback((reason: PauseReason) => {
+    if (!pauseReasons.current.delete(reason)) return;
+    if (pauseReasons.current.size > 0) return;
     const now = Date.now();
     timers.current.forEach((timer, id) => {
       if (timer.handle != null) return;
@@ -217,7 +244,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   // hold still, so drop the pause rather than let it outlive its cause and
   // freeze the next toast on screen indefinitely.
   useEffect(() => {
-    if (toasts.length === 0) isPaused.current = false;
+    if (toasts.length === 0) pauseReasons.current.clear();
   }, [toasts.length]);
 
   useEffect(() => {

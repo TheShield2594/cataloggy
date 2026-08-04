@@ -87,6 +87,58 @@ describe("ToastProvider", () => {
     expect(screen.queryByText("Removed Alien")).not.toBeInTheDocument();
   });
 
+  it("does not run the action twice when Undo is activated by keyboard mid-exit", () => {
+    const onAction = vi.fn();
+    renderToasts();
+    act(() => show("Removed Alien", "info", { action: { label: "Undo", onAction } }));
+
+    const undo = screen.getByRole("button", { name: "Undo" });
+    // The toast is `pointer-events-none` while fading, which stops a second
+    // click but not a second Enter on a button the keyboard still holds focus on.
+    fireEvent.click(undo);
+    fireEvent.click(undo);
+
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(undo).toBeDisabled();
+  });
+
+  it("keeps holding the timer when focus leaves but the pointer has not", () => {
+    renderToasts();
+    act(() => show("Saved"));
+
+    // Clicking Undo or Dismiss focuses a button inside a stack the pointer is
+    // already over; the blur that follows must not restart a countdown the
+    // pointer is still holding.
+    fireEvent.mouseEnter(stack());
+    fireEvent.focus(screen.getByRole("button", { name: "Dismiss notification" }));
+    fireEvent.blur(screen.getByRole("button", { name: "Dismiss notification" }));
+
+    advance(60_000);
+    expect(screen.getByText("Saved")).toBeInTheDocument();
+
+    // Only the pointer leaving releases it.
+    fireEvent.mouseLeave(stack());
+    advance(3000);
+    finishExit();
+    expect(screen.queryByText("Saved")).not.toBeInTheDocument();
+  });
+
+  it("ignores focus moving between buttons within the stack", () => {
+    renderToasts();
+    act(() => show("Removed Alien", "info", { action: { label: "Undo", onAction: () => {} } }));
+
+    const undo = screen.getByRole("button", { name: "Undo" });
+    const dismiss = screen.getByRole("button", { name: "Dismiss notification" });
+
+    fireEvent.focus(undo);
+    // Tabbing Undo → Dismiss is not focus leaving the stack.
+    fireEvent.blur(undo, { relatedTarget: dismiss });
+    fireEvent.focus(dismiss);
+
+    advance(60_000);
+    expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+  });
+
   it("gives an error long enough to read the reason it carries", () => {
     renderToasts();
     act(() => show('Created "Watchlist", but couldn\'t add "Alien" (TMDB timed out)', "error"));

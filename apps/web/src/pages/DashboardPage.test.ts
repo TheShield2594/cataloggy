@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SeriesProgress } from "../api";
-import { computeProgressPct, msUntilNextBoundary, timeOfDayGreeting } from "./DashboardPage";
+import { computeProgressPct, msUntilNextBoundary, showsSameHeader, timeOfDayGreeting } from "./DashboardPage";
 
 const series = (overrides: Partial<SeriesProgress> = {}): SeriesProgress => ({
   imdbId: "tt0903747",
@@ -60,6 +60,30 @@ describe("timeOfDayGreeting", () => {
     expect(timeOfDayGreeting(at(12))).toBe("Good afternoon");
     expect(timeOfDayGreeting(at(17, 59))).toBe("Good afternoon");
     expect(timeOfDayGreeting(at(18))).toBe("Good evening");
+  });
+});
+
+// Guards the correction the clock effect makes on mount: the effect schedules
+// from a Date read after the first render, and if the two straddle a cutoff the
+// header would otherwise show the pre-cutoff greeting until the *next* one —
+// hours, not milliseconds.
+describe("showsSameHeader", () => {
+  const on = (day: number, hour: number, minute = 0) => new Date(2026, 6, day, hour, minute, 0, 0);
+
+  it("treats instants within the same greeting and day as identical", () => {
+    expect(showsSameHeader(on(15, 14), on(15, 14, 59))).toBe(true);
+    expect(showsSameHeader(on(15, 12), on(15, 17, 59))).toBe(true);
+  });
+
+  it("spots a greeting cutoff crossed between the render and the effect", () => {
+    expect(showsSameHeader(on(15, 11, 59), on(15, 12))).toBe(false);
+    expect(showsSameHeader(on(15, 17, 59), on(15, 18))).toBe(false);
+  });
+
+  it("spots a date rollover the greeting alone would miss", () => {
+    // Same greeting on both sides — only the date moved.
+    expect(timeOfDayGreeting(on(15, 14))).toBe(timeOfDayGreeting(on(16, 14)));
+    expect(showsSameHeader(on(15, 14), on(16, 14))).toBe(false);
   });
 });
 

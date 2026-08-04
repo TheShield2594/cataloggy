@@ -496,6 +496,13 @@ export function msUntilNextBoundary(now: Date): number {
  * saying "Good evening" under yesterday's date. Waking at the boundaries costs
  * four re-renders a day rather than a poll running all night.
  */
+// Whether two instants would render the header identically. Returning the
+// previous Date when they would lets React bail out of the re-render, so the
+// common case — the effect running microseconds after the first render — costs
+// nothing.
+export const showsSameHeader = (a: Date, b: Date) =>
+  timeOfDayGreeting(a) === timeOfDayGreeting(b) && a.toDateString() === b.toDateString();
+
 function useClockBoundary(): Date {
   const [now, setNow] = useState(() => new Date());
 
@@ -520,7 +527,13 @@ function useClockBoundary(): Date {
       schedule(updated);
     };
 
-    schedule(new Date());
+    // Schedule from the same value the header is showing. The clock can cross a
+    // cutoff between the first render and this effect, and scheduling from a
+    // fresher Date than the one on screen would leave the two disagreeing until
+    // the *next* cutoff — a stale greeting for hours, not milliseconds.
+    const current = new Date();
+    setNow((previous) => (showsSameHeader(previous, current) ? previous : current));
+    schedule(current);
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       clearTimeout(timer);
