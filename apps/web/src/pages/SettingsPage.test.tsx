@@ -14,6 +14,8 @@ vi.mock("../components/settings/JobStatusSettings", () => ({ JobStatusSettings: 
 vi.mock("../components/settings/ApiTokenSettings", () => ({ ApiTokenSettings: () => <p>api token body</p> }));
 vi.mock("../components/settings/TraktSettings", () => ({ TraktSettings: () => <p>trakt body</p> }));
 vi.mock("../components/settings/AddonSettings", () => ({ AddonSettings: () => <p>addon body</p> }));
+vi.mock("../components/settings/StremioSyncSettings", () => ({ StremioSyncSettings: () => <p>stremio sync body</p> }));
+vi.mock("../components/settings/PlayDetectionSettings", () => ({ PlayDetectionSettings: () => <p>play detection body</p> }));
 vi.mock("../components/settings/OmdbSettings", () => ({ OmdbSettings: () => <p>omdb body</p> }));
 vi.mock("../components/settings/RpdbSettings", () => ({ RpdbSettings: () => <p>rpdb body</p> }));
 vi.mock("../components/settings/AiSettings", () => ({ AiSettings: () => <p>ai body</p> }));
@@ -48,7 +50,7 @@ describe("settings sections", () => {
 
   it("finds a section by a word in its title, ignoring case", () => {
     expect(find("region")).toEqual(["preferences"]);
-    expect(find("STREMIO")).toEqual(["addon"]);
+    expect(find("STREMIO")).toEqual(["addon", "stremio-sync", "play-detection"]);
   });
 
   it("finds a section by what it does, not only by what it is called", () => {

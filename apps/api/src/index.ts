@@ -16,6 +16,8 @@ import { isStremioSecretPath } from "./lib/stremio-secret.js";
 import { getAiRecommendations, isAiConfigured } from "./lib/ai.js";
 import { trendingCacheDeletePrefix } from "./lib/cache.js";
 import { pollTraktHistory, syncTraktWatchlist } from "./lib/trakt-client.js";
+import { isStremioConnected, getStremioProfileId, syncStremioLibrary } from "./lib/stremio-library.js";
+import { isPlayDetectionEnabled, settleDuePlaySignals } from "./lib/play-signal.js";
 import { ensureDefaultWatchlist } from "./lib/watchlist.js";
 import { ensureDefaultCollection } from "./lib/collection.js";
 import { getDefaultProfileId } from "./lib/profile.js";
@@ -41,6 +43,7 @@ import streamingRoutes from "./routes/streaming.js";
 import settingsRoutes from "./routes/settings.js";
 import aiRoutes from "./routes/ai.js";
 import stremioRoutes from "./routes/stremio.js";
+import stremioLibraryRoutes from "./routes/stremio-library.js";
 import traktRoutes from "./routes/trakt.js";
 import scrobbleRoutes from "./routes/scrobble.js";
 import pushRoutes from "./routes/push.js";
@@ -52,6 +55,19 @@ import gamesRoutes from "./routes/games.js";
 import gamesSteamRoutes from "./routes/games-steam.js";
 
 const TRAKT_POLL_INTERVAL_SEC = Number(process.env.TRAKT_POLL_INTERVAL_SEC ?? 300);
+
+// Shorter than the Trakt poll because it costs far less: when nothing has been
+// watched, a sync is a single small `datastoreMeta` call that fetches no items
+// at all. The interval also bounds the one real gap in this sync — Stremio
+// reports the episode you are *on*, so episodes finished within a single
+// interval collapse into the latest one. Two minutes is well under any real
+// episode length.
+// Off by default: with play detection covering every addon-consuming client,
+// the library poll is for people who want Stremio's own exact watched state
+// rather than an inference. The one-time import stays available either way.
+const STREMIO_POLL_INTERVAL_SEC = Number(process.env.STREMIO_POLL_INTERVAL_SEC ?? 0);
+
+const PLAY_SIGNAL_SETTLE_INTERVAL_MS = 60 * 1000;
 const AI_REFRESH_INTERVAL_SEC = Number(process.env.AI_REFRESH_INTERVAL_SEC ?? 86400);
 const NOTIFICATION_CHECK_INTERVAL_SEC = Number(process.env.NOTIFICATION_CHECK_INTERVAL_SEC ?? 3600);
 
@@ -195,6 +211,7 @@ app.register(streamingRoutes);
 app.register(settingsRoutes);
 app.register(aiRoutes);
 app.register(stremioRoutes);
+app.register(stremioLibraryRoutes);
 app.register(traktRoutes);
 app.register(scrobbleRoutes);
 app.register(pushRoutes);
@@ -269,6 +286,41 @@ const start = async () => {
     }, TRAKT_POLL_INTERVAL_SEC * 1000);
   } else {
     app.log.info("Scheduled Trakt poll disabled because TRAKT_POLL_INTERVAL_SEC is set to 0");
+  }
+
+  if (STREMIO_POLL_INTERVAL_SEC > 0) {
+    setInterval(() => {
+      void (async () => {
+        // Checked every tick rather than at boot, so connecting an account from
+        // Settings starts syncing without a restart.
+        if (!(await isStremioConnected())) return;
+        // The profile that connected the account, so scheduled watches land
+        // where the connect and import routes put theirs. Rows predating that
+        // column report null and keep the old default-profile behaviour.
+        const profileId = (await getStremioProfileId()) ?? (await getDefaultProfileId());
+        await syncStremioLibrary(app.log, profileId, "incremental")
+          .then(() => reportJobSuccess("stremio-library-sync"))
+          .catch((error) => {
+            reportBackgroundError(error, "Scheduled Stremio library sync failed", "stremio-library-sync");
+          });
+      })().catch((error) => {
+        reportBackgroundError(error, "Scheduled Stremio library sync failed");
+      });
+    }, STREMIO_POLL_INTERVAL_SEC * 1000);
+  } else {
+    app.log.info("Scheduled Stremio library sync disabled because STREMIO_POLL_INTERVAL_SEC is set to 0");
+  }
+
+  // A pending play signal becomes a watch once its title's runtime has elapsed,
+  // so this only needs to run often enough to keep that promotion punctual.
+  if (isPlayDetectionEnabled()) {
+    setInterval(() => {
+      void settleDuePlaySignals(app.log)
+        .then(() => reportJobSuccess("stremio-play-signals"))
+        .catch((error) => {
+          reportBackgroundError(error, "Settling Stremio play signals failed", "stremio-play-signals");
+        });
+    }, PLAY_SIGNAL_SETTLE_INTERVAL_MS);
   }
 
   setInterval(() => {

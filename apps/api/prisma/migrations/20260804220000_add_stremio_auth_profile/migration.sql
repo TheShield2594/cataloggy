@@ -1,0 +1,13 @@
+-- Records which profile connected the Stremio account.
+--
+-- The scheduled library sync has no request to resolve a profile from and was
+-- falling back to the oldest one, while the connect/import/sync routes act as
+-- the requesting profile. On a multi-profile install those disagree: a second
+-- profile could connect and baseline into its own history, then have every
+-- later incremental watch filed under the default profile instead.
+--
+-- Nullable rather than backfilled: an existing row has no way of knowing who
+-- connected it, and null keeps the previous default-profile behaviour for it.
+-- No foreign key, deliberately — a deleted profile should leave the connection
+-- to fall back rather than cascade the whole account away.
+ALTER TABLE "StremioAuth" ADD COLUMN "profileId" UUID;

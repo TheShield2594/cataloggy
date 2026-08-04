@@ -440,7 +440,13 @@ const buildManifest = (lists: CataloggyList[], genres: string[], enabledCatalogs
     version: "0.3.0",
     name: "Cataloggy",
     description: "Personal catalogs, tracking, and discovery powered by Cataloggy.",
-    resources: ["catalog", "meta", "subtitles"],
+    // `stream` is declared without Cataloggy ever providing a stream: the
+    // request itself is the point. A client asks every installed addon for
+    // streams the moment a user opens a title to watch it, and that request is
+    // the only "about to play this" signal the protocol offers an addon that
+    // isn't a stream provider. The reply is always an empty list, so nothing
+    // extra appears in the client. See PLAY_DETECTION below.
+    resources: ["catalog", "meta", "subtitles", "stream"],
     types: ["movie", "series"],
     idPrefixes: ["tt"],
     catalogs,
@@ -706,6 +712,77 @@ addonGet<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async
   return reply.send({ meta });
 });
 
+// ─── Play detection ───
+//
+// Addons are never told what was watched — a client only ever asks them for
+// things. But two of those asks mean "the user is about to watch this":
+// `stream` (they opened a title's stream list) and `subtitles` (a player
+// loaded). Forwarding them lets Cataloggy infer watches from clients that keep
+// their library entirely to themselves — Vidi, Omni, Nuvio and other
+// addon-consuming apps that never sync to a Stremio account.
+//
+// Fire-and-forget on purpose: this must never delay or fail the response a
+// client is waiting on. The API decides what to do with a signal (and drops it
+// entirely unless play detection is enabled there) — this side only observes.
+const PLAY_DETECTION = process.env.STREMIO_PLAY_DETECTION?.trim() === "true";
+
+// Bounded here rather than at the API: this string is whatever a client chose
+// to send, and it exists only to be read back in Settings.
+const MAX_CLIENT_LENGTH = 200;
+
+const forwardPlaySignal = (
+  resource: "stream" | "subtitles",
+  type: "movie" | "series",
+  id: string,
+  profileId: string | null,
+  client: string | undefined
+): void => {
+  if (!PLAY_DETECTION) return;
+
+  const parts = id.split(":");
+  const imdbId = parts[0];
+  if (!imdbId?.startsWith("tt")) return;
+
+  const season = parts.length >= 3 ? Number.parseInt(parts[1], 10) : NaN;
+  const episode = parts.length >= 3 ? Number.parseInt(parts[2], 10) : NaN;
+  const isEpisode = type === "series" && Number.isInteger(season) && Number.isInteger(episode);
+
+  // A bare series id means the user opened the show, not an episode — there is
+  // nothing specific enough to record.
+  if (type === "series" && !isEpisode) return;
+
+  void apiPost(
+    "/stremio/play-signal",
+    {
+      type: isEpisode ? "episode" : "movie",
+      imdbId,
+      ...(isEpisode ? { seriesImdbId: imdbId, season, episode } : {}),
+      resource,
+      // The player's own user-agent. Without forwarding it the API would only
+      // ever see this service's fetch agent, which says nothing about which app
+      // is actually watching — the one thing this field is for.
+      ...(client?.trim() ? { client: client.trim().slice(0, MAX_CLIENT_LENGTH) } : {}),
+    },
+    profileId
+  ).catch((error) => {
+    app.log.warn({ error, resource, id }, "Failed to forward play signal");
+  });
+};
+
+// Always an empty list — see the manifest comment on why this route exists.
+addonGet<{ Params: { type: string; id: string } }>("/stream/:type/:id.json", async (request, reply) => {
+  reply.header("Access-Control-Allow-Origin", "*");
+  reply.header("Content-Type", "application/json");
+
+  const { type, id } = request.params;
+  if (type === "movie" || type === "series") {
+    const scope = await resolveProfileScope(request);
+    if (scope.ok) forwardPlaySignal("stream", type, id, scope.profileId, request.headers["user-agent"]);
+  }
+
+  return reply.send({ streams: [] });
+});
+
 // ─── Subtitles route (mark as watched from Stremio) ───
 
 addonGet<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", async (request, reply) => {
@@ -726,6 +803,10 @@ addonGet<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", 
 
   const scope = await resolveProfileScope(request);
   if (!scope.ok) return reply.send({ subtitles: [] });
+
+  // A subtitles request means a player actually loaded, which is a stronger
+  // play signal than the stream request that preceded it.
+  forwardPlaySignal("subtitles", type, id, scope.profileId, request.headers["user-agent"]);
 
   const addonBase = ADDON_PUBLIC_BASE ?? `http://localhost:${process.env.PORT ?? 7001}`;
   const tokenQuery = MUTATION_TOKEN ? `?token=${MUTATION_TOKEN}` : "";
