@@ -24,6 +24,7 @@ import { isSteamSyncConfigured, syncSteamLibrary } from "./lib/steam-sync.js";
 import { cleanupStaleSessions, SCROBBLE_CLEANUP_INTERVAL_MS } from "./routes/scrobble.js";
 import { recordJobFailure, recordJobSuccess, type JobName } from "./lib/job-status.js";
 import { bodyTooLargeMessage, isBodyTooLargeError, mbToBytes, parseMaxBodySizeMb } from "./lib/body-limit.js";
+import { redactUrl, redactedRequestSerializer } from "./lib/redact-url.js";
 
 // Route modules
 import healthRoutes from "./routes/health.js";
@@ -78,7 +79,13 @@ const PROXY_PATH_PREFIXES = parseProxyPathPrefixes(process.env.PROXY_PATH_PREFIX
 const MAX_BODY_SIZE_MB = parseMaxBodySizeMb(process.env.MAX_BODY_SIZE_MB);
 
 const app = Fastify({
-  logger: true,
+  logger: {
+    // Fastify's default `req` serializer logs the URL verbatim, so a secret sent
+    // as a query parameter — `?token=` on the Plex/Jellyfin webhooks, which Plex
+    // has no other way to send — is written to the log in plaintext and kept for
+    // as long as the log is. This mirrors that serializer with the value masked.
+    serializers: { req: redactedRequestSerializer },
+  },
   bodyLimit: mbToBytes(MAX_BODY_SIZE_MB),
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   rewriteUrl: (request) => normalizeProxyPath(request.url ?? "/", PROXY_PATH_PREFIXES),
@@ -158,7 +165,7 @@ app.addHook("onRequest", async (request, reply) => {
 app.setErrorHandler((error, request, reply) => {
   if (isBodyTooLargeError(error)) {
     request.log.warn(
-      { url: request.url, limitMb: MAX_BODY_SIZE_MB },
+      { url: redactUrl(request.url), limitMb: MAX_BODY_SIZE_MB },
       "Rejected a request body larger than MAX_BODY_SIZE_MB"
     );
     return reply.code(413).send({ error: bodyTooLargeMessage(MAX_BODY_SIZE_MB), code: "body_too_large" });

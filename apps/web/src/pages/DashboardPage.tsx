@@ -462,12 +462,104 @@ function PageHeading() {
   return <h1 className="sr-only">Dashboard</h1>;
 }
 
-function timeOfDayGreeting() {
-  const hour = new Date().getHours();
+export function timeOfDayGreeting(now: Date) {
+  const hour = now.getHours();
   if (hour < 5) return "Good night";
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
+}
+
+// The hours at which the header's two clock-derived strings change: the
+// greeting cutoffs above, plus midnight, which also rolls the date over.
+const GREETING_CUTOFF_HOURS = [0, 5, 12, 18];
+
+export function msUntilNextBoundary(now: Date): number {
+  const next = new Date(now);
+  next.setMinutes(0, 0, 0);
+  const nextCutoff = GREETING_CUTOFF_HOURS.find((hour) => hour > now.getHours());
+  if (nextCutoff === undefined) {
+    next.setDate(next.getDate() + 1);
+    next.setHours(0);
+  } else {
+    next.setHours(nextCutoff);
+  }
+  // A DST shift can land the "next" boundary in the past; never schedule a
+  // zero-delay timeout that would spin.
+  return Math.max(next.getTime() - now.getTime(), 60_000);
+}
+
+/**
+ * The current time, re-read whenever the greeting or the date would change.
+ *
+ * Both were computed once at render, so a dashboard left open overnight kept
+ * saying "Good evening" under yesterday's date. Waking at the boundaries costs
+ * four re-renders a day rather than a poll running all night.
+ */
+// Whether two instants would render the header identically. Returning the
+// previous Date when they would lets React bail out of the re-render, so the
+// common case — the effect running microseconds after the first render — costs
+// nothing.
+export const showsSameHeader = (a: Date, b: Date) =>
+  timeOfDayGreeting(a) === timeOfDayGreeting(b) && a.toDateString() === b.toDateString();
+
+function useClockBoundary(): Date {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+
+    const schedule = (current: Date) => {
+      timer = setTimeout(() => {
+        const updated = new Date();
+        setNow(updated);
+        schedule(updated);
+      }, msUntilNextBoundary(current));
+    };
+
+    // A suspended laptop wakes with a timeout that was scheduled yesterday still
+    // pending, so re-read the clock on the way back rather than wait it out.
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      clearTimeout(timer);
+      const updated = new Date();
+      setNow(updated);
+      schedule(updated);
+    };
+
+    // Schedule from the same value the header is showing. The clock can cross a
+    // cutoff between the first render and this effect, and scheduling from a
+    // fresher Date than the one on screen would leave the two disagreeing until
+    // the *next* cutoff — a stale greeting for hours, not milliseconds.
+    const current = new Date();
+    setNow((previous) => (showsSameHeader(previous, current) ? previous : current));
+    schedule(current);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
+
+  return now;
+}
+
+// The stat row's stand-in while getWatchStats and getDetailedStats are in
+// flight. Without it the header renders as greeting + date only and then grows
+// a whole row taller when the two calls land — on every dashboard load, warm
+// ones included, because the calls are issued from their own effects. The
+// widths are the chips' rough measure, enough to hold the line's height and
+// keep the page below from being shoved down.
+const STAT_CHIP_SKELETON_WIDTHS = ["w-24", "w-32", "w-20", "w-24", "w-20"];
+
+function StatChipsSkeleton() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5" aria-hidden="true">
+      {STAT_CHIP_SKELETON_WIDTHS.map((width, i) => (
+        <span key={i} className={`skeleton h-4 ${width} rounded`} />
+      ))}
+    </div>
+  );
 }
 
 function StatChip({ icon: Icon, label, value, accent }: { icon: React.ElementType; label: string; value: string | number; accent?: boolean }) {
@@ -505,7 +597,8 @@ function DashboardHeader({
   statsFailed: boolean;
   onRetryStats: () => void;
 }) {
-  const today = new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  const now = useClockBoundary();
+  const today = now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   return (
     <div
       className="flex flex-col gap-2.5 rounded-xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
@@ -513,11 +606,13 @@ function DashboardHeader({
     >
       <PageHeading />
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-        <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{timeOfDayGreeting()}</span>
+        <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{timeOfDayGreeting(now)}</span>
         <span style={{ color: "var(--border-strong)" }}>&middot;</span>
         <span className="text-xs" style={{ color: "var(--text-mute)" }}>{today}</span>
       </div>
-      {!loading && !statsLoading && (
+      {loading || statsLoading ? (
+        <StatChipsSkeleton />
+      ) : (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
           <StatChip icon={Clock} label="this week" value={playsThisWeek} />
           {!statsFailed && streak > 0 && <StatChip icon={Flame} label={`day streak (best ${longestStreak})`} value={streak} accent />}
@@ -986,8 +1081,11 @@ export function DashboardPage() {
           <div className="rounded-2xl py-12 text-center" style={{ border: "1px dashed var(--border-strong)" }}>
             <Tv className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
             <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
-              No series in progress. Start watching something!
+              No series in progress. Series you start watching pick up here.
             </p>
+            <Link to="/search" className="mt-1 inline-block text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
+              Find something to watch &rarr;
+            </Link>
           </div>
         ) : (
           <>
@@ -1203,7 +1301,12 @@ export function DashboardPage() {
         ) : history.length === 0 ? (
           <div className="rounded-2xl py-12 text-center" style={{ border: "1px dashed var(--border-strong)" }}>
             <Film className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
-            <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>No watch history yet.</p>
+            <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
+              No watch history yet. Anything you mark watched shows up here.
+            </p>
+            <Link to="/search" className="mt-1 inline-block text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
+              Find something to watch &rarr;
+            </Link>
           </div>
         ) : (
           <CarouselTrack

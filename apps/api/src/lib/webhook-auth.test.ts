@@ -2,14 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FastifyRequest } from "fastify";
 
 const makeRequest = (options: {
-  query?: Record<string, string>;
-  headers?: Record<string, string>;
+  query?: Record<string, unknown>;
+  headers?: Record<string, unknown>;
   ip?: string;
+  warn?: (...args: unknown[]) => void;
 }): FastifyRequest =>
   ({
     query: options.query ?? {},
     headers: options.headers ?? {},
     ip: options.ip ?? "127.0.0.1",
+    log: { warn: options.warn ?? (() => {}) },
   }) as unknown as FastifyRequest;
 
 const loadVerifyWebhookSecret = async () => (await import("./webhook-auth.js")).verifyWebhookSecret;
@@ -62,6 +64,59 @@ describe("verifyWebhookSecret", () => {
     const verifyWebhookSecret = await loadVerifyWebhookSecret();
 
     expect(verifyWebhookSecret(makeRequest({}))).toBe(false);
+  });
+
+  it("rejects a repeated query param rather than coercing the array", async () => {
+    process.env.WEBHOOK_SECRET = "ab";
+    vi.resetModules();
+    const verifyWebhookSecret = await loadVerifyWebhookSecret();
+
+    // "?token=a&token=b" reaches the handler as a two-element array, which
+    // Buffer.from() would otherwise turn into two zero bytes of the right length.
+    expect(verifyWebhookSecret(makeRequest({ query: { token: ["a", "b"] } }))).toBe(false);
+  });
+
+  it("rejects a non-ASCII secret of the same character length without throwing", async () => {
+    // "€" is one character but three UTF-8 bytes, so a character-length
+    // pre-check would let this through to timingSafeEqual and raise a RangeError.
+    process.env.WEBHOOK_SECRET = "shh-secre€";
+    vi.resetModules();
+    const verifyWebhookSecret = await loadVerifyWebhookSecret();
+
+    expect(verifyWebhookSecret(makeRequest({ query: { token: "shh-secret" } }))).toBe(false);
+  });
+
+  it("prefers the header when both forms are present", async () => {
+    process.env.WEBHOOK_SECRET = "shh-secret";
+    vi.resetModules();
+    const verifyWebhookSecret = await loadVerifyWebhookSecret();
+    const warn = vi.fn();
+
+    expect(
+      verifyWebhookSecret(
+        makeRequest({
+          headers: { "x-webhook-secret": "shh-secret" },
+          query: { token: "wrong" },
+          warn,
+        }),
+      ),
+    ).toBe(true);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("warns once per process when the secret arrives in the query string", async () => {
+    process.env.WEBHOOK_SECRET = "shh-secret";
+    vi.resetModules();
+    const verifyWebhookSecret = await loadVerifyWebhookSecret();
+    const warn = vi.fn();
+
+    verifyWebhookSecret(makeRequest({ query: { token: "shh-secret" }, warn }));
+    verifyWebhookSecret(makeRequest({ query: { token: "shh-secret" }, warn }));
+
+    // A scrobbling media server hits this on every play; the advice only needs
+    // saying once, and the line must never carry the secret itself.
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).not.toContain("shh-secret");
   });
 });
 
