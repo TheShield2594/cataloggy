@@ -84,6 +84,8 @@ function AddItemModal({
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const requestIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useFocusTrap<HTMLDivElement>();
   const { showToast } = useToast();
@@ -92,27 +94,53 @@ function AddItemModal({
     inputRef.current?.focus();
   }, []);
 
+  // Closing the modal mid-search shouldn't leave the request running, and its
+  // resolution must not set state on an unmounted component.
+  useEffect(() => () => {
+    requestIdRef.current++;
+    abortRef.current?.abort();
+  }, []);
+
   useScrollLock();
   useEscapeKey(onClose);
 
+  // Debounced typing can still leave two searches in flight — more so since
+  // "All" issues two requests per search — and the slower one landing last
+  // would overwrite fresher results, or clear the spinner while the newer
+  // search was still running. Only the newest request may touch state; the
+  // rest are aborted and ignored, as on the search page.
   const doSearch = useCallback(async (q: string, f: AddFilter) => {
+    abortRef.current?.abort();
+    const requestId = ++requestIdRef.current;
+
     if (!q.trim()) {
       setResults([]);
       return;
     }
+
+    const controller = new AbortController();
+    abortRef.current = controller;
     setSearching(true);
     setError(null);
     try {
+      let next: SearchResult[];
       if (f === "all") {
-        const [movies, series] = await Promise.all([api.search("movie", q), api.search("series", q)]);
-        setResults(mergeByRelevance(movies, series, q));
+        const [movies, series] = await Promise.all([
+          api.search("movie", q, controller.signal),
+          api.search("series", q, controller.signal),
+        ]);
+        next = mergeByRelevance(movies, series, q);
       } else {
-        setResults(await api.search(f, q));
+        next = await api.search(f, q, controller.signal);
       }
+      if (requestIdRef.current !== requestId) return;
+      setResults(next);
     } catch (err) {
+      if (requestIdRef.current !== requestId) return;
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Search failed");
     } finally {
-      setSearching(false);
+      if (requestIdRef.current === requestId) setSearching(false);
     }
   }, []);
 

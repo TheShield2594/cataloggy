@@ -216,8 +216,8 @@ describe("ListsPage add-item modal", () => {
     const user = userEvent.setup();
     await openModal(user);
 
-    await waitFor(() => expect(search).toHaveBeenCalledWith("movie", "sol"));
-    expect(search).toHaveBeenCalledWith("series", "sol");
+    await waitFor(() => expect(search).toHaveBeenCalledWith("movie", "sol", expect.any(AbortSignal)));
+    expect(search).toHaveBeenCalledWith("series", "sol", expect.any(AbortSignal));
   });
 
   it("marks a title already in the list as added, and won't add it twice", async () => {
@@ -263,15 +263,39 @@ describe("ListsPage add-item modal", () => {
     expect(dialog.getByRole("button", { name: /Sunshine/ })).not.toHaveTextContent("Added");
   });
 
+  it("ignores a slow search that lands after a newer one", async () => {
+    const user = userEvent.setup();
+    // The first search (two calls, since the filter starts on All) hangs until
+    // released; the newer one resolves straight away. Whichever settles last
+    // must not be what the user is left looking at.
+    let releaseStale: () => void = () => {};
+    const stalePending = new Promise<void>((resolve) => { releaseStale = resolve; });
+    search
+      .mockImplementationOnce(async () => { await stalePending; return [result("Stale Movie")]; })
+      .mockImplementationOnce(async () => { await stalePending; return []; });
+
+    const dialog = await openModal(user);
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+
+    search.mockImplementation(async (type) => (type === "movie" ? [result("Sunshine")] : []));
+    await user.type(dialog.getByLabelText("Search movies and series"), "ar");
+    expect(await dialog.findByRole("button", { name: /Sunshine/ })).toBeInTheDocument();
+
+    releaseStale();
+    await stalePending;
+    await waitFor(() => expect(dialog.getByRole("button", { name: /Sunshine/ })).toBeInTheDocument());
+    expect(dialog.queryByRole("button", { name: /Stale Movie/ })).not.toBeInTheDocument();
+  });
+
   it("searches only the chosen type once the filter narrows", async () => {
     const user = userEvent.setup();
     const dialog = await openModal(user);
-    await waitFor(() => expect(search).toHaveBeenCalledWith("series", "sol"));
+    await waitFor(() => expect(search).toHaveBeenCalledWith("series", "sol", expect.any(AbortSignal)));
 
     search.mockClear();
     await user.click(dialog.getByRole("button", { name: "Series" }));
 
-    await waitFor(() => expect(search).toHaveBeenCalledWith("series", "sol"));
+    await waitFor(() => expect(search).toHaveBeenCalledWith("series", "sol", expect.any(AbortSignal)));
     expect(search).not.toHaveBeenCalledWith("movie", "sol");
   });
 });

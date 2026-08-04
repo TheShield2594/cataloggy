@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SeriesProgress } from "../api";
-import { computeProgressPct, msUntilNextBoundary, showsSameHeader, timeOfDayGreeting } from "./DashboardPage";
+import { computeProgressPct, historyItemImdbId, msUntilNextBoundary, showsSameHeader, timeOfDayGreeting } from "./DashboardPage";
 
 const series = (overrides: Partial<SeriesProgress> = {}): SeriesProgress => ({
   imdbId: "tt0903747",
@@ -117,5 +117,25 @@ describe("msUntilNextBoundary", () => {
         expect(msUntilNextBoundary(at(hour, minute))).toBeGreaterThanOrEqual(MINUTE);
       }
     }
+  });
+});
+
+describe("historyItemImdbId", () => {
+  it("opens an episode row on its series, not on the episode", () => {
+    expect(
+      historyItemImdbId({ type: "episode", imdbId: "tt2301451", seriesImdbId: "tt0903747" })
+    ).toBe("tt0903747");
+  });
+
+  it("falls back to the row's own id when an episode carries no series id", () => {
+    expect(historyItemImdbId({ type: "episode", imdbId: "tt2301451" })).toBe("tt2301451");
+  });
+
+  it("leaves a movie row alone", () => {
+    // A movie has no series to redirect to, and a stray `seriesImdbId` on one
+    // must not hijack it.
+    expect(
+      historyItemImdbId({ type: "movie", imdbId: "tt0110912", seriesImdbId: "tt0903747" })
+    ).toBe("tt0110912");
   });
 });

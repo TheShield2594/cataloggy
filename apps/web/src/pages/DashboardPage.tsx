@@ -141,6 +141,20 @@ export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
 
 /* ─── Continue Watching card (used for every item after the hero) ─── */
 
+/**
+ * The IMDb id the detail panel should open for a history row.
+ *
+ * An episode row carries the episode's own id in `imdbId` and its series' in
+ * `seriesImdbId`. The panel is about the series — opening it on the episode id
+ * looks up a title that isn't there. `HistoryPage` has always made this
+ * distinction; the dashboard's Recently Watched carousel did not.
+ */
+export function historyItemImdbId(
+  event: Pick<WatchEvent, "type" | "imdbId" | "seriesImdbId">
+): string {
+  return event.type === "episode" ? (event.seriesImdbId ?? event.imdbId) : event.imdbId;
+}
+
 export function computeProgressPct(s: SeriesProgress): number | null {
   return typeof s.watchedEpisodes === "number" && s.totalEpisodes && s.totalEpisodes > 0
     ? Math.min(Math.max((s.watchedEpisodes / s.totalEpisodes) * 100, 0), 100)
@@ -1340,7 +1354,7 @@ export function DashboardPage() {
                 <button
                   type="button"
                   className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
-                  onClick={() => setSelectedItem(toSearchResult(event.imdbId, event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster }))}
+                  onClick={() => setSelectedItem(toSearchResult(historyItemImdbId(event), event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster }))}
                   aria-label={`View details for ${event.name}`}
                 />
                 <div

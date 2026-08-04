@@ -26,15 +26,15 @@ vi.mock("../lib/stremio-helpers.js", () => ({
 const { lockedProfileIds } = vi.hoisted(() => ({ lockedProfileIds: new Set<string>() }));
 const tokenFor = (profileId: string) => `verified-${profileId}`;
 
-vi.mock("../lib/profile.js", () => ({
+// Only the profile *resolution* is faked; PROFILE_LOCKED_RESPONSE stays the
+// real constant, so a change to the error code these routes send has to be a
+// deliberate one rather than something a duplicated literal here hides.
+vi.mock("../lib/profile.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/profile.js")>()),
   resolveProfile: async (request: { profileId?: string }) => {
     request.profileId = PROFILE_ID;
   },
   getDefaultProfileId: async () => PROFILE_ID,
-  PROFILE_LOCKED_RESPONSE: {
-    error: "Profile PIN verification required",
-    code: "profile_verification_required",
-  },
   isProfileLocked: async (
     request: { headers: Record<string, string | undefined> },
     profileId: string
@@ -289,6 +289,23 @@ describe("stremio routes — ?profileId names a profile, it does not unlock one"
 
     expect(response.statusCode).toBe(200);
     expect(response.json().metas).toEqual([{ id: "tt0000001" }]);
+    await app.close();
+  });
+
+  it("does not accept another profile's token as verification for this one", async () => {
+    const app = await buildApp();
+    lockedProfileIds.add(OTHER_PROFILE_ID);
+    prismaMock.profile.findUnique.mockResolvedValue({ id: OTHER_PROFILE_ID });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/watchlist?type=movie&profileId=${OTHER_PROFILE_ID}`,
+      // A token minted for the profile the caller *can* open, aimed at one it
+      // cannot — the check has to be bound to the profile being served.
+      headers: { "x-profile-token": tokenFor(PROFILE_ID) },
+    });
+
+    expect(response.statusCode).toBe(401);
     await app.close();
   });
 
