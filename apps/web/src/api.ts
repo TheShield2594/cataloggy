@@ -226,7 +226,7 @@ export type AddonConfig = {
 export type StremioLibraryStatus = {
   connected: boolean;
   email: string | null;
-  apiBase: string;
+  apiBase: string | null;
   connectedAt: string | null;
 };
 

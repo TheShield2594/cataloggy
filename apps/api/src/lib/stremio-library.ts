@@ -59,14 +59,23 @@ export const isStremioConnected = async (): Promise<boolean> =>
 export const getStremioStatus = async (): Promise<{
   connected: boolean;
   email: string | null;
-  apiBase: string;
+  apiBase: string | null;
   connectedAt: string | null;
 }> => {
   const row = await prisma.stremioAuth.findUnique({ where: { id: AUTH_ROW_ID } });
+  // A rejected base (non-HTTPS, unparseable) must not take the status route
+  // down with it — reporting it as absent is what lets Settings stay usable
+  // long enough to see something is wrong.
+  let apiBase: string | null;
+  try {
+    apiBase = getStremioApiBase();
+  } catch {
+    apiBase = null;
+  }
   return {
     connected: !!row,
     email: row?.email ?? null,
-    apiBase: getStremioApiBase(),
+    apiBase,
     connectedAt: row?.updatedAt.toISOString() ?? null,
   };
 };
@@ -109,6 +118,28 @@ const readWatermark = async (): Promise<Watermark | null> => {
   }
 };
 
+/**
+ * Serializes every pass through the library.
+ *
+ * A pass is a read-modify-write over one watermark row with network calls in
+ * the middle, so two overlapping passes — the scheduled poll meeting a manual
+ * "Sync now" or an import — would both read the same pre-state, both decide the
+ * same items are new, and both record them. That is precisely the duplicate the
+ * signature scheme exists to prevent, so the whole pass is taken under a lock
+ * rather than trying to make the watermark write conditional.
+ *
+ * Callers queue rather than bail: an import must not be silently skipped just
+ * because a poll happened to be in flight.
+ */
+let syncChain: Promise<unknown> = Promise.resolve();
+
+const withSyncLock = <T>(run: () => Promise<T>): Promise<T> => {
+  // `.then(run, run)` so a failed pass never wedges the queue behind it.
+  const next = syncChain.then(run, run);
+  syncChain = next.catch(() => undefined);
+  return next;
+};
+
 const writeWatermark = async (watermark: Watermark): Promise<void> => {
   const value = JSON.stringify(watermark);
   const now = new Date();
@@ -131,12 +162,16 @@ const parseEpisodeRef = (
   const videoId = typeof state.video_id === "string" ? state.video_id : null;
   if (videoId) {
     const parts = videoId.split(":");
-    if (parts.length === 3 && parts[0] === itemId) {
-      const season = Number.parseInt(parts[1], 10);
-      const episode = Number.parseInt(parts[2], 10);
-      if (Number.isInteger(season) && Number.isInteger(episode) && season >= 0 && episode >= 0) {
-        return { season, episode };
-      }
+    // A video_id naming a *different* series is the one case where the
+    // season/episode fallback must not run: those numbers describe the foreign
+    // id, so using them would file someone else's episode under this series.
+    // Bail out entirely rather than fall through.
+    if (parts.length !== 3 || parts[0] !== itemId) return null;
+
+    const season = Number.parseInt(parts[1], 10);
+    const episode = Number.parseInt(parts[2], 10);
+    if (Number.isInteger(season) && Number.isInteger(episode) && season >= 0 && episode >= 0) {
+      return { season, episode };
     }
   }
 
@@ -160,7 +195,11 @@ const parseWatchedAt = (state: NonNullable<StremioLibraryItem["state"]>, mtime: 
     const parsed = new Date(candidate);
     const time = parsed.getTime();
     if (!Number.isFinite(time)) continue;
-    if (time < Date.UTC(1970, 1, 1)) continue;
+    // At or before the Unix epoch: either a pre-epoch date, or the zero
+    // timestamp Stremio uses to mean "never". Everything after it, January 1970
+    // included, is a real date. (Date.UTC months are zero-based, so the obvious
+    // spelling of "1 Jan 1970" reads as 1 February and throws January away.)
+    if (time <= 0) continue;
     if (time > Date.now() + 24 * 60 * 60 * 1000) continue;
     return parsed;
   }
@@ -230,10 +269,16 @@ const chunk = <T,>(items: T[], size: number): T[][] => {
  * The incremental path costs a single small `datastoreMeta` call when nothing
  * has been watched, which is what makes a short poll interval reasonable.
  */
-export const syncStremioLibrary = async (
+export const syncStremioLibrary = (
   logger: FastifyBaseLogger,
   profileId: string,
   mode: StremioSyncMode = "incremental"
+): Promise<StremioSyncSummary> => withSyncLock(() => runSync(logger, profileId, mode));
+
+const runSync = async (
+  logger: FastifyBaseLogger,
+  profileId: string,
+  mode: StremioSyncMode
 ): Promise<StremioSyncSummary> => {
   const summary: StremioSyncSummary = { scanned: 0, fetched: 0, recorded: 0, skipped: 0 };
 
@@ -246,6 +291,14 @@ export const syncStremioLibrary = async (
 
   let items: StremioLibraryItem[];
   const watermark: Watermark = {};
+  // The mtime a *changed* item should be watermarked under, keyed by id.
+  //
+  // Comparison and storage have to draw on the same clock. `datastoreMeta` and
+  // an item's own `_mtime` are different representations, so watermarking a
+  // fetched item under `_mtime` would guarantee the next pass's meta comparison
+  // never matched — every item re-fetched, every poll, which is exactly the
+  // cost the incremental path exists to avoid.
+  const metaMtimes = new Map<string, string>();
 
   try {
     if (isFullPass) {
@@ -259,6 +312,7 @@ export const syncStremioLibrary = async (
       const changedIds: string[] = [];
       for (const [id, mtime] of meta) {
         const mtimeKey = String(mtime);
+        metaMtimes.set(id, mtimeKey);
         const seen = previous[id];
         if (seen && seen.m === mtimeKey) {
           // Unchanged since last sync — carry the watermark forward untouched
@@ -290,7 +344,10 @@ export const syncStremioLibrary = async (
   for (const item of items) {
     const id = typeof item._id === "string" ? item._id.trim() : "";
     if (!id) continue;
-    const mtimeKey = String(item._mtime ?? "");
+    // A full pass makes no `datastoreMeta` call, so `_mtime` is all there is;
+    // the first incremental pass after one re-fetches everything once and is
+    // consistent from then on.
+    const mtimeKey = metaMtimes.get(id) ?? String(item._mtime ?? "");
 
     const watch = extractWatch(item);
     if (!watch) {

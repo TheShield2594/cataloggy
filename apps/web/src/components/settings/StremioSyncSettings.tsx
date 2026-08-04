@@ -11,7 +11,7 @@ const summaryText = (summary: StremioSyncSummary): string =>
 export function StremioSyncSettings() {
   const [status, setStatus] = useState<StremioLibraryStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<"connect" | "import" | "sync" | null>(null);
+  const [busy, setBusy] = useState<"connect" | "import" | "sync" | "disconnect" | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
@@ -53,6 +53,7 @@ export function StremioSyncSettings() {
   };
 
   const disconnect = async () => {
+    setBusy("disconnect");
     setError(null);
     setResult(null);
     try {
@@ -60,6 +61,8 @@ export function StremioSyncSettings() {
       setStatus((prev) => (prev ? { ...prev, connected: false, email: null, connectedAt: null } : prev));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Disconnect failed");
+    } finally {
+      setBusy(null);
     }
   };
 

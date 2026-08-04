@@ -25,11 +25,18 @@ vi.mock("./watch-event.js", () => watchEventMock);
 
 const PROFILE = "profile-1";
 
+/**
+ * The one mtime every fixture draws on. Comparison (from `datastoreMeta`) and
+ * storage (from the fetched item) have to agree for the incremental path to
+ * skip anything, so the tests must not quietly disagree about it either.
+ */
+const MTIME = "2026-08-01T10:00:00.000Z";
+
 /** Builds the shape `datastoreGet` returns for a library item. */
 const libraryItem = (over: Record<string, unknown> = {}) => ({
   _id: "tt0111161",
   type: "movie",
-  _mtime: "2026-08-01T10:00:00.000Z",
+  _mtime: MTIME,
   state: { flaggedWatched: 1, timesWatched: 1, lastWatched: "2026-08-01T09:00:00.000Z" },
   ...over,
 });
@@ -80,7 +87,7 @@ describe("stremio-library", () => {
   });
 
   it("records a watched movie with Stremio's own watch date", async () => {
-    stubStremio({ meta: [["tt0111161", 1]], items: [libraryItem()] });
+    stubStremio({ meta: [["tt0111161", MTIME]], items: [libraryItem()] });
     const { syncStremioLibrary } = await import("./stremio-library.js");
 
     const summary = await syncStremioLibrary(makeLogger(), PROFILE, "incremental");
@@ -99,7 +106,7 @@ describe("stremio-library", () => {
 
   it("records the episode named by video_id", async () => {
     stubStremio({
-      meta: [["tt0903747", 1]],
+      meta: [["tt0903747", MTIME]],
       items: [
         libraryItem({
           _id: "tt0903747",
@@ -131,7 +138,7 @@ describe("stremio-library", () => {
 
   it("ignores an unwatched item", async () => {
     stubStremio({
-      meta: [["tt0111161", 1]],
+      meta: [["tt0111161", MTIME]],
       items: [libraryItem({ state: { flaggedWatched: 0, timesWatched: 0, timeOffset: 90_000 } })],
     });
     const { syncStremioLibrary } = await import("./stremio-library.js");
@@ -144,7 +151,7 @@ describe("stremio-library", () => {
 
   it("ignores content that is not keyed by an IMDb id", async () => {
     stubStremio({
-      meta: [["yt_id:UCxyz", 1]],
+      meta: [["yt_id:UCxyz", MTIME]],
       items: [libraryItem({ _id: "yt_id:UCxyz", type: "movie" })],
     });
     const { syncStremioLibrary } = await import("./stremio-library.js");
@@ -157,7 +164,7 @@ describe("stremio-library", () => {
 
   it("ignores an episode whose video_id belongs to a different series", async () => {
     stubStremio({
-      meta: [["tt0903747", 1]],
+      meta: [["tt0903747", MTIME]],
       items: [
         libraryItem({
           _id: "tt0903747",
@@ -174,12 +181,85 @@ describe("stremio-library", () => {
     expect(watchEventMock.recordWatchEvent).not.toHaveBeenCalled();
   });
 
+  it("ignores a foreign video_id even when the item carries its own season and episode", async () => {
+    // The season/episode fallback exists for items with no video_id at all. It
+    // must not rescue one that names a different series: those numbers describe
+    // the foreign id, so using them would file someone else's episode here.
+    stubStremio({
+      meta: [["tt0903747", MTIME]],
+      items: [
+        libraryItem({
+          _id: "tt0903747",
+          type: "series",
+          state: {
+            flaggedWatched: 1,
+            timesWatched: 1,
+            video_id: "tt9999999:1:1",
+            season: 4,
+            episode: 2,
+          },
+        }),
+      ],
+    });
+    const { syncStremioLibrary } = await import("./stremio-library.js");
+
+    const summary = await syncStremioLibrary(makeLogger(), PROFILE, "incremental");
+
+    expect(summary.recorded).toBe(0);
+    expect(watchEventMock.recordWatchEvent).not.toHaveBeenCalled();
+  });
+
+  it("records via season and episode when the item carries no video_id", async () => {
+    stubStremio({
+      meta: [["tt0903747", MTIME]],
+      items: [
+        libraryItem({
+          _id: "tt0903747",
+          type: "series",
+          state: { flaggedWatched: 1, timesWatched: 1, season: 4, episode: 2 },
+        }),
+      ],
+    });
+    const { syncStremioLibrary } = await import("./stremio-library.js");
+
+    await syncStremioLibrary(makeLogger(), PROFILE, "incremental");
+
+    expect(watchEventMock.recordWatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "episode", imdbId: "tt0903747", season: 4, episode: 2 })
+    );
+  });
+
+  it("fetches nothing on a second pass when the library has not changed", async () => {
+    // The watermark a pass writes has to be one the *next* pass can match, or
+    // the incremental path re-fetches the whole library on every poll.
+    //
+    // Deliberately not MTIME: `datastoreMeta` and an item's own `_mtime` are
+    // different representations of the same version, and watermarking a fetched
+    // item under `_mtime` only looks correct while the two happen to be spelled
+    // the same. Diverging them here is what makes this a regression test.
+    const metaMtime = Date.parse(MTIME);
+    const fetchMock = stubStremio({ meta: [["tt0111161", metaMtime]], items: [libraryItem()] });
+    const { syncStremioLibrary } = await import("./stremio-library.js");
+
+    await syncStremioLibrary(makeLogger(), PROFILE, "incremental");
+    // Feed the first pass's own watermark back in, as the KV row would.
+    prismaMock.kV.findUnique.mockResolvedValue({ value: JSON.stringify(lastWatermark()) });
+    fetchMock.mockClear();
+
+    const second = await syncStremioLibrary(makeLogger(), PROFILE, "incremental");
+
+    expect(second.fetched).toBe(0);
+    expect(second.recorded).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0].toString()).toContain("datastoreMeta");
+  });
+
   it("does not re-record an item whose watch signature is unchanged", async () => {
     prismaMock.kV.findUnique.mockResolvedValue({
-      value: JSON.stringify({ tt0111161: { m: "2", s: "m|1|1" } }),
+      value: JSON.stringify({ tt0111161: { m: MTIME, s: "m|1|1" } }),
     });
     // mtime moved (playback progress ticked), but the watch itself did not change.
-    stubStremio({ meta: [["tt0111161", 3]], items: [libraryItem()] });
+    stubStremio({ meta: [["tt0111161", "2026-08-02T10:00:00.000Z"]], items: [libraryItem()] });
     const { syncStremioLibrary } = await import("./stremio-library.js");
 
     const summary = await syncStremioLibrary(makeLogger(), PROFILE, "incremental");
@@ -191,10 +271,10 @@ describe("stremio-library", () => {
 
   it("records a re-watched movie when Stremio's play counter increments", async () => {
     prismaMock.kV.findUnique.mockResolvedValue({
-      value: JSON.stringify({ tt0111161: { m: "2", s: "m|1|1" } }),
+      value: JSON.stringify({ tt0111161: { m: MTIME, s: "m|1|1" } }),
     });
     stubStremio({
-      meta: [["tt0111161", 3]],
+      meta: [["tt0111161", "2026-08-02T10:00:00.000Z"]],
       items: [libraryItem({ state: { flaggedWatched: 1, timesWatched: 2, lastWatched: "2026-08-03T09:00:00.000Z" } })],
     });
     const { syncStremioLibrary } = await import("./stremio-library.js");
@@ -206,9 +286,9 @@ describe("stremio-library", () => {
 
   it("skips the item fetch entirely when no mtime has changed", async () => {
     prismaMock.kV.findUnique.mockResolvedValue({
-      value: JSON.stringify({ tt0111161: { m: "2", s: "m|1|1" } }),
+      value: JSON.stringify({ tt0111161: { m: MTIME, s: "m|1|1" } }),
     });
-    const fetchMock = stubStremio({ meta: [["tt0111161", 2]] });
+    const fetchMock = stubStremio({ meta: [["tt0111161", MTIME]] });
     const { syncStremioLibrary } = await import("./stremio-library.js");
 
     const summary = await syncStremioLibrary(makeLogger(), PROFILE, "incremental");
@@ -226,7 +306,7 @@ describe("stremio-library", () => {
 
     expect(summary.recorded).toBe(0);
     expect(watchEventMock.recordWatchEvent).not.toHaveBeenCalled();
-    expect(lastWatermark()).toEqual({ tt0111161: { m: "2026-08-01T10:00:00.000Z", s: "m|1|1" } });
+    expect(lastWatermark()).toEqual({ tt0111161: { m: MTIME, s: "m|1|1" } });
   });
 
   it("import mode records what baseline mode only recorded a watermark for", async () => {
@@ -244,8 +324,8 @@ describe("stremio-library", () => {
       .mockResolvedValueOnce({ status: "recorded" });
     stubStremio({
       meta: [
-        ["tt0111161", 1],
-        ["tt0068646", 1],
+        ["tt0111161", MTIME],
+        ["tt0068646", MTIME],
       ],
       items: [libraryItem(), libraryItem({ _id: "tt0068646" })],
     });
@@ -274,6 +354,46 @@ describe("stremio-library", () => {
       /Session does not exist/
     );
     expect(prismaMock.kV.upsert).not.toHaveBeenCalled();
+  });
+
+  it("serializes overlapping passes so a watch is recorded once, not once per caller", async () => {
+    // A poll meeting a manual sync: both read the watermark before either
+    // writes, so without a lock both would see the same item as new.
+    stubStremio({ meta: [["tt0111161", MTIME]], items: [libraryItem()] });
+    const { syncStremioLibrary } = await import("./stremio-library.js");
+
+    let stored: string | null = null;
+    prismaMock.kV.findUnique.mockImplementation(async () => (stored ? { value: stored } : null));
+    prismaMock.kV.upsert.mockImplementation(async (call: { update: { value: string } }) => {
+      stored = call.update.value;
+      return {};
+    });
+
+    const [first, second] = await Promise.all([
+      syncStremioLibrary(makeLogger(), PROFILE, "incremental"),
+      syncStremioLibrary(makeLogger(), PROFILE, "incremental"),
+    ]);
+
+    expect(first.recorded + second.recorded).toBe(1);
+    expect(watchEventMock.recordWatchEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a non-HTTPS account server rather than sending credentials in the clear", async () => {
+    process.env.STREMIO_API_BASE = "http://stremio.lan";
+    stubStremio({ meta: [], items: [] });
+    const { syncStremioLibrary } = await import("./stremio-library.js");
+
+    await expect(syncStremioLibrary(makeLogger(), PROFILE, "incremental")).rejects.toThrow(/https/i);
+  });
+
+  it("keeps a path prefix on the configured account server", async () => {
+    process.env.STREMIO_API_BASE = "https://proxy.example/stremio";
+    const fetchMock = stubStremio({ meta: [], items: [] });
+    const { syncStremioLibrary } = await import("./stremio-library.js");
+
+    await syncStremioLibrary(makeLogger(), PROFILE, "incremental");
+
+    expect(fetchMock.mock.calls[0][0].toString()).toBe("https://proxy.example/stremio/api/datastoreMeta");
   });
 
   it("stores only the authKey when connecting, never the password", async () => {

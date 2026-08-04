@@ -19,8 +19,28 @@ import type { FastifyBaseLogger } from "fastify";
 const DEFAULT_STREMIO_API_BASE = "https://api.strem.io";
 const REQUEST_TIMEOUT_MS = 15_000;
 
-export const getStremioApiBase = (): string =>
-  (process.env.STREMIO_API_BASE?.trim() || DEFAULT_STREMIO_API_BASE).replace(/\/+$/, "");
+/**
+ * The configured account-server base, minus any trailing slash.
+ *
+ * Refuses anything that isn't HTTPS: the very first call made against this base
+ * carries the user's Stremio password, and every later one carries the authKey
+ * that stands in for it. Downgrading that to plaintext is not a trade a
+ * self-hoster should be able to make by typo.
+ */
+export const getStremioApiBase = (): string => {
+  const raw = (process.env.STREMIO_API_BASE?.trim() || DEFAULT_STREMIO_API_BASE).replace(/\/+$/, "");
+
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new StremioApiError(`STREMIO_API_BASE is not a valid URL: ${raw}`);
+  }
+  if (parsed.protocol !== "https:") {
+    throw new StremioApiError(`STREMIO_API_BASE must be an https:// URL (got ${parsed.protocol}//)`);
+  }
+  return raw;
+};
 
 /** The playback state Stremio keeps per library item. All fields are optional. */
 export type StremioItemState = {
@@ -128,7 +148,10 @@ export class StremioClient {
   }
 
   private async post<T>(path: string, body: unknown, logger: FastifyBaseLogger): Promise<T | null> {
-    const url = new URL(path, this.baseUrl);
+    // Concatenated, not resolved: `new URL("/api/login", base)` treats the
+    // absolute path as root-relative and silently drops any prefix the base
+    // carries, so a base of https://host/stremio would post to https://host/api/login.
+    const url = new URL(`${this.baseUrl}${path}`);
     let response: Response;
     try {
       response = await fetch(url, {

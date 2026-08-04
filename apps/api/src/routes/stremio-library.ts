@@ -29,39 +29,57 @@ const stremioLibraryRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(await getStremioStatus());
   });
 
-  app.post<{ Body: unknown }>("/stremio/library/connect", CONNECT_RATE_LIMIT, async (request, reply) => {
-    const body = request.body as { email?: unknown; password?: unknown } | null;
-    const email = typeof body?.email === "string" ? body.email.trim() : "";
-    const password = typeof body?.password === "string" ? body.password : "";
+  // Every route below acts on a profile's library, so it takes the profile from
+  // the request rather than assuming the default one — an import run while
+  // acting as a second profile belongs to that profile. Only the scheduled job,
+  // which has no request to resolve, falls back to `getDefaultProfileId`.
+  app.post<{ Body: unknown }>(
+    "/stremio/library/connect",
+    { ...CONNECT_RATE_LIMIT, preHandler: resolveProfile },
+    async (request, reply) => {
+      const body = request.body as { email?: unknown; password?: unknown } | null;
+      const email = typeof body?.email === "string" ? body.email.trim() : "";
+      const password = typeof body?.password === "string" ? body.password : "";
 
-    if (!email || !password) {
-      return reply.code(400).send({ error: "email and password are required" });
-    }
-
-    try {
-      await connectStremio(email, password, request.log);
-    } catch (error) {
-      if (error instanceof StremioApiError) {
-        // Stremio's own wording is the useful part here ("Wrong password",
-        // "User not found"); it says nothing the caller didn't already supply.
-        return reply.code(401).send({ error: error.message });
+      if (!email || !password) {
+        return reply.code(400).send({ error: "email and password are required" });
       }
-      request.log.error(error, "Stremio connect failed");
-      return reply.code(502).send({ error: "Could not reach Stremio" });
-    }
 
-    // Learn the current library state without recording it, so connecting an
-    // account with years of history doesn't backdate a flood of watch events
-    // the user never asked for. `POST /stremio/library/import` is the opt-in.
-    try {
-      const profileId = await getDefaultProfileId();
-      await syncStremioLibrary(request.log, profileId, "baseline");
-    } catch (error) {
-      request.log.warn(error, "Stremio baseline sync failed after connecting");
-    }
+      try {
+        await connectStremio(email, password, request.log);
+      } catch (error) {
+        if (error instanceof StremioApiError) {
+          // Stremio's own wording is the useful part here ("Wrong password",
+          // "User not found"); it says nothing the caller didn't already supply.
+          return reply.code(401).send({ error: error.message });
+        }
+        request.log.error(error, "Stremio connect failed");
+        return reply.code(502).send({ error: "Could not reach Stremio" });
+      }
 
-    return reply.code(200).send(await getStremioStatus());
-  });
+      // Learn the current library state without recording it, so connecting an
+      // account with years of history doesn't backdate a flood of watch events
+      // the user never asked for. `POST /stremio/library/import` is the opt-in.
+      //
+      // A connection whose baseline never landed is not a usable connection: the
+      // scheduler's next incremental pass would read an empty watermark, find the
+      // entire library "new", and record all of it as watched — the exact flood
+      // the baseline exists to prevent. So a failure here undoes the connection
+      // rather than leaving it in place to do that.
+      try {
+        await syncStremioLibrary(request.log, request.profileId as string, "baseline");
+      } catch (error) {
+        request.log.error(error, "Stremio baseline sync failed after connecting — undoing the connection");
+        await disconnectStremio();
+        resetStremioClient();
+        return reply
+          .code(502)
+          .send({ error: "Connected to Stremio, but could not read the library. Nothing was saved." });
+      }
+
+      return reply.code(200).send(await getStremioStatus());
+    }
+  );
 
   app.post("/stremio/library/disconnect", async (_request, reply) => {
     await disconnectStremio();
@@ -71,13 +89,12 @@ const stremioLibraryRoutes: FastifyPluginAsync = async (app) => {
 
   // One-time backfill of everything the Stremio account already has marked as
   // watched, dated from Stremio's own `lastWatched` rather than from now.
-  app.post("/stremio/library/import", async (request, reply) => {
+  app.post("/stremio/library/import", { preHandler: resolveProfile }, async (request, reply) => {
     if (!(await isStremioConnected())) {
       return reply.code(400).send({ error: "No Stremio account is connected" });
     }
     try {
-      const profileId = await getDefaultProfileId();
-      const summary = await syncStremioLibrary(request.log, profileId, "import");
+      const summary = await syncStremioLibrary(request.log, request.profileId as string, "import");
       return reply.code(200).send(summary);
     } catch (error) {
       request.log.error(error, "Stremio library import failed");
@@ -86,13 +103,12 @@ const stremioLibraryRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // Manual trigger for the same pass the scheduler runs.
-  app.post("/stremio/library/sync", async (request, reply) => {
+  app.post("/stremio/library/sync", { preHandler: resolveProfile }, async (request, reply) => {
     if (!(await isStremioConnected())) {
       return reply.code(400).send({ error: "No Stremio account is connected" });
     }
     try {
-      const profileId = await getDefaultProfileId();
-      const summary = await syncStremioLibrary(request.log, profileId, "incremental");
+      const summary = await syncStremioLibrary(request.log, request.profileId as string, "incremental");
       return reply.code(200).send(summary);
     } catch (error) {
       request.log.error(error, "Stremio library sync failed");
