@@ -111,6 +111,9 @@ function PinForm({ profile, onSaved, onCancel }: { profile: Profile; onSaved: (p
         autoFocus={!profile.hasPin}
         type="password"
         inputMode="numeric"
+        // Matches MIN_PIN_LENGTH on the server. Only on the set/change field —
+        // a PIN chosen before the floor existed still has to unlock.
+        minLength={4}
         value={pin}
         onChange={(e) => setPin(e.target.value)}
         placeholder={profile.hasPin ? "New PIN" : "PIN"}

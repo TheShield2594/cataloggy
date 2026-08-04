@@ -128,6 +128,8 @@ function CreateProfileForm({
       <input
         type="password"
         inputMode="numeric"
+        // Matches MIN_PIN_LENGTH on the server.
+        minLength={4}
         value={pin}
         onChange={(e) => setPin(e.target.value)}
         placeholder="PIN (optional)"

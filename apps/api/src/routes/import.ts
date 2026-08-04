@@ -1,13 +1,32 @@
 import { WatchEventType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
-import { prisma } from "../lib/prisma.js";
 import { resolveProfile } from "../lib/profile.js";
 import { getTmdb } from "../lib/tmdb-client.js";
 import { batchUpsertWatchEvents, type WatchEventInput } from "../lib/batch-watch-events.js";
+import { batchUpsertRatings, type RatingInput } from "../lib/batch-ratings.js";
 import { mapWithConcurrency } from "../lib/concurrency.js";
+import {
+  boundedInt,
+  boundedNumber,
+  MAX_EPISODE,
+  MAX_IMPORT_ROWS,
+  MAX_RATING,
+  MAX_SEASON,
+  MIN_RATING,
+  normalizeImdbId,
+  tooManyRowsMessage,
+} from "../lib/import-validation.js";
 import { parseCsv } from "./export.js";
 
 const TMDB_LOOKUP_CONCURRENCY = 5;
+
+/**
+ * The Letterboxd formats carry no IMDb ids, so every unique title costs a TMDB
+ * search — outbound work against someone else's rate-limited API, not just a
+ * local row. They get a much lower ceiling than the id-carrying formats; 10k
+ * films is well past any real diary export.
+ */
+const MAX_TMDB_LOOKUP_ROWS = 10_000;
 
 const parseDate = (v: string | undefined): Date | null => {
   if (!v?.trim()) return null;
@@ -30,7 +49,9 @@ const resolveImdbIdByTitle = async (
     const tmdb = await getTmdb();
     const results = await tmdb.search("movie", title);
     const match = year ? results.find((r) => r.year === year) : results[0];
-    imdbId = (match ?? results[0])?.imdbId ?? null;
+    // TMDB is an upstream we don't control — an id from it gets the same
+    // format check as one typed into a CSV column.
+    imdbId = normalizeImdbId((match ?? results[0])?.imdbId);
   } catch {
     imdbId = null;
   }
@@ -58,6 +79,13 @@ const importRoutes: FastifyPluginAsync = async (app) => {
 
     const header = rows[0].map((h) => h.trim().toLowerCase());
     const dataRows = rows.slice(1).filter((r) => r.length > 0 && !r.every((c) => c.trim() === ""));
+    // Bounded on top of MAX_BODY_SIZE_MB: row count, not payload size, is what
+    // a single request's work scales with — and for Letterboxd that work
+    // includes a TMDB search per unique title.
+    const rowLimit = format.startsWith("letterboxd") ? MAX_TMDB_LOOKUP_ROWS : MAX_IMPORT_ROWS;
+    if (dataRows.length > rowLimit) {
+      return reply.code(413).send({ error: tooManyRowsMessage("CSV rows", rowLimit), code: "too_many_rows" });
+    }
     const col = (name: string) => header.indexOf(name);
 
     const summary = { imported: 0, ratingsImported: 0, skipped: 0 };
@@ -90,10 +118,12 @@ async function importImdbRatings(
     throw Object.assign(new Error("Unrecognized IMDb ratings export header"), { code: "BAD_FORMAT" });
   }
 
+  const ratingInputs: RatingInput[] = [];
+
   for (const row of rows) {
-    const imdbId = row[constCol]?.trim();
-    const rating = Number(row[ratingCol]);
-    if (!imdbId || !Number.isFinite(rating)) {
+    const imdbId = normalizeImdbId(row[constCol]);
+    const rating = boundedNumber(row[ratingCol], MIN_RATING, MAX_RATING);
+    if (!imdbId || rating === null) {
       summary.skipped += 1;
       continue;
     }
@@ -101,13 +131,11 @@ async function importImdbRatings(
     const titleType = (row[titleTypeCol] ?? "").toLowerCase();
     const type = titleType.includes("tv") ? "series" : "movie";
 
-    await prisma.rating.upsert({
-      where: { profileId_type_imdbId_season_episode: { profileId, type, imdbId, season: 0, episode: 0 } },
-      create: { profileId, type, imdbId, season: 0, episode: 0, rating, ratedAt },
-      update: { rating, ratedAt },
-    });
+    ratingInputs.push({ type, imdbId, season: 0, episode: 0, rating, ratedAt });
     summary.ratingsImported += 1;
   }
+
+  await batchUpsertRatings(profileId, ratingInputs);
 }
 
 async function importSimkl(
@@ -130,9 +158,10 @@ async function importSimkl(
   }
 
   const watchInputs: WatchEventInput[] = [];
+  const ratingInputs: RatingInput[] = [];
 
   for (const row of rows) {
-    const imdbId = row[imdbCol]?.trim();
+    const imdbId = normalizeImdbId(row[imdbCol]);
     if (!imdbId) {
       summary.skipped += 1;
       continue;
@@ -140,8 +169,16 @@ async function importSimkl(
 
     const rawType = (typeCol !== -1 ? row[typeCol] : "movie")?.trim().toLowerCase();
     const isEpisode = rawType === "episode" || rawType === "tv" || rawType === "show";
-    const season = seasonCol !== -1 && row[seasonCol]?.trim() ? Number(row[seasonCol]) : null;
-    const episode = episodeCol !== -1 && row[episodeCol]?.trim() ? Number(row[episodeCol]) : null;
+    const rawSeason = seasonCol !== -1 ? row[seasonCol]?.trim() : "";
+    const rawEpisode = episodeCol !== -1 ? row[episodeCol]?.trim() : "";
+    const season = rawSeason ? boundedInt(rawSeason, 0, MAX_SEASON) : null;
+    const episode = rawEpisode ? boundedInt(rawEpisode, 0, MAX_EPISODE) : null;
+    // A season/episode the column can't hold makes the row ambiguous, not just
+    // imprecise — skip it rather than filing the watch under "no episode".
+    if ((rawSeason && season === null) || (rawEpisode && episode === null)) {
+      summary.skipped += 1;
+      continue;
+    }
 
     const watchedAt = dateCol !== -1 ? parseDate(row[dateCol]) : null;
     if (watchedAt) {
@@ -150,26 +187,29 @@ async function importSimkl(
         type: watchType,
         imdbId,
         seriesImdbId: watchType === "episode" ? imdbId : null,
-        season: Number.isFinite(season) ? season : null,
-        episode: Number.isFinite(episode) ? episode : null,
+        season,
+        episode,
         watchedAt,
       });
       summary.imported += 1;
     }
 
-    const rating = ratingCol !== -1 ? Number(row[ratingCol]) : NaN;
-    if (Number.isFinite(rating) && rating > 0) {
-      const type = isEpisode ? "series" : "movie";
-      await prisma.rating.upsert({
-        where: { profileId_type_imdbId_season_episode: { profileId, type, imdbId, season: 0, episode: 0 } },
-        create: { profileId, type, imdbId, season: 0, episode: 0, rating, ratedAt: watchedAt ?? new Date() },
-        update: { rating, ratedAt: watchedAt ?? new Date() },
+    const rating = ratingCol !== -1 ? boundedNumber(row[ratingCol], MIN_RATING, MAX_RATING) : null;
+    if (rating !== null && rating > 0) {
+      ratingInputs.push({
+        type: isEpisode ? "series" : "movie",
+        imdbId,
+        season: 0,
+        episode: 0,
+        rating,
+        ratedAt: watchedAt ?? new Date(),
       });
       summary.ratingsImported += 1;
     }
   }
 
   await batchUpsertWatchEvents(profileId, watchInputs);
+  await batchUpsertRatings(profileId, ratingInputs);
 }
 
 async function importLetterboxd(
@@ -195,11 +235,12 @@ async function importLetterboxd(
   const resolvedImdbIds = await mapWithConcurrency(rows, TMDB_LOOKUP_CONCURRENCY, async (row) => {
     const title = row[nameCol]?.trim();
     if (!title) return null;
-    const year = yearCol !== -1 && row[yearCol]?.trim() ? Number(row[yearCol]) : null;
-    return resolveImdbIdByTitle(title, Number.isFinite(year) ? year : null, titleCache);
+    const year = yearCol !== -1 ? boundedInt(row[yearCol], 1800, 2999) : null;
+    return resolveImdbIdByTitle(title, year, titleCache);
   });
 
   const watchInputs: WatchEventInput[] = [];
+  const ratingInputs: RatingInput[] = [];
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -223,21 +264,18 @@ async function importLetterboxd(
       }
     }
 
-    const rawRating = ratingCol !== -1 ? Number(row[ratingCol]) : NaN;
-    if (Number.isFinite(rawRating) && rawRating > 0) {
-      // Letterboxd uses a 0.5-5 star scale; normalize to Cataloggy's 1-10 scale.
+    // Letterboxd uses a 0.5-5 star scale; normalize to Cataloggy's 1-10 scale.
+    const rawRating = ratingCol !== -1 ? boundedNumber(row[ratingCol], MIN_RATING, MAX_RATING / 2) : null;
+    if (rawRating !== null && rawRating > 0) {
       const rating = Math.round(rawRating * 2 * 10) / 10;
       const ratedAt = (watchedDateCol !== -1 ? parseDate(row[watchedDateCol]) : null) ?? new Date();
-      await prisma.rating.upsert({
-        where: { profileId_type_imdbId_season_episode: { profileId, type: "movie", imdbId, season: 0, episode: 0 } },
-        create: { profileId, type: "movie", imdbId, season: 0, episode: 0, rating, ratedAt },
-        update: { rating, ratedAt },
-      });
+      ratingInputs.push({ type: "movie", imdbId, season: 0, episode: 0, rating, ratedAt });
       summary.ratingsImported += 1;
     }
   }
 
   await batchUpsertWatchEvents(profileId, watchInputs);
+  await batchUpsertRatings(profileId, ratingInputs);
 }
 
 export default importRoutes;

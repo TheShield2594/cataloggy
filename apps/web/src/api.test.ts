@@ -261,3 +261,58 @@ describe("runtimeConfig", () => {
     expect(runtimeConfig.getProfileToken()).toBe("");
   });
 });
+
+describe("API response cache on sign-out", () => {
+  let cachesDelete: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    cachesDelete = vi.fn().mockResolvedValue(true);
+    vi.stubGlobal("caches", { delete: cachesDelete });
+  });
+
+  it("drops the cache when the token changes", async () => {
+    runtimeConfig.setToken("a-new-token");
+    await Promise.resolve();
+
+    expect(cachesDelete).toHaveBeenCalledWith("api-runtime-v1");
+  });
+
+  it("drops the cache when the token is cleared on sign-out", async () => {
+    runtimeConfig.setToken("");
+    await Promise.resolve();
+
+    expect(cachesDelete).toHaveBeenCalledWith("api-runtime-v1");
+  });
+
+  it("leaves the cache alone when the same token is written back", async () => {
+    runtimeConfig.setToken("stored-token");
+    await Promise.resolve();
+
+    expect(cachesDelete).not.toHaveBeenCalled();
+  });
+
+  it("drops the cache when the profile is cleared", async () => {
+    runtimeConfig.clearProfileId();
+    await Promise.resolve();
+
+    expect(cachesDelete).toHaveBeenCalledWith("api-runtime-v1");
+  });
+
+  it("purges on a 401 from the bearer-token middleware", async () => {
+    fetchMock.mockResolvedValue(unauthorized());
+
+    await expect(api.getLists()).rejects.toThrow();
+
+    expect(runtimeConfig.getToken()).toBe("");
+    expect(cachesDelete).toHaveBeenCalledWith("api-runtime-v1");
+  });
+
+  it("still signs out when Cache Storage rejects", async () => {
+    cachesDelete.mockRejectedValue(new Error("unavailable"));
+
+    runtimeConfig.setToken("");
+    await Promise.resolve();
+
+    expect(runtimeConfig.getToken()).toBe("");
+  });
+});

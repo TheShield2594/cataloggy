@@ -1,27 +1,24 @@
-import { createHash, timingSafeEqual } from "node:crypto";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { mintProfileToken } from "../lib/profile-token.js";
 import { hasValidProfileToken, invalidateProfileCache } from "../lib/profile.js";
+import { hashPin, isValidPinFormat, needsRehash, pinLengthError, pinMatches } from "../lib/pin-hash.js";
 import { UUID_V4_PATTERN } from "../lib/types.js";
-
-const toSha256Digest = (value: string) => createHash("sha256").update(value).digest();
-
-const hashPin = (pin: string) => toSha256Digest(pin).toString("hex");
-
-const pinMatches = (pin: string, pinHash: string): boolean => {
-  const incoming = toSha256Digest(pin);
-  const expected = Buffer.from(pinHash, "hex");
-  if (incoming.length !== expected.length) return false;
-  return timingSafeEqual(incoming, expected);
-};
 
 const MAX_PIN_ATTEMPTS = 5;
 const PIN_LOCKOUT_MS = 5 * 60 * 1000;
+/** Ceiling on the doubling below — an hour, not a permanent lockout. */
+const MAX_PIN_LOCKOUT_MS = 60 * 60 * 1000;
+/**
+ * Quiet period after which the escalation resets. Without it a household that
+ * fat-fingers a PIN twice a year would eventually be starting from the long
+ * end of the backoff; with it, only sustained guessing keeps the multiplier up.
+ */
+const LOCKOUT_DECAY_MS = 24 * 60 * 60 * 1000;
 
 const pinAttemptKey = (profileId: string) => `pinattempts:${profileId}`;
 
-type PinAttemptData = { count: number; lockedUntil: string };
+type PinAttemptData = { count: number; lockedUntil: string; lockouts?: number };
 
 const getPinLockout = async (profileId: string): Promise<{ locked: boolean; retryAfterSec: number }> => {
   const row = await prisma.kV.findUnique({ where: { key: pinAttemptKey(profileId) } });
@@ -50,26 +47,42 @@ const recordPinFailure = async (profileId: string): Promise<void> => {
     await tx.$executeRaw`SELECT value FROM "KV" WHERE key = ${key} FOR UPDATE`;
 
     const row = await tx.kV.findUnique({ where: { key } });
-    let data: PinAttemptData;
+    let data: PinAttemptData = { count: 0, lockedUntil: "", lockouts: 0 };
 
     if (row) {
       try {
-        data = JSON.parse(row.value) as PinAttemptData;
-        // If a previous lockout has expired, reset count
-        if (data.lockedUntil && new Date(data.lockedUntil).getTime() <= Date.now()) {
-          data = { count: 0, lockedUntil: "" };
-        }
-      } catch {
-        data = { count: 0, lockedUntil: "" };
+        const parsed = JSON.parse(row.value) as PinAttemptData;
+        data = {
+          count: Number.isInteger(parsed.count) ? parsed.count : 0,
+          lockedUntil: typeof parsed.lockedUntil === "string" ? parsed.lockedUntil : "",
+          lockouts: Number.isInteger(parsed.lockouts) ? (parsed.lockouts as number) : 0,
+        };
+      } catch { /* unreadable value — start the record over */ }
+
+      // A quiet day wipes the slate, escalation tier included; otherwise an
+      // expired lockout restarts the attempt count but keeps the tier, so a
+      // griefer can't reset the backoff by waiting each lockout out.
+      const sinceLastFailure = now.getTime() - row.updatedAt.getTime();
+      if (sinceLastFailure > LOCKOUT_DECAY_MS) {
+        data = { count: 0, lockedUntil: "", lockouts: 0 };
+      } else if (data.lockedUntil && new Date(data.lockedUntil).getTime() <= Date.now()) {
+        data = { count: 0, lockedUntil: "", lockouts: data.lockouts };
       }
-    } else {
-      data = { count: 0, lockedUntil: "" };
     }
 
     data.count += 1;
     if (data.count >= MAX_PIN_ATTEMPTS) {
-      data.lockedUntil = new Date(Date.now() + PIN_LOCKOUT_MS).toISOString();
+      // Each successive lockout lasts twice as long, up to an hour. A flat
+      // 5 minutes let anyone holding the shared API_TOKEN re-lock a profile
+      // every five minutes forever for the cost of five wrong guesses;
+      // doubling makes sustaining that cost the griefer real time, while the
+      // first mistake still only costs the owner five minutes. Verifying the
+      // PIN clears the record entirely.
+      const lockouts = (data.lockouts ?? 0) + 1;
+      const lockoutMs = Math.min(PIN_LOCKOUT_MS * 2 ** (lockouts - 1), MAX_PIN_LOCKOUT_MS);
+      data.lockedUntil = new Date(Date.now() + lockoutMs).toISOString();
       data.count = 0;
+      data.lockouts = lockouts;
     }
 
     await tx.kV.upsert({
@@ -82,6 +95,27 @@ const recordPinFailure = async (profileId: string): Promise<void> => {
 
 const clearPinAttempts = async (profileId: string): Promise<void> => {
   await prisma.kV.deleteMany({ where: { key: pinAttemptKey(profileId) } });
+};
+
+/**
+ * Re-hashes a PIN that just verified against a pre-scrypt (unsalted SHA-256)
+ * hash, so existing PINs move to the salted KDF the first time they're used
+ * instead of every household having to set theirs again. Best-effort: a failed
+ * write must not turn a correct PIN into a rejected one.
+ */
+const upgradePinHashIfNeeded = async (
+  app: FastifyInstance,
+  profileId: string,
+  pin: string,
+  pinHash: string
+): Promise<void> => {
+  if (!needsRehash(pinHash)) return;
+  try {
+    await prisma.profile.update({ where: { id: profileId }, data: { pinHash: await hashPin(pin) } });
+    invalidateProfileCache();
+  } catch (error) {
+    app.log.warn({ err: error, profileId }, "Failed to upgrade a legacy PIN hash");
+  }
 };
 
 const profilesRoutes: FastifyPluginAsync = async (app) => {
@@ -112,7 +146,10 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
 
     const name = body.name.trim();
     const pin = typeof body.pin === "string" ? body.pin.trim() : undefined;
-    const pinHash = pin ? hashPin(pin) : null;
+    if (pin !== undefined && !isValidPinFormat(pin)) {
+      return reply.code(400).send({ error: pinLengthError });
+    }
+    const pinHash = pin ? await hashPin(pin) : null;
 
     const profile = await prisma.profile.create({ data: { name, pinHash } });
     invalidateProfileCache();
@@ -146,11 +183,12 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
 
       const body = (request.body ?? {}) as { pin?: unknown };
       const pin = typeof body.pin === "string" ? body.pin.trim() : "";
-      if (!pin || !pinMatches(pin, profile.pinHash)) {
+      if (!pin || !(await pinMatches(pin, profile.pinHash))) {
         await recordPinFailure(profile.id);
         return reply.code(401).send({ error: "Incorrect PIN" });
       }
 
+      await upgradePinHashIfNeeded(app, profile.id, pin, profile.pinHash);
       await clearPinAttempts(profile.id);
       return reply
         .code(200)
@@ -178,10 +216,14 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
 
     // pin: omitted = leave as-is, null = remove PIN protection, string = set/change PIN.
     if (body.pin !== undefined) {
+      let nextPin: string | null = null;
       if (body.pin === null) {
         data.pinHash = null;
       } else if (typeof body.pin === "string" && body.pin.trim()) {
-        data.pinHash = hashPin(body.pin.trim());
+        nextPin = body.pin.trim();
+        if (!isValidPinFormat(nextPin)) {
+          return reply.code(400).send({ error: pinLengthError });
+        }
       } else {
         return reply.code(400).send({ error: "pin must be a non-empty string or null when provided" });
       }
@@ -199,11 +241,15 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
         }
 
         const currentPin = typeof body.currentPin === "string" ? body.currentPin.trim() : "";
-        if (!currentPin || !pinMatches(currentPin, profile.pinHash)) {
+        if (!currentPin || !(await pinMatches(currentPin, profile.pinHash))) {
           await recordPinFailure(profile.id);
           return reply.code(401).send({ error: "Incorrect current PIN" });
         }
       }
+
+      // Derived only once the caller has proved the current PIN — scrypt is
+      // deliberately expensive, and a rejected request shouldn't buy any of it.
+      if (nextPin) data.pinHash = await hashPin(nextPin);
     }
 
     if (Object.keys(data).length === 0) {
@@ -253,7 +299,7 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
 
       const body = (request.body ?? {}) as { currentPin?: unknown };
       const currentPin = typeof body.currentPin === "string" ? body.currentPin.trim() : "";
-      if (!currentPin || !pinMatches(currentPin, profile.pinHash)) {
+      if (!currentPin || !(await pinMatches(currentPin, profile.pinHash))) {
         await recordPinFailure(profile.id);
         return reply.code(401).send({ error: "Incorrect current PIN" });
       }

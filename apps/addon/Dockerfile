@@ -1,4 +1,4 @@
-FROM node:26-alpine AS build
+FROM node:26-alpine@sha256:233761595746769ebfdb6090f44fc7cdf818ae0ce62d2b37e0367723b9823e36 AS build
 
 WORKDIR /app
 RUN npm install -g corepack@latest && corepack enable
@@ -27,7 +27,7 @@ RUN pnpm --filter @cataloggy/addon build
 RUN pnpm deploy --filter @cataloggy/addon --prod --legacy \
       --config.confirmModulesPurge=false /deploy
 
-FROM node:26-alpine AS runtime
+FROM node:26-alpine@sha256:233761595746769ebfdb6090f44fc7cdf818ae0ce62d2b37e0367723b9823e36 AS runtime
 
 WORKDIR /app
 RUN apk add --no-cache wget

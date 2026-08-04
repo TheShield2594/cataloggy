@@ -73,7 +73,18 @@ cataloggy/
    docker compose up --build
    ```
 
-   By default `docker-compose.yml` runs the `:latest` image for each service, which always points at the most recent build from `main`. To pin a known-good version instead (recommended once you have a working setup, so `docker compose pull` can't silently update you into a broken state), every image is also published with a `sha-<short-sha>` tag, and with a semver tag (e.g. `v1.2.0`) for tagged releases. Replace `:latest` with a specific tag in the `image:` line for each service to pin it, and roll back the same way if an update causes problems.
+   **Pinning the version you run.** All four app images (`api`, `addon`, `web`, `migrate`) take their tag from `CATALOGGY_IMAGE_TAG` in your `.env`. Unset, it means `latest`, which always follows the most recent build from `main`: `docker compose pull` can move you onto an untested build, and there's no earlier version to fall back to. Once the stack works, pin it — every build is also published as `sha-<short-sha>`, and tagged releases as `vX.Y.Z`:
+
+   ```bash
+   # in .env, next to docker-compose.yml
+   CATALOGGY_IMAGE_TAG=v1.2.0
+   ```
+
+   ```bash
+   docker compose pull && docker compose up -d
+   ```
+
+   Rolling back is the same two commands with the previous tag. Keep all four images on one tag — the `migrate` image applies the schema the `api` image expects — which is why it's a single setting. The Postgres image and the Node base image the app images are built from are pinned by digest in the repo, so a rebuild uses the exact image the stack was tested against; Dependabot proposes those bumps weekly.
 
 3. Run the smoke checks:
 
