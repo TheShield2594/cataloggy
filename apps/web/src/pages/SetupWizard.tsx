@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
-import { Check, Clapperboard, Eye, EyeOff, Loader2, AlertCircle, ArrowLeft, ArrowRight } from "lucide-react";
+import { Check, Eye, EyeOff, Loader2, AlertCircle, ArrowLeft, ArrowRight } from "lucide-react";
 import { api, ApiError, runtimeConfig } from "../api";
+import { BrandMark } from "../components/BrandMark";
 import { StatusBadge } from "../components/settings/StatusBadge";
 import { TraktSettings } from "../components/settings/TraktSettings";
 
@@ -37,9 +38,7 @@ function WizardShell({ step, children }: { step: Step; children: React.ReactNode
     <div className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-md space-y-6">
         <div className="flex items-center justify-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-claw-500">
-            <Clapperboard className="h-6 w-6 text-claw-on" />
-          </div>
+          <BrandMark className="h-12 w-12 flex-none" />
           <span className="text-2xl font-bold">Cataloggy</span>
         </div>
 

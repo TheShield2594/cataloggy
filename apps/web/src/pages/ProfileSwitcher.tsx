@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
-import { AlertCircle, ArrowRight, Clapperboard, Loader2, Lock, Plus, X } from "lucide-react";
+import { AlertCircle, ArrowRight, Loader2, Lock, Plus, X } from "lucide-react";
 import { api, ApiError, Profile, runtimeConfig } from "../api";
+import { BrandMark } from "../components/BrandMark";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useScrollLock } from "../hooks/useScrollLock";
@@ -30,9 +31,7 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
       >
         <div ref={dialogRef} tabIndex={-1} className="w-full max-w-md space-y-6" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-claw-500">
-              <Clapperboard className="h-6 w-6 text-claw-on" />
-            </div>
+            <BrandMark className="h-12 w-12 flex-none" />
             <span className="text-2xl font-bold" style={{ color: "var(--text)" }}>Cataloggy</span>
           </div>
 
@@ -57,9 +56,7 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
     <div className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-md space-y-6">
         <div className="flex items-center justify-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-claw-500">
-            <Clapperboard className="h-6 w-6 text-claw-on" />
-          </div>
+          <BrandMark className="h-12 w-12 flex-none" />
           <span className="text-2xl font-bold" style={{ color: "var(--text)" }}>Cataloggy</span>
         </div>
 

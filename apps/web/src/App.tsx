@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, Route, Routes, useLocation } from "react-router";
-import { Clapperboard, Search, User } from "lucide-react";
+import { Search, User } from "lucide-react";
 import { api, Profile, runtimeConfig } from "./api";
 import { useCommandPalette } from "./hooks/useCommandPalette";
+import { BrandMark } from "./components/BrandMark";
 import { GhostLoader } from "./components/GhostLoader";
 import { InstallButton } from "./components/InstallButton";
 import { MobileTabBar } from "./components/MobileTabBar";
@@ -235,9 +236,7 @@ function AppShell({
       >
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-6 py-3">
           <Link to="/" className="flex items-center gap-2.5 text-lg font-bold sm:hidden" style={{ color: "var(--text)" }}>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-claw-500">
-              <Clapperboard className="h-4 w-4 text-claw-on" />
-            </div>
+            <BrandMark className="h-8 w-8 flex-none" />
             <span>Cataloggy</span>
           </Link>
 
