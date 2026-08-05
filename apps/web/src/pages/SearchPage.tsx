@@ -6,6 +6,7 @@ import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useToast } from "../hooks/useToast";
 import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
 import { mergeByRelevance } from "../utils/mergeSearchResults";
+import { formatRating, ratingLabel, RATING_MAX } from "../utils/rating";
 import {
   useSearchFilters,
   FilterType,
@@ -924,9 +925,10 @@ function ResultCard({
         <div className="mt-0.5 flex items-center gap-2">
           <span className="text-xs" style={{ color: "var(--text-mute)" }}>{result.year ?? "Unknown year"}</span>
           {result.rating != null && result.rating > 0 && (
-            <span className="flex items-center gap-0.5 text-xs text-amber-600">
+            <span className="flex items-center gap-0.5 text-xs text-amber-600" title={ratingLabel(result.rating)}>
               <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
-              {result.rating.toFixed(1)}
+              {formatRating(result.rating)}
+              <span style={{ color: "var(--text-mute)" }}>/{RATING_MAX}</span>
             </span>
           )}
           {listNames.length > 0 && (

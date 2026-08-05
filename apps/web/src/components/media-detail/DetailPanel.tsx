@@ -16,6 +16,7 @@ import { WatchHistorySection } from "./WatchHistorySection";
 import { DropShowButton } from "./DropShowButton";
 import { RecommendationsSection } from "./RecommendationsSection";
 import { formatRuntime, statusColor, WatchLogTarget } from "./detailPanelUtils";
+import { formatRating, ratingLabel, RATING_MAX } from "../../utils/rating";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useScrollLock } from "../../hooks/useScrollLock";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
@@ -364,8 +365,9 @@ export function DetailPanel({
             {/* Meta row: rating, runtime, network, genres */}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {item.rating != null && item.rating > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-600 ring-1 ring-amber-500/20">
-                  <Star className="h-3 w-3 fill-amber-500" />{item.rating.toFixed(1)}
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-600 ring-1 ring-amber-500/20" title={ratingLabel(item.rating)}>
+                  <Star className="h-3 w-3 fill-amber-500" />{formatRating(item.rating)}
+                  <span className="font-normal" style={{ color: "var(--text-mute)" }}>/{RATING_MAX}</span>
                 </span>
               )}
               {item.runtime != null && item.runtime > 0 && (

@@ -4,6 +4,7 @@ import { api, DetailedWatchStats, WatchStats, YearInReviewStats } from "../api";
 import { TicketTile } from "../components/TicketTile";
 import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
 import { useCachedState } from "../hooks/useCachedState";
+import { formatRating, ratingLabel } from "../utils/rating";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -302,8 +303,8 @@ export function StatsPage() {
                     </div>
                   )}
                   {item.rating != null && (
-                    <div className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
-                      <span className="text-2xs font-bold tabular-nums text-amber-400">{item.rating.toFixed(1)}</span>
+                    <div role="img" aria-label={ratingLabel(item.rating)} title={ratingLabel(item.rating)} className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
+                      <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-amber-400">{formatRating(item.rating)}</span>
                     </div>
                   )}
                 </div>
@@ -379,8 +380,8 @@ export function StatsPage() {
                             <Film className="h-8 w-8" style={{ color: "var(--text-mute)" }} />
                           </div>
                         )}
-                        <div className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
-                          <span className="text-2xs font-bold tabular-nums text-amber-400">{item.rating.toFixed(1)}</span>
+                        <div role="img" aria-label={ratingLabel(item.rating)} title={ratingLabel(item.rating)} className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
+                          <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-amber-400">{formatRating(item.rating)}</span>
                         </div>
                       </div>
                       <p className="mt-1.5 truncate text-sm font-medium" style={{ color: "var(--text)" }}>{item.name ?? item.imdbId}</p>
