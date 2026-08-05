@@ -9,6 +9,7 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useToast } from "../hooks/useToast";
+import { useCachedState } from "../hooks/useCachedState";
 
 type ViewMode = "agenda" | "month";
 const AGENDA_RANGES = [14, 30, 60, 90] as const;
@@ -158,8 +159,8 @@ export function CalendarPage() {
   const [view, setView] = useState<ViewMode>("agenda");
   const [agendaDays, setAgendaDays] = useState<(typeof AGENDA_RANGES)[number]>(30);
   const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()));
-  const [entries, setEntries] = useState<CalendarEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [entries, setEntries, entriesMeta] = useCachedState<CalendarEntry[]>("calendar:entries", []);
+  const [loading, setLoading] = useState(!entriesMeta.hadCachedValue);
   const [error, setError] = useState<string | null>(null);
   const [openDay, setOpenDay] = useState<Date | null>(null);
   const { showToast } = useToast();

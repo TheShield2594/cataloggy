@@ -33,6 +33,7 @@ import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { Poster } from "../components/Poster";
 import { useToast } from "../hooks/useToast";
 import { timeAgo, timeUntil } from "../utils/timeAgo";
+import { useCachedState } from "../hooks/useCachedState";
 
 /* ─── Skeleton placeholders ─── */
 
@@ -672,31 +673,37 @@ function DashboardHeader({
 /* ─── Main component ─── */
 
 export function DashboardPage() {
-  const [loading, setLoading] = useState(true);
+  // Each section keeps its data in the shared cache, so leaving the dashboard
+  // and coming back paints the same content in the first frame rather than
+  // spinning while the requests it already made are made again. The loads below
+  // are unchanged and still run on mount — they now refresh what is on screen
+  // instead of replacing it.
+  const [progress, setProgress, progressMeta] = useCachedState<SeriesProgress[]>("dash:progress", []);
+  const [history, setHistory, historyMeta] = useCachedState<WatchEvent[]>("dash:history", []);
+  const [stats, setStats] = useCachedState<WatchStats | null>("dash:stats", null);
+
+  const [loading, setLoading] = useState(!progressMeta.hadCachedValue && !historyMeta.hadCachedValue);
   const [error, setError] = useState<string | null>(null);
 
-  const [progress, setProgress] = useState<SeriesProgress[]>([]);
-  const [history, setHistory] = useState<WatchEvent[]>([]);
-  const [stats, setStats] = useState<WatchStats | null>(null);
-  const [detailedStats, setDetailedStats] = useState<DetailedWatchStats | null>(null);
-  const [detailedLoading, setDetailedLoading] = useState(true);
+  const [detailedStats, setDetailedStats, detailedMeta] = useCachedState<DetailedWatchStats | null>("dash:detailed-stats", null);
+  const [detailedLoading, setDetailedLoading] = useState(!detailedMeta.hadCachedValue);
   const [detailedFailed, setDetailedFailed] = useState(false);
 
-  const [trendingMovies, setTrendingMovies] = useState<TrendingMeta[]>([]);
-  const [trendingLoading, setTrendingLoading] = useState(true);
+  const [trendingMovies, setTrendingMovies, trendingMeta] = useCachedState<TrendingMeta[]>("dash:trending", []);
+  const [trendingLoading, setTrendingLoading] = useState(!trendingMeta.hadCachedValue);
   const [trendingNeedsTmdb, setTrendingNeedsTmdb] = useState(false);
-  const [recommendations, setRecommendations] = useState<TrendingMeta[]>([]);
-  const [recsLoading, setRecsLoading] = useState(true);
+  const [recommendations, setRecommendations, recsMeta] = useCachedState<TrendingMeta[]>("dash:recs:movie", []);
+  const [recsLoading, setRecsLoading] = useState(!recsMeta.hadCachedValue);
   const [recsFailed, setRecsFailed] = useState(false);
-  const [seriesRecs, setSeriesRecs] = useState<TrendingMeta[]>([]);
-  const [seriesRecsLoading, setSeriesRecsLoading] = useState(true);
+  const [seriesRecs, setSeriesRecs, seriesRecsMeta] = useCachedState<TrendingMeta[]>("dash:recs:series", []);
+  const [seriesRecsLoading, setSeriesRecsLoading] = useState(!seriesRecsMeta.hadCachedValue);
   const [seriesRecsFailed, setSeriesRecsFailed] = useState(false);
   const [aiActive, setAiActive] = useState(false);
   const [aiLastGeneratedAt, setAiLastGeneratedAt] = useState<string | null>(null);
   const [movieReasons, setMovieReasons] = useState<Record<string, string>>({});
   const [seriesReasons, setSeriesReasons] = useState<Record<string, string>>({});
-  const [calendarEntries, setCalendarEntries] = useState<CalendarEntry[]>([]);
-  const [calendarLoading, setCalendarLoading] = useState(true);
+  const [calendarEntries, setCalendarEntries, calendarMeta] = useCachedState<CalendarEntry[]>("dash:calendar", []);
+  const [calendarLoading, setCalendarLoading] = useState(!calendarMeta.hadCachedValue);
   const [calendarFailed, setCalendarFailed] = useState(false);
 
   const [markingNext, setMarkingNext] = useState<Set<string>>(new Set());

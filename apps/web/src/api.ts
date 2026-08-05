@@ -1,3 +1,5 @@
+import { invalidateAll as invalidateMemoryCache, setCacheScope } from "./utils/dataCache";
+
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
     super(message);
@@ -27,6 +29,13 @@ const API_BASE_OVERRIDE_KEY = "cataloggy_api_base_override";
 const TOKEN_KEY = "cataloggy_token";
 const PROFILE_ID_KEY = "cataloggy_profile_id";
 const PROFILE_TOKEN_KEY = "cataloggy_profile_token";
+
+// Identity of whoever the in-memory cache's entries belong to. Bumped rather
+// than derived from the token itself: the counter is enough to make every old
+// key unreachable after a rotation, without putting a credential in a map key.
+let identityEpoch = 0;
+
+const applyCacheScope = () => setCacheScope(`${runtimeConfig.getProfileId()}#${identityEpoch}`);
 
 export const runtimeConfig = {
   apiBaseDefault: API_BASE_DEFAULT,
@@ -62,14 +71,19 @@ export const runtimeConfig = {
     // Storage, readable by any same-origin script, until they expire a day
     // later. Signing out or rotating the token has to take them with it, so
     // the next person on a shared device inherits nothing.
-    if (trimmed !== runtimeConfig.getToken()) void purgeApiCache();
+    if (trimmed !== runtimeConfig.getToken()) {
+      identityEpoch += 1;
+      void purgeApiCache();
+    }
 
     if (!trimmed) {
       window.localStorage.removeItem(TOKEN_KEY);
+      applyCacheScope();
       return;
     }
 
     window.localStorage.setItem(TOKEN_KEY, trimmed);
+    applyCacheScope();
   },
   getProfileId() {
     return window.localStorage.getItem(PROFILE_ID_KEY) ?? "";
@@ -78,10 +92,16 @@ export const runtimeConfig = {
     const trimmed = value.trim();
     if (!trimmed) {
       window.localStorage.removeItem(PROFILE_ID_KEY);
+      applyCacheScope();
       return;
     }
 
     window.localStorage.setItem(PROFILE_ID_KEY, trimmed);
+    // Switching profiles must not let the new one read the old one's rows out
+    // of memory, the same way the service-worker cache is partitioned by
+    // profile — so the scope changes and the previous entries become
+    // unreachable in the same tick the id does.
+    applyCacheScope();
   },
   clearProfileId() {
     // Leaving a profile (its access token expired, or it locked) is a sign-out
@@ -89,6 +109,7 @@ export const runtimeConfig = {
     void purgeApiCache();
     window.localStorage.removeItem(PROFILE_ID_KEY);
     window.localStorage.removeItem(PROFILE_TOKEN_KEY);
+    applyCacheScope();
   },
   // Signed capability returned by POST /profiles/:id/verify. Sent as the
   // x-profile-token header so PIN-protected profiles pass the server-side gate.
@@ -492,6 +513,7 @@ const API_CACHE_NAME = "api-runtime-v1";
  * Storage is same-origin, so the page can delete the cache itself.
  */
 export async function purgeApiCache(): Promise<void> {
+  invalidateMemoryCache();
   await notifyServiceWorkerToInvalidateApiCache();
   try {
     if (typeof caches !== "undefined") await caches.delete(API_CACHE_NAME);
@@ -565,6 +587,11 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
     clearTimeout(timeoutId);
     init?.signal?.removeEventListener("abort", onExternalAbort);
     if (method !== "GET") {
+      // Same over-invalidate-rather-than-serve-stale rule the service-worker
+      // cache follows, applied to the in-memory one: a write can touch rows on
+      // pages other than the one that issued it, and the cost of being wrong
+      // here is showing the user data they just changed.
+      invalidateMemoryCache();
       await notifyServiceWorkerToInvalidateApiCache();
     }
   }

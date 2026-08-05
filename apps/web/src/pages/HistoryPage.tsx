@@ -4,6 +4,7 @@ import { AlertCircle, Calendar, Film, Trash2, Tv } from "lucide-react";
 import { api, SearchResult, WatchEvent } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useToast } from "../hooks/useToast";
+import { useCachedState } from "../hooks/useCachedState";
 import { relogWatchEvent } from "../utils/watchEvents";
 
 const PAGE_SIZE = 25;
@@ -38,10 +39,12 @@ function toSearchResult(event: WatchEvent): SearchResult {
 }
 
 export function HistoryPage() {
-  const [events, setEvents] = useState<WatchEvent[]>([]);
+  // Only the first page is cached. Anything scrolled to beyond it is cheap to
+  // re-reach and would otherwise let the cached entry grow without bound.
+  const [events, setEvents, eventsMeta] = useCachedState<WatchEvent[]>("history:events", []);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!eventsMeta.hadCachedValue);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);

@@ -5,6 +5,7 @@ import { api, CatalogList, ListItemWithMeta, MediaType, SearchResult } from "../
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useToast } from "../hooks/useToast";
+import { useCachedState } from "../hooks/useCachedState";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { mergeByRelevance } from "../utils/mergeSearchResults";
@@ -294,12 +295,12 @@ function AddItemModal({
 }
 
 export function ListsPage() {
-  const [lists, setLists] = useState<CatalogList[]>([]);
+  const [lists, setLists, listsMeta] = useCachedState<CatalogList[]>("lists:all", []);
   // The selection lives in the URL so a list can be linked, bookmarked and
   // reloaded, and so Back undoes a list switch instead of leaving the page.
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedListId = searchParams.get("list");
-  const [listsLoaded, setListsLoaded] = useState(false);
+  const [listsLoaded, setListsLoaded] = useState(listsMeta.hadCachedValue);
   const [items, setItems] = useState<ListItemWithMeta[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const [error, setError] = useState<string | null>(null);

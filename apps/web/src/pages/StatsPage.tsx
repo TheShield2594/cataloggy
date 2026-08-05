@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, Award, BarChart3, Calendar, Clock, Film, Flame, Minus, Star, Trophy, TrendingDown, TrendingUp } from "lucide-react";
 import { api, DetailedWatchStats, WatchStats, YearInReviewStats } from "../api";
 import { TicketTile } from "../components/TicketTile";
+import { useCachedState } from "../hooks/useCachedState";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -37,10 +38,10 @@ function nextMilestone(milestones: Milestone[], value: number) {
 }
 
 export function StatsPage() {
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats, statsMeta] = useCachedState<WatchStats | null>("stats:summary", null);
+  const [detailed, setDetailed, detailedMeta] = useCachedState<DetailedWatchStats | null>("stats:detailed", null);
+  const [loading, setLoading] = useState(!statsMeta.hadCachedValue || !detailedMeta.hadCachedValue);
   const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<WatchStats | null>(null);
-  const [detailed, setDetailed] = useState<DetailedWatchStats | null>(null);
   const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
   const [year, setYear] = useState(() => new Date().getFullYear() - 1);
   const [yearReview, setYearReview] = useState<YearInReviewStats | null>(null);
