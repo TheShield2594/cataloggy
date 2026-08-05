@@ -9,6 +9,7 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useToast } from "../hooks/useToast";
+import { useCachedState } from "../hooks/useCachedState";
 
 type ViewMode = "agenda" | "month";
 const AGENDA_RANGES = [14, 30, 60, 90] as const;
@@ -158,12 +159,10 @@ export function CalendarPage() {
   const [view, setView] = useState<ViewMode>("agenda");
   const [agendaDays, setAgendaDays] = useState<(typeof AGENDA_RANGES)[number]>(30);
   const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()));
-  const [entries, setEntries] = useState<CalendarEntry[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openDay, setOpenDay] = useState<Date | null>(null);
   const { showToast } = useToast();
-  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
+  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading, detail: panelDetail, detailLoading: panelDetailLoading } = useDetailPanel();
 
   const today = useMemo(() => startOfDay(new Date()), []);
   // The month grid needs width the phone doesn't have, so on narrow screens
@@ -180,6 +179,15 @@ export function CalendarPage() {
     const diff = Math.round((startOfDay(monthEnd).getTime() - today.getTime()) / 86_400_000);
     return Math.min(Math.max(diff, 1), MAX_CALENDAR_DAYS);
   }, [activeView, agendaDays, monthCursor, today]);
+
+  // Keyed by the range, because the range is part of the question: the agenda's
+  // selector and the month grid ask for different spans, and seeding a 7-day
+  // answer into a 30-day view would paint the wrong thing for a frame.
+  const [entries, setEntries, entriesMeta] = useCachedState<CalendarEntry[]>(
+    `calendar:entries:${daysNeeded}`,
+    []
+  );
+  const [loading, setLoading] = useState(!entriesMeta.hadCachedValue);
 
   // The displayed month is entirely beyond what the API can return.
   const monthOutOfRange = useMemo(() => {
@@ -204,7 +212,10 @@ export function CalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+    // `setEntries` is bound to the current day range's cache key, so it has to
+    // be a dependency — capturing the first range's setter would file every
+    // later range's results under the wrong key.
+  }, [setEntries]);
 
   useEffect(() => {
     if (monthOutOfRange) {
@@ -213,7 +224,7 @@ export function CalendarPage() {
       return;
     }
     void load(daysNeeded);
-  }, [daysNeeded, monthOutOfRange, load]);
+  }, [daysNeeded, monthOutOfRange, load, setEntries]);
 
   const entriesByDate = useMemo(() => {
     const map = new Map<string, CalendarEntry[]>();
@@ -500,6 +511,8 @@ export function CalendarPage() {
           item={selectedItem}
           history={panelHistory}
           historyLoading={panelHistoryLoading}
+          detail={panelDetail}
+          detailLoading={panelDetailLoading}
           onClose={() => setSelectedItem(null)}
           onShowToast={showToast}
           onHistoryChange={(events) => setPanelHistory(events)}

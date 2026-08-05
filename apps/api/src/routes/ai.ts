@@ -15,6 +15,7 @@ import {
   getAiRecommendations,
 } from "../lib/ai.js";
 import { resolveProfile } from "../lib/profile.js";
+import { loadRecommendations } from "../lib/recommendations.js";
 import { resolveAiProviderUrl, validateAiProviderUrl } from "../lib/ssrf.js";
 import { getMetadataType } from "../lib/types.js";
 import type { StremioMetaPreview, StremioMetaType } from "../lib/types.js";
@@ -31,30 +32,7 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
       if (!imdbId) return reply.code(400).send({ error: "imdbId is required" });
 
-      const cacheKey = `recs:${rawType}:${imdbId}`;
-      const [cached, rpdbKey] = await Promise.all([
-        Promise.resolve(trendingCacheGet(cacheKey)),
-        getRpdbApiKey(),
-      ]);
-      if (cached) return { metas: applyRpdbToMetaList(cached.data, rpdbKey) };
-
-      const meta = await prisma.metadata.findUnique({
-        where: { imdbId_type: { imdbId, type } },
-        select: { tmdbId: true },
-      });
-
-      if (!meta?.tmdbId) {
-        try {
-          const { fetchMetadata } = await import("../lib/metadata.js");
-          const fetched = await fetchMetadata(type, imdbId);
-          if (!fetched?.tmdbId) return { metas: [] };
-          return await getRecommendations(rawType, type, fetched.tmdbId, cacheKey);
-        } catch {
-          return { metas: [] };
-        }
-      }
-
-      return await getRecommendations(rawType, type, meta.tmdbId, cacheKey);
+      return loadRecommendations(rawType, type, imdbId);
     }
   );
 
@@ -505,33 +483,5 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 };
-
-async function getRecommendations(
-  rawType: string,
-  type: import("@prisma/client").MetadataType,
-  tmdbId: number,
-  cacheKey: string
-) {
-  try {
-    const tmdb = await getTmdb();
-    const results = await tmdb.recommendations(type, tmdbId);
-    await Promise.all(results.map((r) => upsertMetadata(r)));
-    const metas: StremioMetaPreview[] = results.map((r) => ({
-      id: r.imdbId,
-      type: rawType as StremioMetaType,
-      name: r.name,
-      poster: r.poster ?? undefined,
-      year: r.year ?? undefined,
-      description: r.description ?? undefined,
-      genres: r.genres,
-      rating: r.rating ?? undefined,
-    }));
-    trendingCacheSet(cacheKey, { data: metas });
-    const rpdbKey = await getRpdbApiKey();
-    return { metas: applyRpdbToMetaList(metas, rpdbKey) };
-  } catch {
-    return { metas: [] };
-  }
-}
 
 export default aiRoutes;

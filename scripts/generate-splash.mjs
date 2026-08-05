@@ -16,7 +16,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-const LOGO = join(repoRoot, "apps/web/public/icons/logo-original.png");
+// Deliberately outside `apps/web/public/`: this is a 1.2 MB build-time source,
+// and anything under `public/` is copied into `dist/` and precached by the
+// service worker, so keeping it there shipped it to every install for nothing.
+const LOGO = join(repoRoot, "apps/web/brand/logo-original.png");
 const OUT_DIR = join(repoRoot, "apps/web/public/splash");
 
 // Keep in sync with the PWA manifest's `background_color` in

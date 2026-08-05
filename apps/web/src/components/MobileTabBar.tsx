@@ -12,6 +12,7 @@ import {
   Settings,
   type LucideIcon,
 } from "lucide-react";
+import { prefetchRoute } from "../utils/routePrefetch";
 
 type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean };
 
@@ -79,6 +80,10 @@ export function MobileTabBar({ pathname }: { pathname: string }) {
               aria-current={isActive ? "page" : undefined}
               className={`${TAB_CLASSES} ${isActive ? "text-claw-text" : ""}`}
               style={isActive ? {} : { color: "var(--text-dim)" }}
+              // Touch-down leads the click by ~100 ms, and on a warm connection
+              // that is most of the chunk fetch. The idle pass in App.tsx has
+              // usually beaten us here; this covers the taps that come first.
+              onTouchStart={() => prefetchRoute(item.to)}
             >
               {isActive && <ActiveMarker />}
               <Icon className={`h-5 w-5 flex-none ${isActive ? "fill-claw-500/20" : ""}`} />
@@ -148,6 +153,8 @@ function MoreSheet({ pathname, onClose }: { pathname: string; onClose: () => voi
                   ref={index === 0 ? firstLinkRef : undefined}
                   to={item.to}
                   onClick={onClose}
+                  onTouchStart={() => prefetchRoute(item.to)}
+                  onPointerEnter={() => prefetchRoute(item.to)}
                   aria-current={isActive ? "page" : undefined}
                   className={`flex min-h-11 items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 ${isActive ? "text-claw-text" : ""}`}
                   style={isActive ? { background: "var(--surface)" } : { color: "var(--text-dim)" }}

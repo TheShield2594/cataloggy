@@ -1,3 +1,5 @@
+import { invalidateAll as invalidateMemoryCache, setCacheScope } from "./utils/dataCache";
+
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
     super(message);
@@ -27,6 +29,13 @@ const API_BASE_OVERRIDE_KEY = "cataloggy_api_base_override";
 const TOKEN_KEY = "cataloggy_token";
 const PROFILE_ID_KEY = "cataloggy_profile_id";
 const PROFILE_TOKEN_KEY = "cataloggy_profile_token";
+
+// Identity of whoever the in-memory cache's entries belong to. Bumped rather
+// than derived from the token itself: the counter is enough to make every old
+// key unreachable after a rotation, without putting a credential in a map key.
+let identityEpoch = 0;
+
+const applyCacheScope = () => setCacheScope(`${runtimeConfig.getProfileId()}#${identityEpoch}`);
 
 export const runtimeConfig = {
   apiBaseDefault: API_BASE_DEFAULT,
@@ -62,14 +71,19 @@ export const runtimeConfig = {
     // Storage, readable by any same-origin script, until they expire a day
     // later. Signing out or rotating the token has to take them with it, so
     // the next person on a shared device inherits nothing.
-    if (trimmed !== runtimeConfig.getToken()) void purgeApiCache();
+    if (trimmed !== runtimeConfig.getToken()) {
+      identityEpoch += 1;
+      void purgeApiCache();
+    }
 
     if (!trimmed) {
       window.localStorage.removeItem(TOKEN_KEY);
+      applyCacheScope();
       return;
     }
 
     window.localStorage.setItem(TOKEN_KEY, trimmed);
+    applyCacheScope();
   },
   getProfileId() {
     return window.localStorage.getItem(PROFILE_ID_KEY) ?? "";
@@ -78,10 +92,16 @@ export const runtimeConfig = {
     const trimmed = value.trim();
     if (!trimmed) {
       window.localStorage.removeItem(PROFILE_ID_KEY);
+      applyCacheScope();
       return;
     }
 
     window.localStorage.setItem(PROFILE_ID_KEY, trimmed);
+    // Switching profiles must not let the new one read the old one's rows out
+    // of memory, the same way the service-worker cache is partitioned by
+    // profile — so the scope changes and the previous entries become
+    // unreachable in the same tick the id does.
+    applyCacheScope();
   },
   clearProfileId() {
     // Leaving a profile (its access token expired, or it locked) is a sign-out
@@ -89,6 +109,7 @@ export const runtimeConfig = {
     void purgeApiCache();
     window.localStorage.removeItem(PROFILE_ID_KEY);
     window.localStorage.removeItem(PROFILE_TOKEN_KEY);
+    applyCacheScope();
   },
   // Signed capability returned by POST /profiles/:id/verify. Sent as the
   // x-profile-token header so PIN-protected profiles pass the server-side gate.
@@ -304,11 +325,40 @@ export type WatchProvider = {
   logo: string | null;
 };
 
+/** The metadata row behind a title, as `/meta/:type/:imdbId` returns it. */
+export type ItemMeta = {
+  imdbId: string; type: string; name: string; year: number | null; poster: string | null;
+  description: string | null; genres: string[]; rating: number | null;
+  imdbRating: number | null; rtScore: number | null; mcScore: number | null;
+  runtime: number | null; certification: string | null;
+  status: string | null; network: string | null; releaseDate: string | null;
+  tmdbId: number | null; background: string | null;
+};
+
+export type CastMemberInfo = {
+  name: string; character: string; photo: string | null; order: number;
+};
+
+export type SeasonSummary = {
+  seasonNumber: number; name: string; episodeCount: number; airYear: number | null; poster: string | null;
+};
+
 export type WatchProviders = {
   link: string | null;
   flatrate: WatchProvider[];
   free: WatchProvider[];
   ads: WatchProvider[];
+};
+
+/** Everything the detail panel opens with, as `/meta/:type/:imdbId/bundle` returns it. */
+export type DetailBundle = {
+  meta: ItemMeta;
+  cast: CastMemberInfo[];
+  director: string | null;
+  providers: WatchProviders;
+  recommendations: TrendingMeta[];
+  seasons: SeasonSummary[];
+  dropped: boolean;
 };
 
 export type EpisodeInfo = {
@@ -474,6 +524,7 @@ const API_CACHE_NAME = "api-runtime-v1";
  * Storage is same-origin, so the page can delete the cache itself.
  */
 export async function purgeApiCache(): Promise<void> {
+  invalidateMemoryCache();
   await notifyServiceWorkerToInvalidateApiCache();
   try {
     if (typeof caches !== "undefined") await caches.delete(API_CACHE_NAME);
@@ -496,6 +547,28 @@ export function notifyServiceWorkerToInvalidateApiCache(): Promise<void> {
   });
 }
 
+declare global {
+  interface Window {
+    /** Set by public/preload-dashboard.js — in-flight responses started during HTML parse. */
+    __CATALOGGY_PRELOAD__?: Record<string, Promise<Response | null>>;
+  }
+}
+
+/**
+ * Claims the response that `preload-dashboard.js` started for `path`, if there
+ * is one. Each is claimed at most once and removed as it is taken, so a later
+ * refresh of the same endpoint goes to the network as normal — this stands in
+ * for the very first request of a session, not for the cache.
+ */
+function claimPreloadedResponse(path: string): Promise<Response | null> | null {
+  const preloaded = window.__CATALOGGY_PRELOAD__;
+  if (!preloaded) return null;
+  const pending = preloaded[path];
+  if (!pending) return null;
+  delete preloaded[path];
+  return pending;
+}
+
 async function request<T>(path: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const method = (init?.method ?? "GET").toUpperCase();
   const controller = new AbortController();
@@ -513,14 +586,40 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
 
   let response: Response;
   try {
-    response = await fetch(`${runtimeConfig.getApiBase()}${path}`, {
-      ...init,
-      signal: controller.signal,
-      headers: {
-        ...authHeaders(init?.body != null),
-        ...(init?.headers ?? {})
-      }
-    });
+    // A GET the preload script already started: adopt it rather than issue a
+    // second one. Only for plain GETs — anything with a body, custom headers or
+    // a caller-supplied signal is not the request that was preloaded.
+    const claimed =
+      method === "GET" && !init?.body && !init?.headers && !init?.signal
+        ? claimPreloadedResponse(path)
+        : null;
+
+    // An adopted preload is a promise nothing else governs: the timeout above
+    // and any caller abort apply to `fetch`, not to a request the page head
+    // started. Racing it against the same signal keeps both behaving alike, so a
+    // preload that never settles cannot hang the caller forever.
+    const preloaded = claimed
+      ? await Promise.race([
+          claimed,
+          new Promise<never>((_, reject) => {
+            const abort = () =>
+              reject(new DOMException("The operation was aborted.", "AbortError"));
+            if (controller.signal.aborted) abort();
+            else controller.signal.addEventListener("abort", abort, { once: true });
+          }),
+        ])
+      : null;
+
+    response =
+      preloaded ??
+      (await fetch(`${runtimeConfig.getApiBase()}${path}`, {
+        ...init,
+        signal: controller.signal,
+        headers: {
+          ...authHeaders(init?.body != null),
+          ...(init?.headers ?? {})
+        }
+      }));
   } catch (err) {
     if (init?.signal?.aborted) {
       // The caller cancelled this request on purpose (e.g. a newer request
@@ -547,6 +646,11 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
     clearTimeout(timeoutId);
     init?.signal?.removeEventListener("abort", onExternalAbort);
     if (method !== "GET") {
+      // Same over-invalidate-rather-than-serve-stale rule the service-worker
+      // cache follows, applied to the in-memory one: a write can touch rows on
+      // pages other than the one that issued it, and the cost of being wrong
+      // here is showing the user data they just changed.
+      invalidateMemoryCache();
       await notifyServiceWorkerToInvalidateApiCache();
     }
   }
@@ -790,9 +894,6 @@ export const api = {
   getPersonalRecommendations(type: MediaType, limit = 20) {
     return request<{ metas: TrendingMeta[] }>(`/recommendations/personal?type=${type}&limit=${limit}`);
   },
-  getRecommendations(type: MediaType, imdbId: string, signal?: AbortSignal) {
-    return request<{ metas: TrendingMeta[] }>(`/recommendations?type=${type}&imdbId=${encodeURIComponent(imdbId)}`, { signal });
-  },
   // Calendar
   getCalendar(days = 30) {
     return request<{ calendar: CalendarEntry[] }>(`/calendar?days=${days}`);
@@ -808,25 +909,25 @@ export const api = {
   getAnimeCatalog(type: MediaType) {
     return request<{ metas: TrendingMeta[] }>(`/anime?type=${type}`);
   },
-  getItemMeta(type: MediaType, imdbId: string, signal?: AbortSignal) {
-    return request<{
-      imdbId: string; type: string; name: string; year: number | null; poster: string | null;
-      description: string | null; genres: string[]; rating: number | null;
-      imdbRating: number | null; rtScore: number | null; mcScore: number | null;
-      runtime: number | null; certification: string | null;
-      status: string | null; network: string | null; releaseDate: string | null;
-      tmdbId: number | null; background: string | null;
-    }>(`/meta/${type}/${encodeURIComponent(imdbId)}`, { signal });
+  /**
+   * Everything the detail panel opens with, in one request.
+   *
+   * The panel used to fire six in parallel — meta, cast, providers,
+   * recommendations, and for a series seasons and dropped-state. Parallel isn't
+   * free on a phone: they queue behind the connection limit, and the panel could
+   * only finish filling in when the slowest of the six landed.
+   */
+  getDetailBundle(type: MediaType, imdbId: string, signal?: AbortSignal) {
+    return request<DetailBundle>(`/meta/${type}/${encodeURIComponent(imdbId)}/bundle`, { signal });
   },
-  getCast(type: MediaType, imdbId: string, signal?: AbortSignal) {
-    return request<{
-      cast: Array<{ name: string; character: string; photo: string | null; order: number }>;
-      director: string | null;
-    }>(`/meta/${type}/${encodeURIComponent(imdbId)}/cast`, { signal });
-  },
-  getSeasons(imdbId: string, signal?: AbortSignal) {
-    return request<{ seasons: Array<{ seasonNumber: number; name: string; episodeCount: number; airYear: number | null; poster: string | null }> }>(
-      `/meta/series/${encodeURIComponent(imdbId)}/seasons`, { signal }
+  /**
+   * Still its own call: the search page fetches providers per result row as the
+   * row scrolls into view, which is a different access pattern from the panel's
+   * one-shot bundle.
+   */
+  getWatchProviders(type: MediaType, imdbId: string, signal?: AbortSignal) {
+    return request<{ providers: WatchProviders }>(
+      `/meta/${type}/${encodeURIComponent(imdbId)}/providers`, { signal }
     );
   },
   getSeasonEpisodes(imdbId: string, seasonNumber: number, signal?: AbortSignal) {
@@ -856,14 +957,6 @@ export const api = {
       `/series/${encodeURIComponent(imdbId)}/season/${seasonNumber}/watch-all`,
       { method: "POST", body: JSON.stringify({ episodeNumbers }) }
     );
-  },
-  getWatchProviders(type: MediaType, imdbId: string, signal?: AbortSignal) {
-    return request<{ providers: WatchProviders }>(
-      `/meta/${type}/${encodeURIComponent(imdbId)}/providers`, { signal }
-    );
-  },
-  getDropped(imdbId: string, signal?: AbortSignal) {
-    return request<{ dropped: boolean }>(`/show/${encodeURIComponent(imdbId)}/dropped`, { signal });
   },
   dropShow(imdbId: string) {
     return request<{ dropped: boolean }>(`/show/${encodeURIComponent(imdbId)}/drop`, { method: "POST" });

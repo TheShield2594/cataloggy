@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
+import { resetDataCacheForTests } from "../utils/dataCache";
 
 // jsdom has no layout engine, so ResizeObserver — used by the carousel scroll
 // hook — is missing. A no-op stub is enough: tests drive scroll state directly.
@@ -63,4 +64,9 @@ window.matchMedia ??= ((query: string) => ({
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+  // The data cache is module state that outlives a render, which is the whole
+  // point of it — but across test cases that means one case's fixture seeding
+  // the next case's first paint. Reset it here rather than in each page's suite,
+  // since any component reading cached data is exposed to it.
+  resetDataCacheForTests();
 });

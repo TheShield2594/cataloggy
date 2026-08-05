@@ -1,13 +1,24 @@
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { getTmdb } from "../lib/tmdb-client.js";
-import { upsertMetadata, fetchMetadata, syncMetadata } from "../lib/metadata.js";
+import { upsertMetadata, syncMetadata } from "../lib/metadata.js";
 import { getOmdbApiKey, fetchOmdbRatings, upsertOmdbRatings } from "../lib/omdb.js";
-import { getRpdbApiKey, withRpdbPoster } from "../lib/rpdb.js";
 import { getMetadataType } from "../lib/types.js";
-import { castCache, episodesCache, seasonsCache, watchProvidersCache } from "../lib/cache.js";
-import { getRegionSetting } from "../lib/settings.js";
+import {
+  EMPTY_PROVIDERS,
+  loadCast,
+  loadEpisodes,
+  loadMeta,
+  loadProviders,
+  loadSeasons,
+} from "../lib/detail.js";
+import { loadRecommendations } from "../lib/recommendations.js";
+import { droppedSeriesKey } from "../lib/dropped-shows.js";
+import { resolveProfile } from "../lib/profile.js";
 import { searchAnime } from "../lib/anilist-client.js";
+
+/** Resolves to `fallback` instead of rejecting, for the bundle's optional sections. */
+const settled = <T,>(work: Promise<T>, fallback: T): Promise<T> => work.catch(() => fallback);
 
 const metadataRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { type: string; imdbId: string } }>(
@@ -23,33 +34,10 @@ const metadataRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: "imdbId is required" });
       }
 
-      const [existing, rpdbKey] = await Promise.all([
-        prisma.metadata.findUnique({ where: { imdbId_type: { imdbId, type } } }),
-        getRpdbApiKey(),
-      ]);
-
-      const isDetailComplete = (row: typeof existing) =>
-        row != null &&
-        row.runtime != null &&
-        row.certification != null &&
-        row.status != null &&
-        row.network != null &&
-        row.releaseDate != null &&
-        (row.imdbRating != null || row.rtScore != null || row.mcScore != null);
-
-      if (isDetailComplete(existing)) {
-        return { ...existing, poster: withRpdbPoster(imdbId, existing!.poster, rpdbKey) };
-      }
-
       try {
-        const metadata = await fetchMetadata(type, imdbId);
-        if (!metadata) {
-          return reply.code(404).send({ error: "Metadata not found" });
-        }
-        const fresh = await prisma.metadata.findUnique({ where: { imdbId_type: { imdbId, type } } });
-        return fresh
-          ? { ...fresh, poster: withRpdbPoster(imdbId, fresh.poster, rpdbKey) }
-          : { ...metadata, poster: withRpdbPoster(imdbId, metadata.poster, rpdbKey) };
+        const meta = await loadMeta(type, imdbId);
+        if (!meta) return reply.code(404).send({ error: "Metadata not found" });
+        return meta;
       } catch (error) {
         request.log.error(error, "Metadata fetch failed");
         return reply.code(500).send({ error: "Metadata fetch failed" });
@@ -63,72 +51,14 @@ const metadataRoutes: FastifyPluginAsync = async (app) => {
       const type = getMetadataType(request.params.type);
       if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
 
-      const imdbId = request.params.imdbId.trim();
-      const cacheKey = `cast:${type}:${imdbId}`;
-      const cached = castCache.get(cacheKey);
-      if (cached) return cached;
-
-      let meta = await prisma.metadata.findUnique({
-        where: { imdbId_type: { imdbId, type } },
-        select: { tmdbId: true },
-      });
-
-      if (!meta?.tmdbId) {
-        await fetchMetadata(type, imdbId).catch((err) =>
-          request.log.warn({ imdbId, type, err }, "Background metadata fetch failed")
-        );
-        meta = await prisma.metadata.findUnique({
-          where: { imdbId_type: { imdbId, type } },
-          select: { tmdbId: true },
-        });
-      }
-
-      if (!meta?.tmdbId) return { cast: [], director: null };
-
-      try {
-        const tmdb = await getTmdb();
-        const credits = await tmdb.getCast(type, meta.tmdbId);
-        castCache.set(cacheKey, credits);
-        return credits;
-      } catch {
-        return { cast: [], director: null };
-      }
+      return loadCast(type, request.params.imdbId.trim(), request.log);
     }
   );
 
   app.get<{ Params: { imdbId: string } }>(
     "/meta/series/:imdbId/seasons",
     async (request) => {
-      const imdbId = request.params.imdbId.trim();
-      const cacheKey = `seasons:${imdbId}`;
-      const cached = seasonsCache.get(cacheKey);
-      if (cached) return { seasons: cached };
-
-      let meta = await prisma.metadata.findUnique({
-        where: { imdbId_type: { imdbId, type: "series" } },
-        select: { tmdbId: true },
-      });
-
-      if (!meta?.tmdbId) {
-        await fetchMetadata("series", imdbId).catch((err) =>
-          request.log.warn({ imdbId, err }, "Background metadata fetch failed")
-        );
-        meta = await prisma.metadata.findUnique({
-          where: { imdbId_type: { imdbId, type: "series" } },
-          select: { tmdbId: true },
-        });
-      }
-
-      if (!meta?.tmdbId) return { seasons: [] };
-
-      try {
-        const tmdb = await getTmdb();
-        const seasons = await tmdb.getSeasons(meta.tmdbId);
-        seasonsCache.set(cacheKey, seasons);
-        return { seasons };
-      } catch {
-        return { seasons: [] };
-      }
+      return { seasons: await loadSeasons(request.params.imdbId.trim(), request.log) };
     }
   );
 
@@ -141,35 +71,7 @@ const metadataRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: "seasonNumber must be a positive integer" });
       }
 
-      const cacheKey = `episodes:${imdbId}:${seasonNumber}`;
-      const cached = episodesCache.get(cacheKey);
-      if (cached) return { episodes: cached };
-
-      let meta = await prisma.metadata.findUnique({
-        where: { imdbId_type: { imdbId, type: "series" } },
-        select: { tmdbId: true },
-      });
-
-      if (!meta?.tmdbId) {
-        await fetchMetadata("series", imdbId).catch((err) =>
-          request.log.warn({ imdbId, err }, "Background metadata fetch failed")
-        );
-        meta = await prisma.metadata.findUnique({
-          where: { imdbId_type: { imdbId, type: "series" } },
-          select: { tmdbId: true },
-        });
-      }
-
-      if (!meta?.tmdbId) return { episodes: [] };
-
-      try {
-        const tmdb = await getTmdb();
-        const episodes = await tmdb.getSeasonEpisodes(meta.tmdbId, seasonNumber);
-        episodesCache.set(cacheKey, episodes);
-        return { episodes };
-      } catch {
-        return { episodes: [] };
-      }
+      return { episodes: await loadEpisodes(imdbId, seasonNumber, request.log) };
     }
   );
 
@@ -177,39 +79,71 @@ const metadataRoutes: FastifyPluginAsync = async (app) => {
     "/meta/:type/:imdbId/providers",
     async (request) => {
       const type = getMetadataType(request.params.type);
-      if (!type) return { providers: { link: null, flatrate: [], free: [], ads: [] } };
+      if (!type) return { providers: EMPTY_PROVIDERS };
+      return { providers: await loadProviders(type, request.params.imdbId.trim(), request.log) };
+    }
+  );
+
+  // Everything the detail panel needs, in one round trip.
+  //
+  // Opening a title used to cost six parallel requests — meta, cast, providers,
+  // recommendations, and for a series seasons and dropped-state — each paying
+  // its own HTTP overhead and each independently resolving the same TMDB ID.
+  // Parallel is not free on a phone: they queue behind the connection limit, and
+  // the panel could only fill in as the slowest of six arrived. Server-side the
+  // work is unchanged and still concurrent, but it is now one request, one ID
+  // resolution and one response the client can render in a single pass.
+  //
+  // The per-section routes stay: the season-episode list is still fetched on
+  // demand when a season is expanded, and a bundle is the wrong shape for that.
+  app.get<{ Params: { type: string; imdbId: string } }>(
+    "/meta/:type/:imdbId/bundle",
+    // Needed for the dropped flag, which is per-profile. The rest of this
+    // plugin is profile-agnostic, so the hook is scoped to this one route.
+    { preHandler: resolveProfile },
+    async (request, reply) => {
+      const type = getMetadataType(request.params.type);
+      if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
 
       const imdbId = request.params.imdbId.trim();
-      const region = await getRegionSetting();
-      const cacheKey = `providers:${type}:${imdbId}:${region}`;
-      const cached = watchProvidersCache.get(cacheKey);
-      if (cached) return { providers: cached };
+      if (!imdbId) return reply.code(400).send({ error: "imdbId is required" });
 
-      let meta = await prisma.metadata.findUnique({
-        where: { imdbId_type: { imdbId, type } },
-        select: { tmdbId: true },
-      });
+      const isSeries = type === "series";
+      const profileId = request.profileId!;
 
-      if (!meta?.tmdbId) {
-        await fetchMetadata(type, imdbId).catch((err) =>
-          request.log.warn({ imdbId, type, err }, "Background metadata fetch failed")
-        );
-        meta = await prisma.metadata.findUnique({
-          where: { imdbId_type: { imdbId, type } },
-          select: { tmdbId: true },
-        });
-      }
+      // `meta` is the panel — without it there is nothing to render, so its
+      // rejection is allowed to surface as a 500. The other five are sections
+      // within it, and each already degrades to an empty result of its own
+      // accord; `allSettled` covers the paths that get past those guards (a
+      // database blip inside the dropped lookup, an upstream throwing before its
+      // own try block) so one failing row cannot take the whole panel with it.
+      const meta = await loadMeta(type, imdbId);
+      if (!meta) return reply.code(404).send({ error: "Metadata not found" });
 
-      if (!meta?.tmdbId) return { providers: { link: null, flatrate: [], free: [], ads: [] } };
+      const [cast, providers, recommendations, seasons, dropped] = await Promise.all([
+        settled(loadCast(type, imdbId, request.log), { cast: [], director: null }),
+        settled(loadProviders(type, imdbId, request.log), EMPTY_PROVIDERS),
+        settled(loadRecommendations(request.params.type, type, imdbId), { metas: [] }),
+        isSeries ? settled(loadSeasons(imdbId, request.log), []) : Promise.resolve([]),
+        isSeries
+          ? settled(
+              prisma.kV
+                .findUnique({ where: { key: droppedSeriesKey(profileId, imdbId) } })
+                .then((row) => !!row),
+              false
+            )
+          : Promise.resolve(false),
+      ]);
 
-      try {
-        const tmdb = await getTmdb();
-        const providers = await tmdb.getWatchProviders(type, meta.tmdbId, region);
-        watchProvidersCache.set(cacheKey, providers);
-        return { providers };
-      } catch {
-        return { providers: { link: null, flatrate: [], free: [], ads: [] } };
-      }
+      return {
+        meta,
+        cast: cast.cast,
+        director: cast.director,
+        providers,
+        recommendations: recommendations.metas,
+        seasons,
+        dropped,
+      };
     }
   );
 

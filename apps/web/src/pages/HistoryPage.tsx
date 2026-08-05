@@ -4,6 +4,7 @@ import { AlertCircle, Calendar, Film, Trash2, Tv } from "lucide-react";
 import { api, SearchResult, WatchEvent } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useToast } from "../hooks/useToast";
+import { useCachedState } from "../hooks/useCachedState";
 import { relogWatchEvent } from "../utils/watchEvents";
 
 const PAGE_SIZE = 25;
@@ -38,17 +39,24 @@ function toSearchResult(event: WatchEvent): SearchResult {
 }
 
 export function HistoryPage() {
-  const [events, setEvents] = useState<WatchEvent[]>([]);
+  // Only the first page goes through the cache. Appended pages are held
+  // separately and merged for rendering: writing them through would grow the
+  // cached entry without bound as you scroll, and — because a remount restarts
+  // pagination at offset 0 — the first load back would then replace a long
+  // cached list with a single page, collapsing the view.
+  const [firstPage, setFirstPage, firstPageMeta] = useCachedState<WatchEvent[]>("history:events", []);
+  const [extraPages, setExtraPages] = useState<WatchEvent[]>([]);
+  const events = useMemo(() => [...firstPage, ...extraPages], [firstPage, extraPages]);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!firstPageMeta.hadCachedValue);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const sentinelRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
-  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
+  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading, detail: panelDetail, detailLoading: panelDetailLoading } = useDetailPanel();
 
   // The filter goes to the server, not to the loaded page: filtering in memory
   // only ever saw the rows already fetched, so picking "Movies" on a history
@@ -70,7 +78,8 @@ export function HistoryPage() {
       try {
         const page = await loadPage(0);
         if (!cancelled) {
-          setEvents(page);
+          setFirstPage(page);
+          setExtraPages([]);
           setOffset(page.length);
           setError(null);
         }
@@ -87,7 +96,7 @@ export function HistoryPage() {
     setLoadingMore(true);
     try {
       const page = await loadPage(offset);
-      setEvents((prev) => [...prev, ...page]);
+      setExtraPages((prev) => [...prev, ...page]);
       setOffset((prev) => prev + page.length);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load more history");
@@ -112,8 +121,10 @@ export function HistoryPage() {
   // same-day identical plays into a single row's play count — so the insert is
   // keyed on id rather than appending blindly.
   const restoreEvent = (event: WatchEvent) => {
-    setEvents((prev) =>
-      prev.some((e) => e.id === event.id)
+    // A restored row belongs at its date, which is within the first page for
+    // anything recent — and the first page is the list that persists.
+    setFirstPage((prev) =>
+      prev.some((e) => e.id === event.id) || extraPages.some((e) => e.id === event.id)
         ? prev
         : [...prev, event].sort(
             (a, b) => new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime()
@@ -136,7 +147,9 @@ export function HistoryPage() {
   // gating every removal.
   const handleDelete = async (event: WatchEvent) => {
     setDeletingId(event.id);
-    setEvents((prev) => prev.filter((e) => e.id !== event.id));
+    // The row can be in either list, so both are filtered.
+    setFirstPage((prev) => prev.filter((e) => e.id !== event.id));
+    setExtraPages((prev) => prev.filter((e) => e.id !== event.id));
     setOffset((prev) => prev - 1);
     try {
       await api.deleteWatchEvent(event.id);
@@ -304,6 +317,8 @@ export function HistoryPage() {
           item={selectedItem}
           history={panelHistory}
           historyLoading={panelHistoryLoading}
+          detail={panelDetail}
+          detailLoading={panelDetailLoading}
           onClose={() => setSelectedItem(null)}
           onShowToast={showToast}
           onHistoryChange={(updated) => setPanelHistory(updated)}

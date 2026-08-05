@@ -5,9 +5,21 @@ import { getGradient, getInitials } from "./carousel-utils";
 // Swapping the size segment lets us request a smaller file for small
 // layouts instead of always downloading the original w500 the API stores.
 const TMDB_IMAGE_RE = /^(https:\/\/image\.tmdb\.org\/t\/p\/)w\d+(\/.+)$/;
-const TMDB_SRCSET_WIDTHS = [185, 342, 500, 780];
+// TMDB's actual poster steps. The list starts at w92 because several surfaces
+// render posters around 112px wide — at 1x those were being served a w185 and
+// downscaled, which is roughly four times the bytes for no visible difference.
+const TMDB_SRCSET_WIDTHS = [92, 154, 185, 342, 500, 780];
 
-function buildTmdbSrcSet(src: string): string | undefined {
+/** Default `sizes` for the poster grids, which share a layout across pages. */
+export const POSTER_GRID_SIZES = "(min-width: 640px) 220px, 45vw";
+
+/**
+ * Exported for the pages that render their own `<img>` rather than this
+ * component — their placeholder markup differs, but the bytes on the wire
+ * shouldn't. Without a srcset they pull whatever width the API stored (usually
+ * w500) into a slot around 180px wide.
+ */
+export function buildTmdbSrcSet(src: string): string | undefined {
   const match = src.match(TMDB_IMAGE_RE);
   if (!match) return undefined;
   const [, base, rest] = match;
@@ -53,6 +65,10 @@ export function Poster({
       className={`object-cover ${className}`}
       loading={eager ? "eager" : "lazy"}
       decoding={eager ? "sync" : "async"}
+      // Above-fold artwork is what the page looks like — it should outrank the
+      // lazy posters further down the row that the browser would otherwise treat
+      // as equals. `low` on the rest keeps them behind the data requests.
+      fetchPriority={eager ? "high" : "low"}
       onError={() => setLoadFailed(true)}
     />
   );

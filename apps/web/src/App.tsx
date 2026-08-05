@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, Route, Routes, useLocation } from "react-router";
 import { Clapperboard, Loader2, Search, User } from "lucide-react";
 import { api, Profile, runtimeConfig } from "./api";
-import { CommandPalette, useCommandPalette } from "./components/CommandPalette";
+import { useCommandPalette } from "./hooks/useCommandPalette";
 import { InstallButton } from "./components/InstallButton";
 import { MobileTabBar } from "./components/MobileTabBar";
 import { OfflineBanner } from "./components/OfflineBanner";
@@ -12,21 +12,44 @@ import { useTheme } from "./hooks/useTheme";
 import { ToastProvider } from "./hooks/useToast";
 import { ProfileProvider, useProfile } from "./hooks/useProfile";
 import { DashboardPage } from "./pages/DashboardPage";
+import {
+  loadCalendarPage,
+  loadGamesPage,
+  loadHistoryPage,
+  loadListsPage,
+  loadNotFoundPage,
+  loadProfileSwitcher,
+  loadSearchPage,
+  loadSettingsPage,
+  loadSetupWizard,
+  loadStatsPage,
+  loadCommandPalette,
+  schedulePrefetchOnIdle,
+} from "./utils/routePrefetch";
 
 // DashboardPage stays eager — it is the landing route. The profile switcher and
 // the setup wizard are first-run/occasional surfaces, so they ride in their own
 // chunks rather than in the entry bundle every visit pays for.
-const ProfileSwitcher = lazy(() => import("./pages/ProfileSwitcher").then((m) => ({ default: m.ProfileSwitcher })));
-const SetupWizard = lazy(() => import("./pages/SetupWizard").then((m) => ({ default: m.SetupWizard })));
+//
+// The loaders come from routePrefetch so a nav link can warm the very same chunk
+// on hover, before the click that renders it.
+const ProfileSwitcher = lazy(() => loadProfileSwitcher().then((m) => ({ default: m.ProfileSwitcher })));
+const SetupWizard = lazy(() => loadSetupWizard().then((m) => ({ default: m.SetupWizard })));
 
-const CalendarPage = lazy(() => import("./pages/CalendarPage").then((m) => ({ default: m.CalendarPage })));
-const GamesPage = lazy(() => import("./pages/GamesPage").then((m) => ({ default: m.GamesPage })));
-const HistoryPage = lazy(() => import("./pages/HistoryPage").then((m) => ({ default: m.HistoryPage })));
-const ListsPage = lazy(() => import("./pages/ListsPage").then((m) => ({ default: m.ListsPage })));
-const NotFoundPage = lazy(() => import("./pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })));
-const SearchPage = lazy(() => import("./pages/SearchPage").then((m) => ({ default: m.SearchPage })));
-const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
-const StatsPage = lazy(() => import("./pages/StatsPage").then((m) => ({ default: m.StatsPage })));
+// Closed on every cold start, and plenty of sessions never open it — but once
+// it has been opened it stays mounted, because it keeps rendering a detail panel
+// opened from a result after the palette itself closes. Unmounting on close
+// would take that panel with it.
+const CommandPalette = lazy(() => loadCommandPalette().then((m) => ({ default: m.CommandPalette })));
+
+const CalendarPage = lazy(() => loadCalendarPage().then((m) => ({ default: m.CalendarPage })));
+const GamesPage = lazy(() => loadGamesPage().then((m) => ({ default: m.GamesPage })));
+const HistoryPage = lazy(() => loadHistoryPage().then((m) => ({ default: m.HistoryPage })));
+const ListsPage = lazy(() => loadListsPage().then((m) => ({ default: m.ListsPage })));
+const NotFoundPage = lazy(() => loadNotFoundPage().then((m) => ({ default: m.NotFoundPage })));
+const SearchPage = lazy(() => loadSearchPage().then((m) => ({ default: m.SearchPage })));
+const SettingsPage = lazy(() => loadSettingsPage().then((m) => ({ default: m.SettingsPage })));
+const StatsPage = lazy(() => loadStatsPage().then((m) => ({ default: m.StatsPage })));
 
 const LoadingFallback = ({ label = "Loading…" }: { label?: string }) => (
   <div
@@ -140,6 +163,14 @@ function AppShell({
   const { profile, setProfile, switcherOpen, openSwitcher, closeSwitcher } = useProfile();
   const mainRef = useRef<HTMLElement>(null);
 
+  // Warm the chunks a tap can reach with no hover to warn us first. Runs on
+  // idle, so it queues behind the dashboard's own render and requests.
+  useEffect(() => { schedulePrefetchOnIdle(); }, []);
+
+  // Latches on first open and never unmounts after — see the lazy import above.
+  const [paletteMounted, setPaletteMounted] = useState(paletteOpen);
+  useEffect(() => { if (paletteOpen) setPaletteMounted(true); }, [paletteOpen]);
+
   // Client-side navigation leaves focus on the nav item that was clicked, so a
   // screen reader stays parked in the sidebar while the page behind it swaps
   // out. Move focus into the new content instead — but only on an actual route
@@ -193,7 +224,11 @@ function AppShell({
         profile={profile}
         onSwitchProfile={openSwitcher}
       />
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      {paletteMounted && (
+        <Suspense fallback={null}>
+          <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+        </Suspense>
+      )}
       {switcherOpen && (
         <Suspense fallback={<ProfileSwitcherFallback />}>
           <ProfileSwitcher onSelected={handleProfileSelected} onClose={closeSwitcher} />

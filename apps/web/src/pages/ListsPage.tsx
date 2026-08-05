@@ -5,6 +5,8 @@ import { api, CatalogList, ListItemWithMeta, MediaType, SearchResult } from "../
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useToast } from "../hooks/useToast";
+import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
+import { useCachedState } from "../hooks/useCachedState";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { mergeByRelevance } from "../utils/mergeSearchResults";
@@ -294,11 +296,16 @@ function AddItemModal({
 }
 
 export function ListsPage() {
-  const [lists, setLists] = useState<CatalogList[]>([]);
+  const [lists, setLists] = useCachedState<CatalogList[]>("lists:all", []);
   // The selection lives in the URL so a list can be linked, bookmarked and
   // reloaded, and so Back undoes a list switch instead of leaving the page.
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedListId = searchParams.get("list");
+  // Deliberately false even when the cache seeded `lists`. The cached copy is
+  // good enough to render the sidebar immediately, but this flag also gates
+  // "that list doesn't exist" messaging and the redirect to a default list —
+  // and a list deleted on another device is still present in a stale cache. Both
+  // wait for the fresh response.
   const [listsLoaded, setListsLoaded] = useState(false);
   const [items, setItems] = useState<ListItemWithMeta[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
@@ -318,7 +325,7 @@ export function ListsPage() {
   const selectedListIdRef = useRef(selectedListId);
   selectedListIdRef.current = selectedListId;
   const { showToast } = useToast();
-  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
+  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading, detail: panelDetail, detailLoading: panelDetailLoading } = useDetailPanel();
 
   // Pushing (rather than replacing) is what makes Back undo a list switch. The
   // one exception is the initial default, which the user never chose.
@@ -809,7 +816,15 @@ export function ListsPage() {
                         aria-label={`Open details for ${name}`}
                       >
                         {poster ? (
-                          <img src={poster} alt={name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" loading={index < 5 ? "eager" : "lazy"} />
+                          <img
+                            src={poster}
+                            srcSet={buildTmdbSrcSet(poster)}
+                            sizes={POSTER_GRID_SIZES}
+                            alt={name}
+                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            loading={index < 5 ? "eager" : "lazy"}
+                            fetchPriority={index < 5 ? "high" : "low"}
+                          />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[var(--surface)] to-[var(--surface-strong)]">
                             <Film className="h-10 w-10" style={{ color: "var(--text-mute)" }} />
@@ -869,6 +884,8 @@ export function ListsPage() {
           item={selectedItem}
           history={panelHistory}
           historyLoading={panelHistoryLoading}
+          detail={panelDetail}
+          detailLoading={panelDetailLoading}
           onClose={() => setSelectedItem(null)}
           onShowToast={showToast}
           onHistoryChange={(events) => setPanelHistory(events)}

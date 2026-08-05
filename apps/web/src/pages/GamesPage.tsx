@@ -7,6 +7,8 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useToast } from "../hooks/useToast";
+import { preconnectToGameArtwork } from "../utils/preconnect";
+import { useCachedState } from "../hooks/useCachedState";
 
 const SORT_OPTIONS: { value: GameSort; label: string }[] = [
   { value: "recent", label: "Recently Played" },
@@ -320,8 +322,14 @@ export function GamesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const sort = (SORT_OPTIONS.some((o) => o.value === searchParams.get("sort")) ? searchParams.get("sort") : "recent") as GameSort;
 
-  const [games, setGames] = useState<Game[] | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Keyed by sort order: the list is a different answer per sort, so caching
+  // them separately makes flipping back to one already seen instant.
+  const [games, setGames, gamesMeta] = useCachedState<Game[] | null>(`games:${sort}`, null);
+
+  // Covers come from IGDB and Steam rather than TMDB, so this is the first point
+  // at which those connections are worth opening.
+  useEffect(() => { preconnectToGameArtwork(); }, []);
+  const [loading, setLoading] = useState(!gamesMeta.hadCachedValue);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
@@ -345,7 +353,9 @@ export function GamesPage() {
     } finally {
       if (loadAbortRef.current === controller) setLoading(false);
     }
-  }, []);
+    // `setGames` is bound to the current sort's cache key, so it has to be a
+    // dependency — otherwise every sort's results are written under `games:recent`.
+  }, [setGames]);
 
   useEffect(() => {
     void loadGames(sort);

@@ -1,6 +1,6 @@
 import { precacheAndRoute } from "workbox-precaching";
 import { registerRoute } from "workbox-routing";
-import { NetworkOnly, StaleWhileRevalidate } from "workbox-strategies";
+import { CacheFirst, NetworkOnly, StaleWhileRevalidate } from "workbox-strategies";
 import { CacheableResponsePlugin } from "workbox-cacheable-response";
 import { ExpirationPlugin } from "workbox-expiration";
 
@@ -9,6 +9,41 @@ precacheAndRoute(self.__WB_MANIFEST);
 // Injected at container startup with the live VITE_API_BASE value — must
 // never be served from cache, or env var changes won't reach the browser.
 registerRoute(({ url }) => url.pathname === "/config.js", new NetworkOnly());
+
+// Poster and artwork CDNs. These are content-addressed — a TMDB path names one
+// immutable image — so the freshness question never arises and the only reason
+// to go to the network is a cache miss. Without this the same posters were
+// re-fetched across sessions whenever the browser's own HTTP cache evicted them,
+// and never resolved at all offline, leaving the initials-on-a-gradient
+// placeholder in place of a library the user has already looked at.
+const IMAGE_CDN_HOSTS = new Set([
+  "image.tmdb.org",
+  "images.igdb.com",
+  "media.steampowered.com",
+  "api.ratingposterdb.com",
+]);
+
+registerRoute(
+  ({ url, request }) => request.destination === "image" && IMAGE_CDN_HOSTS.has(url.hostname),
+  new CacheFirst({
+    cacheName: "poster-images-v1",
+    plugins: [
+      // These are loaded by plain <img> tags, so the responses are opaque and
+      // report status 0 — the default `[200]` alone would cache nothing.
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new ExpirationPlugin({
+        maxEntries: 400,
+        maxAgeSeconds: 30 * 24 * 60 * 60,
+        // Opaque responses are stored padded, so this cache counts against the
+        // origin's quota far more heavily than its real size suggests. Let it be
+        // the thing that gets dropped when the quota is hit, rather than taking
+        // the precache or the API cache down with it.
+        purgeOnQuotaError: true,
+      }),
+    ],
+  }),
+  "GET"
+);
 
 // Read-only catalog/list/history/stats endpoints, safe to serve stale-while-
 // revalidate offline. Matched by pathname only since the API can live on any
