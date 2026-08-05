@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { SeriesProgress } from "../api";
-import { ContinueWatchingCard, DiscoveryCard } from "./DashboardPage";
+import { ContinueWatchingCard, ContinueWatchingHero, DiscoveryCard } from "./DashboardPage";
 
 const series: SeriesProgress = {
   imdbId: "tt0903747",
@@ -77,5 +77,45 @@ describe("ContinueWatchingCard", () => {
 
     expect(screen.getByText("Breaking Bad")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Breaking Bad" })).not.toBeInTheDocument();
+  });
+
+  it("pluralises a single-season show", () => {
+    renderCard({ s: { ...series, totalSeasons: 1 } });
+
+    expect(screen.getByText(/1 season(?!s)/)).toBeInTheDocument();
+  });
+});
+
+describe("ContinueWatchingHero", () => {
+  const renderHero = (overrides: Partial<SeriesProgress> = {}) => {
+    render(
+      <ContinueWatchingHero
+        s={{ ...series, ...overrides }}
+        isMarking={false}
+        isDone={false}
+        onMarkNext={vi.fn()}
+        onSelect={vi.fn()}
+      />
+    );
+  };
+
+  it("labels the bar for the numbers filling it", () => {
+    renderHero({ lastSeason: 2, seasonTotalEpisodes: 13, seasonWatchedEpisodes: 7 });
+
+    expect(screen.getByText("Season progress")).toBeInTheDocument();
+    expect(screen.getByText("7 / 13 episodes")).toBeInTheDocument();
+  });
+
+  it("says 'Series progress' when it has only series-wide totals to show", () => {
+    renderHero({ seasonTotalEpisodes: null, seasonWatchedEpisodes: null });
+
+    expect(screen.getByText("Series progress")).toBeInTheDocument();
+    expect(screen.getByText("20 / 62 episodes")).toBeInTheDocument();
+  });
+
+  it("pluralises a single-season show", () => {
+    renderHero({ totalSeasons: 1 });
+
+    expect(screen.getByText(/1 season(?!s)/)).toBeInTheDocument();
   });
 });

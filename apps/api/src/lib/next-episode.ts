@@ -1,23 +1,4 @@
-import { seasonsCache } from "./cache.js";
-import { getTmdb } from "./tmdb-client.js";
-import type { SeasonInfo } from "../tmdb.js";
-
-async function getSeasonsForImdbId(imdbId: string, tmdbId: number | null): Promise<SeasonInfo[]> {
-  const cacheKey = `seasons:${imdbId}`;
-  const cached = seasonsCache.get(cacheKey);
-  if (cached) return cached;
-
-  if (!tmdbId) return [];
-
-  try {
-    const tmdb = await getTmdb();
-    const seasons = await tmdb.getSeasons(tmdbId);
-    seasonsCache.set(cacheKey, seasons);
-    return seasons;
-  } catch {
-    return [];
-  }
-}
+import { getSeasonsForImdbId } from "./seasons.js";
 
 /**
  * Given the last watched season/episode, returns the next episode to watch,

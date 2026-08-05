@@ -199,6 +199,10 @@ export type SeriesProgress = {
   totalSeasons?: number | null;
   totalEpisodes?: number | null;
   watchedEpisodes?: number | null;
+  /** Episodes in `lastSeason`, null when TMDB has no season data for the show. */
+  seasonTotalEpisodes?: number | null;
+  /** Episodes watched within `lastSeason`. */
+  seasonWatchedEpisodes?: number | null;
 };
 
 export type WatchEvent = {
