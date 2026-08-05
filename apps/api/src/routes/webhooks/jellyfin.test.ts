@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../../lib/test-fixtures/route-app.js";
 
 const webhookAuthMock = { verifyWebhookSecret: vi.fn(() => true) };
 vi.mock("../../lib/webhook-auth.js", () => webhookAuthMock);
@@ -10,14 +11,8 @@ vi.mock("../../lib/watch-event.js", () => watchEventMock);
 const webhookProfileMock = { resolveWebhookProfile: vi.fn() };
 vi.mock("../../lib/webhook-profile.js", () => webhookProfileMock);
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: jellyfinWebhookRoutes } = await import("./jellyfin.js");
-  const app = Fastify();
-  await app.register(jellyfinWebhookRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./jellyfin.js"));
 
 describe("POST /webhooks/jellyfin", () => {
   beforeEach(() => {
@@ -39,7 +34,6 @@ describe("POST /webhooks/jellyfin", () => {
 
     expect(response.statusCode).toBe(403);
     expect(watchEventMock.recordWatchEvent).not.toHaveBeenCalled();
-    await app.close();
   });
 
   it("400s with the route's own error when the parsed body is null", async () => {
@@ -58,7 +52,6 @@ describe("POST /webhooks/jellyfin", () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ error: "Empty body" });
-    await app.close();
   });
 
   it("ignores notification types other than PlaybackStop", async () => {
@@ -73,7 +66,6 @@ describe("POST /webhooks/jellyfin", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ status: "ignored", type: "PlaybackStart" });
     expect(watchEventMock.recordWatchEvent).not.toHaveBeenCalled();
-    await app.close();
   });
 
   it("skips PlaybackStop events with no IMDb provider id", async () => {
@@ -88,7 +80,6 @@ describe("POST /webhooks/jellyfin", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ status: "skipped", reason: "no_imdb_id" });
     expect(watchEventMock.recordWatchEvent).not.toHaveBeenCalled();
-    await app.close();
   });
 
   it("records a movie watch event", async () => {
@@ -104,7 +95,6 @@ describe("POST /webhooks/jellyfin", () => {
     expect(watchEventMock.recordWatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: "movie", imdbId: "tt1111111", source: "Jellyfin" })
     );
-    await app.close();
   });
 
   it("records an episode watch event with season/episode", async () => {
@@ -133,7 +123,6 @@ describe("POST /webhooks/jellyfin", () => {
         source: "Jellyfin",
       })
     );
-    await app.close();
   });
 
   it("records against the profile resolved from the Jellyfin username", async () => {
@@ -156,7 +145,6 @@ describe("POST /webhooks/jellyfin", () => {
     expect(watchEventMock.recordWatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({ imdbId: "tt3333333", profileId: "profile-sam" })
     );
-    await app.close();
   });
 
   it("falls back to the plain Username field when NotificationUsername is absent", async () => {
@@ -174,7 +162,6 @@ describe("POST /webhooks/jellyfin", () => {
     });
 
     expect(webhookProfileMock.resolveWebhookProfile).toHaveBeenCalledWith(expect.anything(), "Alex");
-    await app.close();
   });
 
   it("falls back to Username when NotificationUsername renders empty", async () => {
@@ -193,7 +180,6 @@ describe("POST /webhooks/jellyfin", () => {
     });
 
     expect(webhookProfileMock.resolveWebhookProfile).toHaveBeenCalledWith(expect.anything(), "Alex");
-    await app.close();
   });
 
   it("does not record anything when the profile can't be resolved", async () => {
@@ -213,6 +199,5 @@ describe("POST /webhooks/jellyfin", () => {
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ error: "The profile query parameter must be a valid UUID" });
     expect(watchEventMock.recordWatchEvent).not.toHaveBeenCalled();
-    await app.close();
   });
 });

@@ -134,6 +134,19 @@ describe("tags routes", () => {
         where: { id: TAG_ID, profileId: PROFILE_ID },
       });
     });
+
+    it("rejects an id that is not a UUID before it reaches the database", async () => {
+      // `Tag.id` is a uuid column: Postgres errors on a malformed value rather
+      // than matching nothing, so without this guard a bad request would
+      // surface as a 500.
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "DELETE", url: "/tags/not-a-uuid" });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toBe("tagId must be a valid UUID");
+      expect(prismaMock.tag.deleteMany).not.toHaveBeenCalled();
+    });
   });
 
   describe("POST /tags/assign", () => {
@@ -225,6 +238,21 @@ describe("tags routes", () => {
 
       expect(res.statusCode).toBe(404);
       expect(prismaMock.itemTag.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it("rejects a tagId in the body that is not a UUID", async () => {
+      // Same uuid column, reached through the body rather than the path.
+      const app = await buildApp();
+
+      const res = await app.inject({
+        method: "DELETE",
+        url: "/tags/assign",
+        payload: { tagId: "not-a-uuid", type: "movie", imdbId: "tt1" },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toBe("tagId must be a valid UUID");
+      expect(prismaMock.tag.findFirst).not.toHaveBeenCalled();
     });
   });
 });

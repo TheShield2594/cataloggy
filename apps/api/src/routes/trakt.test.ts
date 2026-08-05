@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const prismaMock = {
   kV: { create: vi.fn(), deleteMany: vi.fn() },
@@ -25,14 +26,8 @@ vi.mock("../lib/profile.js", () => ({
   resolveProfile: async () => {},
 }));
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: traktRoutes } = await import("./trakt.js");
-  const app = Fastify();
-  await app.register(traktRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./trakt.js"));
 
 const STATE = "a".repeat(64);
 const originalEnv = { ...process.env };
@@ -63,7 +58,6 @@ describe("trakt OAuth — the callback is bound to the flow that started it", ()
     expect(prismaMock.kV.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ key: `trakt:oauth:state:${state}` }) })
     );
-    await app.close();
   });
 
   it("rejects a callback with no state at all, without exchanging the code", async () => {
@@ -74,7 +68,6 @@ describe("trakt OAuth — the callback is bound to the flow that started it", ()
     expect(response.statusCode).toBe(403);
     expect(globalThis.fetch).not.toHaveBeenCalled();
     expect(prismaMock.traktToken.upsert).not.toHaveBeenCalled();
-    await app.close();
   });
 
   it("rejects a callback whose state this install never issued (or already used)", async () => {
@@ -89,7 +82,6 @@ describe("trakt OAuth — the callback is bound to the flow that started it", ()
     expect(response.statusCode).toBe(403);
     expect(globalThis.fetch).not.toHaveBeenCalled();
     expect(prismaMock.traktToken.upsert).not.toHaveBeenCalled();
-    await app.close();
   });
 
   it("exchanges the code and stores the tokens when the state matches", async () => {
@@ -112,7 +104,6 @@ describe("trakt OAuth — the callback is bound to the flow that started it", ()
     expect(prismaMock.traktToken.upsert).toHaveBeenCalledWith(
       expect.objectContaining({ update: expect.objectContaining({ accessToken: "access" }) })
     );
-    await app.close();
   });
 
   it("still reports a denial from Trakt rather than a state failure", async () => {
@@ -125,6 +116,5 @@ describe("trakt OAuth — the callback is bound to the flow that started it", ()
 
     expect(response.statusCode).toBe(403);
     expect(response.body).toContain("User said no");
-    await app.close();
   });
 });

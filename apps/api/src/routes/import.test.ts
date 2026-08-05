@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -24,14 +25,8 @@ vi.mock("../lib/batch-ratings.js", () => ({
 }));
 
 /** Big enough to hold the row-cap payloads; production sets this from MAX_BODY_SIZE_MB. */
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: importRoutes } = await import("./import.js");
-  const app = Fastify({ bodyLimit: 256 * 1024 * 1024 });
-  await app.register(importRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./import.js"), { bodyLimit: 256 * 1024 * 1024 });
 
 const csvWithRows = (header: string, row: string, count: number) =>
   [header, ...Array.from({ length: count }, () => row)].join("\n");
@@ -58,7 +53,6 @@ describe("POST /import/external — row caps", () => {
     expect(response.json().code).toBe("too_many_rows");
     expect(response.json().error).toContain("10,000");
     expect(tmdbMock.search).not.toHaveBeenCalled();
-    await app.close();
   });
 
   it("accepts an id-carrying format at a row count the Letterboxd cap would reject", async () => {
@@ -73,7 +67,6 @@ describe("POST /import/external — row caps", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().summary.ratingsImported).toBe(10_001);
-    await app.close();
   });
 
   it("still rejects an id-carrying format past the global import cap", async () => {
@@ -89,6 +82,5 @@ describe("POST /import/external — row caps", () => {
     expect(response.statusCode).toBe(413);
     expect(response.json().error).toContain("200,000");
     expect(batchMocks.batchUpsertRatings).not.toHaveBeenCalled();
-    await app.close();
   });
 });

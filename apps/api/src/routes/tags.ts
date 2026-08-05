@@ -2,6 +2,7 @@ import { ItemType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { resolveProfile } from "../lib/profile.js";
+import { UUID_V4_PATTERN } from "../lib/types.js";
 
 const isValidItemType = (v: unknown): v is ItemType => v === "movie" || v === "series" || v === "episode";
 
@@ -48,9 +49,16 @@ const tagsRoutes: FastifyPluginAsync = async (app) => {
     return reply.code(200).send({ tag: toTagPayload(tag) });
   });
 
+  // `Tag.id` is a uuid column, so a malformed id is rejected by Postgres rather
+  // than simply matching nothing — an unhandled driver error and a 500 where the
+  // caller sent a bad request. Guarded here as the sibling routes in lists.ts
+  // and games.ts already do.
   app.delete<{ Params: { tagId: string } }>("/tags/:tagId", async (request, reply) => {
     const profileId = request.profileId!;
     const { tagId } = request.params;
+    if (!UUID_V4_PATTERN.test(tagId)) {
+      return reply.code(400).send({ error: "tagId must be a valid UUID" });
+    }
     await prisma.tag.deleteMany({ where: { id: tagId, profileId } });
     return reply.code(204).send();
   });
@@ -90,6 +98,9 @@ const tagsRoutes: FastifyPluginAsync = async (app) => {
     const imdbId = typeof body?.imdbId === "string" ? body.imdbId.trim() : "";
 
     if (!tagId) return reply.code(400).send({ error: "tagId is required" });
+    if (!UUID_V4_PATTERN.test(tagId)) {
+      return reply.code(400).send({ error: "tagId must be a valid UUID" });
+    }
     if (!isValidItemType(type)) return reply.code(400).send({ error: "type must be one of: movie, series, episode" });
     if (!imdbId) return reply.code(400).send({ error: "imdbId is required" });
 

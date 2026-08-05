@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -43,14 +44,8 @@ const resetMocks = () => {
   seasonsMock.getSeasonsForImdbId.mockResolvedValue([]);
 };
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: seriesRoutes } = await import("./series.js");
-  const app = Fastify();
-  await app.register(seriesRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./series.js"));
 
 describe("series routes — completion drops from Continue Watching", () => {
   beforeEach(() => {
@@ -96,7 +91,6 @@ describe("series routes — completion drops from Continue Watching", () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json().progress).toEqual([]);
-      await app.close();
     });
 
     it("keeps a show with unwatched episodes remaining", async () => {
@@ -138,7 +132,6 @@ describe("series routes — completion drops from Continue Watching", () => {
       expect(progress).toHaveLength(1);
       expect(progress[0].nextSeason).toBe(8);
       expect(progress[0].nextEpisode).toBe(11);
-      await app.close();
     });
   });
 
@@ -159,7 +152,6 @@ describe("series routes — completion drops from Continue Watching", () => {
 
       expect(response.statusCode).toBe(409);
       expect(prismaMock.watchEvent.create).not.toHaveBeenCalled();
-      await app.close();
     });
   });
 });
@@ -217,7 +209,6 @@ describe("GET /series/progress — season-level counts", () => {
     // Series-wide numbers are untouched — the carousel card still shows them.
     expect(progress.watchedEpisodes).toBe(5);
     expect(progress.totalEpisodes).toBe(144);
-    await app.close();
   });
 
   it("looks the seasons up once per series and hands them to the next-episode math", async () => {
@@ -232,7 +223,6 @@ describe("GET /series/progress — season-level counts", () => {
 
     expect(seasonsMock.getSeasonsForImdbId).toHaveBeenCalledTimes(1);
     expect(nextEpisodeMock.computeNextEpisode).toHaveBeenCalledWith("tt-buffy", 95, 2, 3, seasons);
-    await app.close();
   });
 
   it("ignores a row carrying no episode number, which is not one watched episode", async () => {
@@ -248,7 +238,6 @@ describe("GET /series/progress — season-level counts", () => {
     const response = await app.inject({ method: "GET", url: "/series/progress" });
 
     expect(response.json().progress[0].seasonWatchedEpisodes).toBe(1);
-    await app.close();
   });
 
   it("leaves the season total null when TMDB has no season data", async () => {
@@ -260,7 +249,6 @@ describe("GET /series/progress — season-level counts", () => {
 
     const [progress] = response.json().progress;
     expect(progress.seasonTotalEpisodes).toBeNull();
-    await app.close();
   });
 
   it("counts an untouched season as zero rather than borrowing another season's count", async () => {
@@ -278,6 +266,5 @@ describe("GET /series/progress — season-level counts", () => {
 
     const [progress] = response.json().progress;
     expect(progress.seasonWatchedEpisodes).toBe(0);
-    await app.close();
   });
 });

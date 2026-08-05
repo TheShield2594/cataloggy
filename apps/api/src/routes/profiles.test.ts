@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 /**
@@ -31,14 +32,8 @@ const resetMocks = () => {
   );
 };
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: profilesRoutes } = await import("./profiles.js");
-  const app = Fastify();
-  await app.register(profilesRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./profiles.js"));
 
 describe("profiles routes", () => {
   beforeEach(() => {
@@ -60,7 +55,6 @@ describe("profiles routes", () => {
         { id: "p1", name: "Alice", hasPin: true },
         { id: "p2", name: "Bob", hasPin: false },
       ]);
-      await app.close();
     });
   });
 
@@ -69,14 +63,12 @@ describe("profiles routes", () => {
       const app = await buildApp();
       const response = await app.inject({ method: "POST", url: "/profiles", payload: {} });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
 
     it("rejects a blank pin when explicitly provided", async () => {
       const app = await buildApp();
       const response = await app.inject({ method: "POST", url: "/profiles", payload: { name: "Alice", pin: "  " } });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
 
     it("creates a profile without a pin", async () => {
@@ -87,7 +79,6 @@ describe("profiles routes", () => {
 
       expect(response.statusCode).toBe(201);
       expect(response.json().profile).toEqual({ id: PROFILE_ID, name: "Alice", hasPin: false });
-      await app.close();
     });
 
     it("rejects a PIN shorter than the minimum length", async () => {
@@ -97,7 +88,6 @@ describe("profiles routes", () => {
       expect(response.statusCode).toBe(400);
       expect(response.json().error).toMatch(/at least|between/i);
       expect(prismaMock.profile.create).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("creates a profile with a hashed pin", async () => {
@@ -109,7 +99,6 @@ describe("profiles routes", () => {
       expect(prismaMock.profile.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ pinHash: SCRYPT_HASH }) })
       );
-      await app.close();
     });
   });
 
@@ -118,7 +107,6 @@ describe("profiles routes", () => {
       const app = await buildApp();
       const response = await app.inject({ method: "POST", url: "/profiles/not-a-uuid/verify", payload: {} });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
 
     it("returns 404 for an unknown profile", async () => {
@@ -126,7 +114,6 @@ describe("profiles routes", () => {
       const app = await buildApp();
       const response = await app.inject({ method: "POST", url: `/profiles/${PROFILE_ID}/verify`, payload: {} });
       expect(response.statusCode).toBe(404);
-      await app.close();
     });
 
     it("allows verification immediately when the profile has no PIN set", async () => {
@@ -134,7 +121,6 @@ describe("profiles routes", () => {
       const app = await buildApp();
       const response = await app.inject({ method: "POST", url: `/profiles/${PROFILE_ID}/verify`, payload: {} });
       expect(response.statusCode).toBe(200);
-      await app.close();
     });
 
     it("accepts the correct PIN and clears prior attempts", async () => {
@@ -149,7 +135,6 @@ describe("profiles routes", () => {
 
       expect(response.statusCode).toBe(200);
       expect(prismaMock.kV.deleteMany).toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects an incorrect PIN and records a failed attempt", async () => {
@@ -164,7 +149,6 @@ describe("profiles routes", () => {
 
       expect(response.statusCode).toBe(401);
       expect(prismaMock.$transaction).toHaveBeenCalled();
-      await app.close();
     });
 
     it("verifies a PIN stored under the pre-scrypt hash and rewrites it in the new format", async () => {
@@ -183,7 +167,6 @@ describe("profiles routes", () => {
         where: { id: PROFILE_ID },
         data: { pinHash: SCRYPT_HASH },
       });
-      await app.close();
     });
 
     it("still verifies when rewriting the legacy hash fails", async () => {
@@ -198,7 +181,6 @@ describe("profiles routes", () => {
       });
 
       expect(response.statusCode).toBe(200);
-      await app.close();
     });
 
     it("leaves an already-scrypt hash alone on a successful verify", async () => {
@@ -218,7 +200,6 @@ describe("profiles routes", () => {
 
       expect(response.statusCode).toBe(200);
       expect(prismaMock.profile.update).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("locks out after MAX_PIN_ATTEMPTS (5) failures and returns 429 on the next attempt", async () => {
@@ -266,7 +247,6 @@ describe("profiles routes", () => {
       expect(lockedResponse.json()).toEqual(
         expect.objectContaining({ error: expect.stringContaining("Too many incorrect attempts") })
       );
-      await app.close();
     });
 
     it("makes each successive lockout longer instead of re-locking for the same five minutes", async () => {
@@ -304,7 +284,6 @@ describe("profiles routes", () => {
       expect(lockoutDurations[1]).toBeGreaterThan(lockoutDurations[0] * 1.5);
       expect(lockoutDurations[2]).toBeGreaterThan(lockoutDurations[1] * 1.5);
       expect(kvState!.lockouts).toBe(3);
-      await app.close();
     });
   });
 
@@ -313,7 +292,6 @@ describe("profiles routes", () => {
       const app = await buildApp();
       const response = await app.inject({ method: "PATCH", url: "/profiles/not-a-uuid", payload: { name: "Alice" } });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
 
     it("404s for an unknown profile", async () => {
@@ -321,7 +299,6 @@ describe("profiles routes", () => {
       const app = await buildApp();
       const response = await app.inject({ method: "PATCH", url: `/profiles/${PROFILE_ID}`, payload: { name: "Alice" } });
       expect(response.statusCode).toBe(404);
-      await app.close();
     });
 
     it("rejects an empty body (nothing to update)", async () => {
@@ -330,7 +307,6 @@ describe("profiles routes", () => {
       const response = await app.inject({ method: "PATCH", url: `/profiles/${PROFILE_ID}`, payload: {} });
       expect(response.statusCode).toBe(400);
       expect(prismaMock.profile.update).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects a blank name", async () => {
@@ -338,7 +314,6 @@ describe("profiles routes", () => {
       const app = await buildApp();
       const response = await app.inject({ method: "PATCH", url: `/profiles/${PROFILE_ID}`, payload: { name: "  " } });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
 
     it("renames a profile", async () => {
@@ -354,7 +329,6 @@ describe("profiles routes", () => {
         where: { id: PROFILE_ID },
         data: { name: "Alicia" },
       });
-      await app.close();
     });
 
     it("sets a PIN and clears any prior lockout attempts", async () => {
@@ -371,7 +345,6 @@ describe("profiles routes", () => {
         data: { pinHash: SCRYPT_HASH },
       });
       expect(prismaMock.kV.deleteMany).toHaveBeenCalled();
-      await app.close();
     });
 
     it("removes a PIN when pin is explicitly null and the correct currentPin is given", async () => {
@@ -392,7 +365,6 @@ describe("profiles routes", () => {
         data: { pinHash: null },
       });
       expect(prismaMock.kV.deleteMany).toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects a new PIN shorter than the minimum length", async () => {
@@ -402,7 +374,6 @@ describe("profiles routes", () => {
 
       expect(response.statusCode).toBe(400);
       expect(prismaMock.profile.update).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects a blank pin string (use null to remove)", async () => {
@@ -411,7 +382,6 @@ describe("profiles routes", () => {
       const response = await app.inject({ method: "PATCH", url: `/profiles/${PROFILE_ID}`, payload: { pin: "  " } });
       expect(response.statusCode).toBe(400);
       expect(prismaMock.profile.update).not.toHaveBeenCalled();
-      await app.close();
     });
 
     describe("changing/removing an existing PIN requires the current PIN", () => {
@@ -423,7 +393,6 @@ describe("profiles routes", () => {
 
         expect(response.statusCode).toBe(401);
         expect(prismaMock.profile.update).not.toHaveBeenCalled();
-        await app.close();
       });
 
       it("rejects an incorrect currentPin and records a failed attempt", async () => {
@@ -439,7 +408,6 @@ describe("profiles routes", () => {
         expect(response.statusCode).toBe(401);
         expect(prismaMock.profile.update).not.toHaveBeenCalled();
         expect(prismaMock.$transaction).toHaveBeenCalled();
-        await app.close();
       });
 
       it("does not derive a hash for the new PIN when the currentPin is wrong", async () => {
@@ -462,7 +430,6 @@ describe("profiles routes", () => {
           expect(response.statusCode).toBe(401);
           expect(hashSpy).not.toHaveBeenCalled();
           expect(prismaMock.profile.update).not.toHaveBeenCalled();
-          await app.close();
         } finally {
           vi.doUnmock("../lib/pin-hash.js");
           vi.resetModules();
@@ -485,7 +452,6 @@ describe("profiles routes", () => {
           where: { id: PROFILE_ID },
           data: { pinHash: SCRYPT_HASH },
         });
-        await app.close();
       });
 
       it("does not require currentPin when setting a PIN for the first time", async () => {
@@ -496,7 +462,6 @@ describe("profiles routes", () => {
         const response = await app.inject({ method: "PATCH", url: `/profiles/${PROFILE_ID}`, payload: { pin: "9999" } });
 
         expect(response.statusCode).toBe(200);
-        await app.close();
       });
     });
   });
@@ -511,7 +476,6 @@ describe("profiles routes", () => {
 
       expect(response.statusCode).toBe(400);
       expect(prismaMock.profile.delete).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("deletes a profile when more than one exists", async () => {
@@ -523,7 +487,6 @@ describe("profiles routes", () => {
 
       expect(response.statusCode).toBe(204);
       expect(prismaMock.profile.delete).toHaveBeenCalledWith({ where: { id: PROFILE_ID } });
-      await app.close();
     });
 
     describe("a PIN-protected profile requires proof of the PIN", () => {
@@ -543,7 +506,6 @@ describe("profiles routes", () => {
         expect(response.statusCode).toBe(401);
         expect(prismaMock.profile.delete).not.toHaveBeenCalled();
         expect(prismaMock.$transaction).toHaveBeenCalled();
-        await app.close();
       });
 
       it("refuses an incorrect currentPin", async () => {
@@ -557,7 +519,6 @@ describe("profiles routes", () => {
 
         expect(response.statusCode).toBe(401);
         expect(prismaMock.profile.delete).not.toHaveBeenCalled();
-        await app.close();
       });
 
       it("deletes when the correct currentPin is given", async () => {
@@ -571,7 +532,6 @@ describe("profiles routes", () => {
 
         expect(response.statusCode).toBe(204);
         expect(prismaMock.profile.delete).toHaveBeenCalledWith({ where: { id: PROFILE_ID } });
-        await app.close();
       });
 
       it("deletes without a PIN when the caller holds this profile's access token", async () => {
@@ -585,7 +545,6 @@ describe("profiles routes", () => {
         });
 
         expect(response.statusCode).toBe(204);
-        await app.close();
       });
 
       it("ignores an access token minted for a different profile", async () => {
@@ -600,7 +559,6 @@ describe("profiles routes", () => {
 
         expect(response.statusCode).toBe(401);
         expect(prismaMock.profile.delete).not.toHaveBeenCalled();
-        await app.close();
       });
 
       it("returns 429 while the profile is locked out", async () => {
@@ -617,7 +575,6 @@ describe("profiles routes", () => {
 
         expect(response.statusCode).toBe(429);
         expect(prismaMock.profile.delete).not.toHaveBeenCalled();
-        await app.close();
       });
     });
   });

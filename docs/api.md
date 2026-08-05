@@ -218,9 +218,9 @@ Trakt.
 | `GET` | `/tags` | All tags with counts. |
 | `GET` | `/tags?type=&imdbId=` | Tags on one item. Both params or neither. |
 | `POST` | `/tags` | `{ name }`, max 50 chars. Returns the existing tag if the name is taken. |
-| `DELETE` | `/tags/:tagId` | |
+| `DELETE` | `/tags/:tagId` | `400` if `tagId` isn't a UUID. Deleting a tag that doesn't exist is a no-op, not a `404`. |
 | `POST` | `/tags/assign` | `{ tagName, type, imdbId }`. Creates the tag if needed; idempotent. |
-| `DELETE` | `/tags/assign` | `{ tagId, type, imdbId }`. |
+| `DELETE` | `/tags/assign` | `{ tagId, type, imdbId }`. `400` if `tagId` isn't a UUID. |
 
 ### Calendar
 

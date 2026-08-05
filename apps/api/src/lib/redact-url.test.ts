@@ -79,10 +79,12 @@ describe("redactedRequestSerializer wired into Fastify", () => {
     });
     app.get("/webhooks/plex", async () => ({ ok: true }));
 
-    const response = await app.inject({ method: "GET", url });
-    await app.close();
-
-    return { response, logged: JSON.stringify(lines) };
+    try {
+      const response = await app.inject({ method: "GET", url });
+      return { response, logged: JSON.stringify(lines) };
+    } finally {
+      await app.close();
+    }
   };
 
   it("never writes the webhook secret to the log", async () => {

@@ -1,5 +1,9 @@
 import { afterEach, vi } from "vitest";
-import Fastify, { type FastifyInstance, type FastifyPluginAsync } from "fastify";
+import Fastify, {
+  type FastifyInstance,
+  type FastifyPluginAsync,
+  type FastifyServerOptions,
+} from "fastify";
 
 /**
  * Builds a Fastify instance carrying one route plugin, and closes it after the
@@ -22,11 +26,13 @@ afterEach(async () => {
 });
 
 export const buildRouteApp = async (
-  loadPlugin: () => Promise<{ default: FastifyPluginAsync }>
+  loadPlugin: () => Promise<{ default: FastifyPluginAsync }>,
+  // A couple of suites need a non-default `bodyLimit` to exercise the 413 path.
+  options: FastifyServerOptions = {}
 ): Promise<FastifyInstance> => {
   vi.resetModules();
   const { default: routes } = await loadPlugin();
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: false, ...options });
   await app.register(routes);
   await app.ready();
   openApps.add(app);
