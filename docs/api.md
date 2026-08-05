@@ -120,7 +120,7 @@ row genuinely is not found.
 | `GET` | `/meta/:type/:imdbId/cast` | Cast and director. |
 | `GET` | `/meta/:type/:imdbId/providers` | Where to stream it, for the configured region. |
 | `GET` | `/meta/series/:imdbId/seasons` | Season list. |
-| `GET` | `/meta/series/:imdbId/season/:n/episodes` | Episodes for one season. Fetched on demand as a season is expanded. |
+| `GET` | `/meta/series/:imdbId/season/:seasonNumber/episodes` | Episodes for one season; `seasonNumber` must be a positive integer. Fetched on demand as a season is expanded. |
 | `POST` | `/metadata/sync` | `{ imdbId, type }` — refresh one title from TMDB. |
 | `POST` | `/metadata/refresh-all?limit=` | Re-fetch stored metadata in batches of 5. `limit` defaults to 50, caps at 500. |
 | `GET` | `/metadata/anime-search?q=` | AniList search. |
@@ -161,9 +161,9 @@ Discovery responses are cached in memory and returned as Stremio meta previews
 | `GET` | `/series/progress/:imdbId` | One show. |
 | `GET` | `/series/:imdbId/watched-episodes` | |
 | `POST` | `/series/:imdbId/watch-next` | Mark the next unwatched episode. |
-| `POST` | `/series/:imdbId/season/:s/episode/:e/watch` | |
-| `DELETE` | `/series/:imdbId/season/:s/episode/:e/watch` | |
-| `POST` | `/series/:imdbId/season/:s/watch-all` | |
+| `POST` | `/series/:imdbId/season/:seasonNumber/episode/:episodeNumber/watch` | |
+| `DELETE` | `/series/:imdbId/season/:seasonNumber/episode/:episodeNumber/watch` | |
+| `POST` | `/series/:imdbId/season/:seasonNumber/watch-all` | |
 | `GET` | `/show/:imdbId/dropped` | |
 | `POST` | `/show/:imdbId/drop` | Hide a show from Continue Watching without deleting its history. |
 | `DELETE` | `/show/:imdbId/drop` | Un-drop. |
@@ -176,8 +176,8 @@ Plex and Jellyfin webhooks drive.
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/checkin` | The current check-in, if any. |
-| `POST` | `/checkin` | `{ type, imdbId, name, seriesImdbId?, season?, episode?, runtime? }`. With `runtime`, it expires on its own. |
-| `DELETE` | `/checkin` | |
+| `POST` | `/checkin` | `{ type, imdbId, name, poster?, seriesImdbId?, season?, episode?, runtime? }`. `runtime` is in **minutes**, and sets an expiry that far ahead so an abandoned check-in clears itself. |
+| `DELETE` | `/checkin?log=` | Clears the check-in. `?log=true` records a watch event from it first — that is the "finished watching" action, where the bare call is "cancel". A failure to record still clears the check-in. |
 | `GET` | `/scrobble/now-playing` | |
 | `POST` | `/scrobble/start` \| `/scrobble/pause` \| `/scrobble/stop` | Stale sessions are swept periodically. |
 
@@ -187,7 +187,7 @@ Five stars, stored as 1–10 so half-stars survive a round trip.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/ratings?type=&limit=&imdbId=` | |
+| `GET` | `/ratings?type=&limit=&imdbId=` | `limit` is 1–200, default 50. Filtering by `imdbId` drops the limit entirely, so a show's episode ratings come back whole rather than truncated to the most recent. |
 | `POST` | `/ratings` | `{ imdbId, type, rating, season?, episode?, note? }`. `type` is `movie`, `series`, `season` or `episode`. |
 | `GET` | `/ratings/:type/:imdbId?season=&episode=` | |
 | `DELETE` | `/ratings/:type/:imdbId?season=&episode=` | |
@@ -250,10 +250,10 @@ Needs `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` for search, and
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/profiles` | |
-| `POST` | `/profiles` | `{ name, avatar?, pin? }`. |
-| `PATCH` | `/profiles/:id` | |
+| `POST` | `/profiles` | `{ name, pin? }`. A PIN is 4–128 characters. |
+| `PATCH` | `/profiles/:id` | `{ name?, pin? }`. Changing or clearing an existing PIN also needs `currentPin`; `pin: null` removes it. |
 | `DELETE` | `/profiles/:id` | |
-| `POST` | `/profiles/:id/verify` | `{ pin }` → a profile token for `x-profile-token`. Rate limited. |
+| `POST` | `/profiles/:id/verify` | `{ pin }` → a profile token for `x-profile-token`. `401` on a wrong PIN, `429` once the profile is locked out after repeated failures — separate from the global rate limit. |
 
 ### Settings and API keys
 
@@ -268,8 +268,12 @@ rotated key doesn't mean editing `.env` and restarting.
 | `GET` | `/tmdb/status` | `{ configured, source }` where source is `db`, `env` or `none`. |
 | `POST` | `/tmdb/key` | Validated against TMDB before saving, so a typo can't overwrite a working key. |
 | `DELETE` | `/tmdb/key` | Reports the env fallback that remains, if any. |
-| `GET`/`POST`/`DELETE` | `/omdb/status`, `/omdb/key` | Validated against OMDb; its error text is passed through. |
-| `GET`/`POST`/`DELETE` | `/rpdb/status`, `/rpdb/key` | Not validated on save. |
+| `GET` | `/omdb/status` | `{ configured }`. |
+| `POST` | `/omdb/key` | Validated against OMDb before saving; its own error text is passed through. Posting an empty key deletes the stored one and returns `{ configured: false }`. |
+| `DELETE` | `/omdb/key` | |
+| `GET` | `/rpdb/status` | `{ configured, hasKey }`. |
+| `POST` | `/rpdb/key` | Not validated on save — RPDB has no cheap check, so a bad key shows up as missing posters rather than an error here. Posting an empty key deletes the stored one. |
+| `DELETE` | `/rpdb/key` | |
 | `GET` | `/rpdb/poster/:imdbId` | `404` when no key is set. |
 | `GET` | `/rpdb/config` | Used by the add-on service, which needs the key to build poster URLs itself. |
 
@@ -296,7 +300,7 @@ before each outbound request — records can change after a config is saved.
 | `GET` | `/trakt/status` | |
 | `GET` | `/trakt/oauth/authorize` | Starts the flow. |
 | `GET` | `/trakt/oauth/callback` | The redirect target. No bearer token; bound to the flow by `state`. |
-| `POST` | `/trakt/import` | One-time history import. |
+| `POST` | `/trakt/import` | One-time history import. `409` if an import is already running. |
 | `POST` | `/trakt/poll` | Run the scheduled poll now. |
 | `POST` | `/trakt/disconnect` | |
 
@@ -343,15 +347,16 @@ Catalog data also has plain-JSON equivalents used by the web UI: `/watchlist`,
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/export` | The profile's data as JSON: lists and their items, watch events, series progress, and ratings. |
-| `POST` | `/import` | Restores an `/export` payload. |
+| `GET` | `/export` | The profile's data as JSON: lists and their items, watch events, series progress, and ratings. Carries a `version` field. |
+| `POST` | `/import` | Restores an `/export` payload. The body's `version` must be exactly `1`; anything else is a `400` rather than a partial restore. |
 | `POST` | `/import/csv` | Header must include `imdbId,type,watchedAt`; `season,episode` optional. |
 | `POST` | `/import/external` | `{ format, csv }` where format is `letterboxd-diary`, `letterboxd-ratings`, `imdb-ratings` or `simkl`. |
 
 Letterboxd exports carry no IMDb ids, so each unique title costs a TMDB search.
-Those two formats are capped at 10,000 rows; the id-carrying formats get the
-higher `MAX_IMPORT_ROWS` ceiling. Over the cap is a `413` with
-`code: "too_many_rows"`.
+Those two formats are capped at 10,000 rows; the id-carrying formats allow
+200,000 per collection. Over the cap is a `413` with
+`code: "too_many_rows"` — a row limit, not a byte limit, so raising
+`MAX_BODY_SIZE_MB` does not affect it.
 
 ### Webhooks
 
