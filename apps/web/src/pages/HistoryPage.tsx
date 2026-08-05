@@ -292,7 +292,7 @@ export function HistoryPage() {
                     type="button"
                     onClick={(e) => { e.stopPropagation(); void handleDelete(event); }}
                     disabled={deletingId === event.id}
-                    className="flex h-9 w-9 flex-none items-center justify-center rounded-lg opacity-100 transition-all sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/10 disabled:opacity-50 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-ring-offset"
+                    className="flex h-9 w-9 flex-none items-center justify-center rounded-lg opacity-100 transition-all duration-fast sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/10 disabled:opacity-50 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-ring-offset"
                     aria-label="Delete watch event"
                     title="Remove from history"
                   >

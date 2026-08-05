@@ -556,7 +556,7 @@ export function AiSettings() {
           type="button"
           onClick={handleTest}
           disabled={testing}
-          className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-all hover:bg-[var(--surface-strong)] disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-all duration-base hover:bg-[var(--surface-strong)] disabled:opacity-40 disabled:cursor-not-allowed"
           style={{
             borderColor: "var(--border-strong)",
             color: "var(--text-dim)",
@@ -575,7 +575,7 @@ export function AiSettings() {
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-base ${
             saved
               ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/20"
               : "bg-plum-500 text-white hover:bg-plum-600 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -598,7 +598,7 @@ export function AiSettings() {
             type="button"
             onClick={handleRemove}
             disabled={removing}
-            className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-600 transition-all hover:bg-rose-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-600 transition-all duration-base hover:bg-rose-100 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {removing ? (
               <>

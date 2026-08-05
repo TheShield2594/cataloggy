@@ -68,7 +68,7 @@ function EdgeFade({ side, color, visible }: { side: "left" | "right"; color: str
     <span
       aria-hidden="true"
       data-carousel-fade={side}
-      className={`pointer-events-none absolute inset-y-0 w-8 transition-opacity duration-300 ${side === "left" ? "left-0" : "right-0"} ${visible ? "opacity-100" : "opacity-0"}`}
+      className={`pointer-events-none absolute inset-y-0 w-8 transition-opacity duration-slow ${side === "left" ? "left-0" : "right-0"} ${visible ? "opacity-100" : "opacity-0"}`}
       style={{ background: `linear-gradient(to ${side === "left" ? "right" : "left"}, ${color}, transparent)` }}
     />
   );

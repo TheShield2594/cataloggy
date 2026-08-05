@@ -46,10 +46,10 @@ export function ApiTokenSettings() {
       <p className="text-xs text-amber-600">Only use this on trusted devices.</p>
       <button
         type="submit"
-        className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
+        className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-base ${
           saved
             ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
-            : "bg-claw-500 text-claw-on hover:bg-claw-600 shadow-lg shadow-claw-500/20"
+            : "bg-claw-500 text-claw-on hover:bg-claw-600 shadow-glow"
         }`}
       >
         {saved ? <><Check size={16} /> Saved</> : "Save token"}

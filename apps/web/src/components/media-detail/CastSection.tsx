@@ -39,14 +39,14 @@ export function CastSection({ cast, loading }: { cast: CastMember[]; loading: bo
         {/* Mounted even when the row fits, so the cluster fades with layout
             changes instead of blinking; disabled buttons keep it untabbable. */}
         <div
-          className={`flex items-center gap-1 transition-opacity duration-300 ${canScrollLeft || canScrollRight ? "" : "pointer-events-none opacity-0"}`}
+          className={`flex items-center gap-1 transition-opacity duration-slow ${canScrollLeft || canScrollRight ? "" : "pointer-events-none opacity-0"}`}
           aria-hidden={!canScrollLeft && !canScrollRight}
         >
           <button
             type="button"
             onClick={() => scroll("left")}
             disabled={!canScrollLeft}
-            className="flex h-6 w-6 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95"
+            className="flex h-6 w-6 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95"
             style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
             aria-label="Scroll cast left"
           >
@@ -56,7 +56,7 @@ export function CastSection({ cast, loading }: { cast: CastMember[]; loading: bo
             type="button"
             onClick={() => scroll("right")}
             disabled={!canScrollRight}
-            className="flex h-6 w-6 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95"
+            className="flex h-6 w-6 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95"
             style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
             aria-label="Scroll cast right"
           >

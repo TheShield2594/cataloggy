@@ -56,7 +56,7 @@ export function WatchDateModal({
         aria-modal="true"
         aria-labelledby="watch-date-modal-title"
         tabIndex={-1}
-        className={`overlay-dialog w-full max-w-sm rounded-2xl border p-6 shadow-md ${exiting ? "overlay-exit" : ""}`}
+        className={`overlay-dialog w-full max-w-sm rounded-3xl border p-6 shadow-e3 ${exiting ? "overlay-exit" : ""}`}
         style={{ borderColor: "var(--border)", background: "var(--bg-0)" }}
         onClick={(e) => e.stopPropagation()}
         onAnimationEnd={onExitAnimationEnd}

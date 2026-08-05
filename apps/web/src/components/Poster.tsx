@@ -71,7 +71,7 @@ export function Poster({
         srcSet={srcSet}
         sizes={srcSet ? sizes : undefined}
         alt={alt ?? "Poster"}
-        className={`h-full w-full object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+        className={`h-full w-full object-cover transition-opacity duration-slow ${loaded ? "opacity-100" : "opacity-0"}`}
         loading={eager ? "eager" : "lazy"}
         decoding={eager ? "sync" : "async"}
         // Above-fold artwork is what the page looks like — it should outrank the

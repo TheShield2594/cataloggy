@@ -307,7 +307,7 @@ export function SearchPage() {
           another — which read as four unrelated widgets rather than one panel. */}
       <form
         onSubmit={submitSearch}
-        className="glass-surface sticky top-[76px] z-40 rounded-2xl p-4 backdrop-blur-xl shadow-sm"
+        className="glass-surface sticky top-[76px] z-40 rounded-2xl p-4 backdrop-blur-xl shadow-e1"
         style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)", background: "color-mix(in srgb, var(--bg-1) 90%, transparent)" }}
       >
         {/* The search field is the page's title bar, so the h1 is hidden rather
@@ -320,7 +320,7 @@ export function SearchPage() {
             onChange={(e) => setFilters({ query: e.target.value })}
             placeholder="Search movies & TV shows..."
             aria-label="Search movies and TV shows"
-            className="w-full rounded-full py-3.5 pl-14 pr-12 text-base placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15 transition-all"
+            className="w-full rounded-full py-3.5 pl-14 pr-12 text-base placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15 transition-all duration-base"
             style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", background: "var(--bg-0)", color: "var(--text)" }}
             autoFocus={typeof window !== "undefined" && !window.matchMedia("(pointer: coarse)").matches}
           />
@@ -347,9 +347,9 @@ export function SearchPage() {
                   key={opt.value}
                   type="button"
                   onClick={() => setFilters({ filter: opt.value })}
-                  className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
+                  className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-base ${
                     active
-                      ? "bg-claw-500 text-claw-on shadow-sm"
+                      ? "bg-claw-500 text-claw-on shadow-e1"
                       : "text-[var(--text-mute)] hover:text-[var(--text)]"
                   }`}
                 >
@@ -364,7 +364,7 @@ export function SearchPage() {
           <button
             type="button"
             onClick={() => setFiltersOpen((v) => !v)}
-            className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all ${
+            className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all duration-base ${
               hasActiveFilters
                 ? "border-claw-500/50 bg-claw-500/10 text-claw-text"
                 : "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-mute)] hover:text-[var(--text)]"
@@ -519,7 +519,7 @@ export function SearchPage() {
       {hasSearched && results !== null && results.length > 0 && (
         <>
           <div className="flex items-center justify-between">
-            <p className="text-sm" style={{ color: "var(--text-mute)" }}>
+            <p className="text-sm tabular-nums" style={{ color: "var(--text-mute)" }}>
               {results.length} result{results.length !== 1 ? "s" : ""}
               {rawResults && results.length !== rawResults.length && (
                 <span style={{ color: "var(--text-mute)" }}> (filtered from {rawResults.length})</span>
@@ -533,7 +533,7 @@ export function SearchPage() {
                   key={s}
                   type="button"
                   onClick={() => setFilters({ sort: s })}
-                  className={`rounded-full px-2.5 py-1 text-2xs font-medium transition-all ${
+                  className={`rounded-full px-2.5 py-1 text-2xs font-medium transition-all duration-base ${
                     filters.sort === s
                       ? "text-white"
                       : "hover:text-[var(--text)]"
@@ -756,7 +756,7 @@ function ResultCard({
             srcSet={buildTmdbSrcSet(result.poster)}
             sizes={POSTER_GRID_SIZES}
             alt={result.name}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-slow group-hover:scale-105"
             loading={eager ? "eager" : "lazy"}
             fetchPriority={eager ? "high" : "low"}
           />
@@ -768,7 +768,7 @@ function ResultCard({
 
         {/* Type badge */}
         <span
-          className={`absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-lg ring-1 ring-black/15 ${
+          className={`absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-e1 ring-1 ring-black/15 ${
             result.type === "movie"
               ? "bg-claw-500 text-claw-on"
               : "bg-plum-500/90 text-white"
@@ -784,7 +784,7 @@ function ResultCard({
         </span>
 
         {/* Gradient overlay: low resting opacity on desktop so it stays discoverable without a hover, full on hover/focus */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 transition-opacity duration-300 sm:opacity-30 sm:group-hover:opacity-100" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 transition-opacity duration-slow sm:opacity-30 sm:group-hover:opacity-100" />
 
         {/* Quick-add button: same low-resting-opacity treatment so trackpad/keyboard users see it exists before hovering/focusing */}
         <button
@@ -799,7 +799,7 @@ function ResultCard({
             e.stopPropagation();
             onToggleDropdown(result.imdbId);
           }}
-          className="absolute bottom-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-claw-500 text-claw-on opacity-100 sm:opacity-60 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shadow-lg transition-all duration-300 hover:bg-claw-600 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-300 focus-ring-offset"
+          className="absolute bottom-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-claw-500 text-claw-on opacity-100 sm:opacity-60 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shadow-e2 transition-all duration-slow hover:bg-claw-600 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-300 focus-ring-offset"
           aria-label={`Add ${result.name} to a list`}
           aria-expanded={isOpen}
           aria-controls={isOpen ? panelId : undefined}
@@ -809,7 +809,7 @@ function ResultCard({
 
         {/* Watchlist indicator */}
         {listNames.length > 0 && (
-          <div className="absolute top-2.5 right-2.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-claw-500 shadow-lg">
+          <div className="absolute top-2.5 right-2.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-claw-500 shadow-e1">
             <Heart className="h-4 w-4 fill-claw-on text-claw-on" />
           </div>
         )}
@@ -834,7 +834,7 @@ function ResultCard({
             aria-label={`Add ${result.name} to a list`}
             onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeAndFocusTrigger(); } }}
             onBlur={handlePanelBlur}
-            className="absolute left-0 right-0 overflow-hidden rounded-xl shadow-lg"
+            className="absolute left-0 right-0 overflow-hidden rounded-xl shadow-e2"
             style={{ background: "var(--bg-0)", borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }}
           >
             <p className={`px-3 py-2.5 ${MICRO_LABEL}`} style={{ borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: "var(--border)", color: "var(--text-mute)" }}>

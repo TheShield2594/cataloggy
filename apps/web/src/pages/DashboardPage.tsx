@@ -108,8 +108,7 @@ export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
         />
       )}
       <div
-        className="relative aspect-poster overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:scale-[1.03] group-hover:shadow-card-hover"
-        style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
+        className="poster-frame relative aspect-poster overflow-hidden rounded-xl group-hover:scale-[1.03]"
       >
         <Poster src={item.poster} alt={item.name} className="h-full w-full" eager={eager} sizes="176px" />
         {item.rating != null && item.rating > 0 && (
@@ -126,7 +125,7 @@ export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
           </div>
         )}
         {badge && <div className="absolute top-2 right-2">{badge}</div>}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/55 to-transparent px-3 pb-2.5 pt-10 opacity-100 transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100">
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/55 to-transparent px-3 pb-2.5 pt-10 opacity-100 transition-opacity duration-base sm:opacity-0 sm:group-hover:opacity-100">
           <p className="truncate text-xs font-semibold text-white">{item.name}</p>
         </div>
       </div>
@@ -237,8 +236,7 @@ export function ContinueWatchingCard({
     // them as belonging to this series rather than as loose buttons in a row.
     <div role="group" aria-label={s.name} className="flex-none group" style={{ width: "13rem" }}>
       <div
-        className="relative aspect-poster overflow-hidden rounded-2xl shadow-lg transition-all duration-300 group-hover:shadow-card-hover"
-        style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
+        className="poster-frame relative aspect-poster overflow-hidden rounded-xl"
       >
         <Poster src={s.poster} alt={s.name} className="absolute inset-0 h-full w-full" eager={eager} sizes="208px" />
         {/* The poster is a backdrop and the two controls are siblings in a
@@ -255,7 +253,7 @@ export function ContinueWatchingCard({
           <div className="bg-gradient-to-t from-black via-black/80 to-transparent px-3 pb-3 pt-16">
             {progressPct !== null && (
               <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-white/20">
-                <div className="h-full rounded-full bg-claw-500 transition-all duration-500" style={{ width: `${progressPct}%` }} />
+                <div className="h-full rounded-full bg-claw-500 transition-all duration-slow" style={{ width: `${progressPct}%` }} />
               </div>
             )}
             <p className="text-xs text-white/70">
@@ -267,7 +265,7 @@ export function ContinueWatchingCard({
               disabled={isMarking || isDone}
               onClick={onMarkNext}
               aria-label={isMarking ? "Marking" : isDone ? "Marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
-              className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-claw-300 ${
+              className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all duration-base active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-claw-300 ${
                 isMarking ? "bg-white/10 text-white/50" : isDone ? "bg-emerald-500/20 text-emerald-400" : "bg-white/15 text-white backdrop-blur-sm hover:bg-white/25"
               }`}
             >
@@ -288,7 +286,7 @@ export function ContinueWatchingCard({
         {s.name}
       </p>
       {progressPct !== null && (
-        <p className="text-2xs" style={{ color: "var(--text-dim)" }}>
+        <p className="text-2xs tabular-nums" style={{ color: "var(--text-dim)" }}>
           {s.watchedEpisodes} of {s.totalEpisodes} episodes
         </p>
       )}
@@ -330,7 +328,7 @@ export function ContinueWatchingHero({
         className="absolute inset-0"
         style={{ background: "linear-gradient(110deg, var(--bg-0) 15%, color-mix(in srgb, var(--bg-0) 35%, transparent) 60%, transparent)" }}
       />
-      <div className="relative z-10 h-40 w-28 flex-none overflow-hidden rounded-xl shadow-feature" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
+      <div className="relative z-10 h-40 w-28 flex-none overflow-hidden rounded-xl" style={{ boxShadow: "0 0 0 1px var(--border), var(--elevation-2)" }}>
         <Poster src={s.poster} alt={s.name} className="h-full w-full" eager sizes="112px" />
       </div>
       <div className="relative z-10 min-w-0 flex-1">
@@ -344,10 +342,10 @@ export function ContinueWatchingHero({
           <div className="mt-3 max-w-xs">
             <div className="mb-1.5 flex items-center justify-between text-2xs" style={{ color: "var(--text-mute)" }}>
               <span>{progress.label}</span>
-              <span className="font-semibold text-claw-text">{progress.watched} / {progress.total} episodes</span>
+              <span className="font-semibold tabular-nums text-claw-text">{progress.watched} / {progress.total} episodes</span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--surface-strong)" }}>
-              <div className="h-full rounded-full bg-claw-500 transition-all duration-500" style={{ width: `${progress.pct}%` }} />
+              <div className="h-full rounded-full bg-claw-500 transition-all duration-slow" style={{ width: `${progress.pct}%` }} />
             </div>
           </div>
         )}
@@ -357,7 +355,7 @@ export function ContinueWatchingHero({
             disabled={isMarking || isDone}
             onClick={onMarkNext}
             aria-label={isMarking ? "Marking" : isDone ? "Marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
-            className="flex items-center gap-1.5 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on transition-all active:scale-[0.98] hover:bg-claw-600 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on transition-all duration-base active:scale-[0.98] hover:bg-claw-600 disabled:opacity-60"
           >
             {isDone ? (
               <><Check className="h-4 w-4" /> Marked</>
@@ -370,7 +368,7 @@ export function ContinueWatchingHero({
           <button
             type="button"
             onClick={onSelect}
-            className="rounded-xl px-4 py-2.5 text-sm font-semibold transition-all active:scale-[0.98]"
+            className="rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-base active:scale-[0.98]"
             style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
           >
             Details
@@ -397,14 +395,14 @@ function ScrollArrows({
     // Stays mounted when the row fits on screen so a resize fades the cluster
     // out instead of blinking it away; disabled buttons keep it untabbable.
     <div
-      className={`flex items-center gap-1.5 transition-opacity duration-300 ${scrollable ? "" : "pointer-events-none opacity-0"}`}
+      className={`flex items-center gap-1.5 transition-opacity duration-slow ${scrollable ? "" : "pointer-events-none opacity-0"}`}
       aria-hidden={!scrollable}
     >
       <button
         type="button"
         onClick={() => onScroll("left")}
         disabled={!canScrollLeft}
-        className="flex h-8 w-8 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+        className="flex h-8 w-8 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
         style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
         aria-label="Scroll left"
       >
@@ -414,7 +412,7 @@ function ScrollArrows({
         type="button"
         onClick={() => onScroll("right")}
         disabled={!canScrollRight}
-        className="flex h-8 w-8 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+        className="flex h-8 w-8 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
         style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
         aria-label="Scroll right"
       >
@@ -1071,7 +1069,7 @@ export function DashboardPage() {
       {/* ── Hero: Now Watching ── */}
       {activeCheckin && (
         <section
-          className="relative overflow-hidden rounded-3xl"
+          className="relative overflow-hidden rounded-2xl"
           style={{ minHeight: "13rem", border: "1px solid var(--border)" }}
         >
           {(activeCheckin.background ?? activeCheckin.poster) && (
@@ -1088,7 +1086,7 @@ export function DashboardPage() {
           />
           <div className="relative z-10 flex h-full flex-col gap-5 p-6 sm:flex-row sm:items-center">
             {activeCheckin.poster && (
-              <div className="h-32 w-[5.5rem] flex-none overflow-hidden rounded-xl shadow-feature" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
+              <div className="h-32 w-[5.5rem] flex-none overflow-hidden rounded-xl" style={{ boxShadow: "0 0 0 1px var(--border), var(--elevation-2)" }}>
                 <img src={activeCheckin.poster} alt="" className="h-full w-full object-cover" loading="lazy" />
               </div>
             )}
@@ -1111,14 +1109,14 @@ export function DashboardPage() {
               <button
                 type="button"
                 onClick={() => void handleCheckout(true)}
-                className="flex items-center gap-1.5 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on hover:bg-claw-600 active:scale-[0.98] transition-all"
+                className="flex items-center gap-1.5 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on hover:bg-claw-600 active:scale-[0.98] transition-all duration-base"
               >
                 <Check className="h-4 w-4" /> Finished
               </button>
               <button
                 type="button"
                 onClick={() => void handleCheckout(false)}
-                className="flex h-10 w-10 items-center justify-center rounded-xl transition-all active:scale-95"
+                className="flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-base active:scale-95"
                 style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
                 aria-label="Check out without logging"
               >
@@ -1328,7 +1326,7 @@ export function DashboardPage() {
                   return (
                     <div
                       key={`${entry.seriesImdbId}-s${entry.season}e${entry.episode}`}
-                      className="flex items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5 transition-all hover:border-[var(--border-strong)] hover:bg-[var(--surface-strong)]"
+                      className="flex items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5 transition-all duration-base hover:border-[var(--border-strong)] hover:bg-[var(--surface-strong)]"
                     >
                       <div className="h-12 w-8 flex-none overflow-hidden rounded-md" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
                         <Poster src={entry.poster ?? undefined} alt={entry.seriesName} className="h-full w-full" sizes="32px" />
@@ -1449,8 +1447,7 @@ export function DashboardPage() {
                   aria-label={`View details for ${event.name}`}
                 />
                 <div
-                  className="relative aspect-poster overflow-hidden rounded-xl shadow-lg transition-all duration-300 group-hover:scale-[1.03] group-hover:shadow-card-hover"
-                  style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
+                  className="poster-frame relative aspect-poster overflow-hidden rounded-xl group-hover:scale-[1.03]"
                 >
                   <Poster src={event.poster} alt={event.name} className="h-full w-full" sizes="176px" />
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent px-3 pb-3 pt-12">

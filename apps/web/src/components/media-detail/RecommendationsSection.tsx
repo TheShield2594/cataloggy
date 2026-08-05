@@ -23,7 +23,7 @@ export function RecommendationsSection({
         <div className="flex gap-3 overflow-hidden">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="flex-none space-y-1.5" style={{ width: "7rem" }}>
-              <div className="skeleton aspect-poster rounded-lg" />
+              <div className="skeleton aspect-poster rounded-xl" />
               <div className="skeleton h-2.5 w-full rounded" />
             </div>
           ))}
@@ -43,14 +43,14 @@ export function RecommendationsSection({
         {/* Mounted even when the row fits, so the cluster fades with layout
             changes instead of blinking; disabled buttons keep it untabbable. */}
         <div
-          className={`flex items-center gap-1 transition-opacity duration-300 ${canScrollLeft || canScrollRight ? "" : "pointer-events-none opacity-0"}`}
+          className={`flex items-center gap-1 transition-opacity duration-slow ${canScrollLeft || canScrollRight ? "" : "pointer-events-none opacity-0"}`}
           aria-hidden={!canScrollLeft && !canScrollRight}
         >
           <button
             type="button"
             onClick={() => scroll("left")}
             disabled={!canScrollLeft}
-            className="flex h-6 w-6 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95"
+            className="flex h-6 w-6 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95"
             style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
             aria-label="Scroll recommendations left"
           >
@@ -60,7 +60,7 @@ export function RecommendationsSection({
             type="button"
             onClick={() => scroll("right")}
             disabled={!canScrollRight}
-            className="flex h-6 w-6 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95"
+            className="flex h-6 w-6 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95"
             style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
             aria-label="Scroll recommendations right"
           >
@@ -84,8 +84,7 @@ export function RecommendationsSection({
             aria-label={`View details for ${item.name}`}
           >
             <div
-              className="relative aspect-poster overflow-hidden rounded-lg shadow-lg transition-all duration-300 group-hover:scale-[1.03]"
-              style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
+              className="poster-frame relative aspect-poster overflow-hidden rounded-xl group-hover:scale-[1.03]"
             >
               <Poster src={item.poster} alt={item.name} className="h-full w-full" sizes="112px" />
             </div>

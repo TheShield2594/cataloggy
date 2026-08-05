@@ -169,7 +169,9 @@ export function SeasonsSection({
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-medium truncate" style={{ color: "var(--text)" }}>{s.name}</p>
-                    <p className="text-2xs" style={{ color: "var(--text-mute)" }}>
+                    {/* The watched count climbs as episodes are ticked off
+                        under it — tabular figures keep the row still. */}
+                    <p className="text-2xs tabular-nums" style={{ color: "var(--text-mute)" }}>
                       {watchedCount != null ? `${watchedCount}/${s.episodeCount} watched` : `${s.episodeCount} eps`}
                       {s.airYear ? ` · ${s.airYear}` : ""}
                     </p>

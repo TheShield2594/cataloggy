@@ -78,7 +78,7 @@ export function Section({
       {!alwaysOpen && (
         <ChevronDown
           size={18}
-          className={`transition-transform duration-300 ${open ? "rotate-180" : ""}`}
+          className={`transition-transform duration-slow ${open ? "rotate-180" : ""}`}
           style={{ color: "var(--text-mute)" }}
         />
       )}
@@ -86,7 +86,7 @@ export function Section({
   );
 
   return (
-    <div className="glass-panel rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+    <div className="glass-panel rounded-2xl border shadow-e1 overflow-hidden" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
       {alwaysOpen ? (
         <div id={headerId} className="flex w-full items-center gap-3 px-5 py-[1.125rem]">
           {header}
@@ -109,7 +109,7 @@ export function Section({
         role="region"
         aria-labelledby={headerId}
         style={{ height: height !== undefined ? `${height}px` : "auto" }}
-        className="overflow-hidden transition-[height] duration-300 ease-in-out"
+        className="overflow-hidden transition-[height] duration-slow ease-in-out"
       >
         <div className="border-t px-5 py-5" style={{ borderColor: "var(--border)" }}>{children}</div>
       </div>

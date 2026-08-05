@@ -303,13 +303,13 @@ export function DetailPanel({
           tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
           onAnimationEnd={onExitAnimationEnd}
-          className={`glass-surface overlay-panel relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-feature sm:h-auto sm:max-h-[85vh] sm:max-w-4xl sm:flex-row sm:rounded-3xl sm:border lg:max-w-5xl ${exiting ? "overlay-exit" : ""}`}
+          className={`glass-surface overlay-panel relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-e3 sm:h-auto sm:max-h-[85vh] sm:max-w-4xl sm:flex-row sm:rounded-3xl sm:border lg:max-w-5xl ${exiting ? "overlay-exit" : ""}`}
           style={{ background: "var(--bg-0)", borderColor: "var(--border)" }}
         >
           {/* Close */}
           <button
             type="button" onClick={requestClose}
-            className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full shadow-lg backdrop-blur transition-colors hover:text-white"
+            className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full shadow-e2 backdrop-blur transition-colors hover:text-white"
             style={{ background: "color-mix(in srgb, var(--bg-0) 80%, transparent)", color: "var(--bg-2)" }}
             aria-label="Close detail panel"
           >

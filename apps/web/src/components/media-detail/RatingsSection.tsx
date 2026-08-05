@@ -187,11 +187,11 @@ export function StarRating({
                 >
                   <span className="relative grid h-5 w-5 place-items-center sm:h-7 sm:w-7">
                     <Star
-                      className={`absolute h-5 w-5 transition-colors duration-300 sm:h-7 sm:w-7 ${isPreview ? "text-amber-400" : ""}`}
+                      className={`absolute h-5 w-5 transition-colors duration-slow sm:h-7 sm:w-7 ${isPreview ? "text-amber-400" : ""}`}
                       style={isPreview ? undefined : { color: "var(--text-mute)" }}
                     />
                     <Star
-                      className={`star-shake-target absolute h-5 w-5 fill-amber-400 text-amber-400 transition-opacity duration-300 sm:h-7 sm:w-7 ${isFilled ? "star-pop opacity-100" : "opacity-0"}`}
+                      className={`star-shake-target absolute h-5 w-5 fill-amber-400 text-amber-400 transition-opacity duration-slow sm:h-7 sm:w-7 ${isFilled ? "star-pop opacity-100" : "opacity-0"}`}
                     />
                   </span>
                 </button>

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { NavLink } from "react-router";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { NavLink, useLocation } from "react-router";
 import { BarChart3, CalendarDays, Clapperboard, Gamepad2, History, Pin, PinOff, Search, List, Settings, User } from "lucide-react";
 import { Profile } from "../api";
 import { BRAND_WORDMARK, BrandMark } from "./BrandMark";
@@ -50,6 +50,21 @@ export function Sidebar({
   // Matches the `hidden sm:flex` this component styles itself with.
   const railVisible = useMediaQuery("(min-width: 640px)");
   const expanded = pinned || hovered || focused;
+
+  // One marker for the whole rail, moved to the active item — rather than one
+  // per item, mounted and unmounted, which teleported the rail's only piece of
+  // state from wherever it was to wherever it now belongs. Measured off the
+  // active link rather than derived from the index, so it stays correct if an
+  // item's height ever stops matching its neighbours'.
+  const navRef = useRef<HTMLElement>(null);
+  const location = useLocation();
+  const [marker, setMarker] = useState<{ top: number; height: number } | null>(null);
+  useLayoutEffect(() => {
+    // NavLink writes aria-current on whichever link matched, which spares us
+    // re-implementing its `end`/trailing-slash rules to find the same one.
+    const active = navRef.current?.querySelector<HTMLElement>('a[aria-current="page"]');
+    setMarker(active ? { top: active.offsetTop, height: active.offsetHeight } : null);
+  }, [location.pathname]);
 
   useEffect(() => {
     hintSeenRef.current = localStorage.getItem(HINT_KEY) === "1";
@@ -120,7 +135,7 @@ export function Sidebar({
       onBlur={handleBlur}
     >
       <div
-        className="glass-surface flex h-full flex-col py-4 transition-[width] duration-200 ease-out overflow-hidden"
+        className="glass-surface flex h-full flex-col py-4 transition-[width] duration-base ease-out overflow-hidden"
         style={{
           width: expanded ? "15rem" : "4rem",
           background: "var(--bg-1)",
@@ -138,7 +153,18 @@ export function Sidebar({
           </span>
         </div>
 
-        <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 px-2.5">
+        <nav ref={navRef} aria-label="Primary" className="relative flex flex-1 flex-col gap-1 px-2.5">
+          {marker && (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute left-2.5 top-0 w-[3px] rounded-full bg-claw-500 transition-transform duration-slow ease-out"
+              // 6px in from each end of the row, which is where the marker sat
+              // when it was a child of the link itself (`top-1.5 bottom-1.5`).
+              // Floored at 0 for the layout-less case (jsdom, `display: none`),
+              // where every offset measures zero and the inset would go negative.
+              style={{ height: Math.max(marker.height - 12, 0), transform: `translateY(${marker.top + 6}px)` }}
+            />
+          )}
           {SIDEBAR_NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
@@ -159,17 +185,10 @@ export function Sidebar({
               onPointerEnter={() => prefetchRoute(item.to)}
               onFocus={() => prefetchRoute(item.to)}
             >
-              {({ isActive }) => (
-                <>
-                  {isActive && (
-                    <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-claw-500" />
-                  )}
-                  <item.icon className="h-[1.1rem] w-[1.1rem] flex-none" />
-                  <span className="whitespace-nowrap" style={{ opacity: expanded ? 1 : 0 }}>
-                    {item.label}
-                  </span>
-                </>
-              )}
+              <item.icon className="h-[1.1rem] w-[1.1rem] flex-none" />
+              <span className="whitespace-nowrap" style={{ opacity: expanded ? 1 : 0 }}>
+                {item.label}
+              </span>
             </NavLink>
           ))}
         </nav>
@@ -215,7 +234,7 @@ export function Sidebar({
       {showHint && (
         <div
           role="status"
-          className="absolute bottom-4 w-56 rounded-lg p-3 text-xs shadow-lg transition-[left] duration-200 ease-out"
+          className="absolute bottom-4 w-56 rounded-lg p-3 text-xs shadow-e2 transition-[left] duration-base ease-out"
           style={{
             left: expanded ? "15.5rem" : "4.5rem",
             background: "var(--surface-strong)",
