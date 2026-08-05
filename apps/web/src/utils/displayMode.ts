@@ -66,20 +66,28 @@ export function applyDisplayMode(): boolean {
 }
 
 /**
- * Apply it now and keep it in sync. Launching from the home screen is a fresh
- * document, so the initial call covers the normal case; the listener is for
- * installing from an open tab, where Chrome moves the live document into the
- * installed window without reloading it.
+ * Subscribe to installed/browser transitions, returning an unsubscribe.
+ *
+ * Launching from the home screen is a fresh document, so most of the time the
+ * mode is settled before anything runs. The exception is installing from an
+ * open tab: Chrome moves the live document into the installed window without
+ * reloading it, so anything that reads the mode has to be told, rather than
+ * waiting for a next load that never comes.
  */
+export function onDisplayModeChange(handler: () => void): () => void {
+  const query = window.matchMedia?.("(display-mode: browser)");
+  query?.addEventListener?.("change", handler);
+  return () => query?.removeEventListener?.("change", handler);
+}
+
+/** Apply the mode now, and keep it applied across those transitions. */
 export function watchDisplayMode(): () => void {
   applyDisplayMode();
-  const query = window.matchMedia?.("(display-mode: browser)");
-  const onChange = () => {
+  const unsubscribe = onDisplayModeChange(() => {
     applyDisplayMode();
-  };
-  query?.addEventListener?.("change", onChange);
+  });
   return () => {
-    query?.removeEventListener?.("change", onChange);
+    unsubscribe();
     setGestureBlocking(false);
   };
 }
