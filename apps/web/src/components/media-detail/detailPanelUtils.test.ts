@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatRuntime, statusColor } from "./detailPanelUtils";
+import { buildMetaLine, formatRuntime, statusColor } from "./detailPanelUtils";
 
 describe("formatRuntime", () => {
   it("keeps sub-hour runtimes in minutes", () => {
@@ -53,5 +53,41 @@ describe("statusColor", () => {
   it("falls back to the neutral chip for anything unrecognised", () => {
     expect(statusColor("Released")).toBe("status-chip");
     expect(statusColor("")).toBe("status-chip");
+  });
+});
+
+describe("buildMetaLine", () => {
+  const full = {
+    year: 2021,
+    certification: "TV-MA",
+    network: "Netflix",
+    genres: ["Animation", "Action", "Adventure"],
+  };
+
+  it("orders the facts from most to least identifying", () => {
+    expect(buildMetaLine(full)).toEqual(["2021", "TV-MA", "Netflix", "Animation, Action, Adventure"]);
+  });
+
+  it("collapses genres into one segment rather than one each", () => {
+    // Three genre chips read as three more unrelated facts beside the year and
+    // the certification; a comma-separated group reads as one.
+    expect(buildMetaLine({ genres: ["Drama", "Crime"] })).toEqual(["Drama, Crime"]);
+  });
+
+  it("caps the genre list so the line stays shorter than the title", () => {
+    expect(buildMetaLine({ genres: ["A", "B", "C", "D", "E"] })).toEqual(["A, B, C"]);
+  });
+
+  it("drops what a title doesn't have instead of leaving gaps", () => {
+    expect(buildMetaLine({ year: 1999, certification: null, network: null, genres: [] })).toEqual(["1999"]);
+    expect(buildMetaLine({})).toEqual([]);
+  });
+
+  it("treats blank strings as absent, so the line never opens on a separator", () => {
+    expect(buildMetaLine({ certification: "   ", network: "", genres: ["  "] })).toEqual([]);
+  });
+
+  it("keeps a year of 0 out rather than printing it", () => {
+    expect(buildMetaLine({ year: 0 })).toEqual([]);
   });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Tag as TagIcon, X } from "lucide-react";
 import { api } from "../../api";
+import { KICKER } from "../typography";
 
 type Tag = { id: string; name: string; createdAt: string };
 
@@ -57,6 +58,11 @@ export function TagsSection({
 
   return (
     <div className="space-y-2">
+      {/* Every sibling section in the panel is headed; this one wasn't, so a row
+          of pills and a lone input read as orphaned from whatever was above it.
+          The input's `aria-label` already named it for assistive tech — this is
+          for the eye. */}
+      <h3 className={KICKER} style={{ color: "var(--text-mute)" }}>Tags</h3>
       <div className="flex flex-wrap items-center gap-2">
         {tags.map((tag) => (
           <span

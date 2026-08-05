@@ -18,9 +18,9 @@ export function CastSection({ cast, loading }: { cast: CastMember[]; loading: bo
         <h3 className={`mb-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>Cast</h3>
         <div className="flex gap-3 overflow-hidden">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="flex-none w-16 space-y-1">
-              <div className="skeleton h-16 w-16 rounded-full" />
-              <div className="skeleton h-2.5 w-14 rounded" />
+            <div key={i} className="flex-none w-24 space-y-1">
+              <div className="skeleton h-24 w-24 rounded-full" />
+              <div className="skeleton h-2.5 w-20 rounded" />
             </div>
           ))}
         </div>
@@ -70,26 +70,34 @@ export function CastSection({ cast, loading }: { cast: CastMember[]; loading: bo
         canScrollRight={canScrollRight}
         className="gap-3"
       >
+        {/* Fewer, wider cards. At 64px the rail fitted about eight of them and
+            truncated both lines on nearly every one — `Marguerit…` over
+            `Elin Warri…`, where neither line was readable and the extra card
+            bought nothing. 96px fits most first-and-last names outright, and
+            the character line has room to be worth reading. Both keep a `title`
+            so a name that still truncates is recoverable. */}
         {cast.map((member, i) => (
-          <div key={`${i}-${member.name}`} className="flex-none w-16 text-center">
+          <div key={`${i}-${member.name}`} className="flex-none w-24 text-center">
             {member.photo ? (
               <img
                 src={member.photo}
                 alt={member.name}
-                className="h-16 w-16 rounded-full object-cover mx-auto"
+                className="h-24 w-24 rounded-full object-cover mx-auto"
                 style={{ boxShadow: "0 0 0 1px var(--border)" }}
                 loading="lazy"
               />
             ) : (
               <div
-                className="h-16 w-16 rounded-full flex items-center justify-center mx-auto"
+                className="h-24 w-24 rounded-full flex items-center justify-center mx-auto"
                 style={{ background: "var(--surface-strong)", boxShadow: "0 0 0 1px var(--border)" }}
               >
-                <User className="h-6 w-6" style={{ color: "var(--text-mute)" }} />
+                <User className="h-8 w-8" style={{ color: "var(--text-mute)" }} />
               </div>
             )}
-            <p className="mt-1.5 text-2xs font-medium leading-tight truncate" style={{ color: "var(--text-dim)" }}>{member.name}</p>
-            <p className="text-2xs truncate" style={{ color: "var(--text-mute)" }}>{member.character}</p>
+            <p className="mt-2 text-2xs font-medium leading-tight truncate" style={{ color: "var(--text-dim)" }} title={member.name}>{member.name}</p>
+            {member.character && (
+              <p className="text-2xs truncate" style={{ color: "var(--text-mute)" }} title={member.character}>{member.character}</p>
+            )}
           </div>
         ))}
       </CarouselTrack>

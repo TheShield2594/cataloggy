@@ -23,6 +23,37 @@ export function statusColor(status: string): string {
   return "status-chip";
 }
 
+/**
+ * The detail panel header's demoted metadata, as one line.
+ *
+ * The header used to spend nine chips in five colour treatments on this before
+ * the reader reached the overview, with nothing saying which value mattered and
+ * a lone genre chip stranded on its own line once the row wrapped. Only the
+ * score and the runtime are promoted now; year, certification, network and
+ * genres are facts rather than signals, so they read as text that wraps like
+ * text.
+ *
+ * Genres collapse into one segment, comma-separated, so a list of three doesn't
+ * read as three more unrelated facts. Capped at three: past that the line is
+ * longer than the title above it.
+ */
+export const META_LINE_GENRE_LIMIT = 3;
+
+export function buildMetaLine(item: {
+  year?: number | null;
+  certification?: string | null;
+  network?: string | null;
+  genres?: string[] | null;
+}): string[] {
+  const genres = (item.genres ?? []).filter((g) => g.trim().length > 0);
+  return [
+    item.year ? String(item.year) : null,
+    item.certification?.trim() || null,
+    item.network?.trim() || null,
+    genres.length > 0 ? genres.slice(0, META_LINE_GENRE_LIMIT).join(", ") : null,
+  ].filter((part): part is string => Boolean(part));
+}
+
 export type WatchLogTarget =
   | { kind: "movie"; imdbId: string; releaseDate: string | null | undefined }
   | { kind: "episode"; seriesImdbId: string; season: number; episode: number };
