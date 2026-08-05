@@ -136,6 +136,11 @@ describe("ListsPage selection in the URL", () => {
     getLists.mockResolvedValueOnce({ lists: [SCIFI, WATCHLIST] });
     renderPage();
     await waitFor(() => expect(currentSearch()).toBe(`?list=${SCIFI.id}`));
+    // Wait for the items too, not just the URL: the fetch the selection triggers
+    // is one effect behind the address bar, so clearing the mock on the URL alone
+    // can clear it before that fetch was even made — and then attribute it to the
+    // delete below.
+    expect(await screen.findByText("Solaris")).toBeInTheDocument();
 
     // Deferred, as a real reload is: an instantly-resolved one lets the
     // selection and the refreshed sidebar land in the same render and hides

@@ -41,13 +41,34 @@ class MemoryStorage implements Storage {
     this.#entries.clear();
   }
 }
-if (!window.localStorage) {
+// Reading that global is itself what prints Node's "localStorage is not
+// available because --localstorage-file was not provided" ExperimentalWarning —
+// once per worker, so the suite's output was mostly that. The read is only ever
+// a probe, and the answer is acted on right here, so silence the warning it
+// raises rather than the whole process's warnings.
+function probeLocalStorage(): Storage | undefined {
+  const emitWarning = process.emitWarning;
+  process.emitWarning = () => {};
+  try {
+    return window.localStorage;
+  } finally {
+    process.emitWarning = emitWarning;
+  }
+}
+
+if (!probeLocalStorage()) {
   Object.defineProperty(window, "localStorage", {
     value: new MemoryStorage(),
     configurable: true,
     writable: true,
   });
 }
+
+// jsdom has no viewport to scroll, so its `scrollTo` only logs "Not implemented"
+// through the virtual console. The scroll lock restores the page position when a
+// modal closes, so every modal test printed that line. A no-op is the honest
+// stand-in: there is nothing to scroll and nothing asserts that there was.
+window.scrollTo = () => {};
 
 // Likewise absent from jsdom; components read it to honour reduced motion.
 window.matchMedia ??= ((query: string) => ({
