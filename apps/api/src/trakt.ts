@@ -69,6 +69,19 @@ export type TraktRatedShowPayload = {
   };
 };
 
+export type TraktRatedSeasonPayload = {
+  rated_at?: string;
+  rating?: number;
+  season?: {
+    number?: number;
+    ids?: TraktIds;
+  };
+  show?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+};
+
 export type TraktRatedEpisodePayload = {
   rated_at?: string;
   rating?: number;
@@ -260,6 +273,10 @@ export class TraktClient {
 
   async fetchRatedShows(logger: FastifyBaseLogger): Promise<TraktRatedShowPayload[]> {
     return this.fetchAllPages<TraktRatedShowPayload>("/sync/ratings/shows", logger);
+  }
+
+  async fetchRatedSeasons(logger: FastifyBaseLogger): Promise<TraktRatedSeasonPayload[]> {
+    return this.fetchAllPages<TraktRatedSeasonPayload>("/sync/ratings/seasons", logger);
   }
 
   async fetchRatedEpisodes(logger: FastifyBaseLogger): Promise<TraktRatedEpisodePayload[]> {

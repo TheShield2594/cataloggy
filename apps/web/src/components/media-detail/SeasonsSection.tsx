@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Tv } from "lucide-react";
 import { api, EpisodeInfo } from "../../api";
+import { StarPicker } from "../StarPicker";
 import { KICKER } from "../typography";
 
 export interface SeasonInfo {
@@ -28,6 +29,11 @@ export function SeasonsSection({
   const [episodesLoading, setEpisodesLoading] = useState<Record<number, boolean>>({});
   const [pendingEpisode, setPendingEpisode] = useState<Record<string, boolean>>({});
   const [pendingSeason, setPendingSeason] = useState<Record<number, boolean>>({});
+  // A season is rated on its own terms — "season 4 was the weak one" is not the
+  // same judgement as a score for the whole show, which is why both are kept.
+  const [seasonRatings, setSeasonRatings] = useState<Record<number, number>>({});
+  const [episodeRatings, setEpisodeRatings] = useState<Record<string, number>>({});
+  const [pendingRating, setPendingRating] = useState<Record<string, boolean>>({});
   const imdbIdRef = useRef(imdbId);
 
   useEffect(() => {
@@ -40,9 +46,29 @@ export function SeasonsSection({
     setExpanded(null);
     setEpisodesBySeason({});
     setEpisodesLoading({});
+    setSeasonRatings({});
+    setEpisodeRatings({});
     api.getWatchedEpisodes(imdbId)
       .then((res) => {
         if (!cancelled) setWatched(new Set(res.episodes.map((e) => episodeKey(e.season, e.episode))));
+      })
+      .catch(() => { /* best-effort */ });
+    // Every rating for this show in one request — the series' own, its seasons'
+    // and its episodes' — rather than one per row as they come into view.
+    api.getTitleRatings(imdbId)
+      .then((res) => {
+        if (cancelled) return;
+        const seasons: Record<number, number> = {};
+        const episodes: Record<string, number> = {};
+        for (const rating of res.ratings) {
+          if (rating.type === "season" && rating.season != null) {
+            seasons[rating.season] = rating.rating;
+          } else if (rating.type === "episode" && rating.season != null && rating.episode != null) {
+            episodes[episodeKey(rating.season, rating.episode)] = rating.rating;
+          }
+        }
+        setSeasonRatings(seasons);
+        setEpisodeRatings(episodes);
       })
       .catch(() => { /* best-effort */ });
     return () => { cancelled = true; };
@@ -87,6 +113,71 @@ export function SeasonsSection({
     } finally {
       setPendingEpisode((p) => ({ ...p, [k]: false }));
     }
+  };
+
+  // Picking the rating already saved clears it, the same gesture the detail
+  // panel's stars use.
+  const rate = async (
+    key: string,
+    current: number | undefined,
+    value: number,
+    save: () => Promise<void>,
+    clear: () => Promise<void>,
+    apply: (next: number | null) => void
+  ) => {
+    if (pendingRating[key]) return;
+    const requestImdbId = imdbId;
+    setPendingRating((p) => ({ ...p, [key]: true }));
+    try {
+      if (current === value) {
+        await clear();
+        if (imdbIdRef.current === requestImdbId) apply(null);
+      } else {
+        await save();
+        if (imdbIdRef.current === requestImdbId) apply(value);
+      }
+    } catch (err) {
+      onError?.(err instanceof Error ? err.message : "Failed to save rating");
+    } finally {
+      setPendingRating((p) => ({ ...p, [key]: false }));
+    }
+  };
+
+  const rateSeason = (seasonNumber: number, value: number) =>
+    rate(
+      `s${seasonNumber}`,
+      seasonRatings[seasonNumber],
+      value,
+      () => api.setRating(imdbId, "season", value, { season: seasonNumber }).then(() => undefined),
+      () => api.deleteRating("season", imdbId, { season: seasonNumber }),
+      (next) =>
+        setSeasonRatings((prev) => {
+          const updated = { ...prev };
+          if (next === null) delete updated[seasonNumber];
+          else updated[seasonNumber] = next;
+          return updated;
+        })
+    );
+
+  const rateEpisode = (seasonNumber: number, episodeNumber: number, value: number) => {
+    const k = episodeKey(seasonNumber, episodeNumber);
+    return rate(
+      `e${k}`,
+      episodeRatings[k],
+      value,
+      () =>
+        api
+          .setRating(imdbId, "episode", value, { season: seasonNumber, episode: episodeNumber })
+          .then(() => undefined),
+      () => api.deleteRating("episode", imdbId, { season: seasonNumber, episode: episodeNumber }),
+      (next) =>
+        setEpisodeRatings((prev) => {
+          const updated = { ...prev };
+          if (next === null) delete updated[k];
+          else updated[k] = next;
+          return updated;
+        })
+    );
   };
 
   const markSeasonWatched = async (season: SeasonInfo) => {
@@ -177,6 +268,13 @@ export function SeasonsSection({
                     </p>
                   </div>
                 </button>
+                <StarPicker
+                  value={seasonRatings[s.seasonNumber] ?? null}
+                  onRate={(value) => void rateSeason(s.seasonNumber, value)}
+                  disabled={pendingRating[`s${s.seasonNumber}`]}
+                  size="sm"
+                  subject={s.name}
+                />
                 <button
                   type="button"
                   onClick={() => void markSeasonWatched(s)}
@@ -200,34 +298,50 @@ export function SeasonsSection({
                       const k = episodeKey(s.seasonNumber, ep.episodeNumber);
                       const isWatched = watched.has(k);
                       return (
-                        <button
+                        // A row, not one big button: the episode's stars are
+                        // buttons of their own and can't be nested inside the
+                        // watched toggle.
+                        <div
                           key={ep.episodeNumber}
-                          type="button"
-                          onClick={() => void toggleEpisode(s.seasonNumber, ep.episodeNumber)}
-                          disabled={pendingEpisode[k]}
-                          className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-[var(--surface)] disabled:opacity-50"
+                          className="flex w-full items-center gap-3 px-3 py-2"
                           style={{ borderTop: i > 0 ? "1px solid var(--border)" : undefined }}
                         >
-                          <span
-                            className="flex h-5 w-5 flex-none items-center justify-center rounded-full ring-1"
-                            style={isWatched
-                              ? { background: "rgb(var(--accent-rgb))", borderColor: "transparent" }
-                              : { borderColor: "var(--border-strong)" }}
+                          <button
+                            type="button"
+                            onClick={() => void toggleEpisode(s.seasonNumber, ep.episodeNumber)}
+                            disabled={pendingEpisode[k]}
+                            className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left transition-opacity hover:opacity-75 disabled:opacity-50"
+                            aria-pressed={isWatched}
+                            aria-label={`${isWatched ? "Unmark" : "Mark"} ${ep.name} watched`}
                           >
-                            {isWatched && <Check className="h-3 w-3 text-claw-on" />}
-                          </span>
-                          <span className="w-9 flex-none text-2xs font-semibold" style={{ color: "var(--text-mute)" }}>
-                            E{String(ep.episodeNumber).padStart(2, "0")}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate text-xs" style={{ color: isWatched ? "var(--text-mute)" : "var(--text)" }}>
-                            {ep.name}
-                          </span>
+                            <span
+                              className="flex h-5 w-5 flex-none items-center justify-center rounded-full ring-1"
+                              style={isWatched
+                                ? { background: "rgb(var(--accent-rgb))", borderColor: "transparent" }
+                                : { borderColor: "var(--border-strong)" }}
+                            >
+                              {isWatched && <Check className="h-3 w-3 text-claw-on" />}
+                            </span>
+                            <span className="w-9 flex-none text-2xs font-semibold" style={{ color: "var(--text-mute)" }}>
+                              E{String(ep.episodeNumber).padStart(2, "0")}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-xs" style={{ color: isWatched ? "var(--text-mute)" : "var(--text)" }}>
+                              {ep.name}
+                            </span>
+                          </button>
                           {ep.airDate && (
-                            <time className="flex-none text-2xs" style={{ color: "var(--text-mute)" }}>
+                            <time className="hidden flex-none text-2xs sm:block" style={{ color: "var(--text-mute)" }}>
                               {new Date(ep.airDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
                             </time>
                           )}
-                        </button>
+                          <StarPicker
+                            value={episodeRatings[k] ?? null}
+                            onRate={(value) => void rateEpisode(s.seasonNumber, ep.episodeNumber, value)}
+                            disabled={pendingRating[`e${k}`]}
+                            size="sm"
+                            subject={ep.name}
+                          />
+                        </div>
                       );
                     })
                   )}

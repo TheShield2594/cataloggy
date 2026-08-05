@@ -235,7 +235,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
       importTraktCollection(client, request.log, profileId),
       importTraktPersonalLists(client, request.log, profileId),
     ]);
-    imported.ratings = ratings.movies + ratings.shows + ratings.episodes;
+    imported.ratings = ratings.movies + ratings.shows + ratings.seasons + ratings.episodes;
     imported.collectionMovies = collection.movies;
     imported.collectionShows = collection.shows;
     imported.lists = lists.lists;

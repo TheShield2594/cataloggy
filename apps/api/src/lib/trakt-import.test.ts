@@ -34,6 +34,7 @@ const makeClient = (overrides: Partial<Record<string, unknown>>): TraktClient =>
   ({
     fetchRatedMovies: vi.fn().mockResolvedValue([]),
     fetchRatedShows: vi.fn().mockResolvedValue([]),
+    fetchRatedSeasons: vi.fn().mockResolvedValue([]),
     fetchRatedEpisodes: vi.fn().mockResolvedValue([]),
     fetchCollectionMovies: vi.fn().mockResolvedValue([]),
     fetchCollectionShows: vi.fn().mockResolvedValue([]),
@@ -55,7 +56,7 @@ describe("trakt-import", () => {
   });
 
   describe("importTraktRatings", () => {
-    it("maps movie, show and episode ratings onto the scale and keys Cataloggy stores", async () => {
+    it("maps movie, show, season and episode ratings onto the scale and keys Cataloggy stores", async () => {
       const client = makeClient({
         fetchRatedMovies: vi
           .fn()
@@ -63,6 +64,12 @@ describe("trakt-import", () => {
         fetchRatedShows: vi
           .fn()
           .mockResolvedValue([{ rating: 7, rated_at: "2022-06-02T10:00:00Z", show: { ids: { imdb: "tt2" } } }]),
+        fetchRatedSeasons: vi.fn().mockResolvedValue([
+          { rating: 8, rated_at: "2022-08-04T10:00:00Z", season: { number: 3 }, show: { ids: { imdb: "tt2" } } },
+          // Season 0 is Specials, and rating it must not collide with the
+          // show's own rating the way a series row keyed on season 0 would.
+          { rating: 4, rated_at: "2022-08-05T10:00:00Z", season: { number: 0 }, show: { ids: { imdb: "tt2" } } },
+        ]),
         fetchRatedEpisodes: vi.fn().mockResolvedValue([
           {
             rating: 10,
@@ -76,10 +83,12 @@ describe("trakt-import", () => {
       const { importTraktRatings } = await import("./trakt-import.js");
       const result = await importTraktRatings(client, makeLogger(), "profile-1");
 
-      expect(result).toMatchObject({ movies: 1, shows: 1, episodes: 1, skipped: 0 });
+      expect(result).toMatchObject({ movies: 1, shows: 1, seasons: 2, episodes: 1, skipped: 0 });
       expect(batchRatingsMock.batchUpsertRatings).toHaveBeenCalledWith("profile-1", [
         { type: "movie", imdbId: "tt1", season: 0, episode: 0, rating: 9, ratedAt: new Date("2021-05-01T10:00:00Z") },
         { type: "series", imdbId: "tt2", season: 0, episode: 0, rating: 7, ratedAt: new Date("2022-06-02T10:00:00Z") },
+        { type: "season", imdbId: "tt2", season: 3, episode: 0, rating: 8, ratedAt: new Date("2022-08-04T10:00:00Z") },
+        { type: "season", imdbId: "tt2", season: 0, episode: 0, rating: 4, ratedAt: new Date("2022-08-05T10:00:00Z") },
         // Keyed by the series, not the episode's own IMDb id — the convention
         // the ratings API reads back with.
         { type: "episode", imdbId: "tt2", season: 3, episode: 8, rating: 10, ratedAt: new Date("2023-07-03T10:00:00Z") },
@@ -94,6 +103,7 @@ describe("trakt-import", () => {
           { rating: 11, movie: { ids: { imdb: "tt2" } } },
           { movie: { ids: { imdb: "tt3" } } },
         ]),
+        fetchRatedSeasons: vi.fn().mockResolvedValue([{ rating: 5, show: { ids: { imdb: "tt5" } } }]),
         fetchRatedEpisodes: vi
           .fn()
           .mockResolvedValue([{ rating: 6, episode: { season: 1 }, show: { ids: { imdb: "tt4" } } }]),
@@ -102,7 +112,7 @@ describe("trakt-import", () => {
       const { importTraktRatings } = await import("./trakt-import.js");
       const result = await importTraktRatings(client, makeLogger(), "profile-1");
 
-      expect(result).toMatchObject({ movies: 0, shows: 0, episodes: 0, skipped: 5 });
+      expect(result).toMatchObject({ movies: 0, shows: 0, seasons: 0, episodes: 0, skipped: 6 });
       expect(batchRatingsMock.batchUpsertRatings).toHaveBeenCalledWith("profile-1", []);
     });
   });

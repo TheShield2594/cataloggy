@@ -263,7 +263,7 @@ Trakt is supported but is not a system of record, and nothing depends on it:
 - **Metadata** comes from TMDB, never Trakt.
 - **Importing** from Trakt is a one-time action (**Settings → Trakt Integration → Run Full Import**) and keeps working whether or not you leave the ongoing poll on. One run pulls everything Cataloggy can hold from a Trakt account, so it's enough to stop depending on Trakt afterwards:
   - **Watch history** — every play, however far back, each dated as Trakt recorded it, so History and per-year stats go back as far as your account does.
-  - **Ratings** — movies, shows and individual episodes, on the same 1–10 scale. (Trakt also rates *seasons*; Cataloggy has nowhere to show that, so season ratings are counted as skipped rather than folded into the show's rating.)
+  - **Ratings** — movies, shows, seasons and individual episodes, all of them. Cataloggy shows your ratings as five stars in half-star steps and stores them out of ten, which is the same ten values: an imported 9 stays a 9 rather than collapsing into a 10. Season and episode ratings live on the seasons list in a show's detail panel, alongside the show's own rating.
   - **Watchlist**, **collection** (into the Collection list) and **personal lists** (each becoming a custom list of the same name — a list already here under that name is filled rather than duplicated, so re-running is safe).
 
   Anything Trakt knows only by its own or TMDB's id is skipped and counted, never guessed at. On a large library the import can take several minutes; afterwards the scheduled poll only fetches what is new. `TRAKT_BACKFILL_MAX_PAGES` (default `500`, i.e. 50,000 plays) caps how far back a single import walks.

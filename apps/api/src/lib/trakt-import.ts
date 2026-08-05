@@ -40,6 +40,7 @@ export type TouchedImdbIds = { movies: string[]; series: string[] };
 export type TraktRatingsImportResult = {
   movies: number;
   shows: number;
+  seasons: number;
   episodes: number;
   skipped: number;
   imdbIds: TouchedImdbIds;
@@ -48,24 +49,20 @@ export type TraktRatingsImportResult = {
 /**
  * Trakt ratings, on the same 1-10 scale Cataloggy stores.
  *
- * Episode ratings are keyed by the *series* IMDb id plus season/episode, the
- * convention the ratings API and every other import path already use — an
- * episode's own IMDb id would be unreachable from the series pages that read
- * them back.
- *
- * Season ratings are not imported: Cataloggy rates movies, series and
- * episodes, and there is nowhere for a season's rating to be seen. They are
- * counted as skipped rather than flattened into the series rating, which would
- * overwrite a real one.
+ * Season and episode ratings are keyed by the *series* IMDb id plus the season
+ * (and episode) number, the convention the ratings API and every other import
+ * path already use — an episode's own IMDb id would be unreachable from the
+ * series pages that read them back.
  */
 export const importTraktRatings = async (
   client: TraktClient,
   logger: FastifyRequest["log"],
   profileId: string
 ): Promise<TraktRatingsImportResult> => {
-  const [ratedMovies, ratedShows, ratedEpisodes] = await Promise.all([
+  const [ratedMovies, ratedShows, ratedSeasons, ratedEpisodes] = await Promise.all([
     client.fetchRatedMovies(logger),
     client.fetchRatedShows(logger),
+    client.fetchRatedSeasons(logger),
     client.fetchRatedEpisodes(logger),
   ]);
 
@@ -73,6 +70,7 @@ export const importTraktRatings = async (
   const result: TraktRatingsImportResult = {
     movies: 0,
     shows: 0,
+    seasons: 0,
     episodes: 0,
     skipped: 0,
     imdbIds: { movies: [], series: [] },
@@ -112,6 +110,25 @@ export const importTraktRatings = async (
     });
     result.imdbIds.series.push(imdbId);
     result.shows += 1;
+  }
+
+  for (const entry of ratedSeasons) {
+    const seriesImdbId = entry.show?.ids?.imdb;
+    const season = entry.season?.number;
+    if (!seriesImdbId || season === undefined || !isUsableRating(entry.rating)) {
+      result.skipped += 1;
+      continue;
+    }
+    inputs.push({
+      type: MetadataType.season,
+      imdbId: seriesImdbId,
+      season,
+      episode: 0,
+      rating: entry.rating,
+      ratedAt: ratedAtOrNow(entry.rated_at),
+    });
+    result.imdbIds.series.push(seriesImdbId);
+    result.seasons += 1;
   }
 
   for (const entry of ratedEpisodes) {
