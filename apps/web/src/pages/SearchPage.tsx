@@ -15,6 +15,7 @@ import {
   SORT_LABELS,
 } from "../hooks/useSearchFilters";
 import { PAGE_TITLE, SECTION_TITLE, MICRO_LABEL } from "../components/typography";
+import { SelectField } from "../components/SelectField";
 
 /* ─── Helpers ─── */
 
@@ -605,27 +606,18 @@ function FilterSelect({
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={id} className={MICRO_LABEL} style={{ color: "var(--text-mute)" }}>{label}</label>
-      <div className="relative">
-        <select
-          id={id}
-          value={value}
-          disabled={disabled}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded-full px-3 py-2 pr-7 text-sm focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30 appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{
-            borderWidth: 1,
-            borderStyle: "solid",
-            borderColor: "var(--border-strong)",
-            background: "var(--bg-0)",
-            color: "var(--text-dim)",
-          }}
-        >
-          {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: "var(--text-mute)" }} />
-      </div>
+      <SelectField
+        id={id}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-full px-3 py-2 text-sm"
+        style={{ color: "var(--text-dim)" }}
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </SelectField>
     </div>
   );
 }

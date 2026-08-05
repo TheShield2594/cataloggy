@@ -7,6 +7,7 @@ import { useCachedState } from "../hooks/useCachedState";
 import { formatRating, formatStars, ratingLabel, starsLabel } from "../utils/rating";
 import { monthlyBarGeometry } from "../utils/monthlyBars";
 import { PAGE_TITLE, SECTION_TITLE, KICKER } from "../components/typography";
+import { SelectField } from "../components/SelectField";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -348,17 +349,16 @@ export function StatsPage() {
       <section className="glass-panel rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className={SECTION_TITLE} style={{ color: "var(--text)" }}>Year in Review</h2>
-          <select
+          <SelectField
             aria-label="Year in review: year"
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
             className="rounded-lg px-3 py-1.5 text-sm"
-            style={{ border: "1px solid var(--border)", background: "var(--surface-strong)", color: "var(--text)" }}
           >
             {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map((y) => (
               <option key={y} value={y}>{y}</option>
             ))}
-          </select>
+          </SelectField>
         </div>
 
         {yearError && <p className="text-sm text-rose-500">{yearError}</p>}

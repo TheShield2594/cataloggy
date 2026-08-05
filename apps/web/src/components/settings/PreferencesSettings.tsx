@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import { Loader2, Check, AlertCircle, Shield } from "lucide-react";
+import { SelectField } from "../SelectField";
 
 const COMMON_LANGUAGES = [
   { code: "en-US", label: "English (US)" },
@@ -60,11 +61,21 @@ export function PreferencesSettings() {
     })();
   }, []);
 
-  const save = async () => {
+  /**
+   * Saves on change, like every other section in Settings. These three were
+   * the only ones behind an explicit button, which made them read as a form to
+   * fill in rather than settings to adjust — and left a changed select silently
+   * unsaved if you navigated away.
+   *
+   * Takes the changed field as an argument rather than reading it back from
+   * state: a `setLanguage` immediately followed by a save would otherwise post
+   * the previous language, since the state update hasn't landed yet.
+   */
+  const save = async (patch: Partial<{ language: string; region: string; spoilerProtection: boolean }>) => {
     setSaving(true);
     setError(null);
     try {
-      const updated = await api.updatePreferences({ language, region, spoilerProtection });
+      const updated = await api.updatePreferences({ language, region, spoilerProtection, ...patch });
       setLanguage(updated.language);
       setRegion(updated.region);
       setSpoilerProtection(updated.spoilerProtection);
@@ -73,6 +84,8 @@ export function PreferencesSettings() {
       savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save preferences");
+      // Nothing local to roll back to — the inputs already show the attempted
+      // value, and the loader below re-reads the server's on the next mount.
     } finally {
       setSaving(false);
     }
@@ -92,11 +105,14 @@ export function PreferencesSettings() {
       {/* Language */}
       <div>
         <label htmlFor="pref-language" className="mb-1.5 block text-sm font-medium" style={{ color: "var(--text-dim)" }}>Metadata Language</label>
-        <select
+        <SelectField
           id="pref-language"
           value={language}
-          onChange={(e) => { setLanguage(e.target.value); setSaved(false); }}
-          className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-0)] px-4 py-3 text-sm text-[var(--text)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+          disabled={saving}
+          onChange={(e) => { setLanguage(e.target.value); void save({ language: e.target.value }); }}
+          className="w-full rounded-xl px-4 py-3 text-sm"
+          wrapperClassName="w-full"
+          chevronSize={16}
         >
           {!COMMON_LANGUAGES.some((l) => l.code === language) && (
             <option value={language}>{language}</option>
@@ -104,7 +120,7 @@ export function PreferencesSettings() {
           {COMMON_LANGUAGES.map((l) => (
             <option key={l.code} value={l.code}>{l.label} ({l.code})</option>
           ))}
-        </select>
+        </SelectField>
         <p className="mt-1 text-xs" style={{ color: "var(--text-mute)" }}>
           Titles, descriptions, and metadata will be fetched in this language from TMDB.
         </p>
@@ -113,11 +129,14 @@ export function PreferencesSettings() {
       {/* Region */}
       <div>
         <label htmlFor="pref-region" className="mb-1.5 block text-sm font-medium" style={{ color: "var(--text-dim)" }}>Streaming Region</label>
-        <select
+        <SelectField
           id="pref-region"
           value={region}
-          onChange={(e) => { setRegion(e.target.value); setSaved(false); }}
-          className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-0)] px-4 py-3 text-sm text-[var(--text)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+          disabled={saving}
+          onChange={(e) => { setRegion(e.target.value); void save({ region: e.target.value }); }}
+          className="w-full rounded-xl px-4 py-3 text-sm"
+          wrapperClassName="w-full"
+          chevronSize={16}
         >
           {!COMMON_REGIONS.includes(region) && (
             <option value={region}>{region}</option>
@@ -125,20 +144,23 @@ export function PreferencesSettings() {
           {COMMON_REGIONS.map((r) => (
             <option key={r} value={r}>{r}</option>
           ))}
-        </select>
+        </SelectField>
         <p className="mt-1 text-xs" style={{ color: "var(--text-mute)" }}>
           Streaming service catalogs (Netflix, Disney+, etc.) show content available in this region.
         </p>
       </div>
 
-      {/* Spoiler Protection */}
+      {/* Spoiler Protection — a switch rather than a checkbox: it governs an
+          ongoing behaviour in Stremio, not a value being submitted. */}
       <label htmlFor="pref-spoiler" className="flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 cursor-pointer transition-colors hover:bg-[var(--surface-strong)]">
         <input
           id="pref-spoiler"
           type="checkbox"
+          role="switch"
           checked={spoilerProtection}
-          onChange={(e) => { setSpoilerProtection(e.target.checked); setSaved(false); }}
-          className="checkbox-control mt-0.5"
+          disabled={saving}
+          onChange={(e) => { setSpoilerProtection(e.target.checked); void save({ spoilerProtection: e.target.checked }); }}
+          className="switch-control mt-0.5"
         />
         <div>
           <span className="text-sm font-medium flex items-center gap-2" style={{ color: "var(--text)" }}>
@@ -151,15 +173,20 @@ export function PreferencesSettings() {
         </div>
       </label>
 
-      <button
-        type="button"
-        onClick={save}
-        disabled={saving}
-        className={`btn-primary ${saved ? "btn-saved" : ""}`}
-      >
-        {saved ? <><Check size={16} /> Saved</> : saving ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : "Save Preferences"}
-      </button>
-      {error && <p className="flex items-center gap-2 text-sm text-rose-400"><AlertCircle size={16} /> {error}</p>}
+      {/* Status line, not a control. `aria-live` because the confirmation now
+          follows a change the user made to another element — with a submit
+          button it was announced as that button's own new label. */}
+      <p className="flex min-h-5 items-center gap-2 text-xs" aria-live="polite" style={{ color: "var(--text-mute)" }}>
+        {error ? (
+          <span className="flex items-center gap-2 text-rose-400"><AlertCircle size={14} /> {error}</span>
+        ) : saving ? (
+          <><Loader2 size={14} className="animate-spin" /> Saving...</>
+        ) : saved ? (
+          <span className="flex items-center gap-2" style={{ color: "var(--status-ok)" }}><Check size={14} /> Saved</span>
+        ) : (
+          "Changes save automatically."
+        )}
+      </p>
     </div>
   );
 }
