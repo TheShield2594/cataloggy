@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, Route, Routes, useLocation } from "react-router";
-import { Clapperboard, Loader2, Search, User } from "lucide-react";
+import { Clapperboard, Search, User } from "lucide-react";
 import { api, Profile, runtimeConfig } from "./api";
 import { useCommandPalette } from "./hooks/useCommandPalette";
+import { GhostLoader } from "./components/GhostLoader";
 import { InstallButton } from "./components/InstallButton";
 import { MobileTabBar } from "./components/MobileTabBar";
 import { OfflineBanner } from "./components/OfflineBanner";
@@ -52,15 +53,7 @@ const SettingsPage = lazy(() => loadSettingsPage().then((m) => ({ default: m.Set
 const StatsPage = lazy(() => loadStatsPage().then((m) => ({ default: m.StatsPage })));
 
 const LoadingFallback = ({ label = "Loading…" }: { label?: string }) => (
-  <div
-    role="status"
-    aria-live="polite"
-    className="flex items-center justify-center py-24"
-    style={{ color: "var(--text-dim)" }}
-  >
-    <Loader2 size={24} className="animate-spin" aria-hidden="true" />
-    <span className="sr-only">{label}</span>
-  </div>
+  <GhostLoader label={label} className="items-center py-24" />
 );
 
 // The switcher is a full-screen modal, so suspending it to nothing would blank the

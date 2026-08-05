@@ -491,3 +491,203 @@ body {
   transform: translateY(-4px);
   box-shadow: 0 8px 20px rgba(28, 24, 20, 0.08);
 }
+
+/*
+ * Ghost loader — a Pac-Man ghost painted as a 14x14 grid of blocks, with the
+ * bottom two rows flickering between two phases so the fringe appears to
+ * ripple. Adapted from a Uiverse.io design onto the theme tokens.
+ *
+ * Body, fringe and pupils are all --accent, so the ghost picks up whichever
+ * theme is live. The sclera is the one fixed colour: --on-accent is the
+ * token that guarantees contrast on an accent fill, but it resolves to
+ * near-black on four of the five themes, which turns the eyes into hollow
+ * sockets and costs the shape its read as a Pac-Man ghost. White holds that
+ * read everywhere, at 2.4:1 (dark, the weakest accent) to 4.0:1 (midnight)
+ * against the body — under the text threshold, but this is a 40px decorative
+ * block with the accessible name carried by GhostLoader's sr-only label, not
+ * something anyone reads.
+ *
+ * The drop shadow is the accent at low alpha rather than black, which would
+ * vanish against the four dark themes' backgrounds.
+ *
+ * Individual cells get their `grid-area` inline from GhostLoader.tsx; putting
+ * the 27 single-property rules here instead would triple the size of this
+ * block for nothing. Only paint and flicker phase live in CSS.
+ */
+.cg-ghost {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  /* The layout box stays 140px square — this only changes the painted size. */
+  transform: scale(var(--cg-ghost-scale, 0.8));
+}
+
+.cg-ghost__body {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  display: grid;
+  grid-template-columns: repeat(14, 1fr);
+  grid-template-rows: repeat(14, 1fr);
+  animation: ghost-bob 0.5s infinite;
+  grid-template-areas:
+    "a1  a2  a3  a4  a5  top0  top0  top0  top0  a10 a11 a12 a13 a14"
+    "b1  b2  b3  top1 top1 top1 top1 top1 top1 top1 top1 b12 b13 b14"
+    "c1 c2 top2 top2 top2 top2 top2 top2 top2 top2 top2 top2 c13 c14"
+    "d1 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 d14"
+    "e1 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 e14"
+    "f1 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 top3 f14"
+    "top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4"
+    "top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4"
+    "top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4"
+    "top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4"
+    "top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4"
+    "top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4 top4"
+    "st0 st0 an4 st1 an7 st2 an10 an10 st3 an13 st4 an16 st5 st5"
+    "an1 an2 an3 an5 an6 an8 an9 an9 an11 an12 an14 an15 an17 an18";
+}
+
+.cg-ghost__cell {
+  background-color: var(--accent);
+}
+
+/* The two fringe phases run in antiphase, so the notches appear to slide. */
+.cg-ghost__cell--flicker-a {
+  animation: ghost-flicker-a 0.5s infinite;
+}
+
+.cg-ghost__cell--flicker-b {
+  animation: ghost-flicker-b 0.5s infinite;
+}
+
+.cg-ghost__eye {
+  position: absolute;
+  top: 30px;
+  left: 10px;
+  width: 40px;
+  height: 50px;
+}
+
+.cg-ghost__eye--right {
+  left: auto;
+  right: 30px;
+}
+
+/* A plus-shaped sclera: a tall bar crossed by a wide one. */
+.cg-ghost__eye::before,
+.cg-ghost__eye::after {
+  content: "";
+  display: block;
+  position: absolute;
+  background-color: #fff;
+}
+
+.cg-ghost__eye::before {
+  width: 20px;
+  height: 50px;
+  transform: translateX(10px);
+}
+
+.cg-ghost__eye::after {
+  width: 40px;
+  height: 30px;
+  transform: translateY(10px);
+}
+
+.cg-ghost__pupil {
+  position: absolute;
+  top: 50px;
+  left: 10px;
+  z-index: 1;
+  width: 20px;
+  height: 20px;
+  background-color: var(--accent);
+  animation: ghost-look 3s infinite;
+}
+
+.cg-ghost__pupil--right {
+  left: auto;
+  right: 50px;
+}
+
+.cg-ghost__shadow {
+  position: absolute;
+  top: 80%;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background-color: rgb(var(--accent-rgb) / 0.35);
+  transform: rotateX(80deg);
+  filter: blur(20px);
+  animation: ghost-shadow 0.5s infinite;
+}
+
+@keyframes ghost-bob {
+  0%, 49% {
+    transform: translateY(0);
+  }
+  50%, 100% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes ghost-flicker-a {
+  0%, 49% {
+    background-color: var(--accent);
+  }
+  50%, 100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes ghost-flicker-b {
+  0%, 49% {
+    background-color: transparent;
+  }
+  50%, 100% {
+    background-color: var(--accent);
+  }
+}
+
+@keyframes ghost-look {
+  0%, 49% {
+    transform: translateX(0);
+  }
+  50%, 99% {
+    transform: translateX(10px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes ghost-shadow {
+  0%, 49% {
+    opacity: 0.5;
+  }
+  50%, 100% {
+    opacity: 0.2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /*
+   * The global reduce block above collapses every animation to 0.001ms and one
+   * iteration, which would leave the ghost mid-flicker: the phase-b cells hold
+   * their 100% keyframe (painted) while the phase-a cells hold theirs
+   * (transparent), tearing a bite out of one half of the fringe. Drop the
+   * animations outright and paint the whole fringe instead, so what's left is
+   * a still ghost rather than a broken one.
+   */
+  .cg-ghost__body,
+  .cg-ghost__pupil,
+  .cg-ghost__shadow {
+    animation: none;
+  }
+
+  .cg-ghost__cell--flicker-a,
+  .cg-ghost__cell--flicker-b {
+    animation: none;
+    background-color: var(--accent);
+  }
+}
