@@ -143,7 +143,7 @@ export function StatsPage() {
 
       {/* Monthly activity chart */}
       {detailed && detailed.monthly.length > 0 && (
-        <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+        <section className="glass-panel rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Monthly Activity</h2>
             {momComparison && (
@@ -250,7 +250,7 @@ export function StatsPage() {
 
       {/* Genre distribution */}
       {detailed && detailed.genreDistribution.length > 0 && (
-        <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+        <section className="glass-panel rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
           <h2 className="mb-4 text-lg font-semibold" style={{ color: "var(--text)" }}>Top Genres</h2>
           <div className="space-y-2.5">
             {detailed.genreDistribution.map((g) => (
@@ -275,7 +275,7 @@ export function StatsPage() {
 
       {/* Top rated watched content */}
       {detailed && detailed.topRated.length > 0 && (
-        <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+        <section className="glass-panel rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
           <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold" style={{ color: "var(--text)" }}>
             <Star className="h-5 w-5 text-amber-400" /> Top Rated Watched
           </h2>
@@ -316,7 +316,7 @@ export function StatsPage() {
       )}
 
       {/* Year in Review */}
-      <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+      <section className="glass-panel rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Year in Review</h2>
           <select
@@ -425,7 +425,7 @@ function MilestoneBadges({
   if (earned.length === 0 && upcoming.length === 0) return null;
 
   return (
-    <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+    <section className="glass-panel rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold" style={{ color: "var(--text)" }}>
         <Award className="h-5 w-5 text-amber-400" /> Achievements
       </h2>

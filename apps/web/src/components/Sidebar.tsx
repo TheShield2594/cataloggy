@@ -120,7 +120,7 @@ export function Sidebar({
       onBlur={handleBlur}
     >
       <div
-        className="flex h-full flex-col py-4 transition-[width] duration-200 ease-out overflow-hidden"
+        className="glass-surface flex h-full flex-col py-4 transition-[width] duration-200 ease-out overflow-hidden"
         style={{
           width: expanded ? "15rem" : "4rem",
           background: "var(--bg-1)",

@@ -289,7 +289,7 @@ export function DetailPanel({
           aria-label={item.name}
           tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
-          className="relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-feature sm:h-auto sm:max-h-[85vh] sm:max-w-4xl sm:flex-row sm:rounded-3xl sm:border lg:max-w-5xl"
+          className="glass-surface relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-feature sm:h-auto sm:max-h-[85vh] sm:max-w-4xl sm:flex-row sm:rounded-3xl sm:border lg:max-w-5xl"
           style={{ background: "var(--bg-0)", borderColor: "var(--border)" }}
         >
           {/* Close */}

@@ -75,7 +75,7 @@ function EntryRow({ entry, onSelect }: { entry: CalendarEntry; onSelect: (entry:
     <button
       type="button"
       onClick={() => onSelect(entry)}
-      className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+      className="glass-row flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
       style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
     >
       <div className="h-16 w-11 flex-none overflow-hidden rounded-lg" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
@@ -124,7 +124,7 @@ function DayEntriesModal({
         aria-modal="true"
         aria-labelledby="calendar-day-modal-title"
         tabIndex={-1}
-        className="w-full max-w-md rounded-2xl shadow-sm"
+        className="glass-surface w-full max-w-md rounded-2xl shadow-sm"
         style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -338,7 +338,7 @@ export function CalendarPage() {
               ))}
             </div>
           ) : agendaGroups.length === 0 ? (
-            <div className="rounded-2xl p-8 text-center" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+            <div className="glass-panel rounded-2xl p-8 text-center" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
               <CalendarDays className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
               <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
                 No upcoming episodes in the next {agendaDays} days.
@@ -415,7 +415,7 @@ export function CalendarPage() {
           )}
 
           {monthOutOfRange ? (
-            <div className="rounded-2xl p-8 text-center" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+            <div className="glass-panel rounded-2xl p-8 text-center" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
               <CalendarDays className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
               <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
                 This month is too far out — the calendar only looks {MAX_CALENDAR_DAYS} days ahead.

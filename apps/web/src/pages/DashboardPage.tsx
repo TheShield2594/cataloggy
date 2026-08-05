@@ -701,7 +701,7 @@ function DashboardHeader({
   const today = now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   return (
     <div
-      className="relative flex flex-col gap-2.5 rounded-xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+      className="glass-panel relative flex flex-col gap-2.5 rounded-xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
       <PageHeading />
@@ -1131,7 +1131,7 @@ export function DashboardPage() {
             {nowPlaying.map((session) => (
               <div
                 key={session.id}
-                className="flex items-center gap-3 rounded-xl p-3"
+                className="glass-panel flex items-center gap-3 rounded-xl p-3"
                 style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
               >
                 <div

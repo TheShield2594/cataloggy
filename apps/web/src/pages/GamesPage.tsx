@@ -136,7 +136,7 @@ function AddGameModal({
         aria-modal="true"
         aria-labelledby="add-game-modal-title"
         tabIndex={-1}
-        className="w-full max-w-lg rounded-2xl border shadow-sm"
+        className="glass-surface w-full max-w-lg rounded-2xl border shadow-sm"
         style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}
       >

@@ -185,7 +185,7 @@ function AddItemModal({
         aria-modal="true"
         aria-labelledby="add-item-modal-title"
         tabIndex={-1}
-        className="w-full max-w-lg rounded-2xl border shadow-sm"
+        className="glass-surface w-full max-w-lg rounded-2xl border shadow-sm"
         style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -588,7 +588,7 @@ export function ListsPage() {
                 <div className={`group flex items-center rounded-xl border transition-all md:w-full ${
                   selectedListId === list.id
                     ? "border-claw-500/40 bg-claw-500/10"
-                    : "hover:bg-[var(--surface)] hover:border-[var(--border-strong)]"
+                    : "glass-row hover:bg-[var(--surface)] hover:border-[var(--border-strong)]"
                 }`}
                 style={{
                   borderColor: selectedListId === list.id ? undefined : "var(--border)",

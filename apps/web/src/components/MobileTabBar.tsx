@@ -63,7 +63,7 @@ export function MobileTabBar({ pathname }: { pathname: string }) {
 
       <nav
         aria-label="Mobile navigation"
-        className="fixed bottom-0 left-0 right-0 z-40 flex sm:hidden backdrop-blur-xl"
+        className="glass-surface fixed bottom-0 left-0 right-0 z-40 flex sm:hidden backdrop-blur-xl"
         style={{
           borderTop: "1px solid var(--border)",
           backgroundColor: "color-mix(in srgb, var(--bg-0) 96%, transparent)",
@@ -136,7 +136,7 @@ function MoreSheet({ pathname, onClose }: { pathname: string; onClose: () => voi
         className="absolute inset-0 h-full w-full bg-black/60 backdrop-blur-sm"
       />
       <div
-        className="absolute bottom-0 left-0 right-0 rounded-t-2xl p-2"
+        className="glass-surface absolute bottom-0 left-0 right-0 rounded-t-2xl p-2"
         style={{
           background: "var(--bg-1)",
           borderTop: "1px solid var(--border)",

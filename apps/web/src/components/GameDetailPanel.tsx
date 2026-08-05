@@ -181,7 +181,7 @@ export function GameDetailPanel({
         aria-label={game.title}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-feature sm:h-auto sm:max-h-[85vh] sm:max-w-3xl sm:flex-row sm:rounded-3xl sm:border"
+        className="glass-surface relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-feature sm:h-auto sm:max-h-[85vh] sm:max-w-3xl sm:flex-row sm:rounded-3xl sm:border"
         style={{ background: "var(--bg-0)", borderColor: "var(--border)" }}
       >
         <button

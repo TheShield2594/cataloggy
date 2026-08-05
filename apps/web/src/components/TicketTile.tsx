@@ -43,7 +43,7 @@ export function TicketTile({
 }) {
   return (
     <div
-      className="rounded-2xl px-4 py-4 flex flex-col gap-2"
+      className="glass-panel rounded-2xl px-4 py-4 flex flex-col gap-2"
       style={{ border: "1px solid var(--border)", borderTop: "3px solid var(--accent)", background: "var(--bg-1)" }}
     >
       <div className="flex items-center gap-1.5">

@@ -85,7 +85,7 @@ export function Section({
   );
 
   return (
-    <div className="rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+    <div className="glass-panel rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
       {alwaysOpen ? (
         <div id={headerId} className="flex w-full items-center gap-3 px-5 py-[1.125rem]">
           {header}
