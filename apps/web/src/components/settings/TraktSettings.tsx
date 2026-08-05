@@ -103,7 +103,7 @@ export function TraktSettings() {
               type="button"
               onClick={runImport}
               disabled={importing}
-              className="inline-flex items-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on transition-colors hover:bg-claw-600 disabled:opacity-60 shadow-lg shadow-claw-500/20"
+              className="inline-flex items-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on transition-colors hover:bg-claw-600 disabled:opacity-60 shadow-glow"
             >
               {importing ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : "Run Import"}
             </button>

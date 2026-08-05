@@ -138,7 +138,7 @@ export function PreferencesSettings() {
           type="checkbox"
           checked={spoilerProtection}
           onChange={(e) => { setSpoilerProtection(e.target.checked); setSaved(false); }}
-          className="mt-0.5 h-4 w-4 rounded border-[var(--border-strong)] bg-[var(--bg-0)] text-claw-500 focus:ring-claw-500/30"
+          className="checkbox-control mt-0.5"
         />
         <div>
           <span className="text-sm font-medium flex items-center gap-2" style={{ color: "var(--text)" }}>
@@ -155,10 +155,10 @@ export function PreferencesSettings() {
         type="button"
         onClick={save}
         disabled={saving}
-        className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
+        className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-base ${
           saved
             ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
-            : "bg-claw-500 text-claw-on hover:bg-claw-600 shadow-lg shadow-claw-500/20"
+            : "bg-claw-500 text-claw-on hover:bg-claw-600 shadow-glow"
         }`}
       >
         {saved ? <><Check size={16} /> Saved</> : saving ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : "Save Preferences"}

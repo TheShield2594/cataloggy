@@ -182,16 +182,28 @@ export function StarRating({
                   onFocus={() => setHoverRating(star)}
                   onBlur={() => setHoverRating(null)}
                   className="relative flex flex-col items-center gap-0.5 p-0.5 before:absolute before:inset-[-4px] before:content-[''] disabled:opacity-50 sm:p-1"
-                  aria-label={`Rate ${star} out of 10`}
+                  // The current rating's button does the opposite of every
+                  // other one — it clears the rating — and `title` is the only
+                  // place that said so, which a screen reader may never
+                  // announce and a touch user never sees at all.
+                  aria-label={isCurrentRating ? `Your rating: ${star} out of 10. Activate to remove it` : `Rate ${star} out of 10`}
+                  aria-pressed={isCurrentRating}
                   title={isCurrentRating ? "Click again to remove your rating" : undefined}
                 >
                   <span className="relative grid h-5 w-5 place-items-center sm:h-7 sm:w-7">
                     <Star
-                      className={`absolute h-5 w-5 transition-colors duration-300 sm:h-7 sm:w-7 ${isPreview ? "text-amber-400" : ""}`}
+                      className={`absolute h-5 w-5 transition-colors duration-slow sm:h-7 sm:w-7 ${isPreview ? "text-amber-400" : ""}`}
                       style={isPreview ? undefined : { color: "var(--text-mute)" }}
                     />
+                    {/* Gated on the preview as well as the commit, so hovering
+                        below a saved rating actually previews the lower score —
+                        on `isFilled` alone the stars above the pointer stayed
+                        solid and nothing showed what the click would do.
+                        `star-pop` stays tied to `isFilled` so the pop plays when
+                        a rating is committed, not every time the pointer
+                        leaves. */}
                     <Star
-                      className={`star-shake-target absolute h-5 w-5 fill-amber-400 text-amber-400 transition-opacity duration-300 sm:h-7 sm:w-7 ${isFilled ? "star-pop opacity-100" : "opacity-0"}`}
+                      className={`star-shake-target absolute h-5 w-5 fill-amber-400 text-amber-400 transition-opacity duration-slow sm:h-7 sm:w-7 ${isFilled ? "star-pop" : ""} ${isFilled && isPreview ? "opacity-100" : "opacity-0"}`}
                     />
                   </span>
                 </button>

@@ -52,7 +52,7 @@ export function CheckInModal({
         aria-modal="true"
         aria-labelledby="checkin-modal-title"
         tabIndex={-1}
-        className={`overlay-dialog w-full max-w-sm rounded-2xl border shadow-md ${exiting ? "overlay-exit" : ""}`}
+        className={`overlay-dialog w-full max-w-sm rounded-3xl border shadow-e3 ${exiting ? "overlay-exit" : ""}`}
         style={{ borderColor: "var(--border)", background: "var(--bg-0)" }}
         onClick={(e) => e.stopPropagation()}
         onAnimationEnd={onExitAnimationEnd}

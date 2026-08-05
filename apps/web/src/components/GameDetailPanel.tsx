@@ -48,10 +48,15 @@ function GameStarRating({
       <h3 className={`mb-2 flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
         <Star className="h-3.5 w-3.5" /> Your Rating <span className="font-normal">(1-10)</span>
       </h3>
+      {/* Same two-star construction as the media panel's rating: an outline
+          that tints on preview, and a filled star stacked on it that pops in
+          when the rating is committed and shakes on hover. A game rating is
+          the same gesture as a film rating and should answer the same way. */}
       <div className="flex flex-wrap items-center gap-1">
         {Array.from({ length: 10 }, (_, i) => i + 1).map((star) => {
           const isFilled = game.rating !== null && star <= game.rating;
           const isPreview = star <= displayRating;
+          const isCurrentRating = game.rating === star;
           return (
             <button
               key={star}
@@ -60,19 +65,37 @@ function GameStarRating({
               onClick={() => void handleRate(star)}
               onMouseEnter={() => setHoverRating(star)}
               onMouseLeave={() => setHoverRating(null)}
+              onFocus={() => setHoverRating(star)}
+              onBlur={() => setHoverRating(null)}
               className="relative flex p-0.5 disabled:opacity-50"
-              aria-label={`Rate ${star} out of 10`}
-              title={game.rating === star ? "Click again to remove your rating" : undefined}
+              // The current rating's button does the opposite of every other
+              // one — it clears the rating — and `title` is the only place that
+              // said so, which a screen reader may never announce and a touch
+              // user never sees at all.
+              aria-label={isCurrentRating ? `Your rating: ${star} out of 10. Activate to remove it` : `Rate ${star} out of 10`}
+              aria-pressed={isCurrentRating}
+              title={isCurrentRating ? "Click again to remove your rating" : undefined}
             >
-              <Star
-                className={`h-5 w-5 transition-colors ${isPreview ? "fill-amber-400 text-amber-400" : ""}`}
-                style={isPreview ? undefined : { color: "var(--text-mute)" }}
-              />
+              <span className="relative grid h-5 w-5 place-items-center">
+                <Star
+                  className={`absolute h-5 w-5 transition-colors duration-slow ${isPreview ? "text-amber-400" : ""}`}
+                  style={isPreview ? undefined : { color: "var(--text-mute)" }}
+                />
+                {/* Gated on the preview as well as the commit, so hovering
+                    below a saved rating actually previews the lower score —
+                    on `isFilled` alone the stars above the pointer stayed
+                    solid and nothing showed what the click would do. `star-pop`
+                    stays tied to `isFilled` so the pop plays when a rating is
+                    committed, not every time the pointer leaves. */}
+                <Star
+                  className={`star-shake-target absolute h-5 w-5 fill-amber-400 text-amber-400 transition-opacity duration-slow ${isFilled ? "star-pop" : ""} ${isFilled && isPreview ? "opacity-100" : "opacity-0"}`}
+                />
+              </span>
               {isFilled && <span className="sr-only">(rated)</span>}
             </button>
           );
         })}
-        <span className="ml-1 text-sm font-semibold text-amber-500">
+        <span className="ml-1 text-sm font-semibold tabular-nums text-amber-500">
           {hoverRating != null ? `${hoverRating}/10` : game.rating !== null ? `${game.rating}/10` : ""}
         </span>
       </div>
@@ -180,13 +203,13 @@ export function GameDetailPanel({
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         onAnimationEnd={onExitAnimationEnd}
-        className={`glass-surface overlay-panel relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-feature sm:h-auto sm:max-h-[85vh] sm:max-w-3xl sm:flex-row sm:rounded-3xl sm:border ${exiting ? "overlay-exit" : ""}`}
+        className={`glass-surface overlay-panel relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-e3 sm:h-auto sm:max-h-[85vh] sm:max-w-3xl sm:flex-row sm:rounded-3xl sm:border ${exiting ? "overlay-exit" : ""}`}
         style={{ background: "var(--bg-0)", borderColor: "var(--border)" }}
       >
         <button
           type="button"
           onClick={requestClose}
-          className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full shadow-lg backdrop-blur transition-colors hover:text-white"
+          className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full shadow-e2 backdrop-blur transition-colors hover:text-white"
           style={{ background: "color-mix(in srgb, var(--bg-0) 80%, transparent)", color: "var(--bg-2)" }}
           aria-label="Close detail panel"
         >
@@ -240,7 +263,7 @@ export function GameDetailPanel({
           <div>
             <label
               htmlFor="game-finished-toggle"
-              className="flex items-center gap-2 text-sm font-medium"
+              className="flex cursor-pointer items-center gap-2.5 text-sm font-medium"
               style={{ color: "var(--text-dim)" }}
             >
               <input
@@ -248,7 +271,7 @@ export function GameDetailPanel({
                 type="checkbox"
                 checked={game.finished}
                 onChange={() => void toggleFinished()}
-                className="h-4 w-4 rounded"
+                className="checkbox-control"
               />
               Finished
               {game.finished && game.finishedAt && (

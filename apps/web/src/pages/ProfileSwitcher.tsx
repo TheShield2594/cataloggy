@@ -36,7 +36,7 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
             <span className={`text-2xl ${BRAND_WORDMARK}`} style={{ color: "var(--text)" }}>Cataloggy</span>
           </div>
 
-          <div className="relative rounded-2xl border p-6 shadow-sm" style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}>
+          <div className="relative rounded-3xl border p-6 shadow-e3" style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}>
             <button
               type="button"
               onClick={onClose}
@@ -58,7 +58,7 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
       <div className="w-full max-w-md space-y-6">
         <BrandLockup />
 
-        <div className="rounded-2xl border p-6 shadow-sm" style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}>
+        <div className="rounded-2xl border p-6 shadow-e1" style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}>
           {children}
         </div>
       </div>
@@ -149,7 +149,7 @@ function CreateProfileForm({
         <button
           type="submit"
           disabled={creating || !name.trim()}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all hover:bg-claw-600 disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all duration-base hover:bg-claw-600 disabled:opacity-50"
         >
           {creating ? <><Loader2 size={16} className="animate-spin" /> Creating...</> : <>Create <ArrowRight size={16} /></>}
         </button>
@@ -223,7 +223,7 @@ function PinPrompt({
         <button
           type="submit"
           disabled={verifying || !pin.trim()}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all hover:bg-claw-600 disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all duration-base hover:bg-claw-600 disabled:opacity-50"
         >
           {verifying ? <Loader2 size={16} className="animate-spin" /> : <>Unlock <ArrowRight size={16} /></>}
         </button>

@@ -158,7 +158,7 @@ export function ListsSection({
           <div
             role="menu"
             aria-label="Add to list"
-            className="absolute left-0 z-30 mt-1 w-48 overflow-hidden rounded-xl shadow-lg"
+            className="absolute left-0 z-30 mt-1 w-48 overflow-hidden rounded-xl shadow-e2"
             style={{ background: "var(--bg-0)", borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }}
           >
             {otherLists.length === 0 && !creating && (

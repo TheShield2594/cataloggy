@@ -186,7 +186,7 @@ function AddItemModal({
         aria-modal="true"
         aria-labelledby="add-item-modal-title"
         tabIndex={-1}
-        className="glass-surface overlay-dialog w-full max-w-lg rounded-2xl border shadow-sm"
+        className="glass-surface overlay-dialog w-full max-w-lg rounded-3xl border shadow-e3"
         style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -227,8 +227,8 @@ function AddItemModal({
                   type="button"
                   onClick={() => setFilter(opt.value)}
                   aria-pressed={active}
-                  className={`flex items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-medium transition-all ${
-                    active ? "bg-claw-500 text-claw-on shadow-sm" : "text-[var(--text-mute)] hover:text-[var(--text)]"
+                  className={`flex items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-medium transition-all duration-base ${
+                    active ? "bg-claw-500 text-claw-on shadow-e1" : "text-[var(--text-mute)] hover:text-[var(--text)]"
                   }`}
                 >
                   {Icon && <Icon className="h-3 w-3" />}
@@ -586,7 +586,7 @@ export function ListsPage() {
                   </div>
                 </div>
               ) : (
-                <div className={`group flex items-center rounded-xl border transition-all md:w-full ${
+                <div className={`group flex items-center rounded-xl border transition-all duration-base md:w-full ${
                   selectedListId === list.id
                     ? "border-claw-500/40 bg-claw-500/10"
                     : "glass-row hover:bg-[var(--surface)] hover:border-[var(--border-strong)]"
@@ -618,7 +618,7 @@ export function ListsPage() {
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(list.id); }}
-                      className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-500 transition-all focus:opacity-100"
+                      className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-500 transition-all duration-fast focus:opacity-100"
                       style={{ color: "var(--text-mute)" }}
                       aria-label={`Delete list ${list.name}`}
                     >
@@ -719,7 +719,7 @@ export function ListsPage() {
                     </button>
                   </div>
                 )}
-                <p className="mt-0.5 text-sm" style={{ color: "var(--text-mute)" }}>
+                <p className="mt-0.5 text-sm tabular-nums" style={{ color: "var(--text-mute)" }}>
                   {items.length} {items.length === 1 ? "item" : "items"}
                 </p>
               </div>
@@ -759,7 +759,7 @@ export function ListsPage() {
                       type="button"
                       onClick={() => setSortBy(value)}
                       aria-pressed={sortBy === value}
-                      className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                      className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-base ${
                         sortBy === value ? "bg-claw-500 text-claw-on" : "hover:text-[var(--text)]"
                       }`}
                       style={sortBy === value ? undefined : { color: "var(--text-mute)" }}
@@ -822,7 +822,7 @@ export function ListsPage() {
                             srcSet={buildTmdbSrcSet(poster)}
                             sizes={POSTER_GRID_SIZES}
                             alt={name}
-                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            className="h-full w-full object-cover transition-transform duration-slow group-hover:scale-105"
                             loading={index < 5 ? "eager" : "lazy"}
                             fetchPriority={index < 5 ? "high" : "low"}
                           />
@@ -833,7 +833,7 @@ export function ListsPage() {
                         )}
                         {/* Type badge */}
                         <span
-                          className={`absolute top-2.5 left-2.5 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-lg ring-1 ring-black/15 ${
+                          className={`absolute top-2.5 left-2.5 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-e1 ring-1 ring-black/15 ${
                             item.type === "movie"
                               ? "bg-claw-500 text-claw-on"
                               : "bg-plum-500/90 text-white"
@@ -843,14 +843,14 @@ export function ListsPage() {
                           {item.type === "movie" ? "Movie" : "Series"}
                         </span>
                         {/* Hover overlay with gradient */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 transition-opacity duration-300 sm:opacity-0 sm:group-hover:opacity-100" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 transition-opacity duration-slow sm:opacity-0 sm:group-hover:opacity-100" />
                       </button>
                       {/* Remove button on hover */}
                       <button
                         type="button"
                         disabled={removingIds[item.imdbId]}
                         onClick={() => handleRemove(item)}
-                        className="absolute top-2.5 right-2.5 z-10 rounded-full bg-black/60 p-2 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-all duration-200 hover:bg-rose-500 hover:text-white disabled:opacity-50 backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-ring-offset"
+                        className="absolute top-2.5 right-2.5 z-10 rounded-full bg-black/60 p-2 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-all duration-base hover:bg-rose-500 hover:text-white disabled:opacity-50 backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-ring-offset"
                         aria-label="Remove from list"
                       >
                         <Trash2 className="h-4 w-4" />

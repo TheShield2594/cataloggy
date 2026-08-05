@@ -113,7 +113,7 @@ export function RpdbSettings() {
           <button
             type="submit"
             disabled={saving || !apiKey.trim()}
-            className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
+            className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-base ${
               saved
                 ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/20"
                 : "bg-claw-500 text-claw-on hover:bg-claw-600 disabled:opacity-50"

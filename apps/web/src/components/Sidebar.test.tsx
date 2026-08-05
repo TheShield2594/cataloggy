@@ -87,6 +87,21 @@ describe("Sidebar", () => {
     expect(screen.getByRole("link", { name: "Dashboard" })).not.toHaveAttribute("title");
   });
 
+  // The rail's marker is one element that moves, so there is exactly one of it
+  // no matter which route is open — and none when no item matches.
+  it("keeps a single active marker in the rail", () => {
+    render(
+      <MemoryRouter initialEntries={["/stats"]}>
+        <Sidebar pinned onPinnedChange={() => {}} />
+      </MemoryRouter>
+    );
+
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    const markers = nav.querySelectorAll(':scope > span[aria-hidden="true"]');
+    expect(markers).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Stats" })).toHaveAttribute("aria-current", "page");
+  });
+
   it("shows the pin tip on the first visit, before any hover has happened", async () => {
     const user = userEvent.setup();
     renderSidebar();

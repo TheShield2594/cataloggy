@@ -67,7 +67,7 @@ function AddonManifestUrl({ profileName, multiProfile }: { profileName: string |
         <button
           type="button"
           onClick={copy}
-          className={`flex-none inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
+          className={`flex-none inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-base ${
             copied
               ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/20"
               : copyError
@@ -186,8 +186,7 @@ export function AddonSettings() {
                 checked={enabled.includes(catalog)}
                 onChange={() => toggle(catalog)}
                 disabled={isAiCatalog && !aiConfigured}
-                className="h-4 w-4 rounded text-claw-500 focus:ring-claw-500/30 border-[var(--border-strong)]"
-                style={{ background: "var(--bg-0)" }}
+                className="checkbox-control"
               />
               <span className="flex-1 text-sm font-medium" style={{ color: "var(--text)" }}>{CATALOG_LABELS[catalog] ?? catalog}</span>
               {isAiCatalog && (
@@ -220,8 +219,7 @@ export function AddonSettings() {
                   type="checkbox"
                   checked={enabled.includes(catalogId)}
                   onChange={() => toggle(catalogId)}
-                  className="h-4 w-4 rounded text-claw-500 focus:ring-claw-500/30 border-[var(--border-strong)]"
-                  style={{ background: "var(--bg-0)" }}
+                  className="checkbox-control"
                 />
                 <span className="text-sm font-medium" style={{ color: "var(--text)" }}>{list.name}</span>
               </label>
@@ -234,7 +232,7 @@ export function AddonSettings() {
         type="button"
         onClick={save}
         disabled={saving}
-        className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
+        className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-base ${
           saved
             ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/20"
             : "bg-claw-500 text-claw-on hover:bg-claw-600"

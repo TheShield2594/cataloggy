@@ -201,7 +201,7 @@ export function StatsPage() {
                 >
                   {isHovered && (
                     <div
-                      className={`absolute bottom-full z-10 mb-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-2xs shadow-lg ${
+                      className={`absolute bottom-full z-10 mb-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-2xs shadow-e2 ${
                         isFirst ? "left-0" : isLast ? "right-0" : "left-1/2 -translate-x-1/2"
                       }`}
                       style={{ border: "1px solid var(--border)", background: "var(--bg-2)" }}
@@ -217,13 +217,13 @@ export function StatsPage() {
                   <div className="flex w-full flex-col justify-end" style={{ height: "140px" }}>
                     {episodeHeight > 0 && (
                       <div
-                        className={`w-full rounded-t bg-plum-500/70 transition-all duration-500 ${isHovered ? "bg-plum-500" : ""}`}
+                        className={`w-full rounded-t bg-plum-500/70 transition-all duration-slow ${isHovered ? "bg-plum-500" : ""}`}
                         style={{ height: `${episodeHeight}%` }}
                       />
                     )}
                     {movieHeight > 0 && (
                       <div
-                        className={`w-full bg-claw-500/70 transition-all duration-500 ${episodeHeight === 0 ? "rounded-t" : ""} rounded-b ${isHovered ? "bg-claw-500" : ""}`}
+                        className={`w-full bg-claw-500/70 transition-all duration-slow ${episodeHeight === 0 ? "rounded-t" : ""} rounded-b ${isHovered ? "bg-claw-500" : ""}`}
                         style={{ height: `${movieHeight}%` }}
                       />
                     )}
@@ -264,7 +264,7 @@ export function StatsPage() {
                   title={`${g.genre}: ${g.count} watched`}
                 >
                   <div
-                    className="h-full rounded-full bg-claw-500/80 transition-all duration-500"
+                    className="h-full rounded-full bg-claw-500/80 transition-all duration-slow"
                     style={{ width: `${(g.count / maxGenreCount) * 100}%` }}
                   />
                 </div>
@@ -285,8 +285,8 @@ export function StatsPage() {
             {detailed.topRated.map((item, index) => (
               <div key={item.imdbId} className="group">
                 <div
-                  className="relative overflow-hidden rounded-xl transition-transform duration-300 group-hover:scale-[1.03]"
-                  style={{ aspectRatio: "2/3", boxShadow: "inset 0 0 0 1px var(--border)" }}
+                  className="poster-frame relative overflow-hidden rounded-xl group-hover:scale-[1.03]"
+                  style={{ aspectRatio: "2/3" }}
                 >
                   {item.poster ? (
                     <img
@@ -371,8 +371,8 @@ export function StatsPage() {
                   {yearReview.topRated.map((item) => (
                     <div key={item.imdbId} className="group">
                       <div
-                        className="relative overflow-hidden rounded-xl transition-transform duration-300 group-hover:scale-[1.03]"
-                        style={{ aspectRatio: "2/3", boxShadow: "inset 0 0 0 1px var(--border)" }}
+                        className="poster-frame relative overflow-hidden rounded-xl group-hover:scale-[1.03]"
+                        style={{ aspectRatio: "2/3" }}
                       >
                         {item.poster ? (
                           <img src={item.poster} alt={item.name ?? ""} className="h-full w-full object-cover" loading="lazy" />

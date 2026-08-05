@@ -71,14 +71,30 @@ export default {
       aspectRatio: {
         poster: "2 / 3",
       },
+      // Three ranks of surface, three radii — see the "Radius ranks" note in
+      // src/index.css for which surface takes which.
       borderRadius: {
         "2xl": "1rem",
         "3xl": "1.5rem",
       },
+      // Elevation. Three tiers, themed — the values live on :root in
+      // src/index.css so the dark themes can trade warm-black for real black
+      // instead of casting a shadow nobody can see. `glow` is the accent halo
+      // under a primary button, not an elevation.
       boxShadow: {
-        glow: "0 0 20px rgba(217, 119, 66, 0.12)",
-        "card-hover": "0 8px 20px rgba(28, 24, 20, 0.08)",
-        feature: "0 12px 28px rgba(28, 24, 20, 0.18)",
+        e1: "var(--elevation-1)",
+        e2: "var(--elevation-2)",
+        e3: "var(--elevation-3)",
+        glow: "var(--elevation-glow)",
+      },
+      // Three tiers of motion, same source of truth as the CSS below. `base`
+      // matches the 200ms the base layer gives every button, link and input,
+      // so a control that opts into `transition-all` eases at the same rate as
+      // the one beside it that didn't.
+      transitionDuration: {
+        fast: "var(--duration-fast)",
+        base: "var(--duration-base)",
+        slow: "var(--duration-slow)",
       },
     },
   },

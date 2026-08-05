@@ -217,7 +217,7 @@ export function SettingsPage() {
           }}
           placeholder="Search settings..."
           aria-label="Search settings"
-          className="w-full rounded-full py-2.5 pl-11 pr-11 text-sm placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15 transition-all"
+          className="w-full rounded-full py-2.5 pl-11 pr-11 text-sm placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15 transition-all duration-base"
           style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", background: "var(--bg-0)", color: "var(--text)" }}
         />
         {searching && (
@@ -234,7 +234,7 @@ export function SettingsPage() {
       </div>
 
       {searching ? (
-        <p role="status" className="text-sm" style={{ color: "var(--text-dim)" }}>
+        <p role="status" className="text-sm tabular-nums" style={{ color: "var(--text-dim)" }}>
           {visible.length === 0
             ? `No settings match "${query.trim()}".`
             : `${visible.length} ${visible.length === 1 ? "section" : "sections"} across both tabs.`}
@@ -249,9 +249,9 @@ export function SettingsPage() {
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={`flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
+              className={`flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-base ${
                 tab === t.id
-                  ? "bg-claw-500 text-claw-on shadow-lg shadow-claw-500/25"
+                  ? "bg-claw-500 text-claw-on shadow-glow"
                   : "text-[var(--text-dim)] hover:text-[var(--text)]"
               }`}
             >

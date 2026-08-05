@@ -67,7 +67,7 @@ function WizardShell({ step, children }: { step: Step; children: React.ReactNode
         </div>
 
         <div
-          className="rounded-2xl p-6 shadow-sm"
+          className="rounded-2xl p-6 shadow-e1"
           style={{ border: "1px solid var(--border)", backgroundColor: "var(--bg-0)" }}
         >
           {children}
@@ -144,7 +144,7 @@ function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => vo
       <button
         type="submit"
         disabled={verifying || !token.trim()}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all hover:bg-claw-600 disabled:opacity-50 shadow-lg shadow-claw-500/20"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all duration-base hover:bg-claw-600 disabled:opacity-50 shadow-glow"
       >
         {verifying ? <><Loader2 size={16} className="animate-spin" /> Verifying...</> : <>Continue <ArrowRight size={16} /></>}
       </button>
@@ -177,7 +177,7 @@ function TmdbStep({ configured, onContinue, onBack }: { configured: boolean; onC
       <button
         type="button"
         onClick={onContinue}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all hover:bg-claw-600 shadow-lg shadow-claw-500/20"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all duration-base hover:bg-claw-600 shadow-glow"
       >
         Continue <ArrowRight size={16} />
       </button>
@@ -226,7 +226,7 @@ function DoneStep({ onFinish, onBack }: { onFinish: () => void; onBack: () => vo
       <button
         type="button"
         onClick={onFinish}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all hover:bg-claw-600 shadow-lg shadow-claw-500/20"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all duration-base hover:bg-claw-600 shadow-glow"
       >
         Get Started
       </button>

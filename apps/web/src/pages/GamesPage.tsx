@@ -133,7 +133,7 @@ function AddGameModal({
         aria-modal="true"
         aria-labelledby="add-game-modal-title"
         tabIndex={-1}
-        className="glass-surface overlay-dialog w-full max-w-lg rounded-2xl border shadow-sm"
+        className="glass-surface overlay-dialog w-full max-w-lg rounded-3xl border shadow-e3"
         style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -225,7 +225,7 @@ function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => vo
           <img
             src={game.coverUrl}
             alt={game.title}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-slow group-hover:scale-105"
             loading="lazy"
           />
         ) : (
@@ -235,7 +235,7 @@ function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => vo
         )}
 
         {game.finished && (
-          <span className="absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md bg-emerald-500/90 px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-white shadow-lg">
+          <span className="absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md bg-emerald-500/90 px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-white shadow-e1">
             <Check className="h-3 w-3" /> Finished
           </span>
         )}

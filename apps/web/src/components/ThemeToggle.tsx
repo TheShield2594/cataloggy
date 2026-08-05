@@ -88,7 +88,7 @@ export function ThemeToggle({ theme, onChange }: { theme: Theme; onChange: (next
         <div
           role="menu"
           aria-label="Theme"
-          className={`overlay-dialog absolute right-0 top-11 z-40 w-44 overflow-hidden rounded-xl py-1 shadow-lg ${exiting ? "overlay-exit" : ""}`}
+          className={`overlay-dialog absolute right-0 top-11 z-40 w-44 overflow-hidden rounded-xl py-1 shadow-e2 ${exiting ? "overlay-exit" : ""}`}
           style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", transformOrigin: "top right" }}
           onKeyDown={handleMenuKeyDown}
           onAnimationEnd={onExitAnimationEnd}

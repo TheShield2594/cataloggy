@@ -54,6 +54,35 @@ describe("MobileTabBar", () => {
     expect(within(tabBar()).getByRole("link", { name: /dashboard/i })).not.toHaveAttribute("aria-current");
   });
 
+  // One marker that moves, not one per tab that blinks on and off — the whole
+  // point of positioning it arithmetically off the active index.
+  it("keeps a single active marker and slides it to the current tab", () => {
+    const marker = (bar: HTMLElement) => {
+      const found = bar.querySelectorAll(':scope > span[aria-hidden="true"]');
+      expect(found).toHaveLength(1);
+      return found[0] as HTMLElement;
+    };
+
+    const { unmount } = renderBar("/");
+    expect(marker(tabBar()).style.transform).toBe("translateX(0%)");
+    unmount();
+
+    renderBar("/lists");
+    // Third of five slots.
+    expect(marker(tabBar()).style.transform).toBe("translateX(200%)");
+  });
+
+  it("parks the marker on More while a route behind it is open", () => {
+    renderBar("/stats");
+    const marker = tabBar().querySelector<HTMLElement>(':scope > span[aria-hidden="true"]');
+    expect(marker?.style.transform).toBe("translateX(400%)");
+  });
+
+  it("shows no marker at all on a route the bar doesn't own", () => {
+    renderBar("/nowhere");
+    expect(tabBar().querySelectorAll(':scope > span[aria-hidden="true"]')).toHaveLength(0);
+  });
+
   it("matches Dashboard only on the exact root path", () => {
     renderBar("/search");
     expect(within(tabBar()).getByRole("link", { name: /dashboard/i })).not.toHaveAttribute("aria-current");

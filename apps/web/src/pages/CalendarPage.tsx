@@ -125,14 +125,14 @@ function DayEntriesModal({
         aria-modal="true"
         aria-labelledby="calendar-day-modal-title"
         tabIndex={-1}
-        className="glass-surface overlay-dialog w-full max-w-md rounded-2xl shadow-sm"
+        className="glass-surface overlay-dialog w-full max-w-md rounded-3xl shadow-e3"
         style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <div className="min-w-0">
             <h2 id="calendar-day-modal-title" className={`truncate ${SECTION_TITLE}`} style={{ color: "var(--text)" }}>{heading}</h2>
-            <p className="text-xs" style={{ color: "var(--text-mute)" }}>
+            <p className="text-xs tabular-nums" style={{ color: "var(--text-mute)" }}>
               {entries.length} {entries.length === 1 ? "episode" : "episodes"}
             </p>
           </div>
@@ -322,7 +322,7 @@ export function CalendarPage() {
                 key={d}
                 type="button"
                 onClick={() => setAgendaDays(d)}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-base ${
                   agendaDays === d ? "bg-claw-500 text-claw-on" : "hover:text-[var(--text)]"
                 }`}
                 style={agendaDays === d ? undefined : { color: "var(--text-mute)", border: "1px solid var(--border)" }}

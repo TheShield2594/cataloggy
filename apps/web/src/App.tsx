@@ -208,7 +208,7 @@ function AppShell({
         href="#main-content"
         // `not-sr-only` zeroes the padding it restores, so the box has to be
         // rebuilt under the same variant rather than set unconditionally.
-        className="sr-only rounded-xl text-sm font-semibold shadow-lg focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:px-4 focus:py-2.5 focus:outline-none focus:ring-2 focus:ring-claw-400"
+        className="sr-only rounded-xl text-sm font-semibold shadow-e2 focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:px-4 focus:py-2.5 focus:outline-none focus:ring-2 focus:ring-claw-400"
         style={{ background: "var(--bg-1)", color: "var(--text)", border: "1px solid var(--border-strong)" }}
       >
         Skip to main content
@@ -232,7 +232,7 @@ function AppShell({
 
       {/* Slim top bar */}
       <header
-        className={`fixed top-0 left-0 right-0 z-30 backdrop-blur-xl transition-[padding] duration-200 ${sidebarPad}`}
+        className={`fixed top-0 left-0 right-0 z-30 backdrop-blur-xl transition-[padding] duration-base ${sidebarPad}`}
         style={{ borderBottom: "1px solid var(--border)", backgroundColor: "color-mix(in srgb, var(--bg-0) 90%, transparent)" }}
       >
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-6 py-3">
@@ -292,22 +292,28 @@ function AppShell({
         // link and for the focus move on route change.
         tabIndex={-1}
         aria-label="Main content"
-        className={`mx-auto max-w-[1400px] px-6 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[76px] focus:outline-none sm:pb-10 transition-[padding] duration-200 ${sidebarPad}`}
+        className={`mx-auto max-w-[1400px] px-6 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[76px] focus:outline-none sm:pb-10 transition-[padding] duration-base ${sidebarPad}`}
       >
         <OfflineBanner />
-        <Suspense fallback={<LoadingFallback />}>
-          <Routes key={profile?.id ?? runtimeConfig.getProfileId() ?? "default"}>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/search" element={<SearchPage />} />
-            <Route path="/lists" element={<ListsPage />} />
-            <Route path="/games" element={<GamesPage />} />
-            <Route path="/calendar" element={<CalendarPage />} />
-            <Route path="/history" element={<HistoryPage />} />
-            <Route path="/stats" element={<StatsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
-        </Suspense>
+        {/* Keyed on the pathname so the entrance replays once per navigation.
+            The key also remounts the outgoing page, which `<Routes>` does on a
+            route change anyway — this only extends it to a same-element route
+            (the dashboard's own link), where a replay is still what's wanted. */}
+        <div key={location.pathname} className="route-enter">
+          <Suspense fallback={<LoadingFallback />}>
+            <Routes key={profile?.id ?? runtimeConfig.getProfileId() ?? "default"}>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/search" element={<SearchPage />} />
+              <Route path="/lists" element={<ListsPage />} />
+              <Route path="/games" element={<GamesPage />} />
+              <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/history" element={<HistoryPage />} />
+              <Route path="/stats" element={<StatsPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </Suspense>
+        </div>
       </main>
 
       {/* Mobile bottom tab bar */}

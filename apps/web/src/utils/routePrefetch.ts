@@ -15,7 +15,13 @@ import { getCacheScope, isFresh, writeCacheForScope } from "./dataCache";
 // named export straight out of a prefetch loader in `lazy()`.
 type Loader = () => Promise<unknown>;
 
-export const loadDashboardPage = () => import("../pages/DashboardPage");
+// The dashboard is not here on purpose. App.tsx imports it statically — it is
+// the landing route, so it ships in the entry bundle — and a dynamic import of
+// a statically-imported module can't be split out, so Rollup folds the chunk
+// back in and warns about the mixed import for every build. There is nothing to
+// prefetch: the code is already loaded before any nav link exists to hover.
+export const EAGER_ROUTES = new Set(["/"]);
+
 export const loadSearchPage = () => import("../pages/SearchPage");
 export const loadListsPage = () => import("../pages/ListsPage");
 export const loadGamesPage = () => import("../pages/GamesPage");
@@ -67,7 +73,6 @@ const ROUTE_DATA_WARMERS: Record<string, (scope: string) => Promise<void>> = {
 
 /** Keyed by the `to` of every nav link that points at a code-split route. */
 const ROUTE_LOADERS: Record<string, Loader> = {
-  "/": loadDashboardPage,
   "/search": loadSearchPage,
   "/lists": loadListsPage,
   "/games": loadGamesPage,
