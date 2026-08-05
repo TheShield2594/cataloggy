@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -35,14 +36,8 @@ const resetMocks = () => {
   traktClientMock.pushTraktScrobble.mockResolvedValue(null);
 };
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: scrobbleRoutes } = await import("./scrobble.js");
-  const app = Fastify();
-  await app.register(scrobbleRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./scrobble.js"));
 
 describe("scrobble routes", () => {
   beforeEach(() => {
@@ -58,14 +53,12 @@ describe("scrobble routes", () => {
         payload: { type: "bogus", imdbId: "tt1" },
       });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
 
     it("rejects a missing imdbId", async () => {
       const app = await buildApp();
       const response = await app.inject({ method: "POST", url: "/scrobble/start", payload: { type: "movie" } });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
 
     it("creates a new session when none exists and returns 201", async () => {
@@ -85,7 +78,6 @@ describe("scrobble routes", () => {
         expect.objectContaining({ imdbId: "tt1" }),
         expect.anything()
       );
-      await app.close();
     });
 
     it("reuses an existing playing/paused session instead of creating a new one", async () => {
@@ -104,7 +96,6 @@ describe("scrobble routes", () => {
       expect(txMock.scrobbleSession.update).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: "s1" }, data: { status: "playing", progress: 50 } })
       );
-      await app.close();
     });
 
     it("does not re-push to Trakt when resuming a session that was already playing", async () => {
@@ -115,7 +106,6 @@ describe("scrobble routes", () => {
       await app.inject({ method: "POST", url: "/scrobble/start", payload: { type: "movie", imdbId: "tt1", progress: 50 } });
 
       expect(traktClientMock.pushTraktScrobble).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("clamps progress to the 0-100 range", async () => {
@@ -128,7 +118,6 @@ describe("scrobble routes", () => {
       expect(txMock.scrobbleSession.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ progress: 100 }) })
       );
-      await app.close();
     });
   });
 
@@ -138,7 +127,6 @@ describe("scrobble routes", () => {
       const app = await buildApp();
       const response = await app.inject({ method: "POST", url: "/scrobble/pause", payload: { imdbId: "tt1" } });
       expect(response.statusCode).toBe(404);
-      await app.close();
     });
 
     it("pauses an active session and pushes a pause event to Trakt", async () => {
@@ -158,7 +146,6 @@ describe("scrobble routes", () => {
         expect.objectContaining({ progress: 42 }),
         expect.anything()
       );
-      await app.close();
     });
   });
 
@@ -168,7 +155,6 @@ describe("scrobble routes", () => {
       const app = await buildApp();
       const response = await app.inject({ method: "POST", url: "/scrobble/stop", payload: { imdbId: "tt1" } });
       expect(response.statusCode).toBe(404);
-      await app.close();
     });
 
     it("records a watch event when progress meets the 80% completion threshold", async () => {
@@ -193,7 +179,6 @@ describe("scrobble routes", () => {
       expect(response.json().recorded).toBe(true);
       expect(watchEventMock.recordWatchEvent).toHaveBeenCalled();
       expect(traktClientMock.pushTraktScrobble).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("does not record a watch event when progress is just below the 80% threshold", async () => {
@@ -221,7 +206,6 @@ describe("scrobble routes", () => {
         expect.objectContaining({ progress: 79 }),
         expect.anything()
       );
-      await app.close();
     });
 
     it("falls back to the session's stored progress when no progress is supplied", async () => {
@@ -239,7 +223,6 @@ describe("scrobble routes", () => {
       const response = await app.inject({ method: "POST", url: "/scrobble/stop", payload: { imdbId: "tt1" } });
 
       expect(response.json().recorded).toBe(true);
-      await app.close();
     });
   });
 
@@ -249,7 +232,6 @@ describe("scrobble routes", () => {
       const app = await buildApp();
       const response = await app.inject({ method: "GET", url: "/scrobble/now-playing" });
       expect(response.json()).toEqual({ sessions: [] });
-      await app.close();
     });
 
     it("attaches metadata name/poster to active sessions", async () => {
@@ -264,7 +246,6 @@ describe("scrobble routes", () => {
       expect(response.json().sessions[0]).toEqual(
         expect.objectContaining({ name: "Movie A", poster: "poster.jpg" })
       );
-      await app.close();
     });
   });
 });

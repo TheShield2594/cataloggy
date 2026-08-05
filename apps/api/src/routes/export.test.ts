@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 import { MAX_IMPORT_ROWS } from "../lib/import-validation.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
@@ -46,14 +47,8 @@ const resetMocks = () => {
 // `bodyLimit` mirrors the configurable ceiling index.ts sets from
 // MAX_BODY_SIZE_MB; the row caps below it only come into play once a
 // deployment has raised the byte ceiling enough to fit that many rows.
-const buildApp = async (bodyLimit?: number): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: exportRoutes } = await import("./export.js");
-  const app = Fastify(bodyLimit ? { bodyLimit } : {});
-  await app.register(exportRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (bodyLimit?: number): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./export.js"), bodyLimit ? { bodyLimit } : {});
 
 describe("export routes", () => {
   beforeEach(() => {
@@ -66,14 +61,12 @@ describe("export routes", () => {
       const response = await app.inject({ method: "POST", url: "/import", payload: { lists: [] } });
       expect(response.statusCode).toBe(400);
       expect(response.json()).toEqual(expect.objectContaining({ error: expect.stringContaining("version") }));
-      await app.close();
     });
 
     it("rejects a payload with a mismatched version", async () => {
       const app = await buildApp();
       const response = await app.inject({ method: "POST", url: "/import", payload: { version: 99, lists: [] } });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
 
     it("accepts a payload with the correct version and an empty body otherwise", async () => {
@@ -83,7 +76,6 @@ describe("export routes", () => {
       expect(response.json()).toEqual(
         expect.objectContaining({ status: "imported", summary: { lists: 0, listItems: 0, watchEvents: 0, seriesProgress: 0, ratings: 0 } })
       );
-      await app.close();
     });
   });
 
@@ -108,7 +100,6 @@ describe("export routes", () => {
         data: [expect.objectContaining({ imdbId: "tt1", type: "movie", plays: 1 })],
       });
       expect(response.json().summary.watchEvents).toBe(1);
-      await app.close();
     });
 
     it("increments plays for a duplicate watch event instead of creating a new row", async () => {
@@ -139,7 +130,6 @@ describe("export routes", () => {
       expect(prismaMock.watchEvent.update).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: "existing-1" }, data: { plays: { increment: 2 } } })
       );
-      await app.close();
     });
 
     it("skips a watch event entry with an invalid date", async () => {
@@ -153,7 +143,6 @@ describe("export routes", () => {
       expect(response.statusCode).toBe(200);
       expect(response.json().summary.watchEvents).toBe(0);
       expect(prismaMock.watchEvent.createMany).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("skips a watch event entry with an invalid type", async () => {
@@ -165,7 +154,6 @@ describe("export routes", () => {
       });
 
       expect(response.json().summary.watchEvents).toBe(0);
-      await app.close();
     });
   });
 
@@ -174,7 +162,6 @@ describe("export routes", () => {
       const app = await buildApp();
       const response = await app.inject({ method: "POST", url: "/import/csv", payload: {} });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
 
     it("rejects when the required header columns are missing", async () => {
@@ -185,7 +172,6 @@ describe("export routes", () => {
         payload: { csv: "foo,bar\n1,2" },
       });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
 
     it("imports a simple movie row", async () => {
@@ -203,7 +189,6 @@ describe("export routes", () => {
       expect(prismaMock.watchEvent.createMany).toHaveBeenCalledWith({
         data: [expect.objectContaining({ imdbId: "tt1", type: "movie" })],
       });
-      await app.close();
     });
 
     it("imports a quoted field", async () => {
@@ -217,7 +202,6 @@ describe("export routes", () => {
       expect(prismaMock.watchEvent.createMany).toHaveBeenCalledWith({
         data: [expect.objectContaining({ imdbId: "tt1" })],
       });
-      await app.close();
     });
 
     it("skips rows with missing required fields and counts them", async () => {
@@ -228,7 +212,6 @@ describe("export routes", () => {
       const response = await app.inject({ method: "POST", url: "/import/csv", payload: { csv } });
 
       expect(response.json().summary).toEqual({ imported: 1, skipped: 1 });
-      await app.close();
     });
 
     it("skips rows with an invalid type", async () => {
@@ -239,7 +222,6 @@ describe("export routes", () => {
       const response = await app.inject({ method: "POST", url: "/import/csv", payload: { csv } });
 
       expect(response.json().summary).toEqual({ imported: 0, skipped: 1 });
-      await app.close();
     });
 
     it("skips blank lines without counting them as imported or skipped", async () => {
@@ -250,7 +232,6 @@ describe("export routes", () => {
       const response = await app.inject({ method: "POST", url: "/import/csv", payload: { csv } });
 
       expect(response.json().summary).toEqual({ imported: 1, skipped: 0 });
-      await app.close();
     });
 
     it("sets seriesImdbId for episode rows and increments plays on a duplicate", async () => {
@@ -274,7 +255,6 @@ describe("export routes", () => {
       expect(prismaMock.watchEvent.update).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: "existing-ep" }, data: { plays: { increment: 1 } } })
       );
-      await app.close();
     });
 
     it("returns 200 with an empty summary when the CSV has only a header row", async () => {
@@ -287,7 +267,6 @@ describe("export routes", () => {
       // header parses, but there are no data rows to import — should be empty summary, not a crash
       expect(response.statusCode).toBe(200);
       expect(response.json().summary).toEqual({ imported: 0, skipped: 0 });
-      await app.close();
     });
   });
 
@@ -314,7 +293,6 @@ describe("export routes", () => {
         seriesProgress: 0,
         ratings: 0,
       });
-      await app.close();
     });
 
     it("skips rows whose imdbId isn't an IMDb id", async () => {
@@ -339,7 +317,6 @@ describe("export routes", () => {
       );
       expect(prismaMock.listItem.createMany).not.toHaveBeenCalled();
       expect(prismaMock.rating.createMany).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("skips a season/episode that would overflow the 32-bit column", async () => {
@@ -362,7 +339,6 @@ describe("export routes", () => {
       expect(response.json().summary).toEqual(
         expect.objectContaining({ watchEvents: 0, seriesProgress: 0 })
       );
-      await app.close();
     });
 
     it("skips a rating outside the 0-10 scale", async () => {
@@ -387,7 +363,6 @@ describe("export routes", () => {
           data: [expect.objectContaining({ imdbId: "tt3", rating: 7.5 })],
         })
       );
-      await app.close();
     });
 
     it("rejects a collection with more rows than the import limit", async () => {
@@ -403,7 +378,6 @@ describe("export routes", () => {
       expect(response.statusCode).toBe(413);
       expect(response.json().code).toBe("too_many_rows");
       expect(prismaMock.watchEvent.createMany).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("writes ratings in one batch rather than one round trip each", async () => {
@@ -434,7 +408,6 @@ describe("export routes", () => {
       expect(prismaMock.rating.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: expect.objectContaining({ imdbId: "tt2" }), data: expect.objectContaining({ rating: 9 }) })
       );
-      await app.close();
     });
   });
 
@@ -445,7 +418,6 @@ describe("export routes", () => {
       const response = await app.inject({ method: "POST", url: "/import/csv", payload: { csv } });
 
       expect(response.json().summary).toEqual({ imported: 0, skipped: 1 });
-      await app.close();
     });
 
     it("skips a row whose season would overflow the column", async () => {
@@ -454,7 +426,6 @@ describe("export routes", () => {
       const response = await app.inject({ method: "POST", url: "/import/csv", payload: { csv } });
 
       expect(response.json().summary).toEqual({ imported: 0, skipped: 1 });
-      await app.close();
     });
   });
 
@@ -474,7 +445,6 @@ describe("export routes", () => {
       const response = await app.inject({ method: "GET", url: "/export" });
       expect(response.statusCode).toBe(200);
       expect(response.json().version).toBe(1);
-      await app.close();
     });
   });
 });

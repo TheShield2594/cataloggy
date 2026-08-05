@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../../lib/test-fixtures/route-app.js";
 
 const webhookAuthMock = { verifyWebhookSecret: vi.fn(() => true) };
 vi.mock("../../lib/webhook-auth.js", () => webhookAuthMock);
@@ -10,14 +11,8 @@ vi.mock("../../lib/watch-event.js", () => watchEventMock);
 const webhookProfileMock = { resolveWebhookProfile: vi.fn() };
 vi.mock("../../lib/webhook-profile.js", () => webhookProfileMock);
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: plexWebhookRoutes } = await import("./plex.js");
-  const app = Fastify();
-  await app.register(plexWebhookRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./plex.js"));
 
 const buildMultipartBody = (payload: unknown, boundary = "boundary123") =>
   [
@@ -49,7 +44,6 @@ describe("POST /webhooks/plex", () => {
 
     expect(response.statusCode).toBe(403);
     expect(watchEventMock.recordWatchEvent).not.toHaveBeenCalled();
-    await app.close();
   });
 
   it("400s when no payload field is found in a multipart body", async () => {
@@ -63,7 +57,6 @@ describe("POST /webhooks/plex", () => {
     });
 
     expect(response.statusCode).toBe(400);
-    await app.close();
   });
 
   it("400s on malformed JSON inside the payload field", async () => {
@@ -77,7 +70,6 @@ describe("POST /webhooks/plex", () => {
     });
 
     expect(response.statusCode).toBe(400);
-    await app.close();
   });
 
   it("ignores non-scrobble events without recording a watch event", async () => {
@@ -93,7 +85,6 @@ describe("POST /webhooks/plex", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ status: "ignored", event: "media.play" });
     expect(watchEventMock.recordWatchEvent).not.toHaveBeenCalled();
-    await app.close();
   });
 
   it("skips scrobble events with no resolvable IMDb ID", async () => {
@@ -109,7 +100,6 @@ describe("POST /webhooks/plex", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ status: "skipped", reason: "no_imdb_id" });
     expect(watchEventMock.recordWatchEvent).not.toHaveBeenCalled();
-    await app.close();
   });
 
   it("records a movie watch event, extracting the IMDb id from the Guid array", async () => {
@@ -132,7 +122,6 @@ describe("POST /webhooks/plex", () => {
     expect(watchEventMock.recordWatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: "movie", imdbId: "tt9999999", source: "Plex" })
     );
-    await app.close();
   });
 
   it("records an episode watch event with season/episode from the legacy guid field", async () => {
@@ -162,7 +151,6 @@ describe("POST /webhooks/plex", () => {
         source: "Plex",
       })
     );
-    await app.close();
   });
 
   it("accepts a plain JSON body (no multipart wrapper)", async () => {
@@ -178,7 +166,6 @@ describe("POST /webhooks/plex", () => {
     expect(watchEventMock.recordWatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({ imdbId: "tt5555555" })
     );
-    await app.close();
   });
 
   it("records against the profile resolved from the Plex account", async () => {
@@ -200,7 +187,6 @@ describe("POST /webhooks/plex", () => {
     expect(watchEventMock.recordWatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({ imdbId: "tt7777777", profileId: "profile-sam" })
     );
-    await app.close();
   });
 
   it("does not record anything when the profile can't be resolved", async () => {
@@ -220,6 +206,5 @@ describe("POST /webhooks/plex", () => {
     expect(response.statusCode).toBe(404);
     expect(response.json()).toEqual({ error: "Profile not found" });
     expect(watchEventMock.recordWatchEvent).not.toHaveBeenCalled();
-    await app.close();
   });
 });

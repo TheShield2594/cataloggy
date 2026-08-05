@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -14,14 +15,8 @@ vi.mock("../lib/profile.js", () => ({
   },
 }));
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: ratingsRoutes } = await import("./ratings.js");
-  const app = Fastify();
-  await app.register(ratingsRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./ratings.js"));
 
 const row = (over: Record<string, unknown> = {}) => ({
   imdbId: "tt1",
@@ -65,7 +60,6 @@ describe("ratings routes", () => {
         })
       );
       expect(res.json().rating).toMatchObject({ type: "season", season: 3, rating: 9 });
-      await app.close();
     });
 
     it("keeps a Specials rating apart from the show's own rating", async () => {
@@ -95,7 +89,6 @@ describe("ratings routes", () => {
           },
         })
       );
-      await app.close();
     });
 
     it("rejects a season rating with no season number", async () => {
@@ -110,7 +103,6 @@ describe("ratings routes", () => {
       expect(res.statusCode).toBe(400);
       expect(res.json().error).toContain("season must be an integer");
       expect(prismaMock.rating.upsert).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("reads and deletes a season rating by its season number", async () => {
@@ -146,7 +138,6 @@ describe("ratings routes", () => {
           },
         },
       });
-      await app.close();
     });
 
     it("refuses to read or delete a season rating with no season, rather than answering for Specials", async () => {
@@ -161,7 +152,6 @@ describe("ratings routes", () => {
       const removed = await app.inject({ method: "DELETE", url: "/ratings/season/tt2" });
       expect(removed.statusCode).toBe(400);
       expect(prismaMock.rating.delete).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects a season number too large for the column to hold", async () => {
@@ -175,7 +165,6 @@ describe("ratings routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(prismaMock.rating.upsert).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects an episode number too large for the column to hold", async () => {
@@ -189,7 +178,6 @@ describe("ratings routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(prismaMock.rating.upsert).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("names season alongside the other types when the type is unknown", async () => {
@@ -197,7 +185,6 @@ describe("ratings routes", () => {
       const res = await app.inject({ method: "GET", url: "/ratings/decade/tt2" });
       expect(res.statusCode).toBe(400);
       expect(res.json().error).toBe("type must be one of: movie, series, season, episode");
-      await app.close();
     });
   });
 
@@ -220,7 +207,6 @@ describe("ratings routes", () => {
       );
       expect(prismaMock.rating.findMany.mock.calls[0][0]).not.toHaveProperty("take");
       expect(res.json().ratings).toHaveLength(3);
-      await app.close();
     });
 
     it("still caps the unfiltered list", async () => {
@@ -230,7 +216,6 @@ describe("ratings routes", () => {
       await app.inject({ method: "GET", url: "/ratings" });
 
       expect(prismaMock.rating.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 50 }));
-      await app.close();
     });
   });
 });

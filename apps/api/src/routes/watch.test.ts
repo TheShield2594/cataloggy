@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
+// `WatchEvent.id` is a uuid column, so the id used here has to be one — a
+// placeholder like "we-1" is a shape the database could never return.
+const EVENT_ID = "44444444-4444-4444-8444-444444444444";
 
 const txMock = {
   watchEvent: { findFirst: vi.fn(), delete: vi.fn() },
@@ -33,14 +37,8 @@ vi.mock("../lib/profile.js", () => ({
 const watchEventMock = { recordWatchEvent: vi.fn() };
 vi.mock("../lib/watch-event.js", () => watchEventMock);
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: watchRoutes } = await import("./watch.js");
-  const app = Fastify();
-  await app.register(watchRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./watch.js"));
 
 // /watch/stats/detailed runs two aggregate queries against the same mock, so the
 // fixtures are dispatched on the SQL text rather than on call order.
@@ -87,14 +85,12 @@ describe("watch routes", () => {
       const app = await buildApp();
       const response = await app.inject({ method: "POST", url: "/watch", payload: { type: "bogus", imdbId: "tt1" } });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
 
     it("rejects a missing imdbId", async () => {
       const app = await buildApp();
       const response = await app.inject({ method: "POST", url: "/watch", payload: { type: "movie" } });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
 
     it("rejects a negative season", async () => {
@@ -105,7 +101,6 @@ describe("watch routes", () => {
         payload: { type: "episode", imdbId: "tt1", season: -1 },
       });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
 
     it("rejects an invalid watchedAt string", async () => {
@@ -116,7 +111,6 @@ describe("watch routes", () => {
         payload: { type: "movie", imdbId: "tt1", watchedAt: "not-a-date" },
       });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
 
     it("rejects a non-string note", async () => {
@@ -127,14 +121,13 @@ describe("watch routes", () => {
         payload: { type: "movie", imdbId: "tt1", note: 42 },
       });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
   });
 
   describe("POST /watch — success", () => {
     it("records a movie watch event and returns 201 when newly created", async () => {
       watchEventMock.recordWatchEvent.mockResolvedValue({
-        watchEvent: { id: "we-1", traktHistoryId: null },
+        watchEvent: { id: EVENT_ID, traktHistoryId: null },
         wasCreated: true,
       });
 
@@ -149,12 +142,11 @@ describe("watch routes", () => {
       expect(watchEventMock.recordWatchEvent).toHaveBeenCalledWith(
         expect.objectContaining({ type: "movie", imdbId: "tt1", source: "manual" })
       );
-      await app.close();
     });
 
     it("returns 200 (not 201) when the event already existed (a replay)", async () => {
       watchEventMock.recordWatchEvent.mockResolvedValue({
-        watchEvent: { id: "we-1", traktHistoryId: null },
+        watchEvent: { id: EVENT_ID, traktHistoryId: null },
         wasCreated: false,
       });
 
@@ -166,12 +158,11 @@ describe("watch routes", () => {
       });
 
       expect(response.statusCode).toBe(200);
-      await app.close();
     });
 
     it("serializes a bigint traktHistoryId to a string in the response", async () => {
       watchEventMock.recordWatchEvent.mockResolvedValue({
-        watchEvent: { id: "we-1", traktHistoryId: 123456789012345n },
+        watchEvent: { id: EVENT_ID, traktHistoryId: 123456789012345n },
         wasCreated: true,
       });
 
@@ -179,7 +170,6 @@ describe("watch routes", () => {
       const response = await app.inject({ method: "POST", url: "/watch", payload: { type: "movie", imdbId: "tt1" } });
 
       expect(response.json().watchEvent.traktHistoryId).toBe("123456789012345");
-      await app.close();
     });
   });
 
@@ -187,31 +177,39 @@ describe("watch routes", () => {
     it("404s when the event doesn't belong to this profile", async () => {
       prismaMock.watchEvent.findFirst.mockResolvedValue(null);
       const app = await buildApp();
-      const response = await app.inject({ method: "PATCH", url: "/watch/we-1", payload: { note: "hi" } });
+      const response = await app.inject({ method: "PATCH", url: `/watch/${EVENT_ID}`, payload: { note: "hi" } });
       expect(response.statusCode).toBe(404);
-      await app.close();
     });
 
     it("updates the note", async () => {
-      prismaMock.watchEvent.findFirst.mockResolvedValue({ id: "we-1", traktHistoryId: null });
-      prismaMock.watchEvent.update.mockResolvedValue({ id: "we-1", note: "great episode", traktHistoryId: null });
+      prismaMock.watchEvent.findFirst.mockResolvedValue({ id: EVENT_ID, traktHistoryId: null });
+      prismaMock.watchEvent.update.mockResolvedValue({ id: EVENT_ID, note: "great episode", traktHistoryId: null });
 
       const app = await buildApp();
-      const response = await app.inject({ method: "PATCH", url: "/watch/we-1", payload: { note: "great episode" } });
+      const response = await app.inject({ method: "PATCH", url: `/watch/${EVENT_ID}`, payload: { note: "great episode" } });
 
       expect(response.statusCode).toBe(200);
       expect(prismaMock.watchEvent.update).toHaveBeenCalledWith({
-        where: { id: "we-1" },
+        where: { id: EVENT_ID },
         data: { note: "great episode" },
       });
-      await app.close();
     });
 
     it("rejects a non-string, non-null note", async () => {
       const app = await buildApp();
-      const response = await app.inject({ method: "PATCH", url: "/watch/we-1", payload: { note: 5 } });
+      const response = await app.inject({ method: "PATCH", url: `/watch/${EVENT_ID}`, payload: { note: 5 } });
       expect(response.statusCode).toBe(400);
-      await app.close();
+    });
+
+    it("rejects an eventId that is not a UUID before it reaches the database", async () => {
+      // Postgres errors on a malformed value for a uuid column rather than
+      // matching nothing, so without the guard this would be a 500.
+      const app = await buildApp();
+      const response = await app.inject({ method: "PATCH", url: "/watch/we-1", payload: { note: "hi" } });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe("eventId must be a valid UUID");
+      expect(prismaMock.watchEvent.findFirst).not.toHaveBeenCalled();
     });
   });
 
@@ -219,30 +217,28 @@ describe("watch routes", () => {
     it("404s when the event doesn't belong to this profile", async () => {
       txMock.watchEvent.findFirst.mockResolvedValue(null);
       const app = await buildApp();
-      const response = await app.inject({ method: "DELETE", url: "/watch/we-1" });
+      const response = await app.inject({ method: "DELETE", url: `/watch/${EVENT_ID}` });
       expect(response.statusCode).toBe(404);
-      await app.close();
     });
 
     it("deletes a movie watch event without touching series progress", async () => {
-      txMock.watchEvent.findFirst.mockResolvedValue({ id: "we-1", type: "movie", seriesImdbId: null });
+      txMock.watchEvent.findFirst.mockResolvedValue({ id: EVENT_ID, type: "movie", seriesImdbId: null });
       const app = await buildApp();
-      const response = await app.inject({ method: "DELETE", url: "/watch/we-1" });
+      const response = await app.inject({ method: "DELETE", url: `/watch/${EVENT_ID}` });
 
       expect(response.statusCode).toBe(204);
-      expect(txMock.watchEvent.delete).toHaveBeenCalledWith({ where: { id: "we-1" } });
+      expect(txMock.watchEvent.delete).toHaveBeenCalledWith({ where: { id: EVENT_ID } });
       expect(txMock.seriesProgress.upsert).not.toHaveBeenCalled();
       expect(txMock.seriesProgress.deleteMany).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("rewinds series progress to the next-latest episode after deleting an episode event", async () => {
       txMock.watchEvent.findFirst
-        .mockResolvedValueOnce({ id: "we-1", type: "episode", seriesImdbId: "tt-series" })
+        .mockResolvedValueOnce({ id: EVENT_ID, type: "episode", seriesImdbId: "tt-series" })
         .mockResolvedValueOnce({ season: 1, episode: 4, watchedAt: new Date("2026-01-01T00:00:00Z") });
 
       const app = await buildApp();
-      const response = await app.inject({ method: "DELETE", url: "/watch/we-1" });
+      const response = await app.inject({ method: "DELETE", url: `/watch/${EVENT_ID}` });
 
       expect(response.statusCode).toBe(204);
       expect(txMock.seriesProgress.upsert).toHaveBeenCalledWith(
@@ -252,23 +248,30 @@ describe("watch routes", () => {
         })
       );
       expect(txMock.seriesProgress.deleteMany).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("clears series progress entirely when no earlier episode is left", async () => {
       txMock.watchEvent.findFirst
-        .mockResolvedValueOnce({ id: "we-1", type: "episode", seriesImdbId: "tt-series" })
+        .mockResolvedValueOnce({ id: EVENT_ID, type: "episode", seriesImdbId: "tt-series" })
         .mockResolvedValueOnce(null);
 
       const app = await buildApp();
-      const response = await app.inject({ method: "DELETE", url: "/watch/we-1" });
+      const response = await app.inject({ method: "DELETE", url: `/watch/${EVENT_ID}` });
 
       expect(response.statusCode).toBe(204);
       expect(txMock.seriesProgress.deleteMany).toHaveBeenCalledWith({
         where: { profileId: PROFILE_ID, seriesImdbId: "tt-series" },
       });
       expect(txMock.seriesProgress.upsert).not.toHaveBeenCalled();
-      await app.close();
+    });
+
+    it("rejects an eventId that is not a UUID before opening a transaction", async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: "DELETE", url: "/watch/we-1" });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe("eventId must be a valid UUID");
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
     });
   });
 
@@ -278,12 +281,11 @@ describe("watch routes", () => {
       const app = await buildApp();
       const response = await app.inject({ method: "GET", url: "/watch/history" });
       expect(response.json()).toEqual({ history: [] });
-      await app.close();
     });
 
     it("attaches metadata name/poster and serializes traktHistoryId", async () => {
       prismaMock.watchEvent.findMany.mockResolvedValue([
-        { id: "we-1", type: "movie", imdbId: "tt1", seriesImdbId: null, traktHistoryId: 42n },
+        { id: EVENT_ID, type: "movie", imdbId: "tt1", seriesImdbId: null, traktHistoryId: 42n },
       ]);
       prismaMock.metadata.findMany.mockResolvedValue([{ imdbId: "tt1", type: "movie", name: "Movie A", poster: "p.jpg" }]);
 
@@ -293,7 +295,6 @@ describe("watch routes", () => {
       expect(response.json().history[0]).toEqual(
         expect.objectContaining({ name: "Movie A", poster: "p.jpg", traktHistoryId: "42" })
       );
-      await app.close();
     });
 
     it("clamps an out-of-range limit query param to the 1-200 window", async () => {
@@ -304,7 +305,6 @@ describe("watch routes", () => {
       expect(prismaMock.watchEvent.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ take: 200 })
       );
-      await app.close();
     });
 
     it("filters by type in the query, so paging doesn't hide older matches", async () => {
@@ -315,7 +315,6 @@ describe("watch routes", () => {
       expect(prismaMock.watchEvent.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: expect.objectContaining({ type: "movie" }) })
       );
-      await app.close();
     });
 
     it("ignores an unrecognised type rather than rejecting the request", async () => {
@@ -327,7 +326,6 @@ describe("watch routes", () => {
       expect(prismaMock.watchEvent.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: expect.not.objectContaining({ type: expect.anything() }) })
       );
-      await app.close();
     });
   });
 
@@ -347,7 +345,6 @@ describe("watch routes", () => {
         totalPlays: 45,
         playsThisWeek: 3,
       });
-      await app.close();
     });
   });
 
@@ -356,14 +353,12 @@ describe("watch routes", () => {
       const app = await buildApp();
       const response = await app.inject({ method: "GET", url: "/watch/stats/year/abcd" });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
 
     it("rejects a year before 1900", async () => {
       const app = await buildApp();
       const response = await app.inject({ method: "GET", url: "/watch/stats/year/1899" });
       expect(response.statusCode).toBe(400);
-      await app.close();
     });
 
     it("returns zeroed totals for a year with no events", async () => {
@@ -375,7 +370,6 @@ describe("watch routes", () => {
       expect(response.json()).toEqual(
         expect.objectContaining({ year: 2026, totalMovies: 0, totalEpisodes: 0, totalRuntimeMinutes: 0 })
       );
-      await app.close();
     });
   });
 
@@ -390,7 +384,6 @@ describe("watch routes", () => {
       expect(response.json()).toEqual(
         expect.objectContaining({ longestStreak: 12, currentStreak: 3 })
       );
-      await app.close();
     });
 
     it("aggregates in SQL — no per-event or per-metadata rows are pulled into Node", async () => {
@@ -401,7 +394,6 @@ describe("watch routes", () => {
       expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2);
       expect(prismaMock.watchEvent.findMany).not.toHaveBeenCalled();
       expect(prismaMock.metadata.findMany).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("pads the monthly series to 12 buckets and passes SQL rollups through", async () => {
@@ -422,7 +414,6 @@ describe("watch routes", () => {
       expect(body.monthly).toHaveLength(12);
       expect(body.monthly.at(-1)).toEqual({ month: thisMonth, movies: 4, episodes: 9 });
       expect(body.monthly[0]).toEqual(expect.objectContaining({ movies: 0, episodes: 0 }));
-      await app.close();
     });
 
     it("returns the genre histogram and top-rated list built by Postgres", async () => {
@@ -446,7 +437,6 @@ describe("watch routes", () => {
       expect(body.topRated).toEqual([
         { imdbId: "tt1", name: "A Film", type: "movie", rating: 8.4, poster: null },
       ]);
-      await app.close();
     });
   });
 });

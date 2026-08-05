@@ -20,7 +20,10 @@ The fastest way to try Cataloggy is with Docker Compose — see [Docker Compose 
 
 ## For the technically curious
 
-The rest of this README covers setup, configuration, and the moving parts under the hood.
+The rest of this README covers setup, configuration, and the moving parts under the hood. Two companion docs go deeper:
+
+- **[Troubleshooting](docs/troubleshooting.md)** — what the startup errors mean, why the page loads on the server but not your phone, and why watch history isn't showing up.
+- **[API reference](docs/api.md)** — every endpoint, for scripting against Cataloggy or building your own client.
 
 Cataloggy is a Node.js monorepo set up with `pnpm` workspaces.
 
@@ -402,6 +405,8 @@ Plex has no such field, so `?token=WEBHOOK_SECRET` is the only form it can send.
 ## Contributing
 
 Want to contribute? See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, checks to run before opening a PR, and how to report bugs. Notable changes are tracked in [CHANGELOG.md](CHANGELOG.md).
+
+Before filing a bug, it's worth checking [docs/troubleshooting.md](docs/troubleshooting.md) — most reports turn out to be a public URL still pointing at `localhost`.
 
 ## Author
 

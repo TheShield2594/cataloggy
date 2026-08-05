@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_PROFILE_ID = "22222222-2222-4222-8222-222222222222";
@@ -61,14 +62,8 @@ const resetMocks = () => {
   prismaMock.profile.findMany.mockResolvedValue([{ id: PROFILE_ID }, { id: OTHER_PROFILE_ID }]);
 };
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: stremioRoutes } = await import("./stremio.js");
-  const app = Fastify();
-  await app.register(stremioRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./stremio.js"));
 
 describe("stremio routes — addon config is per profile", () => {
   beforeEach(() => {
@@ -87,7 +82,6 @@ describe("stremio routes — addon config is per profile", () => {
       expect(prismaMock.list.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: expect.objectContaining({ profileId: PROFILE_ID }) })
       );
-      await app.close();
     });
 
     it("reads the config row belonging to the requesting profile", async () => {
@@ -98,7 +92,6 @@ describe("stremio routes — addon config is per profile", () => {
       expect(prismaMock.kV.findUnique).toHaveBeenCalledWith({
         where: { key: `addon:config:${PROFILE_ID}` },
       });
-      await app.close();
     });
 
     it("falls back to the default catalogs when the profile has no config row", async () => {
@@ -107,7 +100,6 @@ describe("stremio routes — addon config is per profile", () => {
       const response = await app.inject({ method: "GET", url: "/addon/config" });
 
       expect(response.json().config.enabledCatalogs).toContain("cataloggy-trending-movie");
-      await app.close();
     });
   });
 
@@ -125,7 +117,6 @@ describe("stremio routes — addon config is per profile", () => {
       expect(prismaMock.kV.upsert).toHaveBeenCalledWith(
         expect.objectContaining({ where: { key: `addon:config:${PROFILE_ID}` } })
       );
-      await app.close();
     });
 
     it("drops a list catalog that belongs to another profile", async () => {
@@ -141,7 +132,6 @@ describe("stremio routes — addon config is per profile", () => {
       });
 
       expect(response.json().config.enabledCatalogs).toEqual([`list:${OWN_LIST_ID}`]);
-      await app.close();
     });
 
     it("rejects a body without an enabledCatalogs array", async () => {
@@ -149,7 +139,6 @@ describe("stremio routes — addon config is per profile", () => {
       const response = await app.inject({ method: "POST", url: "/addon/config", payload: {} });
       expect(response.statusCode).toBe(400);
       expect(prismaMock.kV.upsert).not.toHaveBeenCalled();
-      await app.close();
     });
   });
 
@@ -167,7 +156,6 @@ describe("stremio routes — addon config is per profile", () => {
       expect(prismaMock.kV.findUnique).toHaveBeenCalledWith({
         where: { key: `addon:config:${OTHER_PROFILE_ID}` },
       });
-      await app.close();
     });
 
     it("falls back to the default profile when no profileId is given", async () => {
@@ -178,7 +166,6 @@ describe("stremio routes — addon config is per profile", () => {
       expect(prismaMock.kV.findUnique).toHaveBeenCalledWith({
         where: { key: `addon:config:${PROFILE_ID}` },
       });
-      await app.close();
     });
 
     it("offers the app icon as the addon's logo once the web UI has a public address", async () => {
@@ -193,7 +180,6 @@ describe("stremio routes — addon config is per profile", () => {
         const app = await buildApp();
         const response = await app.inject({ method: "GET", url: "/addon/stremio/manifest.json" });
         expect(response.json().logo).toBe("https://cataloggy.example/icons/icon-192.png");
-        await app.close();
       } finally {
         delete process.env.CATALOGGY_WEB_PUBLIC;
       }
@@ -212,7 +198,6 @@ describe("stremio routes — addon config is per profile", () => {
 
       const catalogIds = (response.json().catalogs as { id: string }[]).map((c) => c.id);
       expect(catalogIds).not.toContain(`list:${OTHER_LIST_ID}`);
-      await app.close();
     });
   });
 });
@@ -236,7 +221,6 @@ describe("stremio routes — the legacy list route is profile-scoped", () => {
       where: { id: OWN_LIST_ID, profileId: PROFILE_ID },
       select: { id: true, kind: true },
     });
-    await app.close();
   });
 
   it("looks the list up under the profile named in the query string", async () => {
@@ -254,7 +238,6 @@ describe("stremio routes — the legacy list route is profile-scoped", () => {
       where: { id: OTHER_LIST_ID, profileId: OTHER_PROFILE_ID },
       select: { id: true, kind: true },
     });
-    await app.close();
   });
 
   it("404s a list belonging to a profile other than the resolved one", async () => {
@@ -270,7 +253,6 @@ describe("stremio routes — the legacy list route is profile-scoped", () => {
 
     expect(response.statusCode).toBe(404);
     expect(prismaMock.list.findUnique).not.toHaveBeenCalled();
-    await app.close();
   });
 });
 
@@ -291,7 +273,6 @@ describe("stremio routes — ?profileId names a profile, it does not unlock one"
 
     expect(response.statusCode).toBe(401);
     expect(response.json().code).toBe("profile_verification_required");
-    await app.close();
   });
 
   it("serves that same catalog once the PIN has been verified", async () => {
@@ -307,7 +288,6 @@ describe("stremio routes — ?profileId names a profile, it does not unlock one"
 
     expect(response.statusCode).toBe(200);
     expect(response.json().metas).toEqual([{ id: "tt0000001" }]);
-    await app.close();
   });
 
   it("does not accept another profile's token as verification for this one", async () => {
@@ -324,7 +304,6 @@ describe("stremio routes — ?profileId names a profile, it does not unlock one"
     });
 
     expect(response.statusCode).toBe(401);
-    await app.close();
   });
 
   it("401s the default-profile fallback when that profile is locked", async () => {
@@ -336,7 +315,6 @@ describe("stremio routes — ?profileId names a profile, it does not unlock one"
     const response = await app.inject({ method: "GET", url: "/continue" });
 
     expect(response.statusCode).toBe(401);
-    await app.close();
   });
 
   it("401s the legacy list route for a locked profile before it looks the list up", async () => {
@@ -350,7 +328,6 @@ describe("stremio routes — ?profileId names a profile, it does not unlock one"
 
     expect(response.statusCode).toBe(401);
     expect(prismaMock.list.findFirst).not.toHaveBeenCalled();
-    await app.close();
   });
 
   it("leaves the secret addon URL alone, which is the credential Stremio can actually send", async () => {
@@ -371,7 +348,6 @@ describe("stremio routes — ?profileId names a profile, it does not unlock one"
       if (originalToken === undefined) delete process.env.API_TOKEN;
       else process.env.API_TOKEN = originalToken;
     }
-    await app.close();
   });
 });
 
@@ -405,7 +381,6 @@ describe("stremio routes — the addon URL is gated by a per-profile secret", ()
     expect(prismaMock.kV.findUnique).toHaveBeenCalledWith({
       where: { key: `addon:config:${OTHER_PROFILE_ID}` },
     });
-    await app.close();
   });
 
   it("ignores ?profileId — the secret, not the query string, picks the profile", async () => {
@@ -423,7 +398,6 @@ describe("stremio routes — the addon URL is gated by a per-profile secret", ()
     expect(prismaMock.kV.findUnique).not.toHaveBeenCalledWith({
       where: { key: `addon:config:${OTHER_PROFILE_ID}` },
     });
-    await app.close();
   });
 
   it("404s a manifest request carrying an unknown secret", async () => {
@@ -433,7 +407,6 @@ describe("stremio routes — the addon URL is gated by a per-profile secret", ()
 
     expect(response.statusCode).toBe(404);
     expect(prismaMock.kV.findUnique).not.toHaveBeenCalled();
-    await app.close();
   });
 
   it("404s a configure request carrying an unknown secret", async () => {
@@ -445,7 +418,6 @@ describe("stremio routes — the addon URL is gated by a per-profile secret", ()
     // when CATALOGGY_WEB_PUBLIC is unset — the status code alone cannot.
     expect(response.statusCode).toBe(404);
     expect(response.json().error).toBe("Unknown addon URL");
-    await app.close();
   });
 
   it("serves a catalog for a valid secret and 404s the same catalog without one", async () => {
@@ -465,7 +437,6 @@ describe("stremio routes — the addon URL is gated by a per-profile secret", ()
     });
     expect(rejected.statusCode).toBe(404);
     expect(rejected.json().metas).toEqual([]);
-    await app.close();
   });
 
   it("only serves a custom list catalog to the profile that owns the list", async () => {
@@ -496,7 +467,6 @@ describe("stremio routes — the addon URL is gated by a per-profile secret", ()
       url: `/addon/stremio/${secret}/catalog/movie/list:${OTHER_LIST_ID}.json`,
     });
     expect(foreign.statusCode).toBe(404);
-    await app.close();
   });
 
   it("404s a list catalog the profile owns but has not enabled", async () => {
@@ -515,7 +485,6 @@ describe("stremio routes — the addon URL is gated by a per-profile secret", ()
 
     expect(response.statusCode).toBe(404);
     expect(prismaMock.list.findFirst).not.toHaveBeenCalled();
-    await app.close();
   });
 
   it("404s a list catalog whose id is not a UUID rather than failing the uuid cast", async () => {
@@ -529,7 +498,6 @@ describe("stremio routes — the addon URL is gated by a per-profile secret", ()
 
     expect(response.statusCode).toBe(404);
     expect(prismaMock.list.findFirst).not.toHaveBeenCalled();
-    await app.close();
   });
 
   it("hands the install URL for the requesting profile back from /addon/config", async () => {
@@ -540,6 +508,5 @@ describe("stremio routes — the addon URL is gated by a per-profile secret", ()
     expect(response.json().stremioManifestPath).toBe(
       `/addon/stremio/${await secretFor(PROFILE_ID)}/manifest.json`
     );
-    await app.close();
   });
 });
