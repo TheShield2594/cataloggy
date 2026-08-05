@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { resolveProfile } from "../lib/profile.js";
 import { recordWatchEvent } from "../lib/watch-event.js";
+import { UUID_V4_PATTERN } from "../lib/types.js";
 
 function serializeWatchEvent<T extends { traktHistoryId: bigint | null }>(event: T) {
   return { ...event, traktHistoryId: event.traktHistoryId != null ? event.traktHistoryId.toString() : null };
@@ -117,9 +118,15 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     return reply.code(wasCreated ? 201 : 200).send({ watchEvent: serializeWatchEvent(watchEvent) });
   });
 
+  // `WatchEvent.id` is a uuid column, so a malformed id is rejected by Postgres
+  // rather than simply matching nothing — an unhandled driver error and a 500
+  // where the caller sent a bad request.
   app.patch<{ Params: { eventId: string }; Body: unknown }>("/watch/:eventId", async (request, reply) => {
     const { eventId } = request.params;
     const profileId = request.profileId!;
+    if (!UUID_V4_PATTERN.test(eventId)) {
+      return reply.code(400).send({ error: "eventId must be a valid UUID" });
+    }
     const body = request.body as { note?: unknown } | null;
     if (!body || (body.note !== null && typeof body.note !== "string")) {
       return reply.code(400).send({ error: "note must be a string or null" });
@@ -136,6 +143,9 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
   app.delete<{ Params: { eventId: string } }>("/watch/:eventId", async (request, reply) => {
     const { eventId } = request.params;
     const profileId = request.profileId!;
+    if (!UUID_V4_PATTERN.test(eventId)) {
+      return reply.code(400).send({ error: "eventId must be a valid UUID" });
+    }
     try {
       await prisma.$transaction(async (tx) => {
         const event = await tx.watchEvent.findFirst({ where: { id: eventId, profileId } });

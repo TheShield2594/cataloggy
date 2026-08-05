@@ -3,6 +3,9 @@ import type { FastifyInstance } from "fastify";
 import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
+// `WatchEvent.id` is a uuid column, so the id used here has to be one — a
+// placeholder like "we-1" is a shape the database could never return.
+const EVENT_ID = "44444444-4444-4444-8444-444444444444";
 
 const txMock = {
   watchEvent: { findFirst: vi.fn(), delete: vi.fn() },
@@ -124,7 +127,7 @@ describe("watch routes", () => {
   describe("POST /watch — success", () => {
     it("records a movie watch event and returns 201 when newly created", async () => {
       watchEventMock.recordWatchEvent.mockResolvedValue({
-        watchEvent: { id: "we-1", traktHistoryId: null },
+        watchEvent: { id: EVENT_ID, traktHistoryId: null },
         wasCreated: true,
       });
 
@@ -143,7 +146,7 @@ describe("watch routes", () => {
 
     it("returns 200 (not 201) when the event already existed (a replay)", async () => {
       watchEventMock.recordWatchEvent.mockResolvedValue({
-        watchEvent: { id: "we-1", traktHistoryId: null },
+        watchEvent: { id: EVENT_ID, traktHistoryId: null },
         wasCreated: false,
       });
 
@@ -159,7 +162,7 @@ describe("watch routes", () => {
 
     it("serializes a bigint traktHistoryId to a string in the response", async () => {
       watchEventMock.recordWatchEvent.mockResolvedValue({
-        watchEvent: { id: "we-1", traktHistoryId: 123456789012345n },
+        watchEvent: { id: EVENT_ID, traktHistoryId: 123456789012345n },
         wasCreated: true,
       });
 
@@ -174,28 +177,39 @@ describe("watch routes", () => {
     it("404s when the event doesn't belong to this profile", async () => {
       prismaMock.watchEvent.findFirst.mockResolvedValue(null);
       const app = await buildApp();
-      const response = await app.inject({ method: "PATCH", url: "/watch/we-1", payload: { note: "hi" } });
+      const response = await app.inject({ method: "PATCH", url: `/watch/${EVENT_ID}`, payload: { note: "hi" } });
       expect(response.statusCode).toBe(404);
     });
 
     it("updates the note", async () => {
-      prismaMock.watchEvent.findFirst.mockResolvedValue({ id: "we-1", traktHistoryId: null });
-      prismaMock.watchEvent.update.mockResolvedValue({ id: "we-1", note: "great episode", traktHistoryId: null });
+      prismaMock.watchEvent.findFirst.mockResolvedValue({ id: EVENT_ID, traktHistoryId: null });
+      prismaMock.watchEvent.update.mockResolvedValue({ id: EVENT_ID, note: "great episode", traktHistoryId: null });
 
       const app = await buildApp();
-      const response = await app.inject({ method: "PATCH", url: "/watch/we-1", payload: { note: "great episode" } });
+      const response = await app.inject({ method: "PATCH", url: `/watch/${EVENT_ID}`, payload: { note: "great episode" } });
 
       expect(response.statusCode).toBe(200);
       expect(prismaMock.watchEvent.update).toHaveBeenCalledWith({
-        where: { id: "we-1" },
+        where: { id: EVENT_ID },
         data: { note: "great episode" },
       });
     });
 
     it("rejects a non-string, non-null note", async () => {
       const app = await buildApp();
-      const response = await app.inject({ method: "PATCH", url: "/watch/we-1", payload: { note: 5 } });
+      const response = await app.inject({ method: "PATCH", url: `/watch/${EVENT_ID}`, payload: { note: 5 } });
       expect(response.statusCode).toBe(400);
+    });
+
+    it("rejects an eventId that is not a UUID before it reaches the database", async () => {
+      // Postgres errors on a malformed value for a uuid column rather than
+      // matching nothing, so without the guard this would be a 500.
+      const app = await buildApp();
+      const response = await app.inject({ method: "PATCH", url: "/watch/we-1", payload: { note: "hi" } });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe("eventId must be a valid UUID");
+      expect(prismaMock.watchEvent.findFirst).not.toHaveBeenCalled();
     });
   });
 
@@ -203,28 +217,28 @@ describe("watch routes", () => {
     it("404s when the event doesn't belong to this profile", async () => {
       txMock.watchEvent.findFirst.mockResolvedValue(null);
       const app = await buildApp();
-      const response = await app.inject({ method: "DELETE", url: "/watch/we-1" });
+      const response = await app.inject({ method: "DELETE", url: `/watch/${EVENT_ID}` });
       expect(response.statusCode).toBe(404);
     });
 
     it("deletes a movie watch event without touching series progress", async () => {
-      txMock.watchEvent.findFirst.mockResolvedValue({ id: "we-1", type: "movie", seriesImdbId: null });
+      txMock.watchEvent.findFirst.mockResolvedValue({ id: EVENT_ID, type: "movie", seriesImdbId: null });
       const app = await buildApp();
-      const response = await app.inject({ method: "DELETE", url: "/watch/we-1" });
+      const response = await app.inject({ method: "DELETE", url: `/watch/${EVENT_ID}` });
 
       expect(response.statusCode).toBe(204);
-      expect(txMock.watchEvent.delete).toHaveBeenCalledWith({ where: { id: "we-1" } });
+      expect(txMock.watchEvent.delete).toHaveBeenCalledWith({ where: { id: EVENT_ID } });
       expect(txMock.seriesProgress.upsert).not.toHaveBeenCalled();
       expect(txMock.seriesProgress.deleteMany).not.toHaveBeenCalled();
     });
 
     it("rewinds series progress to the next-latest episode after deleting an episode event", async () => {
       txMock.watchEvent.findFirst
-        .mockResolvedValueOnce({ id: "we-1", type: "episode", seriesImdbId: "tt-series" })
+        .mockResolvedValueOnce({ id: EVENT_ID, type: "episode", seriesImdbId: "tt-series" })
         .mockResolvedValueOnce({ season: 1, episode: 4, watchedAt: new Date("2026-01-01T00:00:00Z") });
 
       const app = await buildApp();
-      const response = await app.inject({ method: "DELETE", url: "/watch/we-1" });
+      const response = await app.inject({ method: "DELETE", url: `/watch/${EVENT_ID}` });
 
       expect(response.statusCode).toBe(204);
       expect(txMock.seriesProgress.upsert).toHaveBeenCalledWith(
@@ -238,17 +252,26 @@ describe("watch routes", () => {
 
     it("clears series progress entirely when no earlier episode is left", async () => {
       txMock.watchEvent.findFirst
-        .mockResolvedValueOnce({ id: "we-1", type: "episode", seriesImdbId: "tt-series" })
+        .mockResolvedValueOnce({ id: EVENT_ID, type: "episode", seriesImdbId: "tt-series" })
         .mockResolvedValueOnce(null);
 
       const app = await buildApp();
-      const response = await app.inject({ method: "DELETE", url: "/watch/we-1" });
+      const response = await app.inject({ method: "DELETE", url: `/watch/${EVENT_ID}` });
 
       expect(response.statusCode).toBe(204);
       expect(txMock.seriesProgress.deleteMany).toHaveBeenCalledWith({
         where: { profileId: PROFILE_ID, seriesImdbId: "tt-series" },
       });
       expect(txMock.seriesProgress.upsert).not.toHaveBeenCalled();
+    });
+
+    it("rejects an eventId that is not a UUID before opening a transaction", async () => {
+      const app = await buildApp();
+      const response = await app.inject({ method: "DELETE", url: "/watch/we-1" });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe("eventId must be a valid UUID");
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
     });
   });
 
@@ -262,7 +285,7 @@ describe("watch routes", () => {
 
     it("attaches metadata name/poster and serializes traktHistoryId", async () => {
       prismaMock.watchEvent.findMany.mockResolvedValue([
-        { id: "we-1", type: "movie", imdbId: "tt1", seriesImdbId: null, traktHistoryId: 42n },
+        { id: EVENT_ID, type: "movie", imdbId: "tt1", seriesImdbId: null, traktHistoryId: 42n },
       ]);
       prismaMock.metadata.findMany.mockResolvedValue([{ imdbId: "tt1", type: "movie", name: "Movie A", poster: "p.jpg" }]);
 

@@ -91,7 +91,9 @@ row genuinely is not found.
 - **Types** are `movie` and `series` almost everywhere. Watch events use `movie`
   and `episode`; tags additionally accept `episode`.
 - **IDs** are IMDb ids (`tt0111161`) for films and shows, UUIDs for
-  Cataloggy's own rows (lists, games, profiles, watch events).
+  Cataloggy's own rows (lists, games, profiles, tags, watch events). Those are
+  uuid columns, so a malformed id is a `400` before any query runs rather than
+  an empty result.
 - **Caching**: `GET` responses carry an ETag. Send `If-None-Match` and you get a
   `304` with no body. Responses over 1 KB are compressed (`br`, `gzip`,
   `deflate`).
@@ -143,10 +145,10 @@ Discovery responses are cached in memory and returned as Stremio meta previews
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `POST` | `/watch` | Record a watch. `{ type: "movie" \| "episode", imdbId, seriesImdbId?, season?, episode?, watchedAt? }`. |
+| `POST` | `/watch` | Record a watch. `{ type: "movie" \| "episode", imdbId, seriesImdbId?, season?, episode?, watchedAt?, dateUnknown?, note? }`. |
 | `GET` | `/watch/history?limit=&offset=&imdbId=` | `limit` is 1–200, default 50. Filtering happens server-side so it searches every row, not just the loaded page. |
-| `PATCH` | `/watch/:eventId` | Change a watch date. |
-| `DELETE` | `/watch/:eventId` | |
+| `PATCH` | `/watch/:eventId` | `{ note }` — sets or clears the note on an existing watch (`null`, or a blank string, clears it). It does not move the watch date. |
+| `DELETE` | `/watch/:eventId` | Deleting an episode rewinds series progress to the next-latest episode watched, or clears the progress row when none is left. |
 | `GET` | `/watch/stats` | Headline counts. |
 | `GET` | `/watch/stats/detailed` | Genres, runtime, patterns over time. |
 | `GET` | `/watch/stats/year/:year` | Year in Review. |
@@ -218,9 +220,9 @@ Trakt.
 | `GET` | `/tags` | All tags with counts. |
 | `GET` | `/tags?type=&imdbId=` | Tags on one item. Both params or neither. |
 | `POST` | `/tags` | `{ name }`, max 50 chars. Returns the existing tag if the name is taken. |
-| `DELETE` | `/tags/:tagId` | `400` if `tagId` isn't a UUID. Deleting a tag that doesn't exist is a no-op, not a `404`. |
+| `DELETE` | `/tags/:tagId` | Deleting a tag that doesn't exist is a no-op, not a `404`. |
 | `POST` | `/tags/assign` | `{ tagName, type, imdbId }`. Creates the tag if needed; idempotent. |
-| `DELETE` | `/tags/assign` | `{ tagId, type, imdbId }`. `400` if `tagId` isn't a UUID. |
+| `DELETE` | `/tags/assign` | `{ tagId, type, imdbId }`. |
 
 ### Calendar
 
