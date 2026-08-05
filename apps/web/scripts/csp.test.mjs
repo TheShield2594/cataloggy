@@ -132,6 +132,16 @@ describe("script-src", () => {
     expect(buildScriptSrc(html)).toBe(buildScriptSrc("<script>a();</script>"));
   });
 
+  // A second `<!--` inside a comment opens nothing — the comment still ends at
+  // the first `-->`, and everything up to it is prose. Worth pinning, because
+  // this is where a strip-the-comments-then-scan pass gets interesting.
+  it("ends a comment where the browser ends it, not at a nested opener", () => {
+    expect(buildScriptSrc("<!-- a <!-- b <script>evil();</script> -->")).toBe("'self'");
+    expect(buildScriptSrc("<!-- a <!-- b --><script>c();</script>")).toBe(
+      buildScriptSrc("<script>c();</script>")
+    );
+  });
+
   // A valueless `src` is still an external script — the body never runs.
   it("ignores a bare src attribute", () => {
     expect(buildScriptSrc("<script src></script>")).toBe("'self'");

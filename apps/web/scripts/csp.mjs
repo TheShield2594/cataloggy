@@ -76,12 +76,23 @@ export const buildConnectSrc = ({ apiBase, addonBase, sentryDsn, extra } = {}) =
   return sources.join(" ");
 };
 
-const HTML_COMMENT_RE = /<!--[\s\S]*?-->/g;
-
-// An inline <script>, i.e. one with no `src` attribute at all — a valueless
-// `src` still stops the body from running, so `\ssrc\b` rather than `\ssrc=`.
+// Comment or inline script, whichever comes first, in one left-to-right pass.
+//
+// The alternation is what keeps the two apart. index.html explains in prose why
+// its script is inline rather than a `<script src>`, and scanning for tags
+// alone reads that sentence as markup — swallowing the real script into a match
+// that starts mid-comment. Matching comments in the same pass consumes them as
+// tokens instead, so nothing inside one can be mistaken for a tag. Stripping
+// them out first would do the same job, but a single removal pass over nested
+// or malformed delimiters is exactly the kind of half-sanitising this doesn't
+// need to be doing: there is nothing to sanitise here, only to read past.
+//
+// An inline script is one with no `src` attribute at all — a valueless `src`
+// still stops the body from running, hence `\ssrc\b` rather than `\ssrc=`.
 // `[^>]*` can't cross a `>`, so the lookahead stays inside the opening tag.
-const INLINE_SCRIPT_RE = /<script(?![^>]*\ssrc\b)[^>]*>([\s\S]*?)<\/script>/gi;
+// A comment match leaves the capture group undefined; only scripts fill it.
+const COMMENT_OR_INLINE_SCRIPT_RE =
+  /<!--[\s\S]*?-->|<script(?![^>]*\ssrc\b)[^>]*>([\s\S]*?)<\/script>/gi;
 
 /**
  * Builds `script-src` for a built index.html.
@@ -105,13 +116,9 @@ const INLINE_SCRIPT_RE = /<script(?![^>]*\ssrc\b)[^>]*>([\s\S]*?)<\/script>/gi;
  */
 export const buildScriptSrc = (html) => {
   const sources = ["'self'"];
-  // Comments first: index.html discusses <script src> in prose, and a scan that
-  // reads that as a real tag swallows the page's actual script into a capture
-  // starting mid-comment — hashing text no browser will ever execute, and
-  // leaving the one script that needed a hash without one.
-  const markup = (html ?? "").replace(HTML_COMMENT_RE, "");
-  for (const [, body] of markup.matchAll(INLINE_SCRIPT_RE)) {
-    // An empty inline script needs no hash and, per spec, wouldn't match one.
+  for (const [, body] of (html ?? "").matchAll(COMMENT_OR_INLINE_SCRIPT_RE)) {
+    // Undefined for a comment; empty for an empty script, which needs no hash
+    // and, per spec, would not match one anyway.
     if (!body) continue;
     const hash = createHash("sha256").update(body, "utf8").digest("base64");
     const source = `'sha256-${hash}'`;
