@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { api } from "../../api";
 import { Loader2, Check, AlertCircle, Download, Upload } from "lucide-react";
+import { SelectField } from "../SelectField";
 
 export function DataSettings() {
   const [syncing, setSyncing] = useState(false);
@@ -199,18 +200,17 @@ export function DataSettings() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <select
+          <SelectField
             aria-label="Import format"
             value={externalFormat}
             onChange={(e) => setExternalFormat(e.target.value as typeof externalFormat)}
             className="rounded-xl px-4 py-2.5 text-sm font-medium"
-            style={{ background: "var(--surface-strong)", border: "1px solid var(--border)", color: "var(--text)" }}
           >
             <option value="letterboxd-diary">Letterboxd diary export</option>
             <option value="letterboxd-ratings">Letterboxd ratings export</option>
             <option value="imdb-ratings">IMDb ratings export</option>
             <option value="simkl">Simkl export</option>
-          </select>
+          </SelectField>
           <input
             ref={externalFileInputRef}
             type="file"

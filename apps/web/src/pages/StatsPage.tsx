@@ -5,7 +5,9 @@ import { TicketTile } from "../components/TicketTile";
 import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
 import { useCachedState } from "../hooks/useCachedState";
 import { formatRating, formatStars, ratingLabel, starsLabel } from "../utils/rating";
+import { monthlyBarGeometry } from "../utils/monthlyBars";
 import { PAGE_TITLE, SECTION_TITLE, KICKER } from "../components/typography";
+import { SelectField } from "../components/SelectField";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -185,10 +187,7 @@ export function StatsPage() {
               .join("; ")}`}
           >
             {detailed.monthly.map((m, idx) => {
-              const total = m.movies + m.episodes;
-              const height = total > 0 ? Math.max((total / maxMonthlyTotal) * 100, 4) : 2;
-              const movieHeight = total > 0 ? (m.movies / total) * height : 0;
-              const episodeHeight = height - movieHeight;
+              const { total, height, movieHeight, episodeHeight } = monthlyBarGeometry(m.movies, m.episodes, maxMonthlyTotal);
               const label = new Date(m.month + "-15").toLocaleDateString(undefined, { month: "short" });
               const isHovered = hoveredMonth === m.month;
               const isFirst = idx === 0;
@@ -229,8 +228,21 @@ export function StatsPage() {
                       </p>
                     </div>
                   )}
-                  <span className="text-2xs tabular-nums" style={{ color: "var(--text-mute)" }}>{total || ""}</span>
-                  <div className="flex w-full flex-col justify-end" style={{ height: "140px" }}>
+                  <div className="relative flex w-full flex-col justify-end" style={{ height: "140px" }}>
+                    {/* Rides its own bar rather than sitting in a row above the
+                        column, which put every value on one line at the top of
+                        the chart. `bottom` is the stack height, so the number
+                        sits on the bar whatever that height turns out to be.
+                        Hidden while this column's tooltip is open, since the
+                        tooltip opens into exactly this space. */}
+                    {total > 0 && !isHovered && (
+                      <span
+                        className="pointer-events-none absolute inset-x-0 text-center text-2xs tabular-nums"
+                        style={{ bottom: `calc(${height}% + 2px)`, color: "var(--text-mute)" }}
+                      >
+                        {total}
+                      </span>
+                    )}
                     {episodeHeight > 0 && (
                       <div
                         className={`w-full rounded-t bg-plum-500/70 transition-all duration-slow ${isHovered ? "bg-plum-500" : ""}`}
@@ -337,17 +349,16 @@ export function StatsPage() {
       <section className="glass-panel rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className={SECTION_TITLE} style={{ color: "var(--text)" }}>Year in Review</h2>
-          <select
+          <SelectField
             aria-label="Year in review: year"
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
             className="rounded-lg px-3 py-1.5 text-sm"
-            style={{ border: "1px solid var(--border)", background: "var(--surface-strong)", color: "var(--text)" }}
           >
             {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map((y) => (
               <option key={y} value={y}>{y}</option>
             ))}
-          </select>
+          </SelectField>
         </div>
 
         {yearError && <p className="text-sm text-rose-500">{yearError}</p>}

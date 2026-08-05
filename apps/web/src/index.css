@@ -235,6 +235,28 @@
   --duration-fast: 120ms;
   --duration-base: 200ms;
   --duration-slow: 300ms;
+
+  /*
+   * The poster card — the dashboard's repeating grid unit.
+   *
+   * The three rails each used to size themselves: the Continue Watching
+   * carousel at a literal 13rem, Recently Watched and DiscoveryCard at a
+   * literal 11rem each, and Trending stretching to whatever a four-column grid
+   * left it beside the 268px Upcoming rail. Nothing established a unit, so
+   * scrolling the page never settled into a rhythm — every section restated
+   * its own scale.
+   *
+   * One width, in one place, and `w-poster-card` in the config points here so
+   * a utility class and an arbitrary grid template can't drift apart. 12rem
+   * sits between the two literals it replaces: wide enough for the Continue
+   * Watching overlay's progress bar and episode caption, narrow enough that
+   * four still fit across the Trending block.
+   *
+   * Below `sm` the rails stay fluid (a two-up grid, or a carousel sized in
+   * viewport units) — a fixed 12rem column would overflow a 375px phone, and
+   * at that width the two-up grid is itself the repeating unit.
+   */
+  --poster-card-w: 12rem;
 }
 
 /*
@@ -582,6 +604,115 @@ body {
   .checkbox-control:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+
+  /*
+   * The toggle switch — for a setting that governs an ongoing behaviour rather
+   * than one that arms an action. Same `appearance: none` reasoning as the
+   * checkbox above, and the same accent fill, so the two read as one family.
+   *
+   * Still a native `input[type=checkbox]`: it keeps Space, the label
+   * association, `:checked`, and the announcement assistive tech expects for a
+   * two-state control, none of which a div with `role="switch"` gets for free.
+   * The knob is an ::after that slides — `translateX` rather than a `left`
+   * change, so it composites instead of laying out.
+   */
+  .switch-control {
+    appearance: none;
+    -webkit-appearance: none;
+    position: relative;
+    flex: none;
+    width: 2.25rem;
+    height: 1.25rem;
+    border-radius: 999px;
+    border: 1.5px solid var(--border-strong);
+    background: var(--surface-strong);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-base) ease-in-out,
+      border-color var(--duration-base) ease-in-out,
+      box-shadow var(--duration-base) ease-in-out;
+  }
+
+  .switch-control::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0.125rem;
+    width: 0.875rem;
+    height: 0.875rem;
+    border-radius: 999px;
+    /* The off-state knob sits on --surface-strong, which is a tint of the text
+       colour rather than an opaque fill, so the knob is painted from the page
+       background to stay visible on all five themes. */
+    background: var(--bg-0);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+    transform: translate(0, -50%);
+    transition: transform var(--duration-base) cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .switch-control:checked {
+    background: rgb(var(--accent-rgb));
+    border-color: rgb(var(--accent-rgb));
+  }
+
+  .switch-control:checked::after {
+    background: var(--on-accent);
+    transform: translate(1rem, -50%);
+  }
+
+  .switch-control:hover:not(:disabled) {
+    border-color: rgb(var(--accent-rgb));
+  }
+
+  .switch-control:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.35);
+  }
+
+  .switch-control:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  /*
+   * Selects.
+   *
+   * `appearance: none` because the native control paints the OS chevron and the
+   * OS focus treatment, which was the one place in the app where the interface
+   * visibly stopped — every other control here is drawn by us. The chevron is
+   * replaced by a real lucide `ChevronDown` in `SelectField`, the same glyph
+   * every other disclosure in the app uses, rather than a background-image
+   * approximation that couldn't be themed from --text-mute.
+   *
+   * `padding-right` leaves the chevron its corner. Radius and vertical padding
+   * stay at the call site: a pill-shaped search filter, a full-width settings
+   * field and a compact inline year picker are deliberately different sizes,
+   * and only the identity below is shared.
+   */
+  .select-control {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 2rem;
+    border: 1px solid var(--border);
+    background: var(--bg-0);
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  .select-control:hover:not(:disabled) {
+    border-color: var(--border-strong);
+  }
+
+  .select-control:focus-visible {
+    outline: none;
+    border-color: rgb(var(--accent-rgb));
+    box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.15);
+  }
+
+  .select-control:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   /*

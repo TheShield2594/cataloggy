@@ -71,6 +71,13 @@ export default {
       aspectRatio: {
         poster: "2 / 3",
       },
+      // The dashboard's repeating grid unit — see the --poster-card-w note in
+      // src/index.css. Pointed at the variable rather than restating the value
+      // so `w-poster-card` and the arbitrary grid templates that need the raw
+      // var stay one definition.
+      spacing: {
+        "poster-card": "var(--poster-card-w)",
+      },
       // Three ranks of surface, three radii — see the "Radius ranks" note in
       // src/index.css for which surface takes which.
       borderRadius: {

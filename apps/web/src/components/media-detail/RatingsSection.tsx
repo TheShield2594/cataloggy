@@ -6,26 +6,23 @@ import { StarPicker } from "../StarPicker";
 import { STARS_MAX } from "../../utils/rating";
 import { KICKER } from "../typography";
 
+/**
+ * The "view on" row.
+ *
+ * IMDb is deliberately absent: it used to appear here as a link chip directly
+ * below its own score in `Ratings`, so the panel showed the same mark twice in
+ * adjacent rows with different treatments. The score up there is the link now —
+ * one IMDb entry, and the affordance sits on the number it belongs to.
+ */
 export function ExternalLinks({
-  imdbId, tmdbId, type,
+  tmdbId, type,
 }: {
-  imdbId: string;
   tmdbId: number | null | undefined;
   type: MediaType;
 }) {
+  if (tmdbId == null) return null;
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <a
-        href={`https://www.imdb.com/title/${encodeURIComponent(imdbId)}/`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center gap-1 rounded-md px-1 py-0.5 text-xs transition-opacity hover:opacity-80"
-        style={{ color: "var(--text-dim)" }}
-        aria-label="View on IMDb"
-      >
-        <ImdbLogo />
-        <ExternalLink className="h-3 w-3" />
-      </a>
       {tmdbId != null && (
         <a
           href={`https://www.themoviedb.org/${type === "movie" ? "movie" : "tv"}/${tmdbId}`}
@@ -44,8 +41,10 @@ export function ExternalLinks({
 }
 
 export function ExternalRatings({
-  imdbRating, rtScore, mcScore, loading = false,
+  imdbId, imdbRating, rtScore, mcScore, loading = false,
 }: {
+  /** Makes the IMDb score its own link — see the note on `ExternalLinks`. */
+  imdbId: string;
   imdbRating: number | null | undefined;
   rtScore: number | null | undefined;
   mcScore: number | null | undefined;
@@ -72,11 +71,18 @@ export function ExternalRatings({
       <h3 className={`mb-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>Ratings</h3>
       <div className="flex flex-wrap items-center gap-4">
         {imdbRating != null && (
-          <div className="flex items-center gap-1.5">
+          <a
+            href={`https://www.imdb.com/title/${encodeURIComponent(imdbId)}/`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 rounded-md transition-opacity hover:opacity-80"
+            aria-label={`IMDb rating ${imdbRating.toFixed(1)} out of 10 — view on IMDb`}
+          >
             <ImdbLogo />
             <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{imdbRating.toFixed(1)}</span>
             <span className="text-xs" style={{ color: "var(--text-mute)" }}>/10</span>
-          </div>
+            <ExternalLink className="h-3 w-3" style={{ color: "var(--text-mute)" }} />
+          </a>
         )}
         {rtScore != null && (
           <div className="flex items-center gap-1.5">

@@ -1,5 +1,12 @@
 import { Check, X } from "lucide-react";
 
+/**
+ * Dropping a show changes how the app tracks it, so it belongs with the other
+ * tracking controls rather than where it used to sit: a small text link in the
+ * bottom-right corner below "More like this", after every other section of the
+ * panel, styled as a footnote. A state-changing action shouldn't read as an
+ * afterthought — and "Drop Show" on its own never said what dropping does.
+ */
 export function DropShowButton({
   isDropped,
   loading,
@@ -15,18 +22,25 @@ export function DropShowButton({
   // native dialog here was the only blocking confirm in an otherwise
   // toast-driven flow.
   return (
-    <div className="flex justify-end pt-1">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-sm font-medium" style={{ color: "var(--text)" }}>
+          {isDropped ? "Dropped" : "Drop this show"}
+        </p>
+        <p className="mt-0.5 text-xs" style={{ color: "var(--text-mute)" }}>
+          {isDropped
+            ? "Hidden from Continue Watching and up-next suggestions."
+            : "Stops it appearing in Continue Watching and up-next suggestions."}
+        </p>
+      </div>
       <button
         type="button"
         onClick={onToggle}
         aria-pressed={isDropped}
-        title={isDropped ? "Undrop this show" : "Mark this show as dropped"}
-        className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors ${
-          isDropped ? "text-[var(--text-dim)] hover:text-rose-500" : "text-[var(--text-mute)] hover:text-rose-500"
-        }`}
+        className="btn-secondary flex-none"
       >
-        {isDropped ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}
-        {isDropped ? "Dropped" : "Drop Show"}
+        {isDropped ? <Check className="h-4 w-4" aria-hidden="true" /> : <X className="h-4 w-4" aria-hidden="true" />}
+        {isDropped ? "Undrop" : "Drop show"}
       </button>
     </div>
   );

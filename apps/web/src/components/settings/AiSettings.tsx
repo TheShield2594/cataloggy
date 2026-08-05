@@ -3,6 +3,7 @@ import { api } from "../../api";
 import { Loader2, Check, AlertCircle, Clock, ChevronDown } from "lucide-react";
 import { timeAgo } from "../../utils/timeAgo";
 import { StatusBadge } from "./StatusBadge";
+import { SelectField } from "../SelectField";
 
 type Provider =
   | "openai"
@@ -324,23 +325,20 @@ export function AiSettings() {
             >
               Provider
             </label>
-            <select
+            <SelectField
               id="ai-provider"
               value={provider}
               onChange={(e) => handleProviderChange(e.target.value as Provider)}
-              className="w-full rounded-xl border px-4 py-2.5 text-sm focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/30"
-              style={{
-                borderColor: "var(--border-strong)",
-                color: "var(--text)",
-                background: "var(--bg-1)",
-              }}
+              className="w-full rounded-xl px-4 py-2.5 text-sm"
+              wrapperClassName="w-full"
+              chevronSize={16}
             >
               {PROVIDERS.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.label}
                 </option>
               ))}
-            </select>
+            </SelectField>
             {activePreset?.helpUrl && (
               <a
                 href={activePreset.helpUrl}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Clock, Film, Star, Tv, TvMinimalPlay, X,
+  Clock, Film, Star, Tv, X,
 } from "lucide-react";
 import { api, CheckIn, SearchResult, TrendingMeta, WatchEvent, WatchProviders } from "../../api";
 import { WatchDateModal } from "./WatchDateModal";
@@ -15,7 +15,7 @@ import { CheckInBlock } from "./CheckInBlock";
 import { WatchHistorySection } from "./WatchHistorySection";
 import { DropShowButton } from "./DropShowButton";
 import { RecommendationsSection } from "./RecommendationsSection";
-import { formatRuntime, statusColor, WatchLogTarget } from "./detailPanelUtils";
+import { buildMetaLine, formatRuntime, statusColor, WatchLogTarget } from "./detailPanelUtils";
 import { formatRating, ratingLabel, RATING_MAX } from "../../utils/rating";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useScrollLock } from "../../hooks/useScrollLock";
@@ -84,6 +84,11 @@ export function DetailPanel({
   const recommendations: TrendingMeta[] = detail?.recommendations ?? [];
   const seasons: SeasonInfo[] = detail?.seasons ?? [];
   const sectionsLoading = detailLoading;
+
+  // The header's hierarchy — see the note on it below, and on `buildMetaLine`.
+  const hasRating = item.rating != null && item.rating > 0;
+  const hasRuntime = item.runtime != null && item.runtime > 0;
+  const metaLine = buildMetaLine(item);
 
   // Dropped state (series only) — seeded from the bundle, then owned here, since
   // toggling it has to show immediately rather than wait for a refetch.
@@ -354,22 +359,26 @@ export function DetailPanel({
           {/* Content */}
           <div className="-mt-10 relative z-20 min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-10 sm:mt-0 sm:max-w-2xl sm:p-8">
 
-          {/* Title + badges */}
+          {/* Title + badges
+
+              The header used to ask the reader to parse nine chips in five
+              colour treatments before reaching the overview — type, year,
+              certification and status on one row; score, runtime, network and
+              up to three genres on the next — with nothing in the arrangement
+              saying which value mattered, and a lone genre chip stranded on its
+              own line once the row wrapped on mobile.
+
+              Two chips carry what a title *is* (its medium, and whether it is
+              still running). Two values are promoted because they are what the
+              panel is usually opened to check: the score and the runtime.
+              Everything else is a fact about the title rather than a signal, so
+              it reads as one dim line of text that wraps like text. */}
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <span className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide ${item.type === "movie" ? "bg-claw-500 text-claw-on" : "bg-plum-500/90 text-white"}`}>
                 {item.type === "movie" ? <Film className="h-3 w-3" /> : <Tv className="h-3 w-3" />}
                 {item.type === "movie" ? "Movie" : "Series"}
               </span>
-              {item.year && <span className="text-sm" style={{ color: "var(--text-mute)" }}>{item.year}</span>}
-              {item.certification && (
-                <span
-                  className="rounded-md border px-2 py-0.5 text-xs font-semibold"
-                  style={{ borderColor: "var(--border-strong)", color: "var(--text-dim)" }}
-                >
-                  {item.certification}
-                </span>
-              )}
               {/* No `ring-1` on the chip: .status-chip draws its own hairline
                   from the same token as its text, and a utility ring would
                   outrank it. */}
@@ -381,40 +390,33 @@ export function DetailPanel({
             </div>
             <h2 className={`mt-3 ${PAGE_TITLE}`} style={{ color: "var(--text)" }}>{item.name}</h2>
 
-            {/* Meta row: rating, runtime, network, genres */}
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              {item.rating != null && item.rating > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-600 ring-1 ring-amber-500/20" title={ratingLabel(item.rating)}>
-                  <Star className="h-3 w-3 fill-amber-500" />{formatRating(item.rating)}
-                  <span className="font-normal" style={{ color: "var(--text-mute)" }}>/{RATING_MAX}</span>
-                </span>
-              )}
-              {item.runtime != null && item.runtime > 0 && (
-                <span
-                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs"
-                  style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
-                >
-                  <Clock className="h-3 w-3" />{formatRuntime(item.runtime)}
-                </span>
-              )}
-              {item.network && (
-                <span
-                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs"
-                  style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
-                >
-                  <TvMinimalPlay className="h-3 w-3" />{item.network}
-                </span>
-              )}
-              {item.genres.slice(0, 3).map((g) => (
-                <span
-                  key={g}
-                  className="rounded-full px-2.5 py-1 text-xs"
-                  style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
-                >
-                  {g}
-                </span>
-              ))}
-            </div>
+            {/* The two promoted values */}
+            {(hasRating || hasRuntime) && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {hasRating && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-sm font-semibold text-amber-600 ring-1 ring-amber-500/20" title={ratingLabel(item.rating!)}>
+                    <Star className="h-3.5 w-3.5 fill-amber-500" />{formatRating(item.rating!)}
+                    <span className="text-xs font-normal" style={{ color: "var(--text-mute)" }}>/{RATING_MAX}</span>
+                  </span>
+                )}
+                {hasRuntime && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm"
+                    style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
+                  >
+                    <Clock className="h-3.5 w-3.5" />{formatRuntime(item.runtime!)}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Everything demoted, as one line that wraps like prose */}
+            {metaLine.length > 0 && (
+              <p className="mt-2 text-sm" style={{ color: "var(--text-mute)" }}>
+                {metaLine.join(" · ")}
+              </p>
+            )}
+
             {director && (
               <p className="mt-1.5 text-sm" style={{ color: "var(--text-dim)" }}>
                 {item.type === "movie" ? "Directed by " : "Created by "}
@@ -437,10 +439,10 @@ export function DetailPanel({
           )}
 
           {/* External Ratings */}
-          <ExternalRatings imdbRating={item.imdbRating} rtScore={item.rtScore} mcScore={item.mcScore} loading={sectionsLoading} />
+          <ExternalRatings imdbId={item.imdbId} imdbRating={item.imdbRating} rtScore={item.rtScore} mcScore={item.mcScore} loading={sectionsLoading} />
 
           {/* External Links */}
-          <ExternalLinks imdbId={item.imdbId} tmdbId={item.tmdbId} type={item.type} />
+          <ExternalLinks tmdbId={item.tmdbId} type={item.type} />
 
           {/* Where to watch */}
           <ProvidersSection providers={providers} loading={sectionsLoading} />
@@ -482,6 +484,18 @@ export function DetailPanel({
           {/* Tags */}
           <TagsSection imdbId={item.imdbId} type={item.type} onError={(msg) => onShowToast(msg, "error")} />
 
+          {/* Drop (series only) — a tracking change, so it lives with the rest
+              of them rather than as a footnote after every other section. */}
+          {item.type === "series" && (
+            <DropShowButton
+              isDropped={isDropped ?? false}
+              // Hidden until the dropped state is actually known, which covers
+              // both "still loading" and "the bundle failed".
+              loading={sectionsLoading || isDropped === null}
+              onToggle={() => void handleToggleDrop()}
+            />
+          )}
+
           {/* Season Breakdown (series only) */}
           {item.type === "series" && (
             <SeasonsSection
@@ -508,16 +522,6 @@ export function DetailPanel({
             onSelect={handleSelectRecommendation}
           />
 
-          {/* Drop Show (series only) */}
-          {item.type === "series" && (
-            <DropShowButton
-              isDropped={isDropped ?? false}
-              // Hidden until the dropped state is actually known, which covers
-              // both "still loading" and "the bundle failed".
-              loading={sectionsLoading || isDropped === null}
-              onToggle={() => void handleToggleDrop()}
-            />
-          )}
           </div>
         </div>
       </div>
