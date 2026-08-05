@@ -24,6 +24,7 @@ import { useExitAnimation } from "../../hooks/useExitAnimation";
 import type { ShowToast } from "../../hooks/useToast";
 import { relogWatchEvent } from "../../utils/watchEvents";
 import { invalidateDetailBundle, type PanelDetail } from "./useDetailPanel";
+import { PAGE_TITLE, KICKER, MICRO_LABEL } from "../typography";
 
 /* ─── Detail Panel ────────────────────────────────────────── */
 
@@ -372,7 +373,7 @@ export function DetailPanel({
                 </span>
               )}
             </div>
-            <h2 className="mt-3 font-heading text-2xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{item.name}</h2>
+            <h2 className={`mt-3 ${PAGE_TITLE}`} style={{ color: "var(--text)" }}>{item.name}</h2>
 
             {/* Meta row: rating, runtime, network, genres */}
             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -424,7 +425,7 @@ export function DetailPanel({
           {/* Description */}
           {item.description && (
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Overview</h3>
+              <h3 className={`mb-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>Overview</h3>
               <p className="text-sm leading-relaxed" style={{ color: "var(--text-dim)" }}>{item.description}</p>
             </div>
           )}
@@ -443,7 +444,7 @@ export function DetailPanel({
 
           {/* ─── Your tracking ──────────────────────────────────── */}
           <div className="flex items-center gap-3 pt-1">
-            <span className="text-2xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+            <span className={MICRO_LABEL} style={{ color: "var(--text-mute)" }}>
               Your tracking
             </span>
             <span aria-hidden="true" className="h-px flex-1" style={{ background: "var(--border)" }} />

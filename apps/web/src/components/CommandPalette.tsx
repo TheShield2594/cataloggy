@@ -8,6 +8,7 @@ import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useExitAnimation } from "../hooks/useExitAnimation";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useToast } from "../hooks/useToast";
+import { MICRO_LABEL } from "./typography";
 
 type Action = {
   id: string;
@@ -228,7 +229,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
           {!searching && results.length > 0 && (
             <div className="px-2 pb-2">
-              <p className="px-2 pb-1 text-2xs font-medium uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+              <p className={`px-2 pb-1 ${MICRO_LABEL}`} style={{ color: "var(--text-mute)" }}>
                 Titles
               </p>
               {results.map((r, i) => (
@@ -257,7 +258,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
           <div className="px-2">
             {visibleActions.length > 0 && (
-              <p className="px-2 pb-1 pt-1 text-2xs font-medium uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+              <p className={`px-2 pb-1 pt-1 ${MICRO_LABEL}`} style={{ color: "var(--text-mute)" }}>
                 Navigate
               </p>
             )}

@@ -1,6 +1,7 @@
 import { Calendar, Clock, Film, Trash2, Tv } from "lucide-react";
 import { Poster } from "../Poster";
 import { WatchEvent } from "../../api";
+import { KICKER } from "../typography";
 
 export function WatchHistorySection({
   history,
@@ -16,7 +17,7 @@ export function WatchHistorySection({
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+        <h3 className={`flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
           <Clock className="h-3.5 w-3.5" /> Watch History
         </h3>
         <button

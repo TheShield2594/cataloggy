@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useId, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { SECTION_TITLE } from "../typography";
 
 const STORAGE_PREFIX = "cataloggy:settings-section:";
 
@@ -73,7 +74,7 @@ export function Section({
   const header = (
     <>
       <span className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: "var(--surface-strong)", color: "var(--text-mute)" }}>{icon}</span>
-      <span className="flex-1 text-base font-semibold" style={{ color: "var(--text)" }}>{title}</span>
+      <span className={`flex-1 ${SECTION_TITLE}`} style={{ color: "var(--text)" }}>{title}</span>
       {!alwaysOpen && (
         <ChevronDown
           size={18}

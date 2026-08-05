@@ -6,6 +6,7 @@ import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useToast } from "../hooks/useToast";
 import { useCachedState } from "../hooks/useCachedState";
 import { relogWatchEvent } from "../utils/watchEvents";
+import { PAGE_TITLE, SECTION_TITLE, KICKER } from "../components/typography";
 
 const PAGE_SIZE = 25;
 
@@ -184,7 +185,7 @@ export function HistoryPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Watch History</h1>
+        <h1 className={PAGE_TITLE} style={{ color: "var(--text)" }}>Watch History</h1>
 
         <div className="relative inline-flex rounded-full p-0.5" style={{ background: "var(--surface-strong)", border: "1px solid var(--border)" }}>
           {(["all", "movie", "episode"] as const).map((opt) => (
@@ -221,7 +222,7 @@ export function HistoryPage() {
       ) : error && events.length === 0 ? (
         <div className="mx-auto max-w-lg rounded-2xl p-8 text-center" style={{ border: "1px solid rgba(244,63,94,0.2)", background: "rgba(244,63,94,0.05)" }}>
           <AlertCircle className="mx-auto h-12 w-12 text-rose-500" />
-          <p className="mt-3 text-lg font-semibold text-rose-500">{error}</p>
+          <p className={`mt-3 ${SECTION_TITLE} text-rose-500`}>{error}</p>
         </div>
       ) : events.length === 0 ? (
         <div className="glass-panel rounded-2xl p-8 text-center" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
@@ -244,7 +245,7 @@ export function HistoryPage() {
         <div className="space-y-6">
           {groups.map((group) => (
             <div key={`${group.label}-${group.events[0].id}`} className="space-y-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+              <h2 className={KICKER} style={{ color: "var(--text-mute)" }}>
                 {group.label}
               </h2>
               {group.events.map((event) => (

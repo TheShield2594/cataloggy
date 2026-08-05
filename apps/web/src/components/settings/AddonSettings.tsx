@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, runtimeConfig } from "../../api";
 import { Loader2, Check, AlertCircle, Copy, ExternalLink, Sparkles } from "lucide-react";
+import { KICKER } from "../typography";
 
 const AI_CATALOGS = new Set(["cataloggy-ai-movie", "cataloggy-ai-series"]);
 
@@ -205,7 +206,7 @@ export function AddonSettings() {
       {/* User lists */}
       {availableLists.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider pt-1" style={{ color: "var(--text-mute)" }}>My Lists</p>
+          <p className={`pt-1 ${KICKER}`} style={{ color: "var(--text-mute)" }}>My Lists</p>
           <p className="text-xs" style={{ color: "var(--text-mute)" }}>Each list adds separate Movies and Series catalogs to Stremio.</p>
           {availableLists.map((list) => {
             const catalogId = `list:${list.id}`;

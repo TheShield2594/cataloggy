@@ -4,6 +4,7 @@ import { api, ApiError, runtimeConfig } from "../api";
 import { BrandLockup } from "../components/BrandMark";
 import { StatusBadge } from "../components/settings/StatusBadge";
 import { TraktSettings } from "../components/settings/TraktSettings";
+import { SECTION_TITLE } from "../components/typography";
 
 type Step = "token" | "tmdb" | "trakt" | "done";
 
@@ -113,7 +114,7 @@ function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => vo
       <div>
         {/* Not "Welcome to Cataloggy": the lockup above already says the name,
             and a step's heading is better spent saying what the step wants. */}
-        <h1 className="text-lg font-semibold">Connect your server</h1>
+        <h1 className={SECTION_TITLE}>Connect your server</h1>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
           Paste the API token your server was configured with to get started.
         </p>
@@ -155,7 +156,7 @@ function TmdbStep({ configured, onContinue, onBack }: { configured: boolean; onC
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold">TMDB Metadata</h1>
+        <h1 className={SECTION_TITLE}>TMDB Metadata</h1>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
           Cataloggy uses TMDB to fetch posters, ratings, and details for movies and shows.
         </p>
@@ -189,7 +190,7 @@ function TraktStep({ onContinue, onBack }: { onContinue: () => void; onBack: () 
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold">Connect Trakt (optional)</h1>
+        <h1 className={SECTION_TITLE}>Connect Trakt (optional)</h1>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
           Sync your watch history and watchlist from Trakt. You can also do this later in Settings.
         </p>
@@ -217,7 +218,7 @@ function DoneStep({ onFinish, onBack }: { onFinish: () => void; onBack: () => vo
         <Check className="h-7 w-7 text-emerald-600" />
       </div>
       <div>
-        <h1 className="text-lg font-semibold">You're all set</h1>
+        <h1 className={SECTION_TITLE}>You're all set</h1>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
           Start searching for movies and shows to build your catalog.
         </p>

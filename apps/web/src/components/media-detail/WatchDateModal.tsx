@@ -5,6 +5,7 @@ import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useScrollLock } from "../../hooks/useScrollLock";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
 import { useExitAnimation } from "../../hooks/useExitAnimation";
+import { SECTION_TITLE } from "../typography";
 
 export function WatchDateModal({
   target,
@@ -61,8 +62,9 @@ export function WatchDateModal({
         onAnimationEnd={onExitAnimationEnd}
       >
         <div className="mb-5 flex items-center justify-between">
-          <h3 id="watch-date-modal-title" className="text-base font-semibold" style={{ color: "var(--text)" }}>When did you watch this?</h3>
+          <h3 id="watch-date-modal-title" className={SECTION_TITLE} style={{ color: "var(--text)" }}>When did you watch this?</h3>
           <button type="button" onClick={requestClose} aria-label="Close" className="rounded-lg p-1 hover:opacity-80" style={{ color: "var(--text-mute)" }}>
+
             <X className="h-4 w-4" />
           </button>
         </div>

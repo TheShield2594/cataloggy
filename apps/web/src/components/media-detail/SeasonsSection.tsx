@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Tv } from "lucide-react";
 import { api, EpisodeInfo } from "../../api";
+import { KICKER } from "../typography";
 
 export interface SeasonInfo {
   seasonNumber: number;
@@ -122,7 +123,7 @@ export function SeasonsSection({
   if (loading) {
     return (
       <div>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Seasons</h3>
+        <h3 className={`mb-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>Seasons</h3>
         <div className="space-y-2">
           {[1, 2, 3].map((i) => <div key={i} className="skeleton h-11 rounded-xl" />)}
         </div>
@@ -134,7 +135,7 @@ export function SeasonsSection({
 
   return (
     <div>
-      <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+      <h3 className={`mb-3 flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
         <Tv className="h-3.5 w-3.5" /> Seasons
       </h3>
       <div className="space-y-2">

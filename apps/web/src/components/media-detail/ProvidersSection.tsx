@@ -1,5 +1,6 @@
 import { MonitorPlay } from "lucide-react";
 import { WatchProviders } from "../../api";
+import { KICKER } from "../typography";
 
 export function ProvidersSection({ providers, loading }: { providers: WatchProviders | null; loading: boolean }) {
   // Reserve the section's space while the bundle loads — rendering null and
@@ -8,7 +9,7 @@ export function ProvidersSection({ providers, loading }: { providers: WatchProvi
   if (loading) {
     return (
       <div>
-        <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+        <h3 className={`mb-2 flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
           <MonitorPlay className="h-3.5 w-3.5" /> Where to Watch
         </h3>
         <div className="flex flex-wrap gap-2">
@@ -32,7 +33,7 @@ export function ProvidersSection({ providers, loading }: { providers: WatchProvi
 
   return (
     <div>
-      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+      <h3 className={`mb-2 flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
         <MonitorPlay className="h-3.5 w-3.5" /> Where to Watch
       </h3>
       <div className="flex flex-wrap gap-2">
