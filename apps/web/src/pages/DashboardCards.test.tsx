@@ -88,7 +88,7 @@ describe("ContinueWatchingCard", () => {
 
 describe("ContinueWatchingHero", () => {
   const renderHero = (overrides: Partial<SeriesProgress> = {}) => {
-    render(
+    return render(
       <ContinueWatchingHero
         s={{ ...series, ...overrides }}
         isMarking={false}
@@ -98,6 +98,29 @@ describe("ContinueWatchingHero", () => {
       />
     );
   };
+
+  /** The decorative full-bleed backdrop, not the poster in the card's corner. */
+  const backdropOf = (container: HTMLElement) =>
+    container.querySelector('img[aria-hidden="true"]');
+  const scrimOf = (container: HTMLElement) =>
+    container.querySelector('div[style*="linear-gradient(110deg"]');
+
+  it("wears the hero treatment when there is a backdrop to wear it over", () => {
+    const { container } = renderHero({ background: "https://image.tmdb.org/t/p/w500/bd.jpg" });
+
+    expect(backdropOf(container)).toHaveAttribute("src", "https://image.tmdb.org/t/p/w500/bd.jpg");
+    expect(scrimOf(container)).toBeInTheDocument();
+  });
+
+  it("is a flat panel when there is no backdrop, rather than a scrim over nothing", () => {
+    // The scrim used to be painted unconditionally over a blurred copy of the
+    // poster. With no art behind it, it is just --bg-0 fading to the page —
+    // cream to grey-brown on the light theme, across the empty half of a card.
+    const { container } = renderHero({ background: null, poster: "https://image.tmdb.org/t/p/w500/p.jpg" });
+
+    expect(backdropOf(container)).toBeNull();
+    expect(scrimOf(container)).toBeNull();
+  });
 
   it("labels the bar for the numbers filling it", () => {
     renderHero({ lastSeason: 2, seasonTotalEpisodes: 13, seasonWatchedEpisodes: 7 });
