@@ -1,9 +1,10 @@
 import { ReactNode, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Key, Link, Database, Info, Clapperboard, Image, Globe, Star, Sparkles, Bell, Users, Activity, Search, X } from "lucide-react";
+import { Key, Link, Database, Info, Clapperboard, Film, Image, Globe, Star, Sparkles, Bell, Users, Activity, Search, X } from "lucide-react";
 import { Section } from "../components/settings/Section";
 import { ApiTokenSettings } from "../components/settings/ApiTokenSettings";
 import { TraktSettings } from "../components/settings/TraktSettings";
+import { TmdbSettings } from "../components/settings/TmdbSettings";
 import { OmdbSettings } from "../components/settings/OmdbSettings";
 import { RpdbSettings } from "../components/settings/RpdbSettings";
 import { AddonSettings } from "../components/settings/AddonSettings";
@@ -91,6 +92,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: <Key size={20} />,
     keywords: "auth authentication bearer secret credentials",
     content: <ApiTokenSettings />,
+  },
+  {
+    id: "tmdb",
+    tab: "integrations",
+    title: "TMDB Metadata",
+    icon: <Film size={20} />,
+    keywords: "the movie database api key posters metadata artwork cast",
+    content: <TmdbSettings />,
   },
   {
     id: "trakt",

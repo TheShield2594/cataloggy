@@ -6,7 +6,7 @@ import { SetupWizard, WIZARD_STEPS, previousStep } from "./SetupWizard";
 
 vi.mock("../api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../api")>();
-  return { ...actual, api: { getTmdbStatus: vi.fn() } };
+  return { ...actual, api: { getTmdbStatus: vi.fn(), setTmdbKey: vi.fn(), removeTmdbKey: vi.fn() } };
 });
 
 // Talks to the server and opens an OAuth flow; the wizard only places it.
@@ -14,9 +14,11 @@ vi.mock("../components/settings/TraktSettings", () => ({ TraktSettings: () => <p
 
 const { api } = await import("../api");
 const getTmdbStatus = vi.mocked(api.getTmdbStatus);
+const setTmdbKey = vi.mocked(api.setTmdbKey);
 
 beforeEach(() => {
-  getTmdbStatus.mockResolvedValue({ configured: true });
+  getTmdbStatus.mockReset().mockResolvedValue({ configured: true, source: "env" });
+  setTmdbKey.mockReset().mockResolvedValue({ configured: true, source: "db" });
 });
 
 /** Enters a token and lands on the tmdb step. */
@@ -50,6 +52,21 @@ describe("SetupWizard", () => {
 
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "2");
     expect(screen.getByText(`Step 2 of ${WIZARD_STEPS.length}`)).toBeInTheDocument();
+  });
+
+  // Onboarding used to dead-end here on a server without a key: it named the
+  // environment variable to set and told you to restart.
+  it("takes a TMDB key without leaving setup", async () => {
+    getTmdbStatus.mockResolvedValue({ configured: false, source: null });
+    const user = userEvent.setup();
+    render(<SetupWizard onComplete={vi.fn()} />);
+    await enterToken(user);
+
+    await user.type(await screen.findByLabelText("TMDB API key"), "tmdb-key");
+    await user.click(screen.getByRole("button", { name: /save tmdb key/i }));
+
+    await waitFor(() => expect(setTmdbKey).toHaveBeenCalledWith("tmdb-key"));
+    expect(await screen.findByText("Active")).toBeInTheDocument();
   });
 
   it("offers no way back from the entry step", () => {

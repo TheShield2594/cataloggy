@@ -529,6 +529,12 @@ export type JobFailure = {
   failedAt: string;
 };
 
+/** `source` says which key is in use: one saved here, or `TMDB_API_KEY`. */
+export type TmdbStatus = {
+  configured: boolean;
+  source: "db" | "env" | null;
+};
+
 const authHeaders = (hasBody: boolean) => {
   const token = runtimeConfig.getToken();
   const headers: Record<string, string> = {
@@ -870,7 +876,16 @@ export const api = {
     return request<{ configured: boolean }>("/omdb/status");
   },
   getTmdbStatus() {
-    return request<{ configured: boolean }>("/tmdb/status");
+    return request<TmdbStatus>("/tmdb/status");
+  },
+  setTmdbKey(apiKey: string) {
+    return request<TmdbStatus>("/tmdb/key", {
+      method: "POST",
+      body: JSON.stringify({ apiKey })
+    });
+  },
+  removeTmdbKey() {
+    return request<TmdbStatus>("/tmdb/key", { method: "DELETE" });
   },
   setOmdbKey(apiKey: string) {
     return request<{ configured: boolean }>("/omdb/key", {

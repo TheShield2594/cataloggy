@@ -2,7 +2,7 @@ import { FormEvent, useState } from "react";
 import { Check, Eye, EyeOff, Loader2, AlertCircle, ArrowLeft, ArrowRight } from "lucide-react";
 import { api, ApiError, runtimeConfig } from "../api";
 import { BrandLockup } from "../components/BrandMark";
-import { StatusBadge } from "../components/settings/StatusBadge";
+import { TmdbSettings } from "../components/settings/TmdbSettings";
 import { TraktSettings } from "../components/settings/TraktSettings";
 import { SECTION_TITLE } from "../components/typography";
 
@@ -76,7 +76,7 @@ function WizardShell({ step, children }: { step: Step; children: React.ReactNode
   );
 }
 
-function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => void }) {
+function TokenStep({ onVerified }: { onVerified: () => void }) {
   // Prefilled so stepping back from tmdb lands on the token that got you here,
   // ready to be corrected rather than retyped from scratch.
   const [token, setToken] = useState(() => runtimeConfig.getToken());
@@ -94,8 +94,10 @@ function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => vo
     runtimeConfig.setToken(trimmed);
 
     try {
-      const status = await api.getTmdbStatus();
-      onVerified(status.configured);
+      // Any authenticated endpoint would do — this one is cheap and the next
+      // step needs the server reachable anyway.
+      await api.getTmdbStatus();
+      onVerified();
     } catch (err) {
       runtimeConfig.setToken("");
       if (err instanceof ApiError && err.status === 401) {
@@ -151,32 +153,22 @@ function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => vo
   );
 }
 
-function TmdbStep({ configured, onContinue, onBack }: { configured: boolean; onContinue: () => void; onBack: () => void }) {
+function TmdbStep({ onContinue, onBack }: { onContinue: () => void; onBack: () => void }) {
   return (
     <div className="space-y-4">
       <div>
         <h1 className={SECTION_TITLE}>TMDB Metadata</h1>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
-          Cataloggy uses TMDB to fetch posters, ratings, and details for movies and shows.
+          Add a key now, or skip and add one later in Settings.
         </p>
       </div>
 
-      <div className="flex items-center gap-3">
-        <StatusBadge ok={configured} label={configured ? "Configured" : "Not configured"} />
-      </div>
-
-      {!configured && (
-        <p className="text-sm text-amber-600 leading-relaxed">
-          The server is missing a TMDB API key. Set the <code style={{ color: "var(--text-dim)" }}>TMDB_API_KEY</code>{" "}
-          environment variable on your Cataloggy server and restart it. You can continue setup now and
-          come back to this later.
-        </p>
-      )}
+      <TmdbSettings />
 
       <button
         type="button"
         onClick={onContinue}
-        className="btn-primary btn-lg w-full"
+        className="btn-secondary btn-lg w-full"
       >
         Continue <ArrowRight size={16} />
       </button>
@@ -235,7 +227,6 @@ function DoneStep({ onFinish, onBack }: { onFinish: () => void; onBack: () => vo
 
 export function SetupWizard({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState<Step>("token");
-  const [tmdbConfigured, setTmdbConfigured] = useState(false);
 
   // Every step past the first is reachable in both directions: a token that
   // verified against the wrong server, or a Trakt connection started by
@@ -244,15 +235,8 @@ export function SetupWizard({ onComplete }: { onComplete: () => void }) {
 
   return (
     <WizardShell step={step}>
-      {step === "token" && (
-        <TokenStep
-          onVerified={(configured) => {
-            setTmdbConfigured(configured);
-            setStep("tmdb");
-          }}
-        />
-      )}
-      {step === "tmdb" && <TmdbStep configured={tmdbConfigured} onContinue={() => setStep("trakt")} onBack={goBack} />}
+      {step === "token" && <TokenStep onVerified={() => setStep("tmdb")} />}
+      {step === "tmdb" && <TmdbStep onContinue={() => setStep("trakt")} onBack={goBack} />}
       {step === "trakt" && <TraktStep onContinue={() => setStep("done")} onBack={goBack} />}
       {step === "done" && <DoneStep onFinish={onComplete} onBack={goBack} />}
     </WizardShell>
