@@ -3,8 +3,9 @@ import { NavLink } from "react-router";
 import { BarChart3, CalendarDays, Clapperboard, Gamepad2, History, Pin, PinOff, Search, List, Settings, User } from "lucide-react";
 import { Profile } from "../api";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { prefetchRoute } from "../utils/routePrefetch";
 
-const navItems = [
+export const SIDEBAR_NAV_ITEMS = [
   { to: "/", label: "Dashboard", icon: Clapperboard, end: true },
   { to: "/search", label: "Search", icon: Search, end: false },
   { to: "/lists", label: "Lists", icon: List, end: false },
@@ -139,7 +140,7 @@ export function Sidebar({
         </div>
 
         <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 px-2.5">
-          {navItems.map((item) => (
+          {SIDEBAR_NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -153,6 +154,11 @@ export function Sidebar({
               // Pointer-user fallback while the label is hidden: without it the
               // collapsed rail is eight icons with nothing to hover for a name.
               title={expanded ? undefined : item.label}
+              // Start the route's chunk on the approach rather than on the
+              // click, so the page is usually already in memory by the time it
+              // is asked for. Keyboard focus counts as an approach too.
+              onPointerEnter={() => prefetchRoute(item.to)}
+              onFocus={() => prefetchRoute(item.to)}
             >
               {({ isActive }) => (
                 <>

@@ -1,0 +1,34 @@
+/**
+ * Opens the connection to a cross-origin API host before the app's first
+ * request needs it.
+ *
+ * The API base is a runtime value (window.__CATALOGGY_API_BASE__, written into
+ * config.js at container start), so it can't be a static <link> in index.html
+ * the way the TMDB image host is. Without this, the dashboard's opening burst of
+ * requests all queue behind one DNS + TCP + TLS handshake — on a remote host
+ * over a mobile link that is comfortably a few hundred milliseconds of nothing
+ * on screen.
+ *
+ * Same-origin deployments (the API behind a path on the same host) need no hint:
+ * that connection is already open, having just delivered the page.
+ */
+export function preconnectToApi(apiBase: string): void {
+  let origin: string;
+  try {
+    origin = new URL(apiBase, window.location.href).origin;
+  } catch {
+    // A malformed base is the request layer's problem to report, not something
+    // to throw out of a speculative optimisation during startup.
+    return;
+  }
+  if (origin === window.location.origin) return;
+
+  const link = document.createElement("link");
+  link.rel = "preconnect";
+  link.href = origin;
+  // `request()` in api.ts uses fetch's default credentials mode, so its
+  // cross-origin calls carry no cookies and land in the anonymous connection
+  // pool. A credentialed preconnect would warm a pool they never touch.
+  link.crossOrigin = "anonymous";
+  document.head.appendChild(link);
+}

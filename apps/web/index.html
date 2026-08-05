@@ -8,6 +8,13 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Cataloggy" />
+    <!-- Nearly every poster on every page comes from here, and the first one
+         otherwise pays DNS + TCP + TLS before a single byte of image arrives.
+         Opening the connection alongside the app's own JS takes that setup off
+         the critical path. `crossorigin` matches how <img> fetches these
+         (anonymous, no credentials) — without it the browser would warm a
+         connection the image requests can't reuse. -->
+    <link rel="preconnect" href="https://image.tmdb.org" crossorigin />
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" type="image/png" href="/icons/icon-192.png" sizes="192x192" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />

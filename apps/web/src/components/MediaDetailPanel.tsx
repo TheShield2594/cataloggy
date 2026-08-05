@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ComponentProps } from "react";
 // Type-only: a value import here would defeat the lazy() split below.
 import type { DetailPanel as DetailPanelImpl } from "./media-detail/DetailPanel";
+import { loadDetailPanel } from "../utils/routePrefetch";
 
 export { useDetailPanel } from "./media-detail/useDetailPanel";
 
@@ -14,9 +15,11 @@ export { useDetailPanel } from "./media-detail/useDetailPanel";
 // Suspense is local rather than borrowed from the router boundary in App.tsx: the
 // command palette renders outside `<Routes>`, so there is no ancestor boundary
 // there to catch the suspend.
-const LazyDetailPanel = lazy(() =>
-  import("./media-detail/DetailPanel").then((m) => ({ default: m.DetailPanel }))
-);
+//
+// The fallback is `null`, so a cold chunk means the click on a poster appears to
+// do nothing until it lands. `loadDetailPanel` is the same loader the idle
+// prefetch in App.tsx warms, which is what keeps that gap off the screen.
+const LazyDetailPanel = lazy(() => loadDetailPanel().then((m) => ({ default: m.DetailPanel })));
 
 export function DetailPanel(props: ComponentProps<typeof DetailPanelImpl>) {
   return (
