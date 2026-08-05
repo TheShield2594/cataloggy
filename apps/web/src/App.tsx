@@ -156,6 +156,7 @@ function AppShell({
 }) {
   const { profile, setProfile, switcherOpen, openSwitcher, closeSwitcher } = useProfile();
   const mainRef = useRef<HTMLElement>(null);
+  const onSearchRoute = location.pathname === "/search";
 
   // Warm the chunks a tap can reach with no hover to warn us first. Runs on
   // idle, so it queues behind the dashboard's own render and requests.
@@ -240,22 +241,31 @@ function AppShell({
             <span>Cataloggy</span>
           </Link>
 
-          <button
-            type="button"
-            onClick={() => setPaletteOpen(true)}
-            aria-label="Search (⌘K)"
-            className="flex h-11 w-11 flex-none items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] sm:h-auto sm:w-auto sm:flex-1 sm:max-w-sm sm:justify-start sm:gap-2.5 sm:px-4 sm:py-2 sm:text-sm"
-            style={{ border: "1px solid var(--border-strong)", color: "var(--text-mute)", background: "var(--surface)" }}
-          >
-            <Search className="h-4 w-4" />
-            <span className="hidden sm:inline">Search</span>
-            <kbd
-              className="ml-auto hidden rounded px-1.5 py-0.5 text-2xs font-medium sm:inline"
-              style={{ background: "var(--surface-strong)", color: "var(--text-mute)" }}
+          {/* The search page puts its own field at the top of the content, so the
+              header trigger would be a second search box that quietly does
+              something else — it opens the palette rather than filling the page.
+              Stand it down there and leave a spacer, so the controls on the right
+              sit in the same place on every route. ⌘K still reaches the palette. */}
+          {onSearchRoute ? (
+            <div className="flex-1" aria-hidden="true" />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              aria-label="Search (⌘K)"
+              className="flex h-11 w-11 flex-none items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] sm:h-auto sm:w-auto sm:flex-1 sm:max-w-sm sm:justify-start sm:gap-2.5 sm:px-4 sm:py-2 sm:text-sm"
+              style={{ border: "1px solid var(--border-strong)", color: "var(--text-mute)", background: "var(--surface)" }}
             >
-              ⌘K
-            </kbd>
-          </button>
+              <Search className="h-4 w-4" />
+              <span className="hidden sm:inline">Search</span>
+              <kbd
+                className="ml-auto hidden rounded px-1.5 py-0.5 text-2xs font-medium sm:inline"
+                style={{ background: "var(--surface-strong)", color: "var(--text-mute)" }}
+              >
+                ⌘K
+              </kbd>
+            </button>
+          )}
 
           <div className="flex min-w-0 items-center gap-3">
             <ThemeToggle theme={theme} onChange={setTheme} />

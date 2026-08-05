@@ -4,12 +4,7 @@ import { api, Game } from "../api";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-
-function formatPlaytime(minutes: number): string {
-  if (minutes <= 0) return "Not played yet";
-  const hours = minutes / 60;
-  return hours >= 10 ? `${Math.round(hours)}h` : `${hours.toFixed(1)}h`;
-}
+import { formatPlaytime } from "../utils/playtime";
 
 function formatDate(value: string | null): string | null {
   if (!value) return null;
@@ -181,7 +176,7 @@ export function GameDetailPanel({
         aria-label={game.title}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-feature sm:h-auto sm:max-h-[85vh] sm:max-w-3xl sm:flex-row sm:rounded-3xl sm:border"
+        className="glass-surface relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-feature sm:h-auto sm:max-h-[85vh] sm:max-w-3xl sm:flex-row sm:rounded-3xl sm:border"
         style={{ background: "var(--bg-0)", borderColor: "var(--border)" }}
       >
         <button
@@ -221,7 +216,7 @@ export function GameDetailPanel({
 
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs" style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}>
-                <Clock className="h-3 w-3" /> {formatPlaytime(game.playtimeMinutes)}
+                <Clock className="h-3 w-3" /> {formatPlaytime(game.playtimeMinutes, "Not played yet")}
               </span>
               {game.genres.slice(0, 4).map((g) => (
                 <span key={g} className="rounded-full px-2.5 py-1 text-xs" style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}>

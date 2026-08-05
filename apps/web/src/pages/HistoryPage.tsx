@@ -224,7 +224,7 @@ export function HistoryPage() {
           <p className="mt-3 text-lg font-semibold text-rose-500">{error}</p>
         </div>
       ) : events.length === 0 ? (
-        <div className="rounded-2xl p-8 text-center" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+        <div className="glass-panel rounded-2xl p-8 text-center" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
           <Calendar className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
           <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
             {typeFilter === "movie"
@@ -254,7 +254,7 @@ export function HistoryPage() {
                   tabIndex={0}
                   onClick={() => setSelectedItem(toSearchResult(event))}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedItem(toSearchResult(event)); } }}
-                  className="group flex cursor-pointer items-center gap-3 rounded-xl p-3 transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+                  className="glass-row group flex cursor-pointer items-center gap-3 rounded-xl p-3 transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
                   style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
                 >
                   <div

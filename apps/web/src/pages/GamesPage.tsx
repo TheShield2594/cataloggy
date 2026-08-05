@@ -9,18 +9,14 @@ import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useToast } from "../hooks/useToast";
 import { preconnectToGameArtwork } from "../utils/preconnect";
 import { useCachedState } from "../hooks/useCachedState";
+import { formatPlaytime } from "../utils/playtime";
+import { formatRating, ratingLabel, RATING_MAX } from "../utils/rating";
 
 const SORT_OPTIONS: { value: GameSort; label: string }[] = [
   { value: "recent", label: "Recently Played" },
   { value: "playtime", label: "Playtime" },
   { value: "rating", label: "Rating" },
 ];
-
-function formatPlaytime(minutes: number): string {
-  if (minutes <= 0) return "Unplayed";
-  const hours = minutes / 60;
-  return hours >= 10 ? `${Math.round(hours)}h` : `${hours.toFixed(1)}h`;
-}
 
 // Mirrors the server's sortToOrderBy (routes/games.ts) so a locally-added or
 // -updated game lands in the right spot instead of just being pinned to
@@ -136,7 +132,7 @@ function AddGameModal({
         aria-modal="true"
         aria-labelledby="add-game-modal-title"
         tabIndex={-1}
-        className="w-full max-w-lg rounded-2xl border shadow-sm"
+        className="glass-surface w-full max-w-lg rounded-2xl border shadow-sm"
         style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -251,9 +247,10 @@ function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => vo
             <Clock className="h-3 w-3" /> {formatPlaytime(game.playtimeMinutes)}
           </span>
           {game.rating != null && (
-            <span className="flex items-center gap-0.5 text-xs text-amber-600">
+            <span className="flex items-center gap-0.5 text-xs text-amber-600" title={ratingLabel(game.rating)}>
               <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
-              {game.rating}
+              {formatRating(game.rating)}
+              <span style={{ color: "var(--text-mute)" }}>/{RATING_MAX}</span>
             </span>
           )}
         </div>

@@ -4,6 +4,7 @@ import { api, DetailedWatchStats, WatchStats, YearInReviewStats } from "../api";
 import { TicketTile } from "../components/TicketTile";
 import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
 import { useCachedState } from "../hooks/useCachedState";
+import { formatRating, ratingLabel } from "../utils/rating";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -143,7 +144,7 @@ export function StatsPage() {
 
       {/* Monthly activity chart */}
       {detailed && detailed.monthly.length > 0 && (
-        <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+        <section className="glass-panel rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Monthly Activity</h2>
             {momComparison && (
@@ -250,7 +251,7 @@ export function StatsPage() {
 
       {/* Genre distribution */}
       {detailed && detailed.genreDistribution.length > 0 && (
-        <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+        <section className="glass-panel rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
           <h2 className="mb-4 text-lg font-semibold" style={{ color: "var(--text)" }}>Top Genres</h2>
           <div className="space-y-2.5">
             {detailed.genreDistribution.map((g) => (
@@ -275,7 +276,7 @@ export function StatsPage() {
 
       {/* Top rated watched content */}
       {detailed && detailed.topRated.length > 0 && (
-        <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+        <section className="glass-panel rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
           <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold" style={{ color: "var(--text)" }}>
             <Star className="h-5 w-5 text-amber-400" /> Top Rated Watched
           </h2>
@@ -302,8 +303,8 @@ export function StatsPage() {
                     </div>
                   )}
                   {item.rating != null && (
-                    <div className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
-                      <span className="text-2xs font-bold tabular-nums text-amber-400">{item.rating.toFixed(1)}</span>
+                    <div role="img" aria-label={ratingLabel(item.rating)} title={ratingLabel(item.rating)} className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
+                      <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-amber-400">{formatRating(item.rating)}</span>
                     </div>
                   )}
                 </div>
@@ -316,7 +317,7 @@ export function StatsPage() {
       )}
 
       {/* Year in Review */}
-      <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+      <section className="glass-panel rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Year in Review</h2>
           <select
@@ -379,8 +380,8 @@ export function StatsPage() {
                             <Film className="h-8 w-8" style={{ color: "var(--text-mute)" }} />
                           </div>
                         )}
-                        <div className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
-                          <span className="text-2xs font-bold tabular-nums text-amber-400">{item.rating.toFixed(1)}</span>
+                        <div role="img" aria-label={ratingLabel(item.rating)} title={ratingLabel(item.rating)} className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
+                          <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-amber-400">{formatRating(item.rating)}</span>
                         </div>
                       </div>
                       <p className="mt-1.5 truncate text-sm font-medium" style={{ color: "var(--text)" }}>{item.name ?? item.imdbId}</p>
@@ -425,7 +426,7 @@ function MilestoneBadges({
   if (earned.length === 0 && upcoming.length === 0) return null;
 
   return (
-    <section className="rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+    <section className="glass-panel rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold" style={{ color: "var(--text)" }}>
         <Award className="h-5 w-5 text-amber-400" /> Achievements
       </h2>

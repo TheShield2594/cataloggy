@@ -6,6 +6,7 @@ import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useToast } from "../hooks/useToast";
 import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
 import { mergeByRelevance } from "../utils/mergeSearchResults";
+import { formatRating, ratingLabel, RATING_MAX } from "../utils/rating";
 import {
   useSearchFilters,
   FilterType,
@@ -296,10 +297,16 @@ export function SearchPage() {
 
   return (
     <div className="relative space-y-6">
-      {/* Search bar */}
+      {/* Search bar.
+
+          Two radii in this panel, and only two: surfaces are rounded-2xl (this
+          form, the advanced-filters grid inside it), controls are pills
+          (the query field, the type toggle, the year inputs, the selects). It
+          previously ran to four — 2xl, xl, full and lg stacked inside one
+          another — which read as four unrelated widgets rather than one panel. */}
       <form
         onSubmit={submitSearch}
-        className="sticky top-[76px] z-40 rounded-2xl p-4 backdrop-blur-xl shadow-sm"
+        className="glass-surface sticky top-[76px] z-40 rounded-2xl p-4 backdrop-blur-xl shadow-sm"
         style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)", background: "color-mix(in srgb, var(--bg-1) 90%, transparent)" }}
       >
         {/* The search field is the page's title bar, so the h1 is hidden rather
@@ -393,7 +400,7 @@ export function SearchPage() {
 
         {/* Advanced filters panel */}
         {filtersOpen && (
-          <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl p-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6" style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)", background: "var(--surface)" }}>
+          <div className="mt-3 grid grid-cols-2 gap-3 rounded-2xl p-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6" style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)", background: "var(--surface)" }}>
             {/* Genre */}
             <FilterSelect
               label="Genre"
@@ -414,7 +421,7 @@ export function SearchPage() {
                   max="2030"
                   value={filters.yearMin}
                   onChange={(e) => setFilters({ yearMin: e.target.value })}
-                  className="w-full min-w-0 rounded-lg px-1.5 py-2 text-center text-sm placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
+                  className="w-full min-w-0 rounded-full px-1.5 py-2 text-center text-sm placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
                   style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", background: "var(--bg-0)", color: "var(--text)" }}
                 />
                 <input
@@ -425,7 +432,7 @@ export function SearchPage() {
                   max="2030"
                   value={filters.yearMax}
                   onChange={(e) => setFilters({ yearMax: e.target.value })}
-                  className="w-full min-w-0 rounded-lg px-1.5 py-2 text-center text-sm placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
+                  className="w-full min-w-0 rounded-full px-1.5 py-2 text-center text-sm placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
                   style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", background: "var(--bg-0)", color: "var(--text)" }}
                 />
               </div>
@@ -603,7 +610,7 @@ function FilterSelect({
           value={value}
           disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded-lg px-2.5 py-2 pr-7 text-sm focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30 appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full rounded-full px-3 py-2 pr-7 text-sm focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30 appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           style={{
             borderWidth: 1,
             borderStyle: "solid",
@@ -918,9 +925,10 @@ function ResultCard({
         <div className="mt-0.5 flex items-center gap-2">
           <span className="text-xs" style={{ color: "var(--text-mute)" }}>{result.year ?? "Unknown year"}</span>
           {result.rating != null && result.rating > 0 && (
-            <span className="flex items-center gap-0.5 text-xs text-amber-600">
+            <span className="flex items-center gap-0.5 text-xs text-amber-600" title={ratingLabel(result.rating)}>
               <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
-              {result.rating.toFixed(1)}
+              {formatRating(result.rating)}
+              <span style={{ color: "var(--text-mute)" }}>/{RATING_MAX}</span>
             </span>
           )}
           {listNames.length > 0 && (

@@ -103,7 +103,19 @@
   --on-accent: rgb(var(--on-accent-rgb));
   --accent-text-rgb: 39 147 255;
   --accent-text: rgb(var(--accent-text-rgb));
+
+  /* Frosting. Every tint is --bg-1 at some density: the floating chrome sits
+     over arbitrary content and can stay thin, the in-flow panels hold body
+     text and need a little more to sit on, and the -flat pair stands in where
+     the blur is turned off. See the .glass-surface / .glass-panel / .glass-row
+     rules below for which surface takes which. */
   --glass-blur: 24px;
+  --glass-blur-panel: 12px;
+  --glass-tint: rgba(17,20,27,0.55);
+  --glass-tint-panel: rgba(17,20,27,0.62);
+  --glass-tint-row-hover: rgba(38,44,58,0.72);
+  --glass-tint-row-hover-flat: rgba(38,44,58,0.94);
+  --glass-tint-panel-flat: rgba(17,20,27,0.86);
 }
 
 [data-theme="midnight"] {
@@ -267,11 +279,84 @@ body {
   background-attachment: fixed;
 }
 
+/*
+ * Two tiers of frosting, because the cost is per-surface and the surfaces are
+ * not alike.
+ *
+ * .glass-surface — the floating chrome: header, sidebar, command palette,
+ *   detail panels, sheets. At most two are on screen at once, they sit over
+ *   whatever is scrolling underneath, and they carry the full blur.
+ *
+ * .glass-panel — the in-flow panels that tile a page: dashboard cards, stats
+ *   and settings sections, calendar and history cards. A dashboard can stack a
+ *   dozen, so they take a lighter blur and a slightly denser tint, which keeps
+ *   text readable over the ambient gradients without asking the compositor for
+ *   a dozen full-size blurred layers.
+ *
+ * .glass-row — a .glass-panel that is also a click target. The tint has to be
+ *   !important to beat the inline `background` nearly every surface here sets
+ *   from a token — which also beats the `hover:bg-*` utility those rows use to
+ *   answer the pointer. This restores that answer as a tint of its own.
+ */
 [data-theme="glass"] .glass-surface,
 [data-theme="glass"] header {
-  background: rgba(17,20,27,0.55) !important;
+  background: var(--glass-tint) !important;
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+[data-theme="glass"] .glass-panel,
+[data-theme="glass"] .glass-row {
+  background: var(--glass-tint-panel) !important;
+  backdrop-filter: blur(var(--glass-blur-panel));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel));
+}
+
+[data-theme="glass"] .glass-row:hover {
+  background: var(--glass-tint-row-hover) !important;
+}
+
+/*
+ * Phones and TV browsers are where a screenful of blurred layers actually
+ * costs frames, and they are also where the least backdrop shows around the
+ * panels — the ambient gradients are mostly covered at that width. The panels
+ * drop to a flat translucent tint there; the floating chrome above keeps its
+ * blur, since there is only ever one or two of those.
+ *
+ * 639px, not 640: Tailwind's `sm:` is `min-width: 640px`, so a 640px viewport
+ * would otherwise lay itself out as a desktop while its panels took the phone
+ * treatment.
+ */
+@media (max-width: 639px) {
+  [data-theme="glass"] .glass-panel,
+  [data-theme="glass"] .glass-row {
+    background: var(--glass-tint-panel-flat) !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  /* The hover tint declared outside this query still outranks the rule above
+     on specificity, so restate it at the flat density — otherwise a hovered
+     row is more transparent than the ones either side of it. */
+  [data-theme="glass"] .glass-row:hover {
+    background: var(--glass-tint-row-hover-flat) !important;
+  }
+}
+
+/* Same trade for anyone who has asked the OS to cut transparency effects. */
+@media (prefers-reduced-transparency: reduce) {
+  [data-theme="glass"] .glass-surface,
+  [data-theme="glass"] .glass-panel,
+  [data-theme="glass"] .glass-row,
+  [data-theme="glass"] header {
+    background: var(--bg-1) !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  [data-theme="glass"] .glass-row:hover {
+    background: var(--glass-tint-row-hover-flat) !important;
+  }
 }
 
 @layer base {

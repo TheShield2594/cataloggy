@@ -33,6 +33,7 @@ import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { Poster } from "../components/Poster";
 import { useToast } from "../hooks/useToast";
 import { timeAgo, timeUntil } from "../utils/timeAgo";
+import { formatRating, ratingLabel } from "../utils/rating";
 import { useCachedState } from "../hooks/useCachedState";
 
 /* ─── Skeleton placeholders ─── */
@@ -111,11 +112,16 @@ export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
       >
         <Poster src={item.poster} alt={item.name} className="h-full w-full" eager={eager} sizes="176px" />
         {item.rating != null && item.rating > 0 && (
+          // 28px of chip has no room for "/10", so the scale lives in the
+          // accessible name and the tooltip instead of being left implied.
           <div
+            role="img"
+            aria-label={ratingLabel(item.rating)}
+            title={ratingLabel(item.rating)}
             className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm"
             style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}
           >
-            <span className="text-2xs font-bold tabular-nums text-amber-400">{item.rating.toFixed(1)}</span>
+            <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-amber-400">{formatRating(item.rating)}</span>
           </div>
         )}
         {badge && <div className="absolute top-2 right-2">{badge}</div>}
@@ -701,7 +707,7 @@ function DashboardHeader({
   const today = now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   return (
     <div
-      className="relative flex flex-col gap-2.5 rounded-xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+      className="glass-panel relative flex flex-col gap-2.5 rounded-xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
       <PageHeading />
@@ -1131,7 +1137,7 @@ export function DashboardPage() {
             {nowPlaying.map((session) => (
               <div
                 key={session.id}
-                className="flex items-center gap-3 rounded-xl p-3"
+                className="glass-panel flex items-center gap-3 rounded-xl p-3"
                 style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
               >
                 <div
