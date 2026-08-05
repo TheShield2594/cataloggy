@@ -48,7 +48,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const dialogRef = useFocusTrap<HTMLDivElement>(open);
   const activeRowRef = useRef<HTMLButtonElement>(null);
   const { showToast } = useToast();
-  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
+  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading, detail: panelDetail, detailLoading: panelDetailLoading } = useDetailPanel();
 
   // Bottom of the stack relative to any DetailPanel opened from a result, so
   // Escape closes the panel back to the palette rather than both at once.
@@ -158,6 +158,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         item={selectedItem}
         history={panelHistory}
         historyLoading={panelHistoryLoading}
+        detail={panelDetail}
+        detailLoading={panelDetailLoading}
         // Drops back to the palette rather than dismissing both layers — the
         // palette keeps its query and results, so the next title is one click away.
         onClose={() => setSelectedItem(null)}

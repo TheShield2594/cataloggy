@@ -15,6 +15,7 @@ import {
   getAiRecommendations,
 } from "../lib/ai.js";
 import { resolveProfile } from "../lib/profile.js";
+import { resolveTmdbId } from "../lib/detail.js";
 import { resolveAiProviderUrl, validateAiProviderUrl } from "../lib/ssrf.js";
 import { getMetadataType } from "../lib/types.js";
 import type { StremioMetaPreview, StremioMetaType } from "../lib/types.js";
@@ -31,30 +32,7 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       if (!type) return reply.code(400).send({ error: "type must be one of: movie, series" });
       if (!imdbId) return reply.code(400).send({ error: "imdbId is required" });
 
-      const cacheKey = `recs:${rawType}:${imdbId}`;
-      const [cached, rpdbKey] = await Promise.all([
-        Promise.resolve(trendingCacheGet(cacheKey)),
-        getRpdbApiKey(),
-      ]);
-      if (cached) return { metas: applyRpdbToMetaList(cached.data, rpdbKey) };
-
-      const meta = await prisma.metadata.findUnique({
-        where: { imdbId_type: { imdbId, type } },
-        select: { tmdbId: true },
-      });
-
-      if (!meta?.tmdbId) {
-        try {
-          const { fetchMetadata } = await import("../lib/metadata.js");
-          const fetched = await fetchMetadata(type, imdbId);
-          if (!fetched?.tmdbId) return { metas: [] };
-          return await getRecommendations(rawType, type, fetched.tmdbId, cacheKey);
-        } catch {
-          return { metas: [] };
-        }
-      }
-
-      return await getRecommendations(rawType, type, meta.tmdbId, cacheKey);
+      return loadRecommendations(rawType, type, imdbId);
     }
   );
 
@@ -506,9 +484,30 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
   });
 };
 
+/**
+ * "More like this" for one title, shared with the detail-panel bundle route so
+ * both go through the same cache entry rather than each filling their own.
+ */
+export async function loadRecommendations(
+  rawType: string,
+  type: MetadataType,
+  imdbId: string
+): Promise<{ metas: StremioMetaPreview[] }> {
+  const cacheKey = `recs:${rawType}:${imdbId}`;
+  const [cached, rpdbKey] = await Promise.all([
+    Promise.resolve(trendingCacheGet(cacheKey)),
+    getRpdbApiKey(),
+  ]);
+  if (cached) return { metas: applyRpdbToMetaList(cached.data, rpdbKey) };
+
+  const tmdbId = await resolveTmdbId(type, imdbId);
+  if (!tmdbId) return { metas: [] };
+  return getRecommendations(rawType, type, tmdbId, cacheKey);
+}
+
 async function getRecommendations(
   rawType: string,
-  type: import("@prisma/client").MetadataType,
+  type: MetadataType,
   tmdbId: number,
   cacheKey: string
 ) {

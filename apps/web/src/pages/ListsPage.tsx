@@ -318,7 +318,7 @@ export function ListsPage() {
   const selectedListIdRef = useRef(selectedListId);
   selectedListIdRef.current = selectedListId;
   const { showToast } = useToast();
-  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
+  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading, detail: panelDetail, detailLoading: panelDetailLoading } = useDetailPanel();
 
   // Pushing (rather than replacing) is what makes Back undo a list switch. The
   // one exception is the initial default, which the user never chose.
@@ -869,6 +869,8 @@ export function ListsPage() {
           item={selectedItem}
           history={panelHistory}
           historyLoading={panelHistoryLoading}
+          detail={panelDetail}
+          detailLoading={panelDetailLoading}
           onClose={() => setSelectedItem(null)}
           onShowToast={showToast}
           onHistoryChange={(events) => setPanelHistory(events)}

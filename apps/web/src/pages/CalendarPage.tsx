@@ -163,7 +163,7 @@ export function CalendarPage() {
   const [error, setError] = useState<string | null>(null);
   const [openDay, setOpenDay] = useState<Date | null>(null);
   const { showToast } = useToast();
-  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
+  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading, detail: panelDetail, detailLoading: panelDetailLoading } = useDetailPanel();
 
   const today = useMemo(() => startOfDay(new Date()), []);
   // The month grid needs width the phone doesn't have, so on narrow screens
@@ -500,6 +500,8 @@ export function CalendarPage() {
           item={selectedItem}
           history={panelHistory}
           historyLoading={panelHistoryLoading}
+          detail={panelDetail}
+          detailLoading={panelDetailLoading}
           onClose={() => setSelectedItem(null)}
           onShowToast={showToast}
           onHistoryChange={(events) => setPanelHistory(events)}

@@ -304,6 +304,24 @@ export type WatchProvider = {
   logo: string | null;
 };
 
+/** The metadata row behind a title, as `/meta/:type/:imdbId` returns it. */
+export type ItemMeta = {
+  imdbId: string; type: string; name: string; year: number | null; poster: string | null;
+  description: string | null; genres: string[]; rating: number | null;
+  imdbRating: number | null; rtScore: number | null; mcScore: number | null;
+  runtime: number | null; certification: string | null;
+  status: string | null; network: string | null; releaseDate: string | null;
+  tmdbId: number | null; background: string | null;
+};
+
+export type CastMemberInfo = {
+  name: string; character: string; photo: string | null; order: number;
+};
+
+export type SeasonSummary = {
+  seasonNumber: number; name: string; episodeCount: number; airYear: number | null; poster: string | null;
+};
+
 export type WatchProviders = {
   link: string | null;
   flatrate: WatchProvider[];
@@ -790,9 +808,6 @@ export const api = {
   getPersonalRecommendations(type: MediaType, limit = 20) {
     return request<{ metas: TrendingMeta[] }>(`/recommendations/personal?type=${type}&limit=${limit}`);
   },
-  getRecommendations(type: MediaType, imdbId: string, signal?: AbortSignal) {
-    return request<{ metas: TrendingMeta[] }>(`/recommendations?type=${type}&imdbId=${encodeURIComponent(imdbId)}`, { signal });
-  },
   // Calendar
   getCalendar(days = 30) {
     return request<{ calendar: CalendarEntry[] }>(`/calendar?days=${days}`);
@@ -808,25 +823,33 @@ export const api = {
   getAnimeCatalog(type: MediaType) {
     return request<{ metas: TrendingMeta[] }>(`/anime?type=${type}`);
   },
-  getItemMeta(type: MediaType, imdbId: string, signal?: AbortSignal) {
+  /**
+   * Everything the detail panel opens with, in one request.
+   *
+   * The panel used to fire six in parallel — meta, cast, providers,
+   * recommendations, and for a series seasons and dropped-state. Parallel isn't
+   * free on a phone: they queue behind the connection limit, and the panel could
+   * only finish filling in when the slowest of the six landed.
+   */
+  getDetailBundle(type: MediaType, imdbId: string, signal?: AbortSignal) {
     return request<{
-      imdbId: string; type: string; name: string; year: number | null; poster: string | null;
-      description: string | null; genres: string[]; rating: number | null;
-      imdbRating: number | null; rtScore: number | null; mcScore: number | null;
-      runtime: number | null; certification: string | null;
-      status: string | null; network: string | null; releaseDate: string | null;
-      tmdbId: number | null; background: string | null;
-    }>(`/meta/${type}/${encodeURIComponent(imdbId)}`, { signal });
-  },
-  getCast(type: MediaType, imdbId: string, signal?: AbortSignal) {
-    return request<{
-      cast: Array<{ name: string; character: string; photo: string | null; order: number }>;
+      meta: ItemMeta;
+      cast: CastMemberInfo[];
       director: string | null;
-    }>(`/meta/${type}/${encodeURIComponent(imdbId)}/cast`, { signal });
+      providers: WatchProviders;
+      recommendations: TrendingMeta[];
+      seasons: SeasonSummary[];
+      dropped: boolean;
+    }>(`/meta/${type}/${encodeURIComponent(imdbId)}/bundle`, { signal });
   },
-  getSeasons(imdbId: string, signal?: AbortSignal) {
-    return request<{ seasons: Array<{ seasonNumber: number; name: string; episodeCount: number; airYear: number | null; poster: string | null }> }>(
-      `/meta/series/${encodeURIComponent(imdbId)}/seasons`, { signal }
+  /**
+   * Still its own call: the search page fetches providers per result row as the
+   * row scrolls into view, which is a different access pattern from the panel's
+   * one-shot bundle.
+   */
+  getWatchProviders(type: MediaType, imdbId: string, signal?: AbortSignal) {
+    return request<{ providers: WatchProviders }>(
+      `/meta/${type}/${encodeURIComponent(imdbId)}/providers`, { signal }
     );
   },
   getSeasonEpisodes(imdbId: string, seasonNumber: number, signal?: AbortSignal) {
@@ -856,14 +879,6 @@ export const api = {
       `/series/${encodeURIComponent(imdbId)}/season/${seasonNumber}/watch-all`,
       { method: "POST", body: JSON.stringify({ episodeNumbers }) }
     );
-  },
-  getWatchProviders(type: MediaType, imdbId: string, signal?: AbortSignal) {
-    return request<{ providers: WatchProviders }>(
-      `/meta/${type}/${encodeURIComponent(imdbId)}/providers`, { signal }
-    );
-  },
-  getDropped(imdbId: string, signal?: AbortSignal) {
-    return request<{ dropped: boolean }>(`/show/${encodeURIComponent(imdbId)}/dropped`, { signal });
   },
   dropShow(imdbId: string) {
     return request<{ dropped: boolean }>(`/show/${encodeURIComponent(imdbId)}/drop`, { method: "POST" });

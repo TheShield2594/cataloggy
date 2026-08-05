@@ -709,7 +709,7 @@ export function DashboardPage() {
   const recsScroll = useHorizontalScroll();
   const seriesRecsScroll = useHorizontalScroll();
 
-  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
+  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading, detail: panelDetail, detailLoading: panelDetailLoading } = useDetailPanel();
   const { showToast } = useToast();
 
   const toSearchResult = useCallback((imdbId: string, type: "movie" | "series", name: string, opts?: {
@@ -1392,6 +1392,8 @@ export function DashboardPage() {
           item={selectedItem}
           history={panelHistory}
           historyLoading={panelHistoryLoading}
+          detail={panelDetail}
+          detailLoading={panelDetailLoading}
           onClose={() => { setSelectedItem(null); void refreshProgress(); }}
           onShowToast={showToast}
           onHistoryChange={(events) => setPanelHistory(events)}

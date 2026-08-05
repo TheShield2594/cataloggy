@@ -48,7 +48,7 @@ export function HistoryPage() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const sentinelRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
-  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
+  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading, detail: panelDetail, detailLoading: panelDetailLoading } = useDetailPanel();
 
   // The filter goes to the server, not to the loaded page: filtering in memory
   // only ever saw the rows already fetched, so picking "Movies" on a history
@@ -304,6 +304,8 @@ export function HistoryPage() {
           item={selectedItem}
           history={panelHistory}
           historyLoading={panelHistoryLoading}
+          detail={panelDetail}
+          detailLoading={panelDetailLoading}
           onClose={() => setSelectedItem(null)}
           onShowToast={showToast}
           onHistoryChange={(updated) => setPanelHistory(updated)}

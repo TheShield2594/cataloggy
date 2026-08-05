@@ -21,6 +21,7 @@ import { useScrollLock } from "../../hooks/useScrollLock";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
 import type { ShowToast } from "../../hooks/useToast";
 import { relogWatchEvent } from "../../utils/watchEvents";
+import type { PanelDetail } from "./useDetailPanel";
 
 /* ─── Detail Panel ────────────────────────────────────────── */
 
@@ -28,6 +29,8 @@ export function DetailPanel({
   item,
   history,
   historyLoading,
+  detail,
+  detailLoading,
   onClose,
   onShowToast,
   onHistoryChange,
@@ -36,6 +39,9 @@ export function DetailPanel({
   item: SearchResult;
   history: WatchEvent[];
   historyLoading: boolean;
+  /** Cast, providers, recommendations, seasons and dropped state, fetched as one bundle by `useDetailPanel`. */
+  detail: PanelDetail | null;
+  detailLoading: boolean;
   onClose: () => void;
   onShowToast: ShowToast;
   onHistoryChange: (events: WatchEvent[]) => void;
@@ -55,28 +61,25 @@ export function DetailPanel({
   useScrollLock();
   useEscapeKey(onClose);
 
-  // Cast
-  const [cast, setCast] = useState<CastMember[]>([]);
-  const [castLoading, setCastLoading] = useState(true);
-  const [director, setDirector] = useState<string | null>(null);
+  // Cast, providers, recommendations and seasons all arrive together in `detail`
+  // — one request made by `useDetailPanel`, rather than the five this component
+  // used to fire on mount. They are read straight from the prop; only the
+  // dropped flag needs local state, because the button below can change it.
+  const cast: CastMember[] = detail?.cast ?? [];
+  const director = detail?.director ?? null;
+  const providers: WatchProviders | null = detail?.providers ?? null;
+  const recommendations: TrendingMeta[] = detail?.recommendations ?? [];
+  const seasons: SeasonInfo[] = detail?.seasons ?? [];
+  const sectionsLoading = detailLoading;
 
-  // Where to watch
-  const [providers, setProviders] = useState<WatchProviders | null>(null);
-  const [providersLoading, setProvidersLoading] = useState(true);
-
-  // More like this
-  const [recommendations, setRecommendations] = useState<TrendingMeta[]>([]);
-  const [recommendationsLoading, setRecommendationsLoading] = useState(true);
-
-  // Seasons (series only)
-  const [seasons, setSeasons] = useState<SeasonInfo[]>([]);
-  const [seasonsLoading, setSeasonsLoading] = useState(item.type === "series");
-
-  // Dropped state (series only)
+  // Dropped state (series only) — seeded from the bundle, then owned here, since
+  // toggling it has to show immediately rather than wait for a refetch.
   const [isDropped, setIsDropped] = useState(false);
-  const [droppedLoading, setDroppedLoading] = useState(item.type === "series");
+  useEffect(() => { setIsDropped(detail?.dropped ?? false); }, [detail?.dropped, item.imdbId]);
 
-  // Check-in
+  // Check-in. Stays a request of its own: it is about the user's current
+  // session rather than about this title, and it is what tells the panel
+  // whether the thing playing right now is the thing being looked at.
   const [activeCheckin, setActiveCheckin] = useState<CheckIn | null>(null);
   const [checkinLoading, setCheckinLoading] = useState(true);
   const [showCheckinModal, setShowCheckinModal] = useState(false);
@@ -87,46 +90,17 @@ export function DetailPanel({
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
-    setCast([]); setCastLoading(true); setDirector(null);
-    setSeasons([]); setSeasonsLoading(item.type === "series");
-    setIsDropped(false); setDroppedLoading(item.type === "series");
-    setActiveCheckin(null); setCheckinLoading(true);
-    setProviders(null); setProvidersLoading(true);
-    setRecommendations([]); setRecommendationsLoading(true);
+    setActiveCheckin(null);
+    setCheckinLoading(true);
 
-    const { signal } = controller;
-    const loads: Promise<void>[] = [
-      api.getCast(item.type, item.imdbId, signal).then((r) => {
-        if (!cancelled) { setCast(r.cast); setDirector(r.director); setCastLoading(false); }
-      }).catch(() => { if (!cancelled) setCastLoading(false); }),
-      api.getWatchProviders(item.type, item.imdbId, signal).then((r) => {
-        if (!cancelled) { setProviders(r.providers); setProvidersLoading(false); }
-      }).catch(() => { if (!cancelled) setProvidersLoading(false); }),
-      api.getRecommendations(item.type, item.imdbId, signal).then((r) => {
-        if (!cancelled) { setRecommendations(r.metas); setRecommendationsLoading(false); }
-      }).catch(() => { if (!cancelled) setRecommendationsLoading(false); }),
-      api.getCheckin(signal).then((r) => {
-        if (!cancelled) {
-          const c = r.checkin;
-          const isThisItem = c && (c.imdbId === item.imdbId || c.seriesImdbId === item.imdbId);
-          setActiveCheckin(isThisItem ? c : null);
-          setCheckinLoading(false);
-        }
-      }).catch(() => { if (!cancelled) setCheckinLoading(false); }),
-    ];
+    void api.getCheckin(controller.signal).then((r) => {
+      if (cancelled) return;
+      const c = r.checkin;
+      const isThisItem = c && (c.imdbId === item.imdbId || c.seriesImdbId === item.imdbId);
+      setActiveCheckin(isThisItem ? c : null);
+      setCheckinLoading(false);
+    }).catch(() => { if (!cancelled) setCheckinLoading(false); });
 
-    if (item.type === "series") {
-      loads.push(
-        api.getSeasons(item.imdbId, signal).then((r) => {
-          if (!cancelled) { setSeasons(r.seasons); setSeasonsLoading(false); }
-        }).catch(() => { if (!cancelled) setSeasonsLoading(false); }),
-        api.getDropped(item.imdbId, signal).then((r) => {
-          if (!cancelled) { setIsDropped(r.dropped); setDroppedLoading(false); }
-        }).catch(() => { if (!cancelled) setDroppedLoading(false); }),
-      );
-    }
-
-    void Promise.all(loads);
     return () => { cancelled = true; controller.abort(); };
   }, [item.imdbId, item.type]);
 
@@ -416,10 +390,10 @@ export function DetailPanel({
           <ExternalLinks imdbId={item.imdbId} tmdbId={item.tmdbId} type={item.type} />
 
           {/* Where to watch */}
-          <ProvidersSection providers={providers} loading={providersLoading} />
+          <ProvidersSection providers={providers} loading={sectionsLoading} />
 
           {/* Cast */}
-          <CastSection cast={cast} loading={castLoading} />
+          <CastSection cast={cast} loading={sectionsLoading} />
 
           {/* ─── Your tracking ──────────────────────────────────── */}
           <div className="flex items-center gap-3 pt-1">
@@ -460,7 +434,7 @@ export function DetailPanel({
             <SeasonsSection
               imdbId={item.imdbId}
               seasons={seasons}
-              loading={seasonsLoading}
+              loading={sectionsLoading}
               onError={(msg) => onShowToast(msg, "error")}
               onToast={(msg, type) => onShowToast(msg, type)}
             />
@@ -477,7 +451,7 @@ export function DetailPanel({
           {/* More Like This */}
           <RecommendationsSection
             items={recommendations}
-            loading={recommendationsLoading}
+            loading={sectionsLoading}
             onSelect={handleSelectRecommendation}
           />
 
@@ -485,7 +459,7 @@ export function DetailPanel({
           {item.type === "series" && (
             <DropShowButton
               isDropped={isDropped}
-              loading={droppedLoading}
+              loading={sectionsLoading}
               onToggle={() => void handleToggleDrop()}
             />
           )}

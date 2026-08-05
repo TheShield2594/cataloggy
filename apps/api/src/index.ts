@@ -1,6 +1,7 @@
 import { Sentry } from "./lib/sentry.js";
 import Fastify, { type FastifyRequest } from "fastify";
 import rateLimit from "@fastify/rate-limit";
+import compress from "@fastify/compress";
 import {
   parseProxyPathPrefixes,
   normalizeProxyPath,
@@ -11,6 +12,7 @@ import {
 } from "@cataloggy/shared";
 import { prisma } from "./lib/prisma.js";
 import { applyCorsHeaders } from "./lib/cors.js";
+import { registerHttpCaching } from "./lib/http-cache.js";
 import { verifyToken } from "./lib/auth.js";
 import { isStremioSecretPath } from "./lib/stremio-secret.js";
 import { getAiRecommendations, isAiConfigured } from "./lib/ai.js";
@@ -140,6 +142,27 @@ app.register(rateLimit, {
   max: (request) => (isServiceRequest(request) ? SERVICE_RATE_LIMIT_MAX : BROWSER_RATE_LIMIT_MAX),
   timeWindow: "1 minute",
   keyGenerator: (request) => (isServiceRequest(request) ? SERVICE_RATE_LIMIT_KEY : request.ip),
+});
+
+// ─── Response caching and compression ───
+//
+// Order matters and is load-bearing. The caching hook runs first so the ETag is
+// computed over the JSON itself, not over whichever content-encoding this
+// particular client negotiated — a tag that varied by encoding would never match
+// on revalidation. Compression then runs on whatever survived, which is nothing
+// at all on a 304.
+//
+// JSON from this API compresses to roughly a fifth of its size, and the payloads
+// that matter most are the big ones: a full watchlist, a long watch history, a
+// month of calendar entries.
+registerHttpCaching(app);
+
+app.register(compress, {
+  global: true,
+  // Below about a packet's worth there is nothing to win, and the CPU spent
+  // plus the header overhead can leave the response larger than it started.
+  threshold: 1024,
+  encodings: ["br", "gzip", "deflate"],
 });
 
 // ─── Global hooks ───

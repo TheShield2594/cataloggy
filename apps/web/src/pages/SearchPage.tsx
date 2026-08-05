@@ -81,7 +81,7 @@ export function SearchPage() {
   const { showToast } = useToast();
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading } = useDetailPanel();
+  const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading, detail: panelDetail, detailLoading: panelDetailLoading } = useDetailPanel();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const lastSearchRef = useRef<{ filter: FilterType; query: string }>({ filter: "all", query: "" });
@@ -564,6 +564,8 @@ export function SearchPage() {
           item={selectedItem}
           history={panelHistory}
           historyLoading={panelHistoryLoading}
+          detail={panelDetail}
+          detailLoading={panelDetailLoading}
           onClose={() => setSelectedItem(null)}
           onShowToast={showToast}
           onHistoryChange={(events) => setPanelHistory(events)}
