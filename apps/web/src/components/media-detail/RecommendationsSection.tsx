@@ -39,30 +39,33 @@ export function RecommendationsSection({
         <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
           <Sparkles className="h-3.5 w-3.5" /> More Like This
         </h3>
-        {(canScrollLeft || canScrollRight) && (
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => scroll("left")}
-              disabled={!canScrollLeft}
-              className="flex h-6 w-6 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95"
-              style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
-              aria-label="Scroll recommendations left"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => scroll("right")}
-              disabled={!canScrollRight}
-              className="flex h-6 w-6 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95"
-              style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
-              aria-label="Scroll recommendations right"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        )}
+        {/* Mounted even when the row fits, so the cluster fades with layout
+            changes instead of blinking; disabled buttons keep it untabbable. */}
+        <div
+          className={`flex items-center gap-1 transition-opacity duration-300 ${canScrollLeft || canScrollRight ? "" : "pointer-events-none opacity-0"}`}
+          aria-hidden={!canScrollLeft && !canScrollRight}
+        >
+          <button
+            type="button"
+            onClick={() => scroll("left")}
+            disabled={!canScrollLeft}
+            className="flex h-6 w-6 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95"
+            style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
+            aria-label="Scroll recommendations left"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => scroll("right")}
+            disabled={!canScrollRight}
+            className="flex h-6 w-6 items-center justify-center rounded-full transition-all disabled:opacity-30 disabled:cursor-default active:scale-95"
+            style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
+            aria-label="Scroll recommendations right"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
       <CarouselTrack
         scrollRef={ref}

@@ -41,8 +41,12 @@ export function Poster({
   sizes?: string;
 }) {
   const [loadFailed, setLoadFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => { setLoadFailed(false); }, [src]);
+  useEffect(() => {
+    setLoadFailed(false);
+    setLoaded(false);
+  }, [src]);
 
   if (!src || loadFailed) {
     return (
@@ -56,20 +60,34 @@ export function Poster({
 
   const srcSet = buildTmdbSrcSet(src);
 
+  // The wrapper carries the slot: a shimmer while bytes are in flight (the
+  // cards behind these images are transparent, so without it each poster pops
+  // out of nothing), settling to a plain surface once the image starts its
+  // fade so nothing animates behind an opaque picture.
   return (
-    <img
-      src={src}
-      srcSet={srcSet}
-      sizes={srcSet ? sizes : undefined}
-      alt={alt ?? "Poster"}
-      className={`object-cover ${className}`}
-      loading={eager ? "eager" : "lazy"}
-      decoding={eager ? "sync" : "async"}
-      // Above-fold artwork is what the page looks like — it should outrank the
-      // lazy posters further down the row that the browser would otherwise treat
-      // as equals. `low` on the rest keeps them behind the data requests.
-      fetchPriority={eager ? "high" : "low"}
-      onError={() => setLoadFailed(true)}
-    />
+    <div className={`${loaded ? "bg-[var(--surface-strong)]" : "skeleton"} ${className}`}>
+      <img
+        src={src}
+        srcSet={srcSet}
+        sizes={srcSet ? sizes : undefined}
+        alt={alt ?? "Poster"}
+        className={`h-full w-full object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+        loading={eager ? "eager" : "lazy"}
+        decoding={eager ? "sync" : "async"}
+        // Above-fold artwork is what the page looks like — it should outrank the
+        // lazy posters further down the row that the browser would otherwise treat
+        // as equals. `low` on the rest keeps them behind the data requests.
+        fetchPriority={eager ? "high" : "low"}
+        // A memory-cached image can be `complete` in the same commit that sets
+        // `src` — marking it loaded here paints it opaque on the first frame,
+        // so re-renders and back-navigations skip the fade instead of making
+        // an already-seen poster blink.
+        ref={(el) => {
+          if (el?.complete && el.naturalWidth > 0) setLoaded(true);
+        }}
+        onLoad={() => setLoaded(true)}
+        onError={() => setLoadFailed(true)}
+      />
+    </div>
   );
 }

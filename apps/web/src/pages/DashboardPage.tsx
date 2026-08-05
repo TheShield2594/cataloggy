@@ -391,9 +391,14 @@ function ScrollArrows({
   canScrollRight: boolean;
   onScroll: (dir: "left" | "right") => void;
 }) {
-  if (!canScrollLeft && !canScrollRight) return null;
+  const scrollable = canScrollLeft || canScrollRight;
   return (
-    <div className="flex items-center gap-1.5">
+    // Stays mounted when the row fits on screen so a resize fades the cluster
+    // out instead of blinking it away; disabled buttons keep it untabbable.
+    <div
+      className={`flex items-center gap-1.5 transition-opacity duration-300 ${scrollable ? "" : "pointer-events-none opacity-0"}`}
+      aria-hidden={!scrollable}
+    >
       <button
         type="button"
         onClick={() => onScroll("left")}
