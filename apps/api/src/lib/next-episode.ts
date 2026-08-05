@@ -1,37 +1,25 @@
-import { seasonsCache } from "./cache.js";
-import { getTmdb } from "./tmdb-client.js";
+import { getSeasonsForImdbId } from "./seasons.js";
 import type { SeasonInfo } from "../tmdb.js";
-
-async function getSeasonsForImdbId(imdbId: string, tmdbId: number | null): Promise<SeasonInfo[]> {
-  const cacheKey = `seasons:${imdbId}`;
-  const cached = seasonsCache.get(cacheKey);
-  if (cached) return cached;
-
-  if (!tmdbId) return [];
-
-  try {
-    const tmdb = await getTmdb();
-    const seasons = await tmdb.getSeasons(tmdbId);
-    seasonsCache.set(cacheKey, seasons);
-    return seasons;
-  } catch {
-    return [];
-  }
-}
 
 /**
  * Given the last watched season/episode, returns the next episode to watch,
  * rolling over to the next season's E1 once a season's episode count is
  * exhausted. Returns null if the series appears fully watched (no further
  * season exists past the last one with episodes).
+ *
+ * `knownSeasons` is for callers that already hold this series' season list:
+ * a failed TMDB lookup isn't cached (a transient outage must not blank out
+ * season data for the cache's lifetime), so a caller that looked the seasons
+ * up itself would otherwise pay for a second failing request here.
  */
 export async function computeNextEpisode(
   imdbId: string,
   tmdbId: number | null,
   lastSeason: number,
-  lastEpisode: number
+  lastEpisode: number,
+  knownSeasons?: SeasonInfo[]
 ): Promise<{ season: number; episode: number } | null> {
-  const seasons = await getSeasonsForImdbId(imdbId, tmdbId);
+  const seasons = knownSeasons ?? (await getSeasonsForImdbId(imdbId, tmdbId));
   if (seasons.length === 0) {
     // No season data available — fall back to naive increment.
     return { season: lastSeason, episode: lastEpisode + 1 };

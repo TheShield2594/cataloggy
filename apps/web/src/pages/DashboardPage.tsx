@@ -156,10 +156,57 @@ export function historyItemImdbId(
   return event.type === "episode" ? (event.seriesImdbId ?? event.imdbId) : event.imdbId;
 }
 
+const pctOf = (watched: number, total: number) => Math.min(Math.max((watched / total) * 100, 0), 100);
+
 export function computeProgressPct(s: SeriesProgress): number | null {
   return typeof s.watchedEpisodes === "number" && s.totalEpisodes && s.totalEpisodes > 0
-    ? Math.min(Math.max((s.watchedEpisodes / s.totalEpisodes) * 100, 0), 100)
+    ? pctOf(s.watchedEpisodes, s.totalEpisodes)
     : null;
+}
+
+export type ProgressSummary = { label: string; watched: number; total: number; pct: number };
+
+/**
+ * The bar the featured card draws, and what to call it.
+ *
+ * The season the viewer is actually in is the useful reading next to the
+ * `S1:E5` marker above it, so it wins when TMDB knows how long that season is.
+ * Series-wide totals are the fallback, and they're labelled as such — filling a
+ * bar called "Season progress" from the series total is what made a show five
+ * episodes into season 1 of 3 read `5 / 27 episodes` against a near-empty bar.
+ */
+export function computeProgressSummary(s: SeriesProgress): ProgressSummary | null {
+  if (
+    typeof s.seasonWatchedEpisodes === "number" &&
+    typeof s.seasonTotalEpisodes === "number" &&
+    s.seasonTotalEpisodes > 0
+  ) {
+    return {
+      label: "Season progress",
+      watched: s.seasonWatchedEpisodes,
+      total: s.seasonTotalEpisodes,
+      pct: pctOf(s.seasonWatchedEpisodes, s.seasonTotalEpisodes),
+    };
+  }
+  if (typeof s.watchedEpisodes === "number" && s.totalEpisodes && s.totalEpisodes > 0) {
+    return {
+      label: "Series progress",
+      watched: s.watchedEpisodes,
+      total: s.totalEpisodes,
+      pct: pctOf(s.watchedEpisodes, s.totalEpisodes),
+    };
+  }
+  return null;
+}
+
+/**
+ * The ` · 4 seasons` suffix under a Continue Watching title, empty when the
+ * season count is unknown. Interpolating the number straight in gave a
+ * one-season show `1 seasons`.
+ */
+export function seasonCountSuffix(totalSeasons: number | null | undefined): string {
+  if (!totalSeasons || totalSeasons < 1) return "";
+  return ` · ${totalSeasons} season${totalSeasons === 1 ? "" : "s"}`;
 }
 
 export function ContinueWatchingCard({
@@ -206,7 +253,7 @@ export function ContinueWatchingCard({
             )}
             <p className="text-xs text-white/70">
               S{s.lastSeason}:E{s.lastEpisode}
-              {s.totalSeasons ? ` · ${s.totalSeasons} seasons` : ""}
+              {seasonCountSuffix(s.totalSeasons)}
             </p>
             <button
               type="button"
@@ -244,7 +291,7 @@ export function ContinueWatchingCard({
 
 /* ─── Continue Watching hero — the first in-progress item, featured ─── */
 
-function ContinueWatchingHero({
+export function ContinueWatchingHero({
   s,
   isMarking,
   isDone,
@@ -257,7 +304,7 @@ function ContinueWatchingHero({
   onMarkNext: () => void;
   onSelect: () => void;
 }) {
-  const progressPct = computeProgressPct(s);
+  const progress = computeProgressSummary(s);
   const heroArt = s.background ?? s.poster;
   return (
     <div
@@ -284,16 +331,16 @@ function ContinueWatchingHero({
         <p className="mt-1 truncate font-heading text-xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{s.name}</p>
         <p className="mt-0.5 text-sm" style={{ color: "var(--text-dim)" }}>
           S{s.lastSeason}:E{s.lastEpisode}
-          {s.totalSeasons ? ` · ${s.totalSeasons} seasons` : ""}
+          {seasonCountSuffix(s.totalSeasons)}
         </p>
-        {progressPct !== null && (
+        {progress && (
           <div className="mt-3 max-w-xs">
             <div className="mb-1.5 flex items-center justify-between text-2xs" style={{ color: "var(--text-mute)" }}>
-              <span>Season progress</span>
-              <span className="font-semibold text-claw-text">{s.watchedEpisodes} / {s.totalEpisodes} episodes</span>
+              <span>{progress.label}</span>
+              <span className="font-semibold text-claw-text">{progress.watched} / {progress.total} episodes</span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--surface-strong)" }}>
-              <div className="h-full rounded-full bg-claw-500 transition-all duration-500" style={{ width: `${progressPct}%` }} />
+              <div className="h-full rounded-full bg-claw-500 transition-all duration-500" style={{ width: `${progress.pct}%` }} />
             </div>
           </div>
         )}

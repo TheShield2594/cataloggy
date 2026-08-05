@@ -22,6 +22,9 @@ vi.mock("../lib/profile.js", () => ({
 const nextEpisodeMock = { computeNextEpisode: vi.fn() };
 vi.mock("../lib/next-episode.js", () => nextEpisodeMock);
 
+const seasonsMock = { getSeasonsForImdbId: vi.fn() };
+vi.mock("../lib/seasons.js", () => seasonsMock);
+
 const tmdbClientMock = { getTmdb: vi.fn() };
 vi.mock("../lib/tmdb-client.js", () => tmdbClientMock);
 
@@ -37,6 +40,7 @@ vi.mock("../lib/watch-event.js", () => watchEventLibMock);
 const resetMocks = () => {
   vi.clearAllMocks();
   prismaMock.kV.findMany.mockResolvedValue([]);
+  seasonsMock.getSeasonsForImdbId.mockResolvedValue([]);
 };
 
 const buildApp = async (): Promise<FastifyInstance> => {
@@ -157,5 +161,123 @@ describe("series routes — completion drops from Continue Watching", () => {
       expect(prismaMock.watchEvent.create).not.toHaveBeenCalled();
       await app.close();
     });
+  });
+});
+
+describe("GET /series/progress — season-level counts", () => {
+  beforeEach(() => {
+    resetMocks();
+    prismaMock.seriesProgress.findMany.mockResolvedValue([
+      {
+        seriesImdbId: "tt-buffy",
+        lastSeason: 2,
+        lastEpisode: 3,
+        lastWatchedAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+    prismaMock.metadata.findMany.mockResolvedValue([
+      {
+        imdbId: "tt-buffy",
+        name: "Buffy",
+        poster: null,
+        background: null,
+        totalSeasons: 7,
+        totalEpisodes: 144,
+        tmdbId: 95,
+      },
+    ]);
+    nextEpisodeMock.computeNextEpisode.mockResolvedValue({ season: 2, episode: 4 });
+  });
+
+  const watched = (episodes: { season: number; episode: number }[]) =>
+    prismaMock.watchEvent.groupBy.mockResolvedValue(
+      episodes.map((e) => ({ seriesImdbId: "tt-buffy", ...e, _count: { _all: 1 } }))
+    );
+
+  it("reports how much of the season in progress is watched, alongside the series total", async () => {
+    watched([
+      { season: 1, episode: 1 },
+      { season: 1, episode: 2 },
+      { season: 2, episode: 1 },
+      { season: 2, episode: 2 },
+      { season: 2, episode: 3 },
+    ]);
+    seasonsMock.getSeasonsForImdbId.mockResolvedValue([
+      { seasonNumber: 1, name: "Season 1", episodeCount: 12, airYear: 1997, poster: null },
+      { seasonNumber: 2, name: "Season 2", episodeCount: 22, airYear: 1998, poster: null },
+    ]);
+
+    const app = await buildApp();
+    const response = await app.inject({ method: "GET", url: "/series/progress" });
+
+    const [progress] = response.json().progress;
+    expect(progress.seasonWatchedEpisodes).toBe(3);
+    expect(progress.seasonTotalEpisodes).toBe(22);
+    // Series-wide numbers are untouched — the carousel card still shows them.
+    expect(progress.watchedEpisodes).toBe(5);
+    expect(progress.totalEpisodes).toBe(144);
+    await app.close();
+  });
+
+  it("looks the seasons up once per series and hands them to the next-episode math", async () => {
+    // A failed TMDB lookup isn't cached, so a second call would be a second
+    // failing request rather than a cache hit.
+    watched([{ season: 2, episode: 3 }]);
+    const seasons = [{ seasonNumber: 2, name: "Season 2", episodeCount: 22, airYear: 1998, poster: null }];
+    seasonsMock.getSeasonsForImdbId.mockResolvedValue(seasons);
+
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/series/progress" });
+
+    expect(seasonsMock.getSeasonsForImdbId).toHaveBeenCalledTimes(1);
+    expect(nextEpisodeMock.computeNextEpisode).toHaveBeenCalledWith("tt-buffy", 95, 2, 3, seasons);
+    await app.close();
+  });
+
+  it("ignores a row carrying no episode number, which is not one watched episode", async () => {
+    watched([
+      { season: 2, episode: 1 },
+      { season: 2, episode: null as unknown as number },
+    ]);
+    seasonsMock.getSeasonsForImdbId.mockResolvedValue([
+      { seasonNumber: 2, name: "Season 2", episodeCount: 22, airYear: 1998, poster: null },
+    ]);
+
+    const app = await buildApp();
+    const response = await app.inject({ method: "GET", url: "/series/progress" });
+
+    expect(response.json().progress[0].seasonWatchedEpisodes).toBe(1);
+    await app.close();
+  });
+
+  it("leaves the season total null when TMDB has no season data", async () => {
+    watched([{ season: 2, episode: 3 }]);
+    seasonsMock.getSeasonsForImdbId.mockResolvedValue([]);
+
+    const app = await buildApp();
+    const response = await app.inject({ method: "GET", url: "/series/progress" });
+
+    const [progress] = response.json().progress;
+    expect(progress.seasonTotalEpisodes).toBeNull();
+    await app.close();
+  });
+
+  it("counts an untouched season as zero rather than borrowing another season's count", async () => {
+    // Every watched episode is in season 1; the viewer's marker sits in season 2.
+    watched([
+      { season: 1, episode: 1 },
+      { season: 1, episode: 2 },
+    ]);
+    seasonsMock.getSeasonsForImdbId.mockResolvedValue([
+      { seasonNumber: 2, name: "Season 2", episodeCount: 22, airYear: 1998, poster: null },
+    ]);
+
+    const app = await buildApp();
+    const response = await app.inject({ method: "GET", url: "/series/progress" });
+
+    const [progress] = response.json().progress;
+    expect(progress.seasonWatchedEpisodes).toBe(0);
+    await app.close();
   });
 });

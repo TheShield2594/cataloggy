@@ -6,6 +6,7 @@ import { upsertMetadata } from "../lib/metadata.js";
 import { upsertSeriesProgressIfNewer } from "../lib/series-progress.js";
 import { resolveProfile } from "../lib/profile.js";
 import { computeNextEpisode } from "../lib/next-episode.js";
+import { getSeasonsForImdbId } from "../lib/seasons.js";
 import { droppedSeriesKey, getDroppedSeriesIds } from "../lib/dropped-shows.js";
 import { recordWatchEvent } from "../lib/watch-event.js";
 
@@ -66,11 +67,22 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
 
     const metaByImdbId = new Map(metadata.map((m) => [m.imdbId, m]));
     const watchedBySeriesId = new Map<string, number>();
+    // Same rows, counted per season as well: the card's progress bar is about
+    // the season the viewer is in, not the whole series.
+    const watchedBySeason = new Map<string, number>();
+    const seasonKey = (imdbId: string, season: number) => `${imdbId}:${season}`;
     for (const row of episodeCounts) {
       watchedBySeriesId.set(
         row.seriesImdbId!,
         (watchedBySeriesId.get(row.seriesImdbId!) ?? 0) + 1
       );
+      // Both halves, or the group isn't a distinguishable episode: a row with
+      // a season but no episode number would otherwise count as one watched
+      // episode of that season.
+      if (row.season != null && row.episode != null) {
+        const key = seasonKey(row.seriesImdbId!, row.season);
+        watchedBySeason.set(key, (watchedBySeason.get(key) ?? 0) + 1);
+      }
     }
 
     const SYNC_INLINE_LIMIT = 10;
@@ -131,14 +143,21 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
         if (totalEpisodes !== null && watchedEpisodes !== null && watchedEpisodes >= totalEpisodes) {
           return null;
         }
+        // One season lookup per series, shared by the next-episode math and
+        // the progress bar's season total. When TMDB has nothing to say the
+        // total stays null and the client falls back to series-wide numbers.
+        const seasons = await getSeasonsForImdbId(row.seriesImdbId, meta?.tmdbId ?? null);
         const next = await computeNextEpisode(
           row.seriesImdbId,
           meta?.tmdbId ?? null,
           row.lastSeason,
-          row.lastEpisode
+          row.lastEpisode,
+          seasons
         );
         // Series is fully watched (no further season exists) — drop from Continue Watching.
         if (!next) return null;
+        const seasonTotalEpisodes =
+          seasons.find((s) => s.seasonNumber === row.lastSeason)?.episodeCount ?? null;
         return {
           imdbId: row.seriesImdbId,
           seriesImdbId: row.seriesImdbId,
@@ -154,6 +173,8 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
           totalSeasons: meta?.totalSeasons ?? null,
           totalEpisodes: meta?.totalEpisodes ?? null,
           watchedEpisodes,
+          seasonTotalEpisodes,
+          seasonWatchedEpisodes: watchedBySeason.get(seasonKey(row.seriesImdbId, row.lastSeason)) ?? 0,
         };
       })
     );
