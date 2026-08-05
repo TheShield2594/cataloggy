@@ -355,7 +355,7 @@ export function ContinueWatchingHero({
             disabled={isMarking || isDone}
             onClick={onMarkNext}
             aria-label={isMarking ? "Marking" : isDone ? "Marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
-            className="flex items-center gap-1.5 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on transition-all duration-base active:scale-[0.98] hover:bg-claw-600 disabled:opacity-60"
+            className="btn-primary"
           >
             {isDone ? (
               <><Check className="h-4 w-4" /> Marked</>
@@ -368,8 +368,7 @@ export function ContinueWatchingHero({
           <button
             type="button"
             onClick={onSelect}
-            className="rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-base active:scale-[0.98]"
-            style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
+            className="btn-secondary"
           >
             Details
           </button>
@@ -1015,14 +1014,13 @@ export function DashboardPage() {
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="rounded-lg bg-claw-500 px-5 py-2.5 text-sm font-semibold text-claw-on hover:bg-claw-600 transition-colors active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400"
+              className="btn-primary"
             >
               Reload
             </button>
             <Link
               to="/settings"
-              className="rounded-lg px-5 py-2.5 text-sm font-medium transition-colors focus:outline-none"
-              style={{ border: "1px solid var(--border-strong)", color: "var(--text-dim)" }}
+              className="btn-secondary"
             >
               Settings
             </Link>
@@ -1109,15 +1107,14 @@ export function DashboardPage() {
               <button
                 type="button"
                 onClick={() => void handleCheckout(true)}
-                className="flex items-center gap-1.5 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on hover:bg-claw-600 active:scale-[0.98] transition-all duration-base"
+                className="btn-primary"
               >
                 <Check className="h-4 w-4" /> Finished
               </button>
               <button
                 type="button"
                 onClick={() => void handleCheckout(false)}
-                className="flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-base active:scale-95"
-                style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
+                className="btn-secondary h-10 w-10 p-0"
                 aria-label="Check out without logging"
               >
                 <X className="h-4 w-4" />

@@ -20,20 +20,29 @@ describe("formatRuntime", () => {
 });
 
 describe("statusColor", () => {
-  it("marks running shows green", () => {
-    expect(statusColor("Returning Series")).toContain("text-green-400");
-    expect(statusColor("Ongoing")).toContain("text-green-400");
+  it("always returns a themed chip rather than a raw tint", () => {
+    for (const status of ["Returning Series", "Ended", "Planned", "Released", ""]) {
+      expect(statusColor(status)).toContain("status-chip");
+      // A hard-coded -400/-500 tint is what made these unreadable on the light
+      // theme; every status has to come from a --status-* token now.
+      expect(statusColor(status)).not.toMatch(/-\d00\b/);
+    }
   });
 
-  it("marks finished shows rose", () => {
-    expect(statusColor("Ended")).toContain("text-rose-400");
-    expect(statusColor("Canceled")).toContain("text-rose-400");
-    expect(statusColor("Cancelled")).toContain("text-rose-400");
+  it("marks running shows as ok", () => {
+    expect(statusColor("Returning Series")).toContain("status-chip--ok");
+    expect(statusColor("Ongoing")).toContain("status-chip--ok");
   });
 
-  it("marks upcoming titles amber", () => {
-    expect(statusColor("In Production")).toContain("text-amber-400");
-    expect(statusColor("Planned")).toContain("text-amber-400");
+  it("marks finished shows as bad", () => {
+    expect(statusColor("Ended")).toContain("status-chip--bad");
+    expect(statusColor("Canceled")).toContain("status-chip--bad");
+    expect(statusColor("Cancelled")).toContain("status-chip--bad");
+  });
+
+  it("marks upcoming titles as warn", () => {
+    expect(statusColor("In Production")).toContain("status-chip--warn");
+    expect(statusColor("Planned")).toContain("status-chip--warn");
   });
 
   it("is case-insensitive", () => {
@@ -41,8 +50,8 @@ describe("statusColor", () => {
     expect(statusColor("returning series")).toBe(statusColor("Returning Series"));
   });
 
-  it("falls back to slate for anything unrecognised", () => {
-    expect(statusColor("Released")).toContain("text-slate-400");
-    expect(statusColor("")).toContain("text-slate-400");
+  it("falls back to the neutral chip for anything unrecognised", () => {
+    expect(statusColor("Released")).toBe("status-chip");
+    expect(statusColor("")).toBe("status-chip");
   });
 });

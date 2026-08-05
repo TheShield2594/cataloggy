@@ -209,8 +209,10 @@ export function GameDetailPanel({
         <button
           type="button"
           onClick={requestClose}
-          className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full shadow-e2 backdrop-blur transition-colors hover:text-white"
-          style={{ background: "color-mix(in srgb, var(--bg-0) 80%, transparent)", color: "var(--bg-2)" }}
+          // See the matching close button in media-detail/DetailPanel.tsx: white
+          // on hover is invisible against the light theme's cream circle.
+          className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full shadow-e2 backdrop-blur transition-colors hover:text-[var(--text)]"
+          style={{ background: "color-mix(in srgb, var(--bg-0) 80%, transparent)", color: "var(--text-dim)" }}
           aria-label="Close detail panel"
         >
           <X className="h-4 w-4" />
@@ -301,15 +303,14 @@ export function GameDetailPanel({
                   type="button"
                   disabled={deleting}
                   onClick={() => void handleDelete()}
-                  className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+                  className="btn-danger btn-sm"
                 >
                   {deleting ? "Removing..." : "Confirm remove"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmDelete(false)}
-                  className="rounded-lg px-3 py-1.5 text-xs font-semibold"
-                  style={{ color: "var(--text-mute)" }}
+                  className="btn-secondary btn-sm"
                 >
                   Cancel
                 </button>

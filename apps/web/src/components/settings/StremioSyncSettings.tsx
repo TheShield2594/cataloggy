@@ -139,7 +139,7 @@ export function StremioSyncSettings() {
           <button
             type="submit"
             disabled={busy === "connect" || !email.trim() || !password}
-            className="inline-flex items-center gap-2 rounded-xl bg-plum-500 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-plum-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-primary"
           >
             {busy === "connect" ? (
               <>
@@ -163,7 +163,7 @@ export function StremioSyncSettings() {
               type="button"
               onClick={() => run("import")}
               disabled={busy !== null}
-              className="inline-flex items-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on transition-colors hover:bg-claw-600 disabled:opacity-60 shadow-glow"
+              className="btn-primary"
             >
               {busy === "import" ? (
                 <>
@@ -177,8 +177,7 @@ export function StremioSyncSettings() {
               type="button"
               onClick={() => run("sync")}
               disabled={busy !== null}
-              className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)] border border-[var(--border-strong)] disabled:opacity-60"
-              style={{ color: "var(--text-dim)", background: "var(--bg-1)" }}
+              className="btn-secondary"
             >
               {busy === "sync" ? (
                 <>
@@ -194,8 +193,7 @@ export function StremioSyncSettings() {
               type="button"
               onClick={disconnect}
               disabled={busy !== null}
-              className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-rose-600 hover:text-white border border-[var(--border-strong)] disabled:opacity-60"
-              style={{ color: "var(--text-dim)", background: "var(--bg-1)" }}
+              className="btn-secondary hover:bg-rose-600 hover:text-white"
             >
               <Unplug size={16} /> Disconnect
             </button>

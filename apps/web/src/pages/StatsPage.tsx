@@ -204,13 +204,25 @@ export function StatsPage() {
                       className={`absolute bottom-full z-10 mb-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-2xs shadow-e2 ${
                         isFirst ? "left-0" : isLast ? "right-0" : "left-1/2 -translate-x-1/2"
                       }`}
-                      style={{ border: "1px solid var(--border)", background: "var(--bg-2)" }}
+                      // A normal themed surface, not --bg-2. The inverted
+                      // background is near-white on the four dark themes, and
+                      // the two series lines below are painted in the same
+                      // light accent tints as the bars they describe — on
+                      // near-white they were unreadable. On --bg-1 the swatch
+                      // carries the series and the label stays --text.
+                      style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
                     >
-                      <p className="font-semibold" style={{ color: "var(--bg-0)" }}>
+                      <p className="font-semibold" style={{ color: "var(--text)" }}>
                         {new Date(m.month + "-15").toLocaleDateString(undefined, { month: "long", year: "numeric" })}
                       </p>
-                      <p className="text-claw-400">{m.movies} movies</p>
-                      <p className="text-plum-500">{m.episodes} episodes</p>
+                      <p className="flex items-center gap-1.5" style={{ color: "var(--text-dim)" }}>
+                        <span className="h-2 w-2 flex-none rounded-sm bg-claw-500/70" />
+                        {m.movies} movies
+                      </p>
+                      <p className="flex items-center gap-1.5" style={{ color: "var(--text-dim)" }}>
+                        <span className="h-2 w-2 flex-none rounded-sm bg-plum-500/70" />
+                        {m.episodes} episodes
+                      </p>
                     </div>
                   )}
                   <span className="text-2xs tabular-nums" style={{ color: "var(--text-mute)" }}>{total || ""}</span>

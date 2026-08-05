@@ -52,7 +52,7 @@ export function CheckInModal({
         aria-modal="true"
         aria-labelledby="checkin-modal-title"
         tabIndex={-1}
-        className={`overlay-dialog w-full max-w-sm rounded-3xl border shadow-e3 ${exiting ? "overlay-exit" : ""}`}
+        className={`glass-surface overlay-dialog w-full max-w-sm rounded-3xl border shadow-e3 ${exiting ? "overlay-exit" : ""}`}
         style={{ borderColor: "var(--border)", background: "var(--bg-0)" }}
         onClick={(e) => e.stopPropagation()}
         onAnimationEnd={onExitAnimationEnd}
@@ -94,14 +94,13 @@ export function CheckInModal({
           <div className="flex gap-3 pt-1">
             <button
               type="button" onClick={requestClose}
-              className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)]"
-              style={{ background: "var(--surface)", color: "var(--text-dim)" }}
+              className="btn-secondary flex-1"
             >
               Cancel
             </button>
             <button
               type="button" disabled={saving} onClick={() => void submit()}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on hover:bg-claw-600 disabled:opacity-50 transition-colors"
+              className="btn-primary flex-1"
             >
               <Radio className="h-3.5 w-3.5" />
               {saving ? "Checking in…" : "Check In"}

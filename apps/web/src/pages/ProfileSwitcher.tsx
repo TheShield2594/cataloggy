@@ -36,7 +36,7 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
             <span className={`text-2xl ${BRAND_WORDMARK}`} style={{ color: "var(--text)" }}>Cataloggy</span>
           </div>
 
-          <div className="relative rounded-3xl border p-6 shadow-e3" style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}>
+          <div className="glass-surface relative rounded-3xl border p-6 shadow-e3" style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}>
             <button
               type="button"
               onClick={onClose}
@@ -140,8 +140,7 @@ function CreateProfileForm({
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-xl border px-5 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
-            style={{ borderColor: "var(--border)", color: "var(--text-dim)", background: "var(--bg-1)" }}
+            className="btn-secondary btn-lg flex-1"
           >
             Cancel
           </button>
@@ -149,7 +148,7 @@ function CreateProfileForm({
         <button
           type="submit"
           disabled={creating || !name.trim()}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all duration-base hover:bg-claw-600 disabled:opacity-50"
+          className="btn-primary btn-lg flex-1"
         >
           {creating ? <><Loader2 size={16} className="animate-spin" /> Creating...</> : <>Create <ArrowRight size={16} /></>}
         </button>
@@ -215,15 +214,14 @@ function PinPrompt({
         <button
           type="button"
           onClick={onBack}
-          className="flex-1 rounded-xl border px-5 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
-          style={{ borderColor: "var(--border)", color: "var(--text-dim)", background: "var(--bg-1)" }}
+          className="btn-secondary btn-lg flex-1"
         >
           Back
         </button>
         <button
           type="submit"
           disabled={verifying || !pin.trim()}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all duration-base hover:bg-claw-600 disabled:opacity-50"
+          className="btn-primary btn-lg flex-1"
         >
           {verifying ? <Loader2 size={16} className="animate-spin" /> : <>Unlock <ArrowRight size={16} /></>}
         </button>
@@ -284,8 +282,7 @@ function ProfilePicker({
       <button
         type="button"
         onClick={onCreateNew}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border px-5 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
-        style={{ borderColor: "var(--border)", color: "var(--text-dim)", background: "var(--bg-1)" }}
+        className="btn-secondary btn-lg w-full"
       >
         <Plus size={16} /> New Profile
       </button>

@@ -82,12 +82,9 @@ export function PushSettings() {
         type="button"
         onClick={subscribed ? disable : enable}
         disabled={busy}
-        className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-base disabled:opacity-50 ${
-          subscribed
-            ? "border hover:bg-rose-600 hover:text-white"
-            : "bg-claw-500 text-claw-on hover:bg-claw-600 shadow-glow"
-        }`}
-        style={subscribed ? { backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--text-dim)" } : undefined}
+        // Utilities outrank the .btn-secondary hover, so the destructive hover
+        // lands without needing !important.
+        className={subscribed ? "btn-secondary hover:bg-rose-600 hover:text-white" : "btn-primary"}
       >
         {busy ? (
           <><Loader2 size={16} className="animate-spin" /> {subscribed ? "Disabling..." : "Enabling..."}</>

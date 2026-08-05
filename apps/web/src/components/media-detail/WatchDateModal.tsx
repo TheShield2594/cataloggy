@@ -56,7 +56,7 @@ export function WatchDateModal({
         aria-modal="true"
         aria-labelledby="watch-date-modal-title"
         tabIndex={-1}
-        className={`overlay-dialog w-full max-w-sm rounded-3xl border p-6 shadow-e3 ${exiting ? "overlay-exit" : ""}`}
+        className={`glass-surface overlay-dialog w-full max-w-sm rounded-3xl border p-6 shadow-e3 ${exiting ? "overlay-exit" : ""}`}
         style={{ borderColor: "var(--border)", background: "var(--bg-0)" }}
         onClick={(e) => e.stopPropagation()}
         onAnimationEnd={onExitAnimationEnd}
@@ -105,7 +105,7 @@ export function WatchDateModal({
               type="button"
               disabled={saving}
               onClick={() => void submit(new Date().toISOString())}
-              className="rounded-xl bg-plum-500 px-4 py-3 text-sm font-semibold text-white hover:bg-plum-600 disabled:opacity-50 transition-colors"
+              className="btn-primary py-3"
             >
               Just finished
             </button>
@@ -117,8 +117,7 @@ export function WatchDateModal({
                   const [y, m, d] = releaseDate.split("-").map(Number);
                   void submit(new Date(Date.UTC(y, m - 1, d, 12)).toISOString());
                 }}
-                className="rounded-xl px-4 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)] disabled:opacity-50"
-                style={{ background: "var(--surface)", color: "var(--text)" }}
+                className="btn-secondary py-3"
               >
                 Release date
               </button>
@@ -128,8 +127,7 @@ export function WatchDateModal({
               disabled={saving}
               onClick={() => void submit(new Date().toISOString(), true)}
               title="Logs this watch without a specific date"
-              className="flex flex-col items-start gap-0.5 rounded-xl px-4 py-3 text-left transition-colors hover:bg-[var(--surface-strong)] disabled:opacity-50"
-              style={{ background: "var(--surface)", color: "var(--text)" }}
+              className="btn-secondary flex-col items-start justify-center gap-0.5 py-3 text-left"
             >
               <span className="text-sm font-semibold">Unknown date</span>
               <span className="text-2xs" style={{ color: "var(--text-mute)" }}>Logs without a specific date</span>
@@ -137,8 +135,7 @@ export function WatchDateModal({
             <button
               type="button"
               onClick={() => setMode("custom")}
-              className="rounded-xl px-4 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
-              style={{ background: "var(--surface)", color: "var(--text)" }}
+              className="btn-secondary py-3"
             >
               Other date
             </button>
@@ -158,8 +155,7 @@ export function WatchDateModal({
               <button
                 type="button"
                 onClick={() => setMode("quick")}
-                className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)]"
-                style={{ background: "var(--surface)", color: "var(--text-dim)" }}
+                className="btn-secondary flex-1"
               >
                 Back
               </button>
@@ -170,7 +166,7 @@ export function WatchDateModal({
                   const [y, m, d] = customDate.split("-").map(Number);
                   void submit(new Date(Date.UTC(y, m - 1, d, 12)).toISOString());
                 }}
-                className="flex-1 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on hover:bg-claw-600 disabled:opacity-50 transition-colors"
+                className="btn-primary flex-1"
               >
                 {saving ? "Saving…" : "Log Watch"}
               </button>

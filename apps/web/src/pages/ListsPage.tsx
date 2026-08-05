@@ -571,15 +571,14 @@ export function ListsPage() {
                       type="button"
                       disabled={deletingListId === list.id}
                       onClick={() => void handleDeleteList(list.id)}
-                      className="flex-1 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-60 transition-colors"
+                      className="btn-danger btn-sm flex-1"
                     >
                       {deletingListId === list.id ? "Deleting…" : "Delete"}
                     </button>
                     <button
                       type="button"
                       onClick={() => setConfirmDeleteId(null)}
-                      className="flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold hover:bg-[var(--surface)] transition-colors"
-                      style={{ borderColor: "var(--border)", color: "var(--text-dim)", background: "var(--bg-1)" }}
+                      className="btn-secondary btn-sm flex-1"
                     >
                       Cancel
                     </button>
@@ -642,7 +641,7 @@ export function ListsPage() {
           />
           <button
             type="submit"
-            className="rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on hover:bg-claw-600 transition-colors"
+            className="btn-primary"
           >
             Create
           </button>
@@ -726,7 +725,7 @@ export function ListsPage() {
               <button
                 type="button"
                 onClick={() => setShowAddModal(true)}
-                className="ml-3 flex flex-none items-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on hover:bg-claw-600 transition-colors"
+                className="btn-primary ml-3 flex-none"
               >
                 <Plus className="h-4 w-4" />
                 Add

@@ -116,7 +116,7 @@ export function DataSettings() {
           type="button"
           onClick={refreshAll}
           disabled={syncing}
-          className="inline-flex items-center gap-2 rounded-xl bg-claw-500 px-5 py-2.5 text-sm font-semibold text-claw-on transition-colors hover:bg-claw-600 disabled:opacity-60"
+          className="btn-primary"
         >
           {syncing ? <><Loader2 size={16} className="animate-spin" /> Syncing...</> : "Sync all metadata"}
         </button>
@@ -133,8 +133,7 @@ export function DataSettings() {
           type="button"
           onClick={handleExport}
           disabled={exporting}
-          className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface)] disabled:opacity-60"
-          style={{ background: "var(--surface-strong)", border: "1px solid var(--border)", color: "var(--text-dim)" }}
+          className="btn-secondary"
         >
           {exporting ? <><Loader2 size={16} className="animate-spin" /> Exporting...</> : <><Download size={16} /> Download export</>}
         </button>
@@ -163,8 +162,7 @@ export function DataSettings() {
             type="button"
             onClick={() => jsonFileInputRef.current?.click()}
             disabled={importingJson}
-            className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface)] disabled:opacity-60"
-            style={{ background: "var(--surface-strong)", border: "1px solid var(--border)", color: "var(--text-dim)" }}
+            className="btn-secondary"
           >
             {importingJson ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : <><Upload size={16} /> Import JSON export</>}
           </button>
@@ -184,8 +182,7 @@ export function DataSettings() {
             type="button"
             onClick={() => csvFileInputRef.current?.click()}
             disabled={importingCsv}
-            className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface)] disabled:opacity-60"
-            style={{ background: "var(--surface-strong)", border: "1px solid var(--border)", color: "var(--text-dim)" }}
+            className="btn-secondary"
           >
             {importingCsv ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : <><Upload size={16} /> Import CSV history</>}
           </button>
@@ -229,8 +226,7 @@ export function DataSettings() {
             type="button"
             onClick={() => externalFileInputRef.current?.click()}
             disabled={importingExternal}
-            className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface)] disabled:opacity-60"
-            style={{ background: "var(--surface-strong)", border: "1px solid var(--border)", color: "var(--text-dim)" }}
+            className="btn-secondary"
           >
             {importingExternal ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : <><Upload size={16} /> Import CSV</>}
           </button>
