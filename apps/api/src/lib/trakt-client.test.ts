@@ -576,6 +576,20 @@ describe("trakt-client", () => {
       return fetchMock;
     };
 
+    it("does nothing, quietly, once the Trakt account has been disconnected", async () => {
+      // Leaving Trakt is a supported ending. The scheduled poll must not keep
+      // throwing at a deleted token and reporting it as a broken sync.
+      prismaMock.traktToken.findUnique.mockResolvedValue(null);
+      const fetchMock = stubEmptyHistory();
+
+      const { pollTraktHistory } = await import("./trakt-client.js");
+      const result = await pollTraktHistory(makeLogger(), "profile-1");
+
+      expect(result.importedWatchEvents).toEqual({ movies: 0, episodes: 0 });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(prismaMock.kV.upsert).not.toHaveBeenCalled();
+    });
+
     it("imports the entire history — no start_at — when it has never been imported in full", async () => {
       prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
       stubKv({});

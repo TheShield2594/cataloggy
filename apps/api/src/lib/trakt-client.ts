@@ -369,6 +369,21 @@ export const pollTraktHistory = async (
   profileId: string,
   options: { full?: boolean } = {}
 ) => {
+  // Disconnecting Trakt is a supported ending, not a fault. Without this the
+  // scheduled poll keeps running against a token that no longer exists, throws
+  // every interval, and files a recurring failure in Settings → Sync Status —
+  // so leaving Trakt looks like something broke. Every other Trakt entry point
+  // in this file already checks first.
+  if (!(await isTraktConnected())) {
+    return {
+      since: null,
+      fullBackfill: false,
+      polledAt: new Date().toISOString(),
+      importedWatchEvents: { movies: 0, episodes: 0 },
+      updatedSeriesProgress: 0,
+    };
+  }
+
   const client = await getTraktClient();
   const pollStartAt =
     options.full || !(await hasCompletedBackfill()) ? null : await getTraktPollStartAt();
