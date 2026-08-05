@@ -3,6 +3,7 @@ import { registerRoute } from "workbox-routing";
 import { CacheFirst, NetworkOnly, StaleWhileRevalidate } from "workbox-strategies";
 import { CacheableResponsePlugin } from "workbox-cacheable-response";
 import { ExpirationPlugin } from "workbox-expiration";
+import { IMAGE_CDN_HOSTS } from "./image-cdn-hosts.mjs";
 
 precacheAndRoute(self.__WB_MANIFEST);
 
@@ -16,13 +17,10 @@ registerRoute(({ url }) => url.pathname === "/config.js", new NetworkOnly());
 // re-fetched across sessions whenever the browser's own HTTP cache evicted them,
 // and never resolved at all offline, leaving the initials-on-a-gradient
 // placeholder in place of a library the user has already looked at.
-const IMAGE_CDN_HOSTS = new Set([
-  "image.tmdb.org",
-  "images.igdb.com",
-  "media.steampowered.com",
-  "api.ratingposterdb.com",
-]);
-
+//
+// Handling these here takes the request out of `img-src` and puts it under
+// `connect-src` — see the note in image-cdn-hosts.mjs, which is why that list
+// is shared with the CSP builder rather than written out again here.
 registerRoute(
   ({ url, request }) => request.destination === "image" && IMAGE_CDN_HOSTS.has(url.hostname),
   new CacheFirst({

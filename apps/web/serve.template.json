@@ -8,7 +8,7 @@
         { "key": "Referrer-Policy", "value": "same-origin" },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src __CONNECT_SRC__; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+          "value": "default-src 'self'; script-src __SCRIPT_SRC__; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src __CONNECT_SRC__; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
         }
       ]
     }
