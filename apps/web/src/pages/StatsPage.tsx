@@ -46,7 +46,11 @@ export function StatsPage() {
   const [loading, setLoading] = useState(!statsMeta.hadCachedValue || !detailedMeta.hadCachedValue);
   const [error, setError] = useState<string | null>(null);
   const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
-  const [year, setYear] = useState(() => new Date().getFullYear() - 1);
+  // The year you're in, not the one that just ended. A "year in review" that
+  // opens on last year reads as stale for the eleven months after January —
+  // the current year is listed right above it in the picker, empty-looking by
+  // comparison, and nothing says the panel isn't showing it.
+  const [year, setYear] = useState(() => new Date().getFullYear());
   const [yearReview, setYearReview] = useState<YearInReviewStats | null>(null);
   const [yearError, setYearError] = useState<string | null>(null);
 
