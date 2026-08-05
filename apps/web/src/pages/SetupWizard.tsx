@@ -111,9 +111,11 @@ function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => vo
   return (
     <form onSubmit={submit} className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold">Welcome to Cataloggy</h1>
+        {/* Not "Welcome to Cataloggy": the lockup above already says the name,
+            and a step's heading is better spent saying what the step wants. */}
+        <h1 className="text-lg font-semibold">Connect your server</h1>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
-          Enter the API token configured on your Cataloggy server to get started.
+          Paste the API token your server was configured with to get started.
         </p>
       </div>
       <div className="relative">
