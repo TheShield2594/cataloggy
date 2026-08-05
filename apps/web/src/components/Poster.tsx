@@ -13,6 +13,17 @@ const TMDB_SRCSET_WIDTHS = [92, 154, 185, 342, 500, 780];
 /** Default `sizes` for the poster grids, which share a layout across pages. */
 export const POSTER_GRID_SIZES = "(min-width: 640px) 220px, 45vw";
 
+/*
+ * `sizes` for the dashboard's poster cards. These have to be literal lengths —
+ * the attribute is read by the preload scanner before any stylesheet, so it
+ * can't reference --poster-card-w. Keep both in step with that token (12rem =
+ * 192px); a stale hint only costs bytes, not layout.
+ */
+/** A card in one of the carousels: the token width at every breakpoint. */
+export const POSTER_CARD_SIZES = "192px";
+/** A card in the Trending block, which is two-up and fluid below `sm`. */
+export const POSTER_CARD_FILL_SIZES = "(min-width: 640px) 192px, 45vw";
+
 /**
  * Exported for the pages that render their own `<img>` rather than this
  * component — their placeholder markup differs, but the bytes on the wire

@@ -30,7 +30,7 @@ import { Link } from "react-router";
 import { CarouselTrack } from "../components/CarouselTrack";
 import { useHorizontalScroll } from "../components/carousel-utils";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
-import { Poster } from "../components/Poster";
+import { Poster, POSTER_CARD_SIZES, POSTER_CARD_FILL_SIZES } from "../components/Poster";
 import { useToast } from "../hooks/useToast";
 import { timeAgo, timeUntil } from "../utils/timeAgo";
 import { formatRating, ratingLabel } from "../utils/rating";
@@ -44,7 +44,7 @@ function ContinueWatchingSkeleton() {
     <div className="flex gap-4 overflow-hidden pb-2">
       {Array.from({ length: 5 }).map((_, i) => (
         <div key={i} className="flex-none">
-          <div className="skeleton h-[16.5rem] w-[11rem] rounded-xl" />
+          <div className="skeleton aspect-poster w-poster-card rounded-xl" />
           <div className="skeleton mt-2.5 h-4 w-32 rounded" />
           <div className="skeleton mt-1.5 h-3 w-20 rounded" />
         </div>
@@ -58,7 +58,7 @@ function RecentlyWatchedSkeleton() {
     <div className="flex gap-4 overflow-hidden pb-2">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="flex-none">
-          <div className="skeleton h-[16.5rem] w-[11rem] rounded-xl" />
+          <div className="skeleton aspect-poster w-poster-card rounded-xl" />
           <div className="skeleton mt-2.5 h-4 w-28 rounded" />
           <div className="skeleton mt-1.5 h-3 w-16 rounded" />
         </div>
@@ -90,10 +90,7 @@ export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
   fill?: boolean;
 }) {
   return (
-    <div
-      className={`group relative rounded-xl ${fill ? "w-full" : "flex-none"}`}
-      style={fill ? undefined : { width: "11rem" }}
-    >
+    <div className={`group relative rounded-xl ${fill ? "w-full" : "w-poster-card flex-none"}`}>
       {/* A real button rather than a `role="button"` div: it inherits Enter and
           Space, the disabled/active semantics, and the announcement assistive
           tech expects, instead of re-implementing the first and forgoing the
@@ -110,7 +107,7 @@ export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
       <div
         className="poster-frame relative aspect-poster overflow-hidden rounded-xl group-hover:scale-[1.03]"
       >
-        <Poster src={item.poster} alt={item.name} className="h-full w-full" eager={eager} sizes="176px" />
+        <Poster src={item.poster} alt={item.name} className="h-full w-full" eager={eager} sizes={fill ? POSTER_CARD_FILL_SIZES : POSTER_CARD_SIZES} />
         {item.rating != null && item.rating > 0 && (
           // 28px of chip has no room for "/10", so the scale lives in the
           // accessible name and the tooltip instead of being left implied.
@@ -234,11 +231,11 @@ export function ContinueWatchingCard({
   return (
     // One card, two controls — grouped and labelled so a screen reader announces
     // them as belonging to this series rather than as loose buttons in a row.
-    <div role="group" aria-label={s.name} className="flex-none group" style={{ width: "13rem" }}>
+    <div role="group" aria-label={s.name} className="group w-poster-card flex-none">
       <div
         className="poster-frame relative aspect-poster overflow-hidden rounded-xl"
       >
-        <Poster src={s.poster} alt={s.name} className="absolute inset-0 h-full w-full" eager={eager} sizes="208px" />
+        <Poster src={s.poster} alt={s.name} className="absolute inset-0 h-full w-full" eager={eager} sizes={POSTER_CARD_SIZES} />
         {/* The poster is a backdrop and the two controls are siblings in a
             column above it: "view details" takes the space the overlay doesn't,
             "mark next" lives inside the overlay. Neither covers the other, so
@@ -1245,7 +1242,7 @@ export function DashboardPage() {
             </Link>
           </SectionHeader>
           {trendingLoading ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:[grid-template-columns:repeat(auto-fit,var(--poster-card-w))]">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="skeleton aspect-poster rounded-xl" />
               ))}
@@ -1278,7 +1275,7 @@ export function DashboardPage() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:[grid-template-columns:repeat(auto-fit,var(--poster-card-w))]">
               {trendingMovies.slice(0, 4).map((item, index) => (
                 <DiscoveryCard
                   key={item.id}
@@ -1432,8 +1429,7 @@ export function DashboardPage() {
             {history.map((event) => (
               <div
                 key={event.id}
-                className="flex-none group relative rounded-xl"
-                style={{ width: "11rem" }}
+                className="group relative w-poster-card flex-none rounded-xl"
               >
                 {/* Same treatment as DiscoveryCard: one real button covering a
                     card that has exactly one action. */}
@@ -1446,7 +1442,7 @@ export function DashboardPage() {
                 <div
                   className="poster-frame relative aspect-poster overflow-hidden rounded-xl group-hover:scale-[1.03]"
                 >
-                  <Poster src={event.poster} alt={event.name} className="h-full w-full" sizes="176px" />
+                  <Poster src={event.poster} alt={event.name} className="h-full w-full" sizes={POSTER_CARD_SIZES} />
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent px-3 pb-3 pt-12">
                     {event.type === "episode" && event.season != null && event.episode != null ? (
                       <span className="inline-block rounded px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm" style={{ background: "var(--surface-strong)" }}>

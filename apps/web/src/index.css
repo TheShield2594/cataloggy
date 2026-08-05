@@ -235,6 +235,28 @@
   --duration-fast: 120ms;
   --duration-base: 200ms;
   --duration-slow: 300ms;
+
+  /*
+   * The poster card — the dashboard's repeating grid unit.
+   *
+   * The three rails each used to size themselves: the Continue Watching
+   * carousel at a literal 13rem, Recently Watched and DiscoveryCard at a
+   * literal 11rem each, and Trending stretching to whatever a four-column grid
+   * left it beside the 268px Upcoming rail. Nothing established a unit, so
+   * scrolling the page never settled into a rhythm — every section restated
+   * its own scale.
+   *
+   * One width, in one place, and `w-poster-card` in the config points here so
+   * a utility class and an arbitrary grid template can't drift apart. 12rem
+   * sits between the two literals it replaces: wide enough for the Continue
+   * Watching overlay's progress bar and episode caption, narrow enough that
+   * four still fit across the Trending block.
+   *
+   * Below `sm` the rails stay fluid (a two-up grid, or a carousel sized in
+   * viewport units) — a fixed 12rem column would overflow a 375px phone, and
+   * at that width the two-up grid is itself the repeating unit.
+   */
+  --poster-card-w: 12rem;
 }
 
 /*
