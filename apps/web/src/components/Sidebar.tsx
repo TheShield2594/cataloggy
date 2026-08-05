@@ -252,7 +252,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={dismissHint}
-            className="mt-2 rounded-md bg-claw-500 px-2.5 py-1 text-2xs font-semibold text-claw-on transition-colors hover:bg-claw-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400"
+            className="btn-primary btn-xs mt-2"
           >
             Got it
           </button>

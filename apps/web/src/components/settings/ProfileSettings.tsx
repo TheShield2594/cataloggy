@@ -424,8 +424,7 @@ export function ProfileSettings() {
       <button
         type="button"
         onClick={openSwitcher}
-        className="inline-flex items-center gap-2 rounded-xl border px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
-        style={{ background: "var(--surface)", borderColor: "var(--border-strong)", color: "var(--text-dim)" }}
+        className="btn-secondary"
       >
         <Users size={16} /> Switch Profile
       </button>

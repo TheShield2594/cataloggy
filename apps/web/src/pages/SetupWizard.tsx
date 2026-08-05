@@ -21,8 +21,7 @@ function BackButton({ onBack }: { onBack: () => void }) {
     <button
       type="button"
       onClick={onBack}
-      className="flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
-      style={{ color: "var(--text-dim)", border: "1px solid var(--border)" }}
+      className="btn-secondary btn-lg w-full"
     >
       <ArrowLeft size={16} /> Back
     </button>
@@ -144,7 +143,7 @@ function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => vo
       <button
         type="submit"
         disabled={verifying || !token.trim()}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all duration-base hover:bg-claw-600 disabled:opacity-50 shadow-glow"
+        className="btn-primary btn-lg w-full"
       >
         {verifying ? <><Loader2 size={16} className="animate-spin" /> Verifying...</> : <>Continue <ArrowRight size={16} /></>}
       </button>
@@ -177,7 +176,7 @@ function TmdbStep({ configured, onContinue, onBack }: { configured: boolean; onC
       <button
         type="button"
         onClick={onContinue}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all duration-base hover:bg-claw-600 shadow-glow"
+        className="btn-primary btn-lg w-full"
       >
         Continue <ArrowRight size={16} />
       </button>
@@ -201,8 +200,7 @@ function TraktStep({ onContinue, onBack }: { onContinue: () => void; onBack: () 
       <button
         type="button"
         onClick={onContinue}
-        className="flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)]"
-        style={{ backgroundColor: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }}
+        className="btn-secondary btn-lg w-full"
       >
         Continue <ArrowRight size={16} />
       </button>
@@ -226,7 +224,7 @@ function DoneStep({ onFinish, onBack }: { onFinish: () => void; onBack: () => vo
       <button
         type="button"
         onClick={onFinish}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-claw-500 px-5 py-3 text-sm font-semibold text-claw-on transition-all duration-base hover:bg-claw-600 shadow-glow"
+        className="btn-primary btn-lg w-full"
       >
         Get Started
       </button>

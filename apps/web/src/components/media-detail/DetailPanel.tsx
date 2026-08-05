@@ -309,8 +309,11 @@ export function DetailPanel({
           {/* Close */}
           <button
             type="button" onClick={requestClose}
-            className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full shadow-e2 backdrop-blur transition-colors hover:text-white"
-            style={{ background: "color-mix(in srgb, var(--bg-0) 80%, transparent)", color: "var(--bg-2)" }}
+            // Hovers to --text, not white: the light theme's circle is a
+            // translucent cream, and white-on-cream made the X disappear under
+            // the pointer on the one theme where it mattered most.
+            className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full shadow-e2 backdrop-blur transition-colors hover:text-[var(--text)]"
+            style={{ background: "color-mix(in srgb, var(--bg-0) 80%, transparent)", color: "var(--text-dim)" }}
             aria-label="Close detail panel"
           >
             <X className="h-4 w-4" />
@@ -367,8 +370,11 @@ export function DetailPanel({
                   {item.certification}
                 </span>
               )}
+              {/* No `ring-1` on the chip: .status-chip draws its own hairline
+                  from the same token as its text, and a utility ring would
+                  outrank it. */}
               {item.status && (
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${statusColor(item.status)}`}>
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusColor(item.status)}`}>
                   {item.status}
                 </span>
               )}

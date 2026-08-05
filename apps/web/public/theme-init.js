@@ -8,6 +8,19 @@
     letterboxd: "#14181c",
   };
 
+  // Each theme's --accent, for the pre-hydration spinner in index.html. That
+  // spinner paints before the app's CSS exists, so it cannot read --accent and
+  // used to be a hard-coded orange — which is the wrong brand colour on the
+  // blue and red themes, on the one frame a visitor sees first. Keep in sync
+  // with the --accent declarations in apps/web/src/index.css.
+  var themeAccent = {
+    light: "#d97742",
+    dark: "#e89163",
+    glass: "#0a84ff",
+    midnight: "#e02f44",
+    letterboxd: "#ff8000",
+  };
+
   var stored = null;
   try {
     stored = localStorage.getItem("cataloggy:theme");
@@ -23,6 +36,7 @@
   document.documentElement.setAttribute("data-theme", theme);
   document.documentElement.style.colorScheme = theme === "light" ? "light" : "dark";
   document.documentElement.style.backgroundColor = themeBg[theme];
+  document.documentElement.style.setProperty("--loader-accent", themeAccent[theme]);
 
   var meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", themeBg[theme]);

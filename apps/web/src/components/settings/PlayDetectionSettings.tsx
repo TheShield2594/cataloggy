@@ -88,8 +88,7 @@ export function PlayDetectionSettings() {
             <button
               type="button"
               onClick={fetchSignals}
-              className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)] border border-[var(--border-strong)]"
-              style={{ color: "var(--text-dim)", background: "var(--bg-1)" }}
+              className="btn-secondary"
             >
               <RefreshCw size={16} /> Refresh
             </button>
@@ -146,8 +145,7 @@ export function PlayDetectionSettings() {
           <button
             type="button"
             onClick={fetchSignals}
-            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)] border border-[var(--border-strong)]"
-            style={{ color: "var(--text-dim)", background: "var(--bg-1)" }}
+            className="btn-secondary"
           >
             <RefreshCw size={16} /> Retry
           </button>

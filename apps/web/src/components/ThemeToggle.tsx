@@ -78,7 +78,12 @@ export function ThemeToggle({ theme, onChange }: { theme: Theme; onChange: (next
             openMenu();
           }
         }}
-        className="flex h-10 w-10 flex-none items-center justify-center rounded-full transition-colors active:scale-95 sm:h-9 sm:w-9"
+        // `transition-colors` here meant the active:scale-95 press had no
+        // transition to run on, so the button snapped down and back instead of
+        // pressing. The property list stays explicit rather than becoming
+        // `transition-all`, which would also animate layout — see the base-layer
+        // note in index.css.
+        className="flex h-10 w-10 flex-none items-center justify-center rounded-full transition-[color,background-color,border-color,transform] duration-200 ease-in-out active:scale-95 sm:h-9 sm:w-9"
         style={{ border: "1px solid var(--border-strong)", background: "var(--surface)", color: "var(--text)" }}
       >
         <Palette className="h-4 w-4" />

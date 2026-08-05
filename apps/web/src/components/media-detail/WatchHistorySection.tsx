@@ -23,7 +23,7 @@ export function WatchHistorySection({
         <button
           type="button"
           onClick={onLogWatch}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-claw-500/10 px-2.5 py-1 text-xs font-semibold text-claw-text ring-1 ring-claw-500/20 hover:bg-claw-500/20 transition-colors"
+          className="btn-tonal btn-sm"
         >
           <Calendar className="h-3 w-3" /> Log a Watch
         </button>

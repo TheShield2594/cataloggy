@@ -40,7 +40,7 @@ export function UpdatePrompt() {
       // -translate-x-1/2, and a running keyframe on `transform` would replace
       // that translate for its duration, lurching the banner sideways. Opacity
       // doesn't collide.
-      className={`overlay-fade fixed bottom-6 left-1/2 z-[110] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-xl border px-5 py-3.5 shadow-e2 max-sm:bottom-[calc(5rem+env(safe-area-inset-bottom))] ${exiting ? "overlay-exit" : ""}`}
+      className={`glass-surface overlay-fade fixed bottom-6 left-1/2 z-[110] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-xl border px-5 py-3.5 shadow-e2 max-sm:bottom-[calc(5rem+env(safe-area-inset-bottom))] ${exiting ? "overlay-exit" : ""}`}
       style={{ borderLeftWidth: "4px", borderColor: "var(--border)", background: "var(--bg-1)" }}
       onAnimationEnd={onExitAnimationEnd}
     >
@@ -51,7 +51,7 @@ export function UpdatePrompt() {
       <button
         type="button"
         onClick={() => updateSW?.(true)}
-        className="flex-none rounded-md bg-claw-500 px-3 py-1.5 text-sm font-medium text-claw-on hover:bg-claw-600"
+        className="btn-primary btn-sm flex-none"
       >
         Reload
       </button>

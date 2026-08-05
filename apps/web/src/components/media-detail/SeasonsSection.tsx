@@ -181,7 +181,7 @@ export function SeasonsSection({
                   type="button"
                   onClick={() => void markSeasonWatched(s)}
                   disabled={pendingSeason[s.seasonNumber]}
-                  className="flex-none rounded-full bg-claw-500/10 px-2.5 py-1 text-2xs font-semibold text-claw-text ring-1 ring-claw-500/20 transition-colors hover:bg-claw-500/20 disabled:opacity-50"
+                  className="btn-tonal btn-xs flex-none"
                 >
                   Mark watched
                 </button>

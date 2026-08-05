@@ -92,7 +92,7 @@ export function TraktSettings() {
             type="button"
             onClick={connect}
             disabled={!status?.configured}
-            className="inline-flex items-center gap-2 rounded-xl bg-plum-500 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-plum-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-primary"
           >
             <Link size={16} /> Connect Trakt
           </button>
@@ -103,23 +103,21 @@ export function TraktSettings() {
               type="button"
               onClick={runImport}
               disabled={importing}
-              className="inline-flex items-center gap-2 rounded-xl bg-claw-500 px-4 py-2.5 text-sm font-semibold text-claw-on transition-colors hover:bg-claw-600 disabled:opacity-60 shadow-glow"
+              className="btn-primary"
             >
               {importing ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : "Run Import"}
             </button>
             <button
               type="button"
               onClick={disconnect}
-              className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-rose-600 hover:text-white border border-[var(--border-strong)]"
-              style={{ color: "var(--text-dim)", background: "var(--bg-1)" }}
+              className="btn-secondary hover:bg-rose-600 hover:text-white"
             >
               <Unplug size={16} /> Disconnect
             </button>
             <button
               type="button"
               onClick={fetchStatus}
-              className="rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)] border border-[var(--border-strong)]"
-              style={{ color: "var(--text-dim)", background: "var(--bg-1)" }}
+              className="btn-secondary"
             >
               Refresh
             </button>

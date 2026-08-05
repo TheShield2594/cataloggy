@@ -210,7 +210,12 @@ function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => vo
       <div
         role="button"
         tabIndex={0}
-        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+        // `ring-black/5` was invisible on the four dark themes, so cards of the
+        // same rank carried two different edge treatments — this one and the
+        // Dashboard's themed hairline. --border matches the Dashboard. It stays
+        // a ring rather than an inline inset shadow so .card-lift's hover
+        // shadow can still replace it; an inline style would outrank that.
+        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-[var(--border)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
         style={{ aspectRatio: "var(--poster-ratio)" }}
         onClick={() => onSelect(game)}
         onKeyDown={(e) => {
@@ -389,7 +394,7 @@ export function GamesPage() {
         <button
           type="button"
           onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-claw-500 px-3.5 py-2 text-sm font-semibold text-claw-on transition-colors hover:bg-claw-600"
+          className="btn-primary btn-sm"
         >
           <Plus className="h-4 w-4" /> Add game
         </button>

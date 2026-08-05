@@ -238,6 +238,37 @@
 }
 
 /*
+ * Status colours — "returning", "cancelled", "saved", and friends.
+ *
+ * Split light/dark for the same reason the elevations above are: these were
+ * spelled as raw Tailwind tints at each call site (text-green-400,
+ * text-rose-400, text-amber-400, text-emerald-600), all of them picked against
+ * a dark background. On the light theme's cream those sit at roughly 2:1, so a
+ * series status was legible on four themes and a smudge on the fifth — and the
+ * same "saved" confirmation shipped as emerald-400 in two settings panels and
+ * emerald-600 in three others.
+ *
+ * Only the text colour is a token. Fills and hairlines are mixed out of it
+ * (see .status-chip), so a fill can never drift away from the text it sits
+ * behind. Every value clears 4.5:1 against its themes' --bg-0 and --bg-1.
+ */
+:root,
+[data-theme="light"] {
+  --status-ok: #047857;
+  --status-bad: #be123c;
+  --status-warn: #b45309;
+}
+
+[data-theme="dark"],
+[data-theme="glass"],
+[data-theme="midnight"],
+[data-theme="letterboxd"] {
+  --status-ok: #34d399;
+  --status-bad: #fb7185;
+  --status-warn: #fbbf24;
+}
+
+/*
  * Selection. The UA default is a fixed blue that belongs to none of the five
  * themes — over the Letterboxd charcoal or the Midnight navy it reads as a
  * rendering fault rather than a selection. Accent tint with the accent's own
@@ -356,8 +387,13 @@ body {
  * not alike.
  *
  * .glass-surface — the floating chrome: header, sidebar, command palette,
- *   detail panels, sheets. At most two are on screen at once, they sit over
- *   whatever is scrolling underneath, and they carry the full blur.
+ *   detail panels, sheets, modal dialogs, toasts and the offline/update
+ *   banners. All of it sits over whatever is scrolling underneath, only a
+ *   couple are ever on screen at once (toasts cap at three, and they are small
+ *   boxes), and it carries the full blur. The dialogs and toasts were the
+ *   glaring omission: the glass theme's whole point is an ambient glow behind
+ *   frosted surfaces, and without them the two things that most obviously
+ *   float over the page were opaque slabs.
  *
  * .glass-panel — the in-flow panels that tile a page: dashboard cards, stats
  *   and settings sections, calendar and history cards. A dashboard can stack a
@@ -547,9 +583,144 @@ body {
     opacity: 0.5;
     cursor: default;
   }
+
+  /*
+   * Buttons.
+   *
+   * The same semantic button used to be rebuilt from utilities at every call
+   * site, which is why the primary action shipped as rounded-md, -lg, -xl and
+   * -full on different screens, with the shadow, the press scale, the disabled
+   * opacity and the focus ring each present on roughly half of them. A variant
+   * class is the whole button: `className="btn-primary"` is complete, and call
+   * sites add only layout (`w-full`, `flex-1`) and a size (`btn-sm`).
+   *
+   * Everything shared lives on the selector list below, so a variant can never
+   * drift on shape, motion, focus or the disabled state — only on paint.
+   *
+   * A button is a control rather than a surface, so it sits outside the radius
+   * ranks above: rounded-xl at every size but btn-sm/btn-xs, which shrink with
+   * the box so the corner stays proportional.
+   *
+   * The transition names its properties instead of using `transition-all`: the
+   * base-layer rule deliberately stops buttons easing their own size and
+   * position, and `transform` is added because `active:scale` without it snaps
+   * rather than presses. `transition-colors` at a call site would erase the
+   * transform half of that (utilities outrank components), so migrated buttons
+   * carry neither it nor `transition-all`.
+   *
+   * --tw-ring-offset-color is set here for the same reason .focus-ring-offset
+   * exists — see the comment on it — so a button never needs to be paired with
+   * that class to get a themed offset.
+   */
+  .btn-primary,
+  .btn-secondary,
+  .btn-tonal,
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold;
+    @apply transition-[color,background-color,border-color,box-shadow,transform] duration-base ease-in-out;
+    @apply active:scale-[0.98];
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
+    --tw-ring-offset-color: var(--bg-0);
+  }
+
+  /*
+   * --elevation-glow is the accent halo this token was named for. It is fed
+   * through Tailwind's --tw-shadow rather than declared as a box-shadow of its
+   * own, because `focus-visible:ring-2` paints its ring *as* a box-shadow — a
+   * plain declaration here would either lose to the ring (halo vanishes on
+   * focus) or, at equal specificity, beat it and swap a focused button's ring
+   * for a glow. Composed this way both draw.
+   *
+   * The resting halo is the glow at a third of its spread; .btn-lg takes the
+   * token at full strength, since a hero CTA is what it was measured for.
+   */
+  .btn-primary {
+    @apply bg-claw-500 text-claw-on hover:bg-claw-600;
+    --tw-shadow: 0 2px 8px rgb(var(--accent-rgb) / 0.22);
+    box-shadow: var(--tw-shadow);
+  }
+
+  .btn-secondary {
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text-dim);
+  }
+
+  .btn-secondary:hover {
+    background: var(--surface-strong);
+    color: var(--text);
+  }
+
+  /* Accent-tinted, for the in-panel actions that are the accent action of their
+     section but not of the screen — "Log a Watch", "Mark watched". */
+  .btn-tonal {
+    @apply bg-claw-500/10 text-claw-text ring-1 ring-claw-500/20 hover:bg-claw-500/20;
+  }
+
+  /* Confirmed destructive actions — the second step of a delete, never the
+     first. Rose is fixed rather than themed: a delete has to read as a delete
+     on all five themes, and it is white-on-rose either way. Its focus ring
+     matches, so the ring doesn't say "accent" on a button that means danger. */
+  .btn-danger {
+    @apply bg-rose-600 text-white hover:bg-rose-700;
+    @apply focus-visible:ring-rose-400;
+  }
+
+  /* The settled state of a save button, not a rank of its own: the settings
+     panels swap a .btn-primary to this for a beat after a successful save. */
+  .btn-primary.btn-saved {
+    background: color-mix(in srgb, var(--status-ok) 15%, transparent);
+    color: var(--status-ok);
+    --tw-shadow: inset 0 0 0 1px color-mix(in srgb, var(--status-ok) 30%, transparent);
+  }
+
+  .btn-primary.btn-saved:hover {
+    background: color-mix(in srgb, var(--status-ok) 15%, transparent);
+  }
+
+  /* Size variants. Declared after the variants above so their padding and
+     radius win at equal specificity. */
+  .btn-sm {
+    @apply gap-1.5 rounded-lg px-3 py-1.5 text-xs;
+  }
+
+  .btn-xs {
+    @apply gap-1 rounded-md px-2.5 py-1 text-2xs;
+  }
+
+  /* The full-width hero CTAs — setup wizard, empty-state calls to action. */
+  .btn-lg {
+    @apply rounded-xl px-5 py-3;
+  }
+
+  .btn-primary.btn-lg {
+    --tw-shadow: var(--elevation-glow);
+  }
+
+  /* Status chips — a series' status, and anything else that reads as a state
+     rather than an action. Paint only; the caller sets shape and size. Text,
+     fill and hairline all come from one --status-* token, so they cannot drift
+     apart, and an unmatched status falls through to --text-mute. */
+  .status-chip {
+    color: var(--status-color, var(--text-mute));
+    background: color-mix(in srgb, var(--status-color, var(--text-mute)) 12%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--status-color, var(--text-mute)) 25%, transparent);
+  }
+
+  .status-chip--ok { --status-color: var(--status-ok); }
+  .status-chip--bad { --status-color: var(--status-bad); }
+  .status-chip--warn { --status-color: var(--status-warn); }
 }
 
-/* Custom Scrollbar */
+/*
+ * Custom scrollbar.
+ *
+ * The thumb was a hard-coded warm grey — the dark theme's --text-mute, shipped
+ * to all five themes, so it read as a brown smear down the edge of the two cool
+ * navy ones. Mixing it out of --text-mute instead keeps it the same relationship
+ * to the text on every theme, warm or cool, light or dark.
+ */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -558,17 +729,22 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(143, 132, 117, 0.35);
+  /* Opaque --text-mute first, for anything without color-mix(): a thumb one
+     step too solid still reads as a scrollbar, an invalid value is no thumb. */
+  background: var(--text-mute);
+  background: color-mix(in srgb, var(--text-mute) 45%, transparent);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(181, 171, 154, 0.5);
+  background: var(--text-mute);
+  background: color-mix(in srgb, var(--text-mute) 70%, transparent);
 }
 
 /* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(143, 132, 117, 0.35) transparent;
+  scrollbar-color: var(--text-mute) transparent;
+  scrollbar-color: color-mix(in srgb, var(--text-mute) 45%, transparent) transparent;
 }
 
 /* Hide scrollbar for carousels */

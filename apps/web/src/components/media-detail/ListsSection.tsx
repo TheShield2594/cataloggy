@@ -214,7 +214,7 @@ export function ListsSection({
                   type="button"
                   disabled={!newListName.trim() || savingNewList}
                   onClick={() => void createAndAdd()}
-                  className="flex-none rounded-md bg-claw-500 px-2.5 py-1 text-2xs font-semibold text-claw-on transition-colors hover:bg-claw-600 disabled:opacity-50"
+                  className="btn-primary btn-xs flex-none"
                 >
                   {savingNewList ? "…" : "Add"}
                 </button>

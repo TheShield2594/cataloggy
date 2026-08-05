@@ -20,7 +20,7 @@ export function OfflineBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="overlay-dialog sticky top-[76px] z-20 mb-5 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm shadow-e2"
+      className="glass-surface overlay-dialog sticky top-[76px] z-20 mb-5 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm shadow-e2"
       style={{
         background: "var(--surface-strong)",
         border: "1px solid var(--border-strong)",

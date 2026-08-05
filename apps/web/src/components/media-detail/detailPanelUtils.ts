@@ -5,12 +5,22 @@ export function formatRuntime(minutes: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
+/**
+ * Paint classes for a series' status badge.
+ *
+ * These used to be raw `-400` tints (green/rose/amber/slate), all picked
+ * against a dark background — on the light theme's cream they sat at roughly
+ * 2:1 and the badge was a smudge. `.status-chip` in index.css derives text,
+ * fill and ring from one per-theme token instead, so each status stays legible
+ * on all five themes; the unmatched case falls through to the chip's default,
+ * which is --text-mute.
+ */
 export function statusColor(status: string): string {
   const s = status.toLowerCase();
-  if (s.includes("return") || s.includes("ongoing")) return "text-green-400 bg-green-500/10 ring-green-500/20";
-  if (s.includes("ended") || s.includes("cancel")) return "text-rose-400 bg-rose-500/10 ring-rose-500/20";
-  if (s.includes("production") || s.includes("planned")) return "text-amber-400 bg-amber-500/10 ring-amber-500/20";
-  return "text-slate-400 bg-slate-500/10 ring-slate-500/20";
+  if (s.includes("return") || s.includes("ongoing")) return "status-chip status-chip--ok";
+  if (s.includes("ended") || s.includes("cancel")) return "status-chip status-chip--bad";
+  if (s.includes("production") || s.includes("planned")) return "status-chip status-chip--warn";
+  return "status-chip";
 }
 
 export type WatchLogTarget =

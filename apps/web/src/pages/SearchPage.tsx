@@ -739,7 +739,12 @@ function ResultCard({
       <div
         role="button"
         tabIndex={0}
-        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+        // `ring-black/5` was invisible on the four dark themes, so cards of the
+        // same rank carried two different edge treatments — this one and the
+        // Dashboard's themed hairline. --border matches the Dashboard. It stays
+        // a ring rather than an inline inset shadow so .card-lift's hover
+        // shadow can still replace it; an inline style would outrank that.
+        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-[var(--border)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
         style={{ aspectRatio: "var(--poster-ratio)" }}
         onClick={() => onSelect(result)}
         onKeyDown={(e) => {
@@ -899,7 +904,7 @@ function ResultCard({
                   type="button"
                   disabled={!newListName.trim() || savingNewList}
                   onClick={(e) => { e.stopPropagation(); void submitNewList(); }}
-                  className="flex-none rounded-md bg-claw-500 px-2.5 py-1 text-2xs font-semibold text-claw-on transition-colors hover:bg-claw-600 disabled:opacity-50"
+                  className="btn-primary btn-xs flex-none"
                 >
                   {savingNewList ? "…" : "Add"}
                 </button>

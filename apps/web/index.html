@@ -151,7 +151,10 @@
         height: 32px;
         border-radius: 50%;
         border: 3px solid rgba(150, 150, 150, 0.25);
-        border-top-color: #d6502a;
+        /* theme-init.js sets --loader-accent from the live theme's --accent
+           before this paints. The fallback is the light theme's accent, for
+           the case where that script did not run at all. */
+        border-top-color: var(--loader-accent, #d97742);
         animation: initial-loader-spin 0.8s linear infinite;
       }
       @keyframes initial-loader-spin {

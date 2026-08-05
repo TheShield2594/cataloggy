@@ -95,7 +95,7 @@ function ToastContainer({
           onAnimationEnd={toast.exiting ? () => onExited(toast.id) : undefined}
           // `pointer-events-none` while fading: a toast on its way out must not
           // take a second Undo click during the animation.
-          className={`${toast.exiting ? "toast-exit pointer-events-none" : "toast-enter"} flex items-center gap-3 rounded-xl border px-5 py-3.5 shadow-e2 ${
+          className={`glass-surface ${toast.exiting ? "toast-exit pointer-events-none" : "toast-enter"} flex items-center gap-3 rounded-xl border px-5 py-3.5 shadow-e2 ${
             toast.type === "success"
               ? "border-emerald-500/30"
               : toast.type === "error"

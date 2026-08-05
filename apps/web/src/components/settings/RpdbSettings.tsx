@@ -82,8 +82,7 @@ export function RpdbSettings() {
           <button
             type="button"
             onClick={disconnect}
-            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-rose-600 hover:text-white border"
-            style={{ color: "var(--text-dim)", borderColor: "var(--border)", background: "var(--bg-1)" }}
+            className="btn-secondary hover:bg-rose-600 hover:text-white"
           >
             <Unplug size={16} /> Remove Key
           </button>
@@ -113,11 +112,7 @@ export function RpdbSettings() {
           <button
             type="submit"
             disabled={saving || !apiKey.trim()}
-            className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-base ${
-              saved
-                ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/20"
-                : "bg-claw-500 text-claw-on hover:bg-claw-600 disabled:opacity-50"
-            }`}
+            className={`btn-primary ${saved ? "btn-saved" : ""}`}
           >
             {saved ? <><Check size={16} /> Saved</> : saving ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : "Save RPDB Key"}
           </button>
