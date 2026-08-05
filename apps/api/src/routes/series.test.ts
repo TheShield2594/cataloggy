@@ -220,6 +220,37 @@ describe("GET /series/progress — season-level counts", () => {
     await app.close();
   });
 
+  it("looks the seasons up once per series and hands them to the next-episode math", async () => {
+    // A failed TMDB lookup isn't cached, so a second call would be a second
+    // failing request rather than a cache hit.
+    watched([{ season: 2, episode: 3 }]);
+    const seasons = [{ seasonNumber: 2, name: "Season 2", episodeCount: 22, airYear: 1998, poster: null }];
+    seasonsMock.getSeasonsForImdbId.mockResolvedValue(seasons);
+
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/series/progress" });
+
+    expect(seasonsMock.getSeasonsForImdbId).toHaveBeenCalledTimes(1);
+    expect(nextEpisodeMock.computeNextEpisode).toHaveBeenCalledWith("tt-buffy", 95, 2, 3, seasons);
+    await app.close();
+  });
+
+  it("ignores a row carrying no episode number, which is not one watched episode", async () => {
+    watched([
+      { season: 2, episode: 1 },
+      { season: 2, episode: null as unknown as number },
+    ]);
+    seasonsMock.getSeasonsForImdbId.mockResolvedValue([
+      { seasonNumber: 2, name: "Season 2", episodeCount: 22, airYear: 1998, poster: null },
+    ]);
+
+    const app = await buildApp();
+    const response = await app.inject({ method: "GET", url: "/series/progress" });
+
+    expect(response.json().progress[0].seasonWatchedEpisodes).toBe(1);
+    await app.close();
+  });
+
   it("leaves the season total null when TMDB has no season data", async () => {
     watched([{ season: 2, episode: 3 }]);
     seasonsMock.getSeasonsForImdbId.mockResolvedValue([]);
