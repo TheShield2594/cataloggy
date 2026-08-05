@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { prefetchRoute } from "../utils/routePrefetch";
+import { useExitAnimation } from "../hooks/useExitAnimation";
 
 type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean };
 
@@ -114,6 +115,7 @@ export function MobileTabBar({ pathname }: { pathname: string }) {
 
 function MoreSheet({ pathname, onClose }: { pathname: string; onClose: () => void }) {
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
+  const { exiting, requestClose, onExitAnimationEnd } = useExitAnimation(onClose);
 
   useEffect(() => {
     firstLinkRef.current?.focus();
@@ -121,22 +123,23 @@ function MoreSheet({ pathname, onClose }: { pathname: string; onClose: () => voi
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") requestClose();
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [onClose]);
+  }, [requestClose]);
 
   return (
     <div className="fixed inset-0 z-50 sm:hidden" role="dialog" aria-modal="true" aria-label="More destinations">
       <button
         type="button"
         aria-label="Close menu"
-        onClick={onClose}
-        className="absolute inset-0 h-full w-full bg-black/60 backdrop-blur-sm"
+        onClick={requestClose}
+        className={`overlay-scrim overlay-fade absolute inset-0 h-full w-full ${exiting ? "overlay-exit" : ""}`}
       />
       <div
-        className="glass-surface absolute bottom-0 left-0 right-0 rounded-t-2xl p-2"
+        className={`glass-surface overlay-sheet absolute bottom-0 left-0 right-0 rounded-t-2xl p-2 ${exiting ? "overlay-exit" : ""}`}
+        onAnimationEnd={onExitAnimationEnd}
         style={{
           background: "var(--bg-1)",
           borderTop: "1px solid var(--border)",
@@ -152,7 +155,9 @@ function MoreSheet({ pathname, onClose }: { pathname: string; onClose: () => voi
                 <Link
                   ref={index === 0 ? firstLinkRef : undefined}
                   to={item.to}
-                  onClick={onClose}
+                  // Navigation happens on the click; the sheet slides out over
+                  // the destination page.
+                  onClick={requestClose}
                   onTouchStart={() => prefetchRoute(item.to)}
                   onPointerEnter={() => prefetchRoute(item.to)}
                   aria-current={isActive ? "page" : undefined}

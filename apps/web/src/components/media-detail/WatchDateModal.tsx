@@ -4,6 +4,7 @@ import { WatchLogTarget } from "./detailPanelUtils";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useScrollLock } from "../../hooks/useScrollLock";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
+import { useExitAnimation } from "../../hooks/useExitAnimation";
 
 export function WatchDateModal({
   target,
@@ -19,9 +20,10 @@ export function WatchDateModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useFocusTrap<HTMLDivElement>();
+  const { exiting, requestClose, onExitAnimationEnd } = useExitAnimation(onClose);
 
   useScrollLock();
-  useEscapeKey(onClose);
+  useEscapeKey(requestClose);
 
   // For episode mode: let user pick season+episode
   const [season, setSeason] = useState(target.kind === "episode" ? target.season : 1);
@@ -33,7 +35,7 @@ export function WatchDateModal({
     try {
       const episodeInfo = target.kind === "episode" ? { season, episode } : undefined;
       await onLog(dateIso, episodeInfo, dateUnknown);
-      onClose();
+      requestClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to log watch");
       setSaving(false);
@@ -44,8 +46,8 @@ export function WatchDateModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-      onClick={onClose}
+      className={`overlay-scrim overlay-fade fixed inset-0 z-[60] flex items-center justify-center p-4 ${exiting ? "overlay-exit" : ""}`}
+      onClick={requestClose}
     >
       <div
         ref={dialogRef}
@@ -53,13 +55,14 @@ export function WatchDateModal({
         aria-modal="true"
         aria-labelledby="watch-date-modal-title"
         tabIndex={-1}
-        className="w-full max-w-sm rounded-2xl border p-6 shadow-md"
+        className={`overlay-dialog w-full max-w-sm rounded-2xl border p-6 shadow-md ${exiting ? "overlay-exit" : ""}`}
         style={{ borderColor: "var(--border)", background: "var(--bg-0)" }}
         onClick={(e) => e.stopPropagation()}
+        onAnimationEnd={onExitAnimationEnd}
       >
         <div className="mb-5 flex items-center justify-between">
           <h3 id="watch-date-modal-title" className="text-base font-semibold" style={{ color: "var(--text)" }}>When did you watch this?</h3>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1 hover:opacity-80" style={{ color: "var(--text-mute)" }}>
+          <button type="button" onClick={requestClose} aria-label="Close" className="rounded-lg p-1 hover:opacity-80" style={{ color: "var(--text-mute)" }}>
             <X className="h-4 w-4" />
           </button>
         </div>

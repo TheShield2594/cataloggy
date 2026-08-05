@@ -16,7 +16,10 @@ export function CheckInBlock({
   onStartSeriesCheckin: () => void;
   onCheckout: (logWatch: boolean) => void;
 }) {
-  if (loading) return null;
+  // Hold the Check In button's footprint (42px = py-2.5 + text-sm line height
+  // + borders) instead of rendering nothing — the button materialising a beat
+  // after the panel opened shoved every section below it down.
+  if (loading) return <div className="skeleton h-[42px] w-full rounded-xl" aria-hidden="true" />;
 
   if (activeCheckin) {
     return (

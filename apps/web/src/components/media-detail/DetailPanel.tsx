@@ -20,6 +20,7 @@ import { formatRating, ratingLabel, RATING_MAX } from "../../utils/rating";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useScrollLock } from "../../hooks/useScrollLock";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
+import { useExitAnimation } from "../../hooks/useExitAnimation";
 import type { ShowToast } from "../../hooks/useToast";
 import { relogWatchEvent } from "../../utils/watchEvents";
 import { invalidateDetailBundle, type PanelDetail } from "./useDetailPanel";
@@ -36,6 +37,7 @@ export function DetailPanel({
   onShowToast,
   onHistoryChange,
   onSelectItem,
+  staticScrim = false,
 }: {
   item: SearchResult;
   history: WatchEvent[];
@@ -47,8 +49,17 @@ export function DetailPanel({
   onShowToast: ShowToast;
   onHistoryChange: (events: WatchEvent[]) => void;
   onSelectItem: (item: SearchResult) => void;
+  /**
+   * The command palette opens this panel over a scrim it already has up, and
+   * takes the scrim back when the panel closes. Both backdrops are the same
+   * `.overlay-scrim`, so holding this one still — no fade in, no fade out —
+   * is what makes the swap read as one surface replacing another rather than
+   * the whole backdrop blinking.
+   */
+  staticScrim?: boolean;
 }) {
   const dialogRef = useFocusTrap<HTMLDivElement>();
+  const { exiting, requestClose, onExitAnimationEnd } = useExitAnimation(onClose);
 
   // Undo runs from a toast that outlives the interaction that raised it: the
   // panel can have moved on to a recommendation, or the history behind it can
@@ -60,7 +71,7 @@ export function DetailPanel({
   historyRef.current = history;
 
   useScrollLock();
-  useEscapeKey(onClose);
+  useEscapeKey(requestClose);
 
   // Cast, providers, recommendations and seasons all arrive together in `detail`
   // — one request made by `useDetailPanel`, rather than the five this component
@@ -272,8 +283,8 @@ export function DetailPanel({
   return (
     <>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/70 backdrop-blur-sm sm:p-6"
-        onClick={onClose}
+        className={`overlay-scrim fixed inset-0 z-50 flex items-center justify-center overflow-hidden sm:p-6 ${staticScrim ? "" : "overlay-fade"} ${exiting ? "overlay-exit" : ""}`}
+        onClick={requestClose}
       >
         {item.background && (
           <img
@@ -290,12 +301,13 @@ export function DetailPanel({
           aria-label={item.name}
           tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
-          className="glass-surface relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-feature sm:h-auto sm:max-h-[85vh] sm:max-w-4xl sm:flex-row sm:rounded-3xl sm:border lg:max-w-5xl"
+          onAnimationEnd={onExitAnimationEnd}
+          className={`glass-surface overlay-panel relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-feature sm:h-auto sm:max-h-[85vh] sm:max-w-4xl sm:flex-row sm:rounded-3xl sm:border lg:max-w-5xl ${exiting ? "overlay-exit" : ""}`}
           style={{ background: "var(--bg-0)", borderColor: "var(--border)" }}
         >
           {/* Close */}
           <button
-            type="button" onClick={onClose}
+            type="button" onClick={requestClose}
             className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full shadow-lg backdrop-blur transition-colors hover:text-white"
             style={{ background: "color-mix(in srgb, var(--bg-0) 80%, transparent)", color: "var(--bg-2)" }}
             aria-label="Close detail panel"
@@ -418,7 +430,7 @@ export function DetailPanel({
           )}
 
           {/* External Ratings */}
-          <ExternalRatings imdbRating={item.imdbRating} rtScore={item.rtScore} mcScore={item.mcScore} />
+          <ExternalRatings imdbRating={item.imdbRating} rtScore={item.rtScore} mcScore={item.mcScore} loading={sectionsLoading} />
 
           {/* External Links */}
           <ExternalLinks imdbId={item.imdbId} tmdbId={item.tmdbId} type={item.type} />

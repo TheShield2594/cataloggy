@@ -5,6 +5,7 @@ import { api, SearchResult } from "../api";
 import { Poster } from "./Poster";
 import { DetailPanel, useDetailPanel } from "./MediaDetailPanel";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import { useExitAnimation } from "../hooks/useExitAnimation";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useToast } from "../hooks/useToast";
 
@@ -29,10 +30,18 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const activeRowRef = useRef<HTMLButtonElement>(null);
   const { showToast } = useToast();
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading, detail: panelDetail, detailLoading: panelDetailLoading } = useDetailPanel();
+  const { exiting, requestClose, onExitAnimationEnd, reset } = useExitAnimation(onClose);
+
+  // A DetailPanel opened from a result is drawn over a scrim this palette
+  // already faded in, and hands it back on close. Holding the scrim still
+  // across both swaps (staticScrim on the panel; no re-fade here on return)
+  // keeps the backdrop reading as one surface. State rather than a render-time
+  // ref read, so the class can't flip mid-session and replay the fade.
+  const [scrimHandedBack, setScrimHandedBack] = useState(false);
 
   // Bottom of the stack relative to any DetailPanel opened from a result, so
   // Escape closes the panel back to the palette rather than both at once.
-  useEscapeKey(onClose, open);
+  useEscapeKey(requestClose, open);
 
   // Arrowing past the fold of the max-h-[60vh] scroller would otherwise move
   // the highlight somewhere the user can't see. "nearest" makes this a no-op
@@ -46,9 +55,14 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       setQuery("");
       setResults([]);
       setActiveIndex(0);
+      // The palette stays mounted across open/close cycles, so a fresh open
+      // has to clear the previous close's exit state — and a fresh open means
+      // a fresh scrim, which should fade in again.
+      reset();
+      setScrimHandedBack(false);
       setTimeout(() => inputRef.current?.focus(), 10);
     }
-  }, [open]);
+  }, [open, reset]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -86,22 +100,23 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   }, [query]);
 
   const goToSearch = useCallback((q: string) => {
-    onClose();
+    // Navigate immediately; the palette animates out over the new page.
+    requestClose();
     navigate(`/search?q=${encodeURIComponent(q)}`);
-  }, [navigate, onClose]);
+  }, [navigate, requestClose]);
 
   const openDetail = useCallback((r: SearchResult) => {
     setSelectedItem(r);
   }, [setSelectedItem]);
 
   const actions: Action[] = [
-    { id: "nav-dashboard", label: "Go to Dashboard", icon: Clapperboard, run: () => { onClose(); navigate("/"); } },
-    { id: "nav-search", label: "Go to Search", icon: Search, run: () => { onClose(); navigate("/search"); } },
-    { id: "nav-lists", label: "Go to Lists", icon: List, run: () => { onClose(); navigate("/lists"); } },
-    { id: "nav-games", label: "Go to Games", icon: Gamepad2, run: () => { onClose(); navigate("/games"); } },
-    { id: "nav-calendar", label: "Go to Calendar", icon: CalendarDays, run: () => { onClose(); navigate("/calendar"); } },
-    { id: "nav-stats", label: "Go to Stats", icon: BarChart3, run: () => { onClose(); navigate("/stats"); } },
-    { id: "nav-settings", label: "Go to Settings", icon: Settings, run: () => { onClose(); navigate("/settings"); } },
+    { id: "nav-dashboard", label: "Go to Dashboard", icon: Clapperboard, run: () => { requestClose(); navigate("/"); } },
+    { id: "nav-search", label: "Go to Search", icon: Search, run: () => { requestClose(); navigate("/search"); } },
+    { id: "nav-lists", label: "Go to Lists", icon: List, run: () => { requestClose(); navigate("/lists"); } },
+    { id: "nav-games", label: "Go to Games", icon: Gamepad2, run: () => { requestClose(); navigate("/games"); } },
+    { id: "nav-calendar", label: "Go to Calendar", icon: CalendarDays, run: () => { requestClose(); navigate("/calendar"); } },
+    { id: "nav-stats", label: "Go to Stats", icon: BarChart3, run: () => { requestClose(); navigate("/stats"); } },
+    { id: "nav-settings", label: "Go to Settings", icon: Settings, run: () => { requestClose(); navigate("/settings"); } },
   ];
 
   const visibleActions = query.trim()
@@ -140,9 +155,14 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         historyLoading={panelHistoryLoading}
         detail={panelDetail}
         detailLoading={panelDetailLoading}
+        // The panel opens over the scrim this palette already faded in.
+        staticScrim
         // Drops back to the palette rather than dismissing both layers — the
         // palette keeps its query and results, so the next title is one click away.
-        onClose={() => setSelectedItem(null)}
+        onClose={() => {
+          setScrimHandedBack(true);
+          setSelectedItem(null);
+        }}
         onShowToast={showToast}
         onHistoryChange={(events) => setPanelHistory(events)}
         onSelectItem={setSelectedItem}
@@ -155,18 +175,21 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   return (
     <div
       className="fixed inset-0 z-[100] flex items-start justify-center px-4 pt-[12vh]"
-      onClick={onClose}
+      onClick={requestClose}
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"
     >
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      {/* Fades on a fresh open, holds still when a closing DetailPanel hands
+          the (identical) scrim back — but always fades out with the palette. */}
+      <div className={`overlay-scrim absolute inset-0 ${scrimHandedBack && !exiting ? "" : "overlay-fade"} ${exiting ? "overlay-exit" : ""}`} />
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="glass-surface relative w-full max-w-lg overflow-hidden rounded-2xl shadow-feature"
+        className={`glass-surface overlay-dialog relative w-full max-w-lg overflow-hidden rounded-2xl shadow-feature ${exiting ? "overlay-exit" : ""}`}
         style={{ background: "var(--bg-0)", border: "1px solid var(--border-strong)" }}
         onClick={(e) => e.stopPropagation()}
+        onAnimationEnd={onExitAnimationEnd}
       >
         <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: "1px solid var(--border)" }}>
           <Search className="h-4 w-4 flex-none" style={{ color: "var(--text-mute)" }} />

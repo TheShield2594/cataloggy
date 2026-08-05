@@ -178,14 +178,14 @@ function AddItemModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm pt-[10vh]" onClick={onClose}>
+    <div className="overlay-scrim overlay-fade fixed inset-0 z-50 flex items-start justify-center pt-[10vh]" onClick={onClose}>
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-item-modal-title"
         tabIndex={-1}
-        className="glass-surface w-full max-w-lg rounded-2xl border shadow-sm"
+        className="glass-surface overlay-dialog w-full max-w-lg rounded-2xl border shadow-sm"
         style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}
       >

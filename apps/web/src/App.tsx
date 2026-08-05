@@ -61,7 +61,7 @@ const LoadingFallback = ({ label = "Loading…" }: { label?: string }) => (
 // screen between the click and the chunk arriving. Hold the overlay instead.
 const ProfileSwitcherFallback = () => (
   <div
-    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+    className="overlay-scrim overlay-fade fixed inset-0 z-50 flex items-center justify-center"
     aria-busy="true"
   >
     <LoadingFallback label="Loading profiles…" />

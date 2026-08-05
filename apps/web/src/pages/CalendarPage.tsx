@@ -117,14 +117,14 @@ function DayEntriesModal({
   const heading = date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm px-4 pt-[10vh]" onClick={onClose}>
+    <div className="overlay-scrim overlay-fade fixed inset-0 z-50 flex items-start justify-center px-4 pt-[10vh]" onClick={onClose}>
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="calendar-day-modal-title"
         tabIndex={-1}
-        className="glass-surface w-full max-w-md rounded-2xl shadow-sm"
+        className="glass-surface overlay-dialog w-full max-w-md rounded-2xl shadow-sm"
         style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}
       >

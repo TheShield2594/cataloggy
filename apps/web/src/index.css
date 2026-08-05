@@ -461,6 +461,126 @@ body {
   animation: slide-in 0.6s ease-out;
 }
 
+/*
+ * Overlay choreography — one entrance/exit grammar for every modal, panel,
+ * sheet and popover, so no surface teleports in or out in a single frame.
+ *
+ * Three motions, as keyframe pairs:
+ *
+ *   fade   150ms  the scrim (and anything that should only fade)
+ *   pop    200ms  centered dialogs — fade + scale from 0.97
+ *   sheet  260ms  bottom sheets and full-screen mobile panels, on the iOS
+ *                 sheet curve
+ *
+ * `.overlay-scrim` is the scrim's *paint* — every backdrop shares one darkness
+ * and blur, so stacked or swapped overlays (command palette → detail panel)
+ * agree instead of jumping between opacities. Animation is opted into
+ * separately via `.overlay-fade`, because a surface replacing another over an
+ * identical scrim (the palette handing off to a detail panel) keeps the scrim
+ * still rather than re-fading it.
+ *
+ * Exits: adding `.overlay-exit` beside the entrance class swaps in the
+ * reversed animation, slightly faster, held at its end by `forwards` until
+ * React unmounts the node. `useExitAnimation` owns that lifecycle — it is the
+ * toast's exit pattern (class swap → animationend → unmount, with a fallback
+ * timer) extracted for the rest of the overlays. `pointer-events: none` while
+ * exiting, for the same reason the toast does it: a surface on its way out
+ * must not take another click.
+ *
+ * The prefers-reduced-motion block below collapses all of this to 0.001ms
+ * automatically — entrances and exits both become instant, and the
+ * animationend that drives unmounting still fires.
+ */
+
+.overlay-scrim {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+@keyframes overlay-fade-in {
+  from { opacity: 0; }
+}
+
+@keyframes overlay-fade-out {
+  to { opacity: 0; }
+}
+
+@keyframes overlay-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@keyframes overlay-pop-out {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@keyframes overlay-sheet-in {
+  from { transform: translateY(100%); }
+}
+
+@keyframes overlay-sheet-out {
+  to { transform: translateY(100%); }
+}
+
+:root {
+  /* iOS's sheet curve: fast out of the gate, long settle. */
+  --overlay-sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.overlay-fade {
+  animation: overlay-fade-in 150ms ease-out;
+}
+
+.overlay-dialog {
+  animation: overlay-pop-in 200ms ease-out;
+}
+
+.overlay-sheet {
+  animation: overlay-sheet-in 260ms var(--overlay-sheet-ease);
+}
+
+/* Detail panels: full-screen sheet on phones, centered dialog from sm: up —
+   the same breakpoint their layout switches on. */
+.overlay-panel {
+  animation: overlay-sheet-in 260ms var(--overlay-sheet-ease);
+}
+
+.overlay-exit {
+  pointer-events: none;
+}
+
+.overlay-fade.overlay-exit {
+  animation: overlay-fade-out 150ms ease-in forwards;
+}
+
+.overlay-dialog.overlay-exit {
+  animation: overlay-pop-out 150ms ease-in forwards;
+}
+
+.overlay-sheet.overlay-exit {
+  animation: overlay-sheet-out 200ms var(--overlay-sheet-ease) forwards;
+}
+
+.overlay-panel.overlay-exit {
+  animation: overlay-sheet-out 200ms var(--overlay-sheet-ease) forwards;
+}
+
+@media (min-width: 640px) {
+  .overlay-panel {
+    animation: overlay-pop-in 200ms ease-out;
+  }
+
+  .overlay-panel.overlay-exit {
+    animation: overlay-pop-out 150ms ease-in forwards;
+  }
+}
+
 /* Toast slide-in animation */
 @keyframes toast-in {
   from {
