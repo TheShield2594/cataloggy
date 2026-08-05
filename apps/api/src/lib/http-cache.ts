@@ -22,7 +22,14 @@ import type { FastifyInstance } from "fastify";
 const METADATA_MAX_AGE_SEC = 5 * 60;
 const METADATA_STALE_WHILE_REVALIDATE_SEC = 24 * 60 * 60;
 
-const METADATA_PATH_RE = /^\/(meta\/|recommendations(\/|$|\?)|trending|popular|streaming(\/|$|\?)|anime)/;
+// `meta/` deliberately excludes the bundle suffix, and `recommendations` is
+// pinned to the bare path. Both carry per-profile content that a 24-hour
+// stale-while-revalidate would freeze: the bundle includes the dropped flag, and
+// `/recommendations/personal` is generated from the profile's own watch history.
+// Prefix-matching them into this tier meant marking one user's private,
+// mutable answer cacheable for a day.
+const METADATA_PATH_RE =
+  /^\/(meta\/(?!.*\/bundle$)|recommendations(\?|$)|trending|popular|streaming(\/|$|\?)|anime)/;
 
 const REVALIDATE_PATH_RE = new RegExp(
   "^/(" +
@@ -38,6 +45,10 @@ const REVALIDATE_PATH_RE = new RegExp(
       "collection",
       "games(/.*)?",
       "tags",
+      // Per-profile, and changed by the user's own actions.
+      "meta/[^/]+/[^/]+/bundle",
+      "recommendations/personal",
+      "recommendations/ai",
     ].join("|") +
     ")$"
 );

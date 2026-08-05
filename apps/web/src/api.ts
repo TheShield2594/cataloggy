@@ -350,6 +350,17 @@ export type WatchProviders = {
   ads: WatchProvider[];
 };
 
+/** Everything the detail panel opens with, as `/meta/:type/:imdbId/bundle` returns it. */
+export type DetailBundle = {
+  meta: ItemMeta;
+  cast: CastMemberInfo[];
+  director: string | null;
+  providers: WatchProviders;
+  recommendations: TrendingMeta[];
+  seasons: SeasonSummary[];
+  dropped: boolean;
+};
+
 export type EpisodeInfo = {
   episodeNumber: number;
   name: string;
@@ -578,10 +589,26 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
     // A GET the preload script already started: adopt it rather than issue a
     // second one. Only for plain GETs — anything with a body, custom headers or
     // a caller-supplied signal is not the request that was preloaded.
-    const preloaded =
+    const claimed =
       method === "GET" && !init?.body && !init?.headers && !init?.signal
-        ? await claimPreloadedResponse(path)
+        ? claimPreloadedResponse(path)
         : null;
+
+    // An adopted preload is a promise nothing else governs: the timeout above
+    // and any caller abort apply to `fetch`, not to a request the page head
+    // started. Racing it against the same signal keeps both behaving alike, so a
+    // preload that never settles cannot hang the caller forever.
+    const preloaded = claimed
+      ? await Promise.race([
+          claimed,
+          new Promise<never>((_, reject) => {
+            const abort = () =>
+              reject(new DOMException("The operation was aborted.", "AbortError"));
+            if (controller.signal.aborted) abort();
+            else controller.signal.addEventListener("abort", abort, { once: true });
+          }),
+        ])
+      : null;
 
     response =
       preloaded ??
@@ -891,15 +918,7 @@ export const api = {
    * only finish filling in when the slowest of the six landed.
    */
   getDetailBundle(type: MediaType, imdbId: string, signal?: AbortSignal) {
-    return request<{
-      meta: ItemMeta;
-      cast: CastMemberInfo[];
-      director: string | null;
-      providers: WatchProviders;
-      recommendations: TrendingMeta[];
-      seasons: SeasonSummary[];
-      dropped: boolean;
-    }>(`/meta/${type}/${encodeURIComponent(imdbId)}/bundle`, { signal });
+    return request<DetailBundle>(`/meta/${type}/${encodeURIComponent(imdbId)}/bundle`, { signal });
   },
   /**
    * Still its own call: the search page fetches providers per result row as the

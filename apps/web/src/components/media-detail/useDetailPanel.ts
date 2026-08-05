@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
-import { api, SearchResult, WatchEvent } from "../../api";
+import { api, type DetailBundle, SearchResult, WatchEvent } from "../../api";
 
 /* ─── Hook: open panel with history + detail loading ───────── */
-
-type DetailBundle = Awaited<ReturnType<typeof api.getDetailBundle>>;
 
 /** Everything the panel shows about a title, other than the user's watch history. */
 export type PanelDetail = {

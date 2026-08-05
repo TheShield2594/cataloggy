@@ -212,7 +212,10 @@ export function CalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+    // `setEntries` is bound to the current day range's cache key, so it has to
+    // be a dependency — capturing the first range's setter would file every
+    // later range's results under the wrong key.
+  }, [setEntries]);
 
   useEffect(() => {
     if (monthOutOfRange) {
@@ -221,7 +224,7 @@ export function CalendarPage() {
       return;
     }
     void load(daysNeeded);
-  }, [daysNeeded, monthOutOfRange, load]);
+  }, [daysNeeded, monthOutOfRange, load, setEntries]);
 
   const entriesByDate = useMemo(() => {
     const map = new Map<string, CalendarEntry[]>();

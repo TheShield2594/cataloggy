@@ -44,6 +44,20 @@ export function useCachedState<T>(
   const [value, setValue] = useState<T>(() => readCache<T>(key, maxAgeMs) ?? fallback);
   const hadCachedValueRef = useRef(readCache<T>(key, maxAgeMs) !== undefined);
 
+  // Some keys are derived from state — the calendar's day range, the games
+  // page's sort order — so the key can change without the component
+  // remounting. `useState`'s initialiser runs once, so without this the hook
+  // would keep serving the previous key's value under the new key's name. Done
+  // during render rather than in an effect for the same reason as the
+  // initialiser: an effect would paint the wrong range for a frame first.
+  const previousKeyRef = useRef(key);
+  if (previousKeyRef.current !== key) {
+    previousKeyRef.current = key;
+    const cached = readCache<T>(key, maxAgeMs);
+    hadCachedValueRef.current = cached !== undefined;
+    setValue(cached ?? fallback);
+  }
+
   // Callers pass updater functions (`setEvents(prev => [...prev, ...page])`), so
   // this has to accept them to be a drop-in. The updater is resolved here rather
   // than inside `setValue`, because writing to the cache notifies subscribers,

@@ -4,20 +4,21 @@ import { getTmdb } from "../lib/tmdb-client.js";
 import { upsertMetadata, syncMetadata } from "../lib/metadata.js";
 import { getOmdbApiKey, fetchOmdbRatings, upsertOmdbRatings } from "../lib/omdb.js";
 import { getMetadataType } from "../lib/types.js";
-import { episodesCache } from "../lib/cache.js";
-import { coalesce } from "../lib/coalesce.js";
 import {
   EMPTY_PROVIDERS,
   loadCast,
+  loadEpisodes,
   loadMeta,
   loadProviders,
   loadSeasons,
-  resolveTmdbId,
 } from "../lib/detail.js";
-import { loadRecommendations } from "./ai.js";
+import { loadRecommendations } from "../lib/recommendations.js";
 import { droppedSeriesKey } from "../lib/dropped-shows.js";
 import { resolveProfile } from "../lib/profile.js";
 import { searchAnime } from "../lib/anilist-client.js";
+
+/** Resolves to `fallback` instead of rejecting, for the bundle's optional sections. */
+const settled = <T,>(work: Promise<T>, fallback: T): Promise<T> => work.catch(() => fallback);
 
 const metadataRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { type: string; imdbId: string } }>(
@@ -70,25 +71,7 @@ const metadataRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: "seasonNumber must be a positive integer" });
       }
 
-      const cacheKey = `episodes:${imdbId}:${seasonNumber}`;
-      const cached = episodesCache.get(cacheKey);
-      if (cached) return { episodes: cached };
-
-      const tmdbId = await resolveTmdbId("series", imdbId, request.log);
-      if (!tmdbId) return { episodes: [] };
-
-      return coalesce(cacheKey, async () => {
-        const raced = episodesCache.get(cacheKey);
-        if (raced) return { episodes: raced };
-        try {
-          const tmdb = await getTmdb();
-          const episodes = await tmdb.getSeasonEpisodes(tmdbId, seasonNumber);
-          episodesCache.set(cacheKey, episodes);
-          return { episodes };
-        } catch {
-          return { episodes: [] };
-        }
-      });
+      return { episodes: await loadEpisodes(imdbId, seasonNumber, request.log) };
     }
   );
 
@@ -128,25 +111,29 @@ const metadataRoutes: FastifyPluginAsync = async (app) => {
       const isSeries = type === "series";
       const profileId = request.profileId!;
 
-      // Each section already degrades to an empty result of its own accord, so a
-      // failing provider lookup costs the panel its "where to watch" row and
-      // nothing else. `meta` is the exception — it is the panel — so a rejection
-      // there is allowed to surface.
-      const [meta, cast, providers, recommendations, seasons, dropped] = await Promise.all([
-        loadMeta(type, imdbId),
-        loadCast(type, imdbId, request.log),
-        loadProviders(type, imdbId, request.log),
-        loadRecommendations(request.params.type, type, imdbId),
-        isSeries ? loadSeasons(imdbId, request.log) : Promise.resolve([]),
+      // `meta` is the panel — without it there is nothing to render, so its
+      // rejection is allowed to surface as a 500. The other five are sections
+      // within it, and each already degrades to an empty result of its own
+      // accord; `allSettled` covers the paths that get past those guards (a
+      // database blip inside the dropped lookup, an upstream throwing before its
+      // own try block) so one failing row cannot take the whole panel with it.
+      const meta = await loadMeta(type, imdbId);
+      if (!meta) return reply.code(404).send({ error: "Metadata not found" });
+
+      const [cast, providers, recommendations, seasons, dropped] = await Promise.all([
+        settled(loadCast(type, imdbId, request.log), { cast: [], director: null }),
+        settled(loadProviders(type, imdbId, request.log), EMPTY_PROVIDERS),
+        settled(loadRecommendations(request.params.type, type, imdbId), { metas: [] }),
+        isSeries ? settled(loadSeasons(imdbId, request.log), []) : Promise.resolve([]),
         isSeries
-          ? prisma.kV
-              .findUnique({ where: { key: droppedSeriesKey(profileId, imdbId) } })
-              .then((row) => !!row)
-              .catch(() => false)
+          ? settled(
+              prisma.kV
+                .findUnique({ where: { key: droppedSeriesKey(profileId, imdbId) } })
+                .then((row) => !!row),
+              false
+            )
           : Promise.resolve(false),
       ]);
-
-      if (!meta) return reply.code(404).send({ error: "Metadata not found" });
 
       return {
         meta,

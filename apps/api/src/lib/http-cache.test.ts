@@ -19,6 +19,16 @@ describe("cacheTierFor", () => {
     expect(cacheTierFor("/calendar?days=14")).toBe("revalidate");
   });
 
+  it("keeps per-profile answers out of the metadata tier", () => {
+    // Both sit under prefixes that otherwise read as immutable TMDB facts, and
+    // both are private and user-mutable: the bundle carries the dropped flag,
+    // and personal recommendations come from the profile's own history. A
+    // day-long stale-while-revalidate on either would freeze one user's data.
+    expect(cacheTierFor("/meta/series/tt0903747/bundle")).toBe("revalidate");
+    expect(cacheTierFor("/recommendations/personal?type=movie")).toBe("revalidate");
+    expect(cacheTierFor("/recommendations/ai")).toBe("revalidate");
+  });
+
   it("leaves anything it doesn't recognise uncached", () => {
     expect(cacheTierFor("/checkin")).toBeNull();
     expect(cacheTierFor("/settings")).toBeNull();

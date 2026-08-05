@@ -296,12 +296,17 @@ function AddItemModal({
 }
 
 export function ListsPage() {
-  const [lists, setLists, listsMeta] = useCachedState<CatalogList[]>("lists:all", []);
+  const [lists, setLists] = useCachedState<CatalogList[]>("lists:all", []);
   // The selection lives in the URL so a list can be linked, bookmarked and
   // reloaded, and so Back undoes a list switch instead of leaving the page.
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedListId = searchParams.get("list");
-  const [listsLoaded, setListsLoaded] = useState(listsMeta.hadCachedValue);
+  // Deliberately false even when the cache seeded `lists`. The cached copy is
+  // good enough to render the sidebar immediately, but this flag also gates
+  // "that list doesn't exist" messaging and the redirect to a default list —
+  // and a list deleted on another device is still present in a stale cache. Both
+  // wait for the fresh response.
+  const [listsLoaded, setListsLoaded] = useState(false);
   const [items, setItems] = useState<ListItemWithMeta[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const [error, setError] = useState<string | null>(null);

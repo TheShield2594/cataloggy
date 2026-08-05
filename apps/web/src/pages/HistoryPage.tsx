@@ -39,12 +39,17 @@ function toSearchResult(event: WatchEvent): SearchResult {
 }
 
 export function HistoryPage() {
-  // Only the first page is cached. Anything scrolled to beyond it is cheap to
-  // re-reach and would otherwise let the cached entry grow without bound.
-  const [events, setEvents, eventsMeta] = useCachedState<WatchEvent[]>("history:events", []);
+  // Only the first page goes through the cache. Appended pages are held
+  // separately and merged for rendering: writing them through would grow the
+  // cached entry without bound as you scroll, and — because a remount restarts
+  // pagination at offset 0 — the first load back would then replace a long
+  // cached list with a single page, collapsing the view.
+  const [firstPage, setFirstPage, firstPageMeta] = useCachedState<WatchEvent[]>("history:events", []);
+  const [extraPages, setExtraPages] = useState<WatchEvent[]>([]);
+  const events = useMemo(() => [...firstPage, ...extraPages], [firstPage, extraPages]);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(!eventsMeta.hadCachedValue);
+  const [loading, setLoading] = useState(!firstPageMeta.hadCachedValue);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -73,7 +78,8 @@ export function HistoryPage() {
       try {
         const page = await loadPage(0);
         if (!cancelled) {
-          setEvents(page);
+          setFirstPage(page);
+          setExtraPages([]);
           setOffset(page.length);
           setError(null);
         }
@@ -90,7 +96,7 @@ export function HistoryPage() {
     setLoadingMore(true);
     try {
       const page = await loadPage(offset);
-      setEvents((prev) => [...prev, ...page]);
+      setExtraPages((prev) => [...prev, ...page]);
       setOffset((prev) => prev + page.length);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load more history");
@@ -115,8 +121,10 @@ export function HistoryPage() {
   // same-day identical plays into a single row's play count — so the insert is
   // keyed on id rather than appending blindly.
   const restoreEvent = (event: WatchEvent) => {
-    setEvents((prev) =>
-      prev.some((e) => e.id === event.id)
+    // A restored row belongs at its date, which is within the first page for
+    // anything recent — and the first page is the list that persists.
+    setFirstPage((prev) =>
+      prev.some((e) => e.id === event.id) || extraPages.some((e) => e.id === event.id)
         ? prev
         : [...prev, event].sort(
             (a, b) => new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime()
@@ -139,7 +147,9 @@ export function HistoryPage() {
   // gating every removal.
   const handleDelete = async (event: WatchEvent) => {
     setDeletingId(event.id);
-    setEvents((prev) => prev.filter((e) => e.id !== event.id));
+    // The row can be in either list, so both are filtered.
+    setFirstPage((prev) => prev.filter((e) => e.id !== event.id));
+    setExtraPages((prev) => prev.filter((e) => e.id !== event.id));
     setOffset((prev) => prev - 1);
     try {
       await api.deleteWatchEvent(event.id);

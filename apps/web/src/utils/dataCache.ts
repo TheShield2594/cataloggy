@@ -42,6 +42,24 @@ export function setCacheScope(next: string): void {
 
 const scopedKey = (key: string) => `${scope}|${key}`;
 
+/** The identity entries are currently being written under. */
+export function getCacheScope(): string {
+  return scope;
+}
+
+/**
+ * Writes only if `expectedScope` is still the active one.
+ *
+ * For anything that starts a request and writes the answer later: a profile
+ * switch in between means the answer belongs to an identity that is no longer
+ * active, and storing it under the new scope would show one profile another's
+ * data. Callers capture the scope before they await and pass it back here.
+ */
+export function writeCacheForScope(expectedScope: string, key: string, value: unknown): void {
+  if (expectedScope !== scope) return;
+  writeCache(key, value);
+}
+
 export function readCache<T>(key: string, maxAgeMs = DEFAULT_MAX_AGE_MS): T | undefined {
   const entry = entries.get(scopedKey(key));
   if (!entry) return undefined;

@@ -18,6 +18,9 @@ export function useCommandPalette() {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        // Holding the shortcut down autorepeats, and a toggle on every repeat
+        // flickers the palette open and shut until the key is released.
+        if (e.repeat) return;
         setOpen((v) => !v);
       }
     };

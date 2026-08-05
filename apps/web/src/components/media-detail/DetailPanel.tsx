@@ -21,7 +21,7 @@ import { useScrollLock } from "../../hooks/useScrollLock";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
 import type { ShowToast } from "../../hooks/useToast";
 import { relogWatchEvent } from "../../utils/watchEvents";
-import type { PanelDetail } from "./useDetailPanel";
+import { invalidateDetailBundle, type PanelDetail } from "./useDetailPanel";
 
 /* ─── Detail Panel ────────────────────────────────────────── */
 
@@ -74,8 +74,15 @@ export function DetailPanel({
 
   // Dropped state (series only) — seeded from the bundle, then owned here, since
   // toggling it has to show immediately rather than wait for a refetch.
-  const [isDropped, setIsDropped] = useState(false);
-  useEffect(() => { setIsDropped(detail?.dropped ?? false); }, [detail?.dropped, item.imdbId]);
+  //
+  // `null` means "not known yet", which is not the same as "not dropped": a
+  // bundle that failed leaves `detail` null with nothing loading, and defaulting
+  // to false there would offer to drop a show that is already dropped. The
+  // button stays hidden until there is an answer.
+  const [isDropped, setIsDropped] = useState<boolean | null>(null);
+  useEffect(() => {
+    setIsDropped(detail ? detail.dropped : null);
+  }, [detail, item.imdbId]);
 
   // Check-in. Stays a request of its own: it is about the user's current
   // session rather than about this title, and it is what tells the panel
@@ -141,6 +148,7 @@ export function DetailPanel({
     try {
       await api.undropShow(imdbId);
       if (currentImdbIdRef.current === imdbId) setIsDropped(false);
+      invalidateDetailBundle(imdbId);
     } catch {
       onShowToast("Failed to update drop status", "error");
     }
@@ -160,6 +168,10 @@ export function DetailPanel({
           action: { label: "Undo", onAction: () => void handleUndrop(imdbId) },
         });
       }
+      // The cached bundle carries the old dropped flag, and it is served for a
+      // minute — long enough to reopen this title and see the state you just
+      // changed still showing the previous value.
+      invalidateDetailBundle(imdbId);
     } catch {
       onShowToast("Failed to update drop status", "error");
     }
@@ -458,8 +470,10 @@ export function DetailPanel({
           {/* Drop Show (series only) */}
           {item.type === "series" && (
             <DropShowButton
-              isDropped={isDropped}
-              loading={sectionsLoading}
+              isDropped={isDropped ?? false}
+              // Hidden until the dropped state is actually known, which covers
+              // both "still loading" and "the bundle failed".
+              loading={sectionsLoading || isDropped === null}
               onToggle={() => void handleToggleDrop()}
             />
           )}

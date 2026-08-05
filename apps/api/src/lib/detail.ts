@@ -1,3 +1,4 @@
+import type { LRUCache } from "lru-cache";
 import type { MetadataType } from "@prisma/client";
 import type { FastifyBaseLogger } from "fastify";
 import { prisma } from "./prisma.js";
@@ -5,9 +6,9 @@ import { getTmdb } from "./tmdb-client.js";
 import { fetchMetadata } from "./metadata.js";
 import { getRpdbApiKey, withRpdbPoster } from "./rpdb.js";
 import { getRegionSetting } from "./settings.js";
-import { castCache, seasonsCache, watchProvidersCache } from "./cache.js";
+import { castCache, episodesCache, seasonsCache, watchProvidersCache } from "./cache.js";
 import { coalesce } from "./coalesce.js";
-import type { Credits, SeasonInfo, WatchProviders } from "../tmdb.js";
+import type { Credits, EpisodeInfo, SeasonInfo, WatchProviders } from "../tmdb.js";
 
 const EMPTY_PROVIDERS: WatchProviders = { link: null, flatrate: [], free: [], ads: [] };
 
@@ -44,53 +45,83 @@ export function resolveTmdbId(
   });
 }
 
-export async function loadCast(
+/**
+ * The shape every TMDB-backed section shares: read the cache, resolve the TMDB
+ * ID, then fetch under a coalesced guard, re-checking the cache inside it
+ * because the ID resolution is itself an await another caller may have used to
+ * get there first. Any upstream failure degrades to `fallback` rather than
+ * propagating — one empty section beats a panel that won't open.
+ */
+async function loadCached<T extends NonNullable<unknown>>(
+  cache: LRUCache<string, T>,
+  cacheKey: string,
   type: MetadataType,
   imdbId: string,
+  fetchFrom: (tmdbId: number) => Promise<T>,
+  fallback: T,
   log?: FastifyBaseLogger
-): Promise<Credits> {
-  const cacheKey = `cast:${type}:${imdbId}`;
-  const cached = castCache.get(cacheKey);
-  if (cached) return cached;
+): Promise<T> {
+  const cached = cache.get(cacheKey);
+  if (cached !== undefined) return cached;
 
   const tmdbId = await resolveTmdbId(type, imdbId, log);
-  if (!tmdbId) return { cast: [], director: null };
+  if (!tmdbId) return fallback;
 
   return coalesce(cacheKey, async () => {
-    // Another caller may have filled this while we waited on the ID.
-    const raced = castCache.get(cacheKey);
-    if (raced) return raced;
+    const raced = cache.get(cacheKey);
+    if (raced !== undefined) return raced;
     try {
-      const tmdb = await getTmdb();
-      const credits = await tmdb.getCast(type, tmdbId);
-      castCache.set(cacheKey, credits);
-      return credits;
+      const value = await fetchFrom(tmdbId);
+      cache.set(cacheKey, value);
+      return value;
     } catch {
-      return { cast: [], director: null };
+      return fallback;
     }
   });
 }
 
-export async function loadSeasons(imdbId: string, log?: FastifyBaseLogger): Promise<SeasonInfo[]> {
-  const cacheKey = `seasons:${imdbId}`;
-  const cached = seasonsCache.get(cacheKey);
-  if (cached) return cached;
+export function loadCast(
+  type: MetadataType,
+  imdbId: string,
+  log?: FastifyBaseLogger
+): Promise<Credits> {
+  return loadCached(
+    castCache,
+    `cast:${type}:${imdbId}`,
+    type,
+    imdbId,
+    async (tmdbId) => (await getTmdb()).getCast(type, tmdbId),
+    { cast: [], director: null },
+    log
+  );
+}
 
-  const tmdbId = await resolveTmdbId("series", imdbId, log);
-  if (!tmdbId) return [];
+export function loadSeasons(imdbId: string, log?: FastifyBaseLogger): Promise<SeasonInfo[]> {
+  return loadCached(
+    seasonsCache,
+    `seasons:${imdbId}`,
+    "series",
+    imdbId,
+    async (tmdbId) => (await getTmdb()).getSeasons(tmdbId),
+    [],
+    log
+  );
+}
 
-  return coalesce(cacheKey, async () => {
-    const raced = seasonsCache.get(cacheKey);
-    if (raced) return raced;
-    try {
-      const tmdb = await getTmdb();
-      const seasons = await tmdb.getSeasons(tmdbId);
-      seasonsCache.set(cacheKey, seasons);
-      return seasons;
-    } catch {
-      return [];
-    }
-  });
+export function loadEpisodes(
+  imdbId: string,
+  seasonNumber: number,
+  log?: FastifyBaseLogger
+): Promise<EpisodeInfo[]> {
+  return loadCached(
+    episodesCache,
+    `episodes:${imdbId}:${seasonNumber}`,
+    "series",
+    imdbId,
+    async (tmdbId) => (await getTmdb()).getSeasonEpisodes(tmdbId, seasonNumber),
+    [],
+    log
+  );
 }
 
 export async function loadProviders(
@@ -98,26 +129,18 @@ export async function loadProviders(
   imdbId: string,
   log?: FastifyBaseLogger
 ): Promise<WatchProviders> {
+  // The region is part of the cache key, so it has to be resolved before the
+  // key exists — unlike the others, this one cannot be a pure delegation.
   const region = await getRegionSetting();
-  const cacheKey = `providers:${type}:${imdbId}:${region}`;
-  const cached = watchProvidersCache.get(cacheKey);
-  if (cached) return cached;
-
-  const tmdbId = await resolveTmdbId(type, imdbId, log);
-  if (!tmdbId) return EMPTY_PROVIDERS;
-
-  return coalesce(cacheKey, async () => {
-    const raced = watchProvidersCache.get(cacheKey);
-    if (raced) return raced;
-    try {
-      const tmdb = await getTmdb();
-      const providers = await tmdb.getWatchProviders(type, tmdbId, region);
-      watchProvidersCache.set(cacheKey, providers);
-      return providers;
-    } catch {
-      return EMPTY_PROVIDERS;
-    }
-  });
+  return loadCached(
+    watchProvidersCache,
+    `providers:${type}:${imdbId}:${region}`,
+    type,
+    imdbId,
+    async (tmdbId) => (await getTmdb()).getWatchProviders(type, tmdbId, region),
+    EMPTY_PROVIDERS,
+    log
+  );
 }
 
 /**
@@ -130,16 +153,21 @@ export async function loadMeta(type: MetadataType, imdbId: string) {
     getRpdbApiKey(),
   ]);
 
-  // A row that is merely present isn't enough — the detail panel wants runtime,
-  // certification, status, network, release date and at least one external
-  // rating, and any of those being absent means the row predates a full sync.
+  // A row that is merely present isn't enough: a row predating a full sync is
+  // missing the fields the detail panel wants, and has to be refetched.
+  //
+  // Which fields count is not the same for both types. `network` is only ever
+  // populated for series — TMDB has no such concept for a film — so requiring it
+  // unconditionally meant every movie failed this check and re-hit TMDB on every
+  // single request, which is the opposite of what the check is for. Certification
+  // and status are excluded outright: plenty of legitimate titles have no
+  // certification in the configured region, and treating a genuine null as
+  // incomplete puts those rows into the same permanent refetch loop.
   const isDetailComplete =
     existing != null &&
     existing.runtime != null &&
-    existing.certification != null &&
-    existing.status != null &&
-    existing.network != null &&
     existing.releaseDate != null &&
+    (existing.type !== "series" || existing.network != null) &&
     (existing.imdbRating != null || existing.rtScore != null || existing.mcScore != null);
 
   if (isDetailComplete) {

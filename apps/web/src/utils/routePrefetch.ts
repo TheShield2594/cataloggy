@@ -1,4 +1,4 @@
-import { isFresh, writeCache } from "./dataCache";
+import { getCacheScope, isFresh, writeCacheForScope } from "./dataCache";
 
 // Every route but the dashboard is code-split, so the first visit to one spends
 // a network round trip fetching its chunk *before* the page mounts and can even
@@ -36,28 +36,32 @@ export const loadCommandPalette = () => import("../components/CommandPalette");
 //
 // Deliberately only the one query each page opens with. Prefetching a page's
 // every section would spend a hover on requests the user may never look at.
-const ROUTE_DATA_WARMERS: Record<string, () => Promise<void>> = {
-  "/lists": async () => {
+// Each warmer captures the active profile scope before it awaits and writes
+// under that scope, not whichever is active when the response lands. Without it,
+// switching profile mid-flight files the previous profile's lists or history
+// under the new one.
+const ROUTE_DATA_WARMERS: Record<string, (scope: string) => Promise<void>> = {
+  "/lists": async (scope) => {
     const { api } = await import("../api");
     const { lists } = await api.getLists();
-    writeCache("lists:all", lists);
+    writeCacheForScope(scope, "lists:all", lists);
   },
   // 30 days is the calendar's default agenda range, so this is the answer the
   // page opens with. Pick another range and it fetches that one itself.
-  "/calendar": async () => {
+  "/calendar": async (scope) => {
     const { api } = await import("../api");
     const { calendar } = await api.getCalendar(30);
-    writeCache("calendar:entries:30", calendar ?? []);
+    writeCacheForScope(scope, "calendar:entries:30", calendar ?? []);
   },
-  "/history": async () => {
+  "/history": async (scope) => {
     const { api } = await import("../api");
-    writeCache("history:events", await api.getWatchHistory(30));
+    writeCacheForScope(scope, "history:events", await api.getWatchHistory(30));
   },
-  "/stats": async () => {
+  "/stats": async (scope) => {
     const { api } = await import("../api");
     const [summary, detailed] = await Promise.all([api.getWatchStats(), api.getDetailedStats()]);
-    writeCache("stats:summary", summary);
-    writeCache("stats:detailed", detailed);
+    writeCacheForScope(scope, "stats:summary", summary);
+    writeCacheForScope(scope, "stats:detailed", detailed);
   },
 };
 
@@ -90,6 +94,11 @@ function start(loader: Loader): void {
  * connection. Unknown paths and repeat calls are no-ops.
  */
 export function prefetchRoute(path: string): void {
+  // A speculative chunk download is as unwelcome as a speculative request on a
+  // metered connection. This gate covered the idle pass and the data warmers but
+  // not the hover-triggered chunk fetch, which is the most frequent of the three.
+  if (!prefetchIsWelcome()) return;
+
   const loader = ROUTE_LOADERS[path];
   if (loader) start(loader);
 
@@ -117,9 +126,10 @@ function warmRouteData(path: string): void {
   if (!prefetchIsWelcome()) return;
 
   warmersInFlight.add(path);
+  const scope = getCacheScope();
   // Cleared on settle rather than kept forever, so a hover after the data has
   // gone stale warms it again instead of being permanently written off.
-  void warmer()
+  void warmer(scope)
     .catch(() => { /* a warm-up is a hint; the page's own load still runs */ })
     .finally(() => warmersInFlight.delete(path));
 }

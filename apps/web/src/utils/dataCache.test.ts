@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  getCacheScope,
   invalidate,
   isFresh,
   readCache,
@@ -7,6 +8,7 @@ import {
   setCacheScope,
   subscribe,
   writeCache,
+  writeCacheForScope,
 } from "./dataCache";
 
 afterEach(() => resetDataCacheForTests());
@@ -59,6 +61,25 @@ describe("dataCache", () => {
 
       setCacheScope("profile-b#0");
       expect(readCache("watchlist")).toBeUndefined();
+    });
+
+    it("drops a write whose scope is no longer active", () => {
+      // A route prefetch captures the scope before it awaits. If the profile
+      // changes while that request is in flight, the answer belongs to whoever
+      // asked for it — storing it now would show one profile another's data.
+      setCacheScope("profile-a#0");
+      const captured = getCacheScope();
+
+      setCacheScope("profile-b#0");
+      writeCacheForScope(captured, "lists:all", ["a's lists"]);
+
+      expect(readCache("lists:all")).toBeUndefined();
+    });
+
+    it("still writes when the scope held throughout", () => {
+      setCacheScope("profile-a#0");
+      writeCacheForScope(getCacheScope(), "lists:all", ["a's lists"]);
+      expect(readCache<string[]>("lists:all")).toEqual(["a's lists"]);
     });
 
   });

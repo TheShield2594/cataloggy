@@ -46,15 +46,25 @@ describe("coalesce", () => {
     await expect(coalesce("key", async () => "recovered")).resolves.toBe("recovered");
   });
 
-  it("gives every joined caller the same rejection", async () => {
-    const failing = async () => {
+  it("gives every joined caller the same rejection, from a single run", async () => {
+    const failing = vi.fn(async () => {
       await new Promise((resolve) => setTimeout(resolve, 5));
       throw new Error("upstream down");
-    };
+    });
+
     const results = await Promise.allSettled([
       coalesce("key", failing),
       coalesce("key", failing),
     ]);
+
+    // Merging has to hold on the failure path too: a second caller joining a
+    // doomed run must not quietly start its own retry against the upstream.
+    expect(failing).toHaveBeenCalledTimes(1);
     expect(results.every((r) => r.status === "rejected")).toBe(true);
+
+    const [first, second] = results as PromiseRejectedResult[];
+    expect(first.reason).toBeInstanceOf(Error);
+    // The same Error object, not merely an equal one — proof they shared a run.
+    expect(first.reason).toBe(second.reason);
   });
 });

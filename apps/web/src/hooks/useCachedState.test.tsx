@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -50,6 +51,84 @@ describe("useCachedState", () => {
     await user.click(screen.getByRole("button", { name: "updater" }));
     expect(screen.getByTestId("items")).toHaveTextContent("updater,updater");
     expect(readCache<string[]>("k")).toEqual(["updater", "updater"]);
+  });
+
+  it("rehydrates when the key changes without a remount", async () => {
+    // The calendar keys on its day range and the games page on its sort order,
+    // so the key moves while the component stays mounted. `useState`'s
+    // initialiser only runs once, so without an explicit re-read the hook would
+    // keep serving the previous key's value under the new key's name.
+    writeCache("games:recent", ["recent game"]);
+    writeCache("games:title", ["title game"]);
+
+    function Switcher() {
+      const [sort, setSort] = useState("recent");
+      const [items] = useCachedState<string[]>(`games:${sort}`, []);
+      return (
+        <div>
+          <span data-testid="items">{items.join(",") || "empty"}</span>
+          <button type="button" onClick={() => setSort("title")}>by title</button>
+          <button type="button" onClick={() => setSort("recent")}>by recent</button>
+        </div>
+      );
+    }
+
+    const user = userEvent.setup();
+    render(<Switcher />);
+    expect(screen.getByTestId("items")).toHaveTextContent("recent game");
+
+    await user.click(screen.getByRole("button", { name: "by title" }));
+    expect(screen.getByTestId("items")).toHaveTextContent("title game");
+
+    await user.click(screen.getByRole("button", { name: "by recent" }));
+    expect(screen.getByTestId("items")).toHaveTextContent("recent game");
+  });
+
+  it("falls back rather than carrying the old key's value into an uncached one", async () => {
+    writeCache("games:recent", ["recent game"]);
+
+    function Switcher() {
+      const [sort, setSort] = useState("recent");
+      const [items] = useCachedState<string[]>(`games:${sort}`, []);
+      return (
+        <div>
+          <span data-testid="items">{items.join(",") || "empty"}</span>
+          <button type="button" onClick={() => setSort("added")}>by added</button>
+        </div>
+      );
+    }
+
+    const user = userEvent.setup();
+    render(<Switcher />);
+    await user.click(screen.getByRole("button", { name: "by added" }));
+
+    // Nothing cached for this sort — showing the previous sort's list here would
+    // be worse than an empty one, because it looks like a real answer.
+    expect(screen.getByTestId("items")).toHaveTextContent("empty");
+  });
+
+  it("writes each key separately when a switching component saves", async () => {
+    function Switcher() {
+      const [sort, setSort] = useState("recent");
+      const [items, setItems] = useCachedState<string[]>(`games:${sort}`, []);
+      return (
+        <div>
+          <span data-testid="items">{items.join(",") || "empty"}</span>
+          <button type="button" onClick={() => setItems([`${sort} result`])}>save</button>
+          <button type="button" onClick={() => setSort("title")}>by title</button>
+        </div>
+      );
+    }
+
+    const user = userEvent.setup();
+    render(<Switcher />);
+    await user.click(screen.getByRole("button", { name: "save" }));
+    await user.click(screen.getByRole("button", { name: "by title" }));
+    await user.click(screen.getByRole("button", { name: "save" }));
+
+    // A setter bound to the first key would have filed both under `games:recent`.
+    expect(readCache<string[]>("games:recent")).toEqual(["recent result"]);
+    expect(readCache<string[]>("games:title")).toEqual(["title result"]);
   });
 
   it("does not resurrect another profile's value after a scope change", () => {

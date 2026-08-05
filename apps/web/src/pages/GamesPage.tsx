@@ -353,7 +353,9 @@ export function GamesPage() {
     } finally {
       if (loadAbortRef.current === controller) setLoading(false);
     }
-  }, []);
+    // `setGames` is bound to the current sort's cache key, so it has to be a
+    // dependency — otherwise every sort's results are written under `games:recent`.
+  }, [setGames]);
 
   useEffect(() => {
     void loadGames(sort);
