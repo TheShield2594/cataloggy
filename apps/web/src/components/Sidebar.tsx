@@ -64,7 +64,11 @@ export function Sidebar({
     // re-implementing its `end`/trailing-slash rules to find the same one.
     const active = navRef.current?.querySelector<HTMLElement>('a[aria-current="page"]');
     setMarker(active ? { top: active.offsetTop, height: active.offsetHeight } : null);
-  }, [location.pathname]);
+    // `railVisible` as well as the route: below `sm` the whole rail is
+    // `display: none`, where every offset measures zero. Widening the window
+    // past 640px is not a navigation, so without this the rail would appear
+    // with its marker still holding those zeroes until the next route change.
+  }, [location.pathname, railVisible]);
 
   useEffect(() => {
     hintSeenRef.current = localStorage.getItem(HINT_KEY) === "1";
