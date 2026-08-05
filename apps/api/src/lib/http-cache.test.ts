@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import Fastify from "fastify";
+import compress from "@fastify/compress";
 import { cacheTierFor, ifNoneMatchSatisfied, registerHttpCaching, weakEtag } from "./http-cache.js";
 
 describe("cacheTierFor", () => {
@@ -96,5 +97,57 @@ describe("conditional responses", () => {
     const mutation = await app.inject({ method: "POST", url: "/watchlist" });
     expect(mutation.headers["cache-control"]).toBeUndefined();
     expect(mutation.headers.etag).toBeUndefined();
+  });
+});
+
+// The two hooks are registered in a specific order in index.ts — caching first,
+// so the ETag is computed over JSON rather than over whichever encoding the
+// client negotiated. That ordering is load-bearing, and it puts a compression
+// hook downstream of a 304 that returns no payload at all. This pins both ends
+// of that interaction.
+describe("alongside compression", () => {
+  const build = async () => {
+    const app = Fastify();
+    registerHttpCaching(app);
+    await app.register(compress, {
+      global: true,
+      threshold: 1024,
+      encodings: ["br", "gzip", "deflate"],
+    });
+    app.get("/watch/history", async () =>
+      Array.from({ length: 200 }, (_, i) => ({ id: String(i), name: "A long enough title" }))
+    );
+    return app;
+  };
+
+  it("still compresses a full response", async () => {
+    const app = await build();
+    const response = await app.inject({
+      method: "GET",
+      url: "/watch/history",
+      headers: { "accept-encoding": "gzip" },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-encoding"]).toBe("gzip");
+  });
+
+  it("sends a 304 with no body and no content-encoding", async () => {
+    const app = await build();
+    const first = await app.inject({
+      method: "GET",
+      url: "/watch/history",
+      headers: { "accept-encoding": "gzip" },
+    });
+
+    const second = await app.inject({
+      method: "GET",
+      url: "/watch/history",
+      headers: { "accept-encoding": "gzip", "if-none-match": String(first.headers.etag) },
+    });
+
+    expect(second.statusCode).toBe(304);
+    expect(second.rawPayload.length).toBe(0);
+    // A Content-Encoding on an empty body is what a client would try to inflate.
+    expect(second.headers["content-encoding"]).toBeUndefined();
   });
 });
