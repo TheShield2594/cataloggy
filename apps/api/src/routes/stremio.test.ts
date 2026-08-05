@@ -181,6 +181,24 @@ describe("stremio routes — addon config is per profile", () => {
       await app.close();
     });
 
+    it("offers the app icon as the addon's logo once the web UI has a public address", async () => {
+      const unconfigured = await buildApp();
+      const before = await unconfigured.inject({ method: "GET", url: "/addon/stremio/manifest.json" });
+      // Stremio fetches the logo itself, so a relative path would be useless.
+      expect(before.json().logo).toBe("");
+      await unconfigured.close();
+
+      process.env.CATALOGGY_WEB_PUBLIC = "https://cataloggy.example/";
+      try {
+        const app = await buildApp();
+        const response = await app.inject({ method: "GET", url: "/addon/stremio/manifest.json" });
+        expect(response.json().logo).toBe("https://cataloggy.example/icons/icon-192.png");
+        await app.close();
+      } finally {
+        delete process.env.CATALOGGY_WEB_PUBLIC;
+      }
+    });
+
     it("does not advertise a list catalog owned by another profile", async () => {
       prismaMock.kV.findUnique.mockResolvedValue({
         value: JSON.stringify({ enabledCatalogs: [`list:${OTHER_LIST_ID}`] }),

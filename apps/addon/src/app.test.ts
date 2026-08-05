@@ -118,6 +118,21 @@ describe("profile scoping", () => {
     expect(watchCall.headers["x-profile-id"]).toBe(DEFAULT_PROFILE_ID);
   });
 
+  it("offers the app icon as the addon's logo once the web UI has a public address", async () => {
+    const before = await app.inject({ method: "GET", url: "/manifest.json" });
+    // Stremio fetches the logo itself, so it stays absent rather than relative.
+    expect(JSON.parse(before.body).logo).toBeUndefined();
+
+    process.env.CATALOGGY_WEB_PUBLIC = "https://cataloggy.example/";
+    try {
+      const configured = await buildApp();
+      const response = await configured.inject({ method: "GET", url: "/manifest.json" });
+      expect(JSON.parse(response.body).logo).toBe("https://cataloggy.example/icons/icon-192.png");
+    } finally {
+      delete process.env.CATALOGGY_WEB_PUBLIC;
+    }
+  });
+
   it("scopes catalog reads to the profile in the addon URL", async () => {
     await app.inject({ method: "GET", url: `/p/${OTHER_PROFILE_ID}/manifest.json` });
 

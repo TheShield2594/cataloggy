@@ -12,26 +12,25 @@
 // Pass --html to print the <link> tags instead of writing images.
 
 import { mkdir, readdir, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { INK_ON_DARK, loadSharp, logoSvg, repoRoot } from "./brand.mjs";
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-// Deliberately outside `apps/web/public/`: this is a 1.2 MB build-time source,
-// and anything under `public/` is copied into `dist/` and precached by the
-// service worker, so keeping it there shipped it to every install for nothing.
-const LOGO = join(repoRoot, "apps/web/brand/logo-original.png");
 const OUT_DIR = join(repoRoot, "apps/web/public/splash");
 
 // Keep in sync with the PWA manifest's `background_color` in
 // apps/web/vite.config.ts. The splash is intentionally the dark brand colour
 // rather than the default light theme: it is the installed-app launch screen,
-// and the manifest already declares dark as the app's background.
+// and the manifest already declares dark as the app's background. The mark is
+// therefore drawn in its light ink — the default near-black one would be
+// invisible here.
 const BACKGROUND = "#0d0b0a";
 
-// Logo width as a fraction of the screen's short edge, with its height capped
-// as a fraction of the long edge so it stays comfortable in landscape.
-const LOGO_SHORT_EDGE_RATIO = 0.6;
-const LOGO_LONG_EDGE_CAP = 0.3;
+// The box the logo is scaled to fit inside, as a fraction of each screen edge.
+// The mark is taller than it is wide, so height is what binds in portrait and
+// width in landscape — capping both keeps it the same comfortable size either
+// way up, rather than filling the screen in one orientation.
+const LOGO_MAX_WIDTH_RATIO = 0.5;
+const LOGO_MAX_HEIGHT_RATIO = 0.4;
 
 // CSS pixel dimensions (portrait) and device pixel ratio per device. Devices
 // that share all three collapse onto one entry, since that is all the media
@@ -90,22 +89,16 @@ function htmlTags() {
 }
 
 async function generateImages() {
-  let sharp;
-  try {
-    sharp = (await import("sharp")).default;
-  } catch {
-    console.error(
-      "sharp is not installed. Run:\n" +
-        "  pnpm add -Dw sharp && node scripts/generate-splash.mjs && pnpm remove -w sharp"
-    );
-    process.exitCode = 1;
-    return;
-  }
+  const sharp = await loadSharp("generate-splash.mjs");
 
-  // Trim the logo's transparent padding so it can be centred and scaled by its
-  // visible bounds rather than the source canvas.
-  const logo = await sharp(LOGO).trim({ threshold: 0 }).toBuffer({ resolveWithObject: true });
-  const logoAspect = logo.info.width / logo.info.height;
+  // Trim the mark's transparent padding so it can be centred and scaled by its
+  // visible bounds rather than the square viewBox it is drawn in. Rendered
+  // large enough that every screen below scales it down rather than up.
+  const svg = await logoSvg(INK_ON_DARK);
+  const logo = await sharp(svg)
+    .resize({ height: 2048 })
+    .trim({ threshold: 0 })
+    .toBuffer({ resolveWithObject: true });
 
   await mkdir(OUT_DIR, { recursive: true });
   const targets = splashTargets();
@@ -116,13 +109,12 @@ async function generateImages() {
 
   for (const target of targets) {
     const { width, height } = target;
-    const shortEdge = Math.min(width, height);
-    const longEdge = Math.max(width, height);
 
-    let logoWidth = Math.round(shortEdge * LOGO_SHORT_EDGE_RATIO);
-    const maxHeight = Math.round(longEdge * LOGO_LONG_EDGE_CAP);
-    if (logoWidth / logoAspect > maxHeight) logoWidth = Math.round(maxHeight * logoAspect);
-    const logoHeight = Math.round(logoWidth / logoAspect);
+    const maxWidth = width * LOGO_MAX_WIDTH_RATIO;
+    const maxHeight = height * LOGO_MAX_HEIGHT_RATIO;
+    const scale = Math.min(maxWidth / logo.info.width, maxHeight / logo.info.height);
+    const logoWidth = Math.round(logo.info.width * scale);
+    const logoHeight = Math.round(logo.info.height * scale);
 
     const scaled = await sharp(logo.data).resize(logoWidth, logoHeight).toBuffer();
 

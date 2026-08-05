@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router";
 import { BarChart3, CalendarDays, Clapperboard, Gamepad2, History, Pin, PinOff, Search, List, Settings, User } from "lucide-react";
 import { Profile } from "../api";
+import { BRAND_WORDMARK, BrandMark } from "./BrandMark";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { prefetchRoute } from "../utils/routePrefetch";
 
@@ -127,13 +128,11 @@ export function Sidebar({
           boxShadow: expanded && !pinned ? "8px 0 24px rgba(0,0,0,0.12)" : "none",
         }}
       >
-        <div className="flex items-center gap-2.5 px-4 pb-5">
-          <div className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-claw-500">
-            <Clapperboard className="h-4.5 w-4.5 text-claw-on" />
-          </div>
+        <div className="flex items-center gap-2.5 px-4 pb-5" style={{ color: "var(--text)" }}>
+          <BrandMark className="h-8 w-8 flex-none" />
           <span
-            className="whitespace-nowrap text-base font-bold transition-opacity"
-            style={{ color: "var(--text)", opacity: expanded ? 1 : 0 }}
+            className={`whitespace-nowrap text-base transition-opacity ${BRAND_WORDMARK}`}
+            style={{ opacity: expanded ? 1 : 0 }}
           >
             Cataloggy
           </span>

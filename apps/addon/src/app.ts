@@ -21,7 +21,7 @@ import {
 const CATALOGGY_API_BASE = process.env.CATALOGGY_API_BASE ?? "http://api:7000";
 const CATALOGGY_API_TOKEN = process.env.CATALOGGY_API_TOKEN;
 const ADDON_PUBLIC_BASE = process.env.ADDON_PUBLIC_BASE;
-const WEB_PUBLIC_BASE = process.env.CATALOGGY_WEB_PUBLIC ?? process.env.WEB_PUBLIC_BASE;
+const WEB_PUBLIC_BASE = (process.env.CATALOGGY_WEB_PUBLIC ?? process.env.WEB_PUBLIC_BASE)?.replace(/\/+$/, "");
 const PROXY_PATH_PREFIXES = parseProxyPathPrefixes(process.env.PROXY_PATH_PREFIXES, ["/addon"] as const);
 
 export const app = Fastify({
@@ -440,6 +440,9 @@ const buildManifest = (lists: CataloggyList[], genres: string[], enabledCatalogs
     version: "0.3.0",
     name: "Cataloggy",
     description: "Personal catalogs, tracking, and discovery powered by Cataloggy.",
+    // Stremio fetches this itself, so it can only be offered once the web UI
+    // has a public address; without one the addon keeps Stremio's generic tile.
+    ...(WEB_PUBLIC_BASE ? { logo: `${WEB_PUBLIC_BASE}/icons/icon-192.png` } : {}),
     // `stream` is declared without Cataloggy ever providing a stream: the
     // request itself is the point. A client asks every installed addon for
     // streams the moment a user opens a title to watch it, and that request is

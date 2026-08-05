@@ -363,7 +363,10 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
       version: STREMIO_ADDON_VERSION,
       name: "Cataloggy",
       description: "Your personal media tracker – watchlists, history, and discovery catalogs.",
-      logo: "",
+      // Stremio needs an absolute URL it can reach itself, so the mark can only
+      // be offered once the web UI has a public address. Empty otherwise, which
+      // is what this has always been — Stremio falls back to a generic tile.
+      logo: CATALOGGY_WEB_PUBLIC ? `${CATALOGGY_WEB_PUBLIC}/icons/icon-192.png` : "",
       background: "",
       resources: ["catalog"],
       types: ["movie", "series"],

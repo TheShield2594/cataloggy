@@ -65,7 +65,7 @@ describe("SetupWizard", () => {
 
     await user.click(screen.getByRole("button", { name: /back/i }));
 
-    expect(await screen.findByText(/welcome to cataloggy/i)).toBeInTheDocument();
+    expect(await screen.findByText(/connect your server/i)).toBeInTheDocument();
     // Prefilled, so a typo is a correction rather than a retype.
     expect(screen.getByLabelText(/api token/i)).toHaveValue("mistyped-token");
     expect(runtimeConfig.getToken()).toBe("mistyped-token");

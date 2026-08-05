@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
-import { Check, Clapperboard, Eye, EyeOff, Loader2, AlertCircle, ArrowLeft, ArrowRight } from "lucide-react";
+import { Check, Eye, EyeOff, Loader2, AlertCircle, ArrowLeft, ArrowRight } from "lucide-react";
 import { api, ApiError, runtimeConfig } from "../api";
+import { BrandLockup } from "../components/BrandMark";
 import { StatusBadge } from "../components/settings/StatusBadge";
 import { TraktSettings } from "../components/settings/TraktSettings";
 
@@ -36,12 +37,7 @@ function WizardShell({ step, children }: { step: Step; children: React.ReactNode
   return (
     <div className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-md space-y-6">
-        <div className="flex items-center justify-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-claw-500">
-            <Clapperboard className="h-6 w-6 text-claw-on" />
-          </div>
-          <span className="text-2xl font-bold">Cataloggy</span>
-        </div>
+        <BrandLockup />
 
         {/* The bars alone say nothing to a screen reader and give no sense of
             how much is left to anyone else, so the count carries the meaning
@@ -115,9 +111,11 @@ function TokenStep({ onVerified }: { onVerified: (tmdbConfigured: boolean) => vo
   return (
     <form onSubmit={submit} className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold">Welcome to Cataloggy</h1>
+        {/* Not "Welcome to Cataloggy": the lockup above already says the name,
+            and a step's heading is better spent saying what the step wants. */}
+        <h1 className="text-lg font-semibold">Connect your server</h1>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>
-          Enter the API token configured on your Cataloggy server to get started.
+          Paste the API token your server was configured with to get started.
         </p>
       </div>
       <div className="relative">
