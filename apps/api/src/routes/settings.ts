@@ -10,6 +10,7 @@ import {
   getSpoilerProtection,
 } from "../lib/settings.js";
 import { OMDB_API_KEY_KV, getOmdbApiKey } from "../lib/omdb.js";
+import { TMDB_API_KEY_KV, getTmdbApiKey } from "../lib/tmdb-client.js";
 import { RPDB_API_KEY_KV, getRpdbApiKey, buildRpdbPosterUrl } from "../lib/rpdb.js";
 import { trendingCache } from "../lib/cache.js";
 import { getFailedJobStatuses } from "../lib/job-status.js";
@@ -97,11 +98,54 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ─── TMDB ───
-  // TMDB_API_KEY is a deployment-time secret (no UI to set it), so this
-  // is informational only — used by the setup wizard to surface whether
-  // the server is configured, not to let the browser configure it.
+
   app.get("/tmdb/status", async () => {
-    return { configured: !!process.env.TMDB_API_KEY?.trim() };
+    const { apiKey, source } = await getTmdbApiKey();
+    return { configured: !!apiKey, source };
+  });
+
+  app.post<{ Body: unknown }>("/tmdb/key", async (request, reply) => {
+    const body = request.body as { apiKey?: unknown } | null;
+    if (!body || typeof body.apiKey !== "string") {
+      return reply.code(400).send({ error: "apiKey must be a string" });
+    }
+
+    const apiKey = body.apiKey.trim();
+    if (!apiKey) {
+      return reply.code(400).send({ error: "apiKey is required" });
+    }
+
+    // TMDB is what makes the rest of the app work, so a typo here is worth
+    // catching before it is saved over a key that was fine.
+    try {
+      const testRes = await fetch(
+        `https://api.themoviedb.org/3/configuration?api_key=${encodeURIComponent(apiKey)}`,
+        { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) }
+      );
+      if (testRes.status === 401) {
+        return reply.code(400).send({ error: "TMDB rejected that API key" });
+      }
+      if (!testRes.ok) {
+        return reply.code(400).send({ error: `TMDB could not validate the key (${testRes.status})` });
+      }
+    } catch {
+      return reply.code(400).send({ error: "Could not reach TMDB to validate key" });
+    }
+
+    await prisma.kV.upsert({
+      where: { key: TMDB_API_KEY_KV },
+      create: { key: TMDB_API_KEY_KV, value: apiKey, updatedAt: new Date() },
+      update: { value: apiKey, updatedAt: new Date() },
+    });
+    return { configured: true, source: "db" as const };
+  });
+
+  // Removing the saved key falls back to TMDB_API_KEY when the deployment
+  // sets one, so the response says what is left rather than assuming nothing.
+  app.delete("/tmdb/key", async () => {
+    await prisma.kV.deleteMany({ where: { key: TMDB_API_KEY_KV } });
+    const { apiKey, source } = await getTmdbApiKey();
+    return { configured: !!apiKey, source };
   });
 
   // ─── OMDB ───

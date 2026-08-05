@@ -225,13 +225,13 @@ export class TmdbClient {
     return this.language;
   }
 
-  static fromEnv(language?: string) {
-    const apiKey = process.env.TMDB_API_KEY?.trim();
-    if (!apiKey) {
-      throw new Error("TMDB_API_KEY is not configured");
+  static fromKey(apiKey: string, language?: string) {
+    const trimmed = apiKey.trim();
+    if (!trimmed) {
+      throw new Error("TMDB API key is not configured");
     }
 
-    return new TmdbClient(apiKey, language);
+    return new TmdbClient(trimmed, language);
   }
 
   async search(type: MetadataType, query: string): Promise<MetadataPayload[]> {
