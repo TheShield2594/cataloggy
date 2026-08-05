@@ -322,8 +322,12 @@ body {
  * panels — the ambient gradients are mostly covered at that width. The panels
  * drop to a flat translucent tint there; the floating chrome above keeps its
  * blur, since there is only ever one or two of those.
+ *
+ * 639px, not 640: Tailwind's `sm:` is `min-width: 640px`, so a 640px viewport
+ * would otherwise lay itself out as a desktop while its panels took the phone
+ * treatment.
  */
-@media (max-width: 640px) {
+@media (max-width: 639px) {
   [data-theme="glass"] .glass-panel,
   [data-theme="glass"] .glass-row {
     background: var(--glass-tint-panel-flat) !important;
