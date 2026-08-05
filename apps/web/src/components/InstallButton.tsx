@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Download, X } from "lucide-react";
+import { isStandalone, onDisplayModeChange } from "../utils/displayMode";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -7,9 +8,6 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 const isIOS = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
-const isStandalone =
-  window.matchMedia("(display-mode: standalone)").matches ||
-  ("standalone" in window.navigator && Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone));
 
 const SNOOZE_KEY = "cataloggy:install-snooze-until";
 const SNOOZE_DAYS = 14;
@@ -35,6 +33,12 @@ export function InstallButton() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showManualHint, setShowManualHint] = useState(false);
   const [snoozed, setSnoozed] = useState(isSnoozed);
+  // Held in state rather than read at render time: installing from an open tab
+  // flips the mode without reloading the document, and nothing else re-renders
+  // this, so an offer to install would sit in the installed app's own header.
+  const [standalone, setStandalone] = useState(isStandalone);
+
+  useEffect(() => onDisplayModeChange(() => setStandalone(isStandalone())), []);
 
   useEffect(() => {
     const onBeforeInstallPrompt = (event: Event) => {
@@ -53,7 +57,7 @@ export function InstallButton() {
     return () => window.clearTimeout(timer);
   }, [showManualHint]);
 
-  if (isStandalone || snoozed || (!deferredPrompt && !isIOS)) {
+  if (standalone || snoozed || (!deferredPrompt && !isIOS)) {
     return null;
   }
 

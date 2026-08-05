@@ -413,7 +413,7 @@ export function SearchPage() {
                   max="2030"
                   value={filters.yearMin}
                   onChange={(e) => setFilters({ yearMin: e.target.value })}
-                  className="w-full rounded-lg px-2.5 py-2 text-sm placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
+                  className="w-full min-w-0 rounded-lg px-1.5 py-2 text-center text-sm placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
                   style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", background: "var(--bg-0)", color: "var(--text)" }}
                 />
                 <input
@@ -424,7 +424,7 @@ export function SearchPage() {
                   max="2030"
                   value={filters.yearMax}
                   onChange={(e) => setFilters({ yearMax: e.target.value })}
-                  className="w-full rounded-lg px-2.5 py-2 text-sm placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
+                  className="w-full min-w-0 rounded-lg px-1.5 py-2 text-center text-sm placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-1 focus:ring-claw-500/30"
                   style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", background: "var(--bg-0)", color: "var(--text)" }}
                 />
               </div>

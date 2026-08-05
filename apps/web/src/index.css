@@ -171,6 +171,84 @@ body {
   max-width: 100%;
 }
 
+/*
+ * Touch behaviour.
+ *
+ * Everything under [data-display-mode="standalone"] applies only to the
+ * installed PWA — utils/displayMode.ts sets the attribute, and the reasoning
+ * for scoping it that way (a browser tab keeps pinch-zoom) lives there. Rules
+ * outside that scope are ones a phone browser wants too.
+ *
+ * These are deliberately unlayered: Tailwind's utilities sit in @layer
+ * utilities, and unlayered declarations beat any layered rule regardless of
+ * specificity, so `input { font-size }` below overrides the `text-sm` a field
+ * carries without an !important or a specificity fight.
+ */
+html {
+  /* Stops iOS inflating body text when the device rotates, which reflows the
+     page under the reader rather than just widening it. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html[data-display-mode="standalone"] {
+  /* Keeps vertical scrolling and the carousels' horizontal panning; drops
+     pinch-zoom and double-tap-zoom, which have no way back in an app with no
+     browser chrome. Pairs with `user-scalable=no` on the viewport meta — the
+     part iOS honours for home-screen apps. */
+  touch-action: pan-x pan-y;
+  /* No rubber-band past the ends of the page, and no pull-to-refresh: both
+     drag the whole app — fixed header and tab bar included — off its
+     position, and a refresh gesture in an installed app just blanks it. */
+  overscroll-behavior: none;
+}
+
+html[data-display-mode="standalone"] :is(a, button, [role="button"], img) {
+  /* A long press on a poster is a mis-timed tap, not a request for the iOS
+     share sheet or a drag preview of the image. Text stays selectable — only
+     controls and images opt out. */
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+@media (pointer: coarse) {
+  /* iOS zooms the viewport in when a focused field's text is under 16px, and
+     leaves it zoomed after the field blurs. Raising the floor is the only fix
+     that also works in a browser tab, where `user-scalable=no` is ignored. */
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+
+  /* Number spinners need a hover to be usable, so on touch they only take
+     width away from the value — enough of it that the search page's year
+     fields clip a four-digit year once the text is at the 16px floor. */
+  input[type="number"] {
+    appearance: textfield;
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+
+  /* Drops the double-tap-zoom wait (and the grey tap flash) on controls
+     without touching page zoom itself. */
+  a,
+  button,
+  [role="button"],
+  input,
+  label,
+  select,
+  summary,
+  textarea {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
 body {
   @apply m-0 min-h-screen;
   background-color: var(--bg-0);
