@@ -35,6 +35,18 @@ describe("ensureDefaultWatchlist", () => {
     });
   });
 
+  it("finds a renamed watchlist rather than bootstrapping a second one", async () => {
+    prismaMock.list.findFirst.mockResolvedValue({ id: "list-1", name: "Up Next" });
+    const { ensureDefaultWatchlist } = await import("./watchlist.js");
+
+    await ensureDefaultWatchlist();
+
+    expect(prismaMock.list.findFirst).toHaveBeenCalledWith({
+      where: { kind: "watchlist", profileId: "profile-1" },
+    });
+    expect(prismaMock.list.create).not.toHaveBeenCalled();
+  });
+
   it("resolves without throwing when a P2002 race retry finds the winner's row", async () => {
     prismaMock.list.findFirst
       .mockResolvedValueOnce(null)
@@ -69,6 +81,23 @@ describe("getDefaultWatchlist", () => {
     const result = await getDefaultWatchlist("profile-1");
 
     expect(result).toEqual({ id: "list-new" });
+  });
+
+  // A rename used to orphan the default watchlist: the lookup asked for a list
+  // called "Watchlist" as well as one of kind watchlist, missed the renamed row
+  // and created a duplicate beside it.
+  it("returns a renamed watchlist instead of creating a duplicate", async () => {
+    prismaMock.list.findFirst.mockResolvedValue({ id: "list-1", name: "Up Next" });
+    const { getDefaultWatchlist } = await import("./watchlist.js");
+
+    const result = await getDefaultWatchlist("profile-1");
+
+    expect(result).toEqual({ id: "list-1", name: "Up Next" });
+    expect(prismaMock.list.findFirst).toHaveBeenCalledWith({
+      where: { kind: "watchlist", profileId: "profile-1" },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(prismaMock.list.create).not.toHaveBeenCalled();
   });
 
   it("retries the lookup and returns the winner's row on a P2002 race instead of throwing", async () => {

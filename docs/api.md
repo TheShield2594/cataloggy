@@ -205,8 +205,8 @@ Trakt.
 | --- | --- | --- |
 | `GET` | `/lists` | Each list with its item count. |
 | `POST` | `/lists` | `{ name, kind }`. |
-| `PATCH` | `/lists/:id` | `{ name }`. |
-| `DELETE` | `/lists/:id` | |
+| `PATCH` | `/lists/:id` | `{ name }`. Renaming a default list is allowed — both defaults are looked up by kind, not by name. |
+| `DELETE` | `/lists/:id` | `409` for a `watchlist` or `collection` list: items cascade off the list, so deleting a default takes its contents with it. Only `custom` lists can be deleted. |
 | `GET` | `/lists/:listId/items` | Items with metadata joined; anything still missing metadata falls back to the title captured when it was added, and a backfill is queued. |
 | `POST` | `/lists/:listId/items` | `{ type, imdbId, title? }`. `409` if already present. |
 | `DELETE` | `/lists/:listId/items/:type/:imdbId` | |

@@ -170,14 +170,39 @@ describe("lists routes", () => {
 
   describe("DELETE /lists/:id", () => {
     it("deletes a list the profile owns", async () => {
-      prismaMock.list.findFirst.mockResolvedValue(listRow());
-      prismaMock.list.delete.mockResolvedValue(listRow());
+      prismaMock.list.findFirst.mockResolvedValue(listRow({ name: "Sci-Fi Night", kind: "custom" }));
+      prismaMock.list.delete.mockResolvedValue(listRow({ kind: "custom" }));
       const app = await buildApp();
 
       const res = await app.inject({ method: "DELETE", url: `/lists/${LIST_ID}` });
 
       expect(res.statusCode).toBe(204);
       expect(prismaMock.list.delete).toHaveBeenCalledWith({ where: { id: LIST_ID } });
+    });
+
+    // Items cascade off the list, so a delete here doesn't just remove a
+    // container the app would recreate — it empties a watch history's worth of
+    // entries with no way back.
+    it("refuses to delete the default watchlist", async () => {
+      prismaMock.list.findFirst.mockResolvedValue(listRow());
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "DELETE", url: `/lists/${LIST_ID}` });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error).toMatch(/watchlist/i);
+      expect(prismaMock.list.delete).not.toHaveBeenCalled();
+    });
+
+    it("refuses to delete the default collection", async () => {
+      prismaMock.list.findFirst.mockResolvedValue(listRow({ name: "Collection", kind: "collection" }));
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "DELETE", url: `/lists/${LIST_ID}` });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error).toMatch(/collection/i);
+      expect(prismaMock.list.delete).not.toHaveBeenCalled();
     });
 
     it("404s when the list is not the profile's", async () => {

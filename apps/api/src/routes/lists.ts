@@ -58,6 +58,19 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
     });
     if (!list) return reply.code(404).send({ error: "List not found" });
 
+    // The default lists are find-or-create, so losing one doesn't break the app
+    // — but ListItem cascades on the list, so the delete takes every item in it
+    // and nothing brings those back. The web UI only offers delete on custom
+    // lists; this makes a direct API call agree with it.
+    if (list.kind !== ListKind.custom) {
+      return reply.code(409).send({
+        error:
+          list.kind === ListKind.watchlist
+            ? "The default watchlist can't be deleted"
+            : "The default collection can't be deleted",
+      });
+    }
+
     await prisma.list.delete({ where: { id: list.id } });
 
     return reply.code(204).send();
