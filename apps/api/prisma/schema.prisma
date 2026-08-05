@@ -28,9 +28,13 @@ enum WatchEventType {
   episode
 }
 
+// `season` exists for ratings only — a season is something you can judge on its
+// own, and both Trakt and TMDB treat it that way. Nothing writes Metadata rows
+// of that type: TMDB metadata is fetched per title, not per season.
 enum MetadataType {
   movie
   series
+  season
   episode
 }
 

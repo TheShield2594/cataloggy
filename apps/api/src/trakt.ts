@@ -4,15 +4,26 @@ import type { PrismaClient } from "@prisma/client";
 const TRAKT_API_BASE = "https://api.trakt.tv";
 const MAX_PAGES = 100;
 const DEFAULT_POLL_MAX_PAGES = 20;
+// A backfill walks every play the account has ever recorded, so it needs a far
+// higher ceiling than an incremental poll: an account with a decade of history
+// blows past 20 pages (2000 plays) in its first year alone, and anything the
+// cap cuts off is history that silently never arrives.
+const MAX_BACKFILL_PAGES = 1000;
+const DEFAULT_BACKFILL_MAX_PAGES = 500;
 const REQUEST_TIMEOUT_MS = 10_000;
 
-function parsePollMaxPages(raw: string | undefined): number {
+function parseMaxPages(raw: string | undefined, fallback: number, ceiling: number): number {
   const parsed = raw !== undefined ? Number.parseInt(raw, 10) : NaN;
-  if (!Number.isInteger(parsed) || parsed < 1) return DEFAULT_POLL_MAX_PAGES;
-  return Math.min(parsed, MAX_PAGES);
+  if (!Number.isInteger(parsed) || parsed < 1) return fallback;
+  return Math.min(parsed, ceiling);
 }
 
-const POLL_MAX_PAGES = parsePollMaxPages(process.env.TRAKT_POLL_MAX_PAGES);
+const POLL_MAX_PAGES = parseMaxPages(process.env.TRAKT_POLL_MAX_PAGES, DEFAULT_POLL_MAX_PAGES, MAX_PAGES);
+const BACKFILL_MAX_PAGES = parseMaxPages(
+  process.env.TRAKT_BACKFILL_MAX_PAGES,
+  DEFAULT_BACKFILL_MAX_PAGES,
+  MAX_BACKFILL_PAGES
+);
 const DEFAULT_TOKEN_ROW_ID = "default";
 const DEFAULT_TOKEN_EXPIRY_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
@@ -34,6 +45,87 @@ type TraktMoviePayload = {
 };
 
 type TraktShowPayload = {
+  show?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+};
+
+export type TraktRatedMoviePayload = {
+  rated_at?: string;
+  rating?: number;
+  movie?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+};
+
+export type TraktRatedShowPayload = {
+  rated_at?: string;
+  rating?: number;
+  show?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+};
+
+export type TraktRatedSeasonPayload = {
+  rated_at?: string;
+  rating?: number;
+  season?: {
+    number?: number;
+    ids?: TraktIds;
+  };
+  show?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+};
+
+export type TraktRatedEpisodePayload = {
+  rated_at?: string;
+  rating?: number;
+  episode?: {
+    season?: number;
+    number?: number;
+    title?: string;
+    ids?: TraktIds;
+  };
+  show?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+};
+
+export type TraktCollectedMoviePayload = {
+  collected_at?: string;
+  movie?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+};
+
+export type TraktCollectedShowPayload = {
+  last_collected_at?: string;
+  show?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+};
+
+export type TraktPersonalListPayload = {
+  ids?: { trakt?: number; slug?: string };
+  name?: string;
+  description?: string | null;
+  item_count?: number;
+};
+
+export type TraktListItemPayload = {
+  type?: string;
+  movie?: {
+    title?: string;
+    ids?: TraktIds;
+  };
   show?: {
     title?: string;
     ids?: TraktIds;
@@ -175,12 +267,74 @@ export class TraktClient {
     return this.fetchAllPages<TraktWatchedShowPayload>("/sync/watched/shows", logger);
   }
 
+  // Ratings and the collection are only ever fetched in full, as part of a
+  // one-time import, so they take the backfill cap rather than the poll-sized
+  // default — a library past 10,000 entries would otherwise be cut off with
+  // nothing to resume from.
+  async fetchRatedMovies(logger: FastifyBaseLogger): Promise<TraktRatedMoviePayload[]> {
+    return this.fetchAllPages<TraktRatedMoviePayload>("/sync/ratings/movies", logger, undefined, BACKFILL_MAX_PAGES);
+  }
+
+  async fetchRatedShows(logger: FastifyBaseLogger): Promise<TraktRatedShowPayload[]> {
+    return this.fetchAllPages<TraktRatedShowPayload>("/sync/ratings/shows", logger, undefined, BACKFILL_MAX_PAGES);
+  }
+
+  async fetchRatedSeasons(logger: FastifyBaseLogger): Promise<TraktRatedSeasonPayload[]> {
+    return this.fetchAllPages<TraktRatedSeasonPayload>("/sync/ratings/seasons", logger, undefined, BACKFILL_MAX_PAGES);
+  }
+
+  async fetchRatedEpisodes(logger: FastifyBaseLogger): Promise<TraktRatedEpisodePayload[]> {
+    return this.fetchAllPages<TraktRatedEpisodePayload>("/sync/ratings/episodes", logger, undefined, BACKFILL_MAX_PAGES);
+  }
+
+  async fetchCollectionMovies(logger: FastifyBaseLogger): Promise<TraktCollectedMoviePayload[]> {
+    return this.fetchAllPages<TraktCollectedMoviePayload>("/sync/collection/movies", logger, undefined, BACKFILL_MAX_PAGES);
+  }
+
+  async fetchCollectionShows(logger: FastifyBaseLogger): Promise<TraktCollectedShowPayload[]> {
+    return this.fetchAllPages<TraktCollectedShowPayload>("/sync/collection/shows", logger, undefined, BACKFILL_MAX_PAGES);
+  }
+
+  /**
+   * The user's own lists. Unlike the /sync endpoints this one is not paginated
+   * — asking for page 2 returns the same full array again — so it is fetched as
+   * a single request rather than through fetchAllPages, which would read that
+   * repeat as more data and import every list twice.
+   */
+  async fetchPersonalLists(logger: FastifyBaseLogger): Promise<TraktPersonalListPayload[]> {
+    const response = await this.request("/users/me/lists", {
+      method: "GET",
+      headers: {
+        "trakt-api-version": "2",
+        "trakt-api-key": this.clientId,
+        Authorization: `Bearer ${this.accessToken}`
+      },
+      logger
+    });
+
+    try {
+      return (await response.json()) as TraktPersonalListPayload[];
+    } catch {
+      throw new Error(`Trakt API returned non-JSON response for /users/me/lists (status ${response.status})`);
+    }
+  }
+
+  // Movies and shows only: a personal list can also hold people, seasons and
+  // episodes, none of which a Cataloggy list can hold.
+  async fetchPersonalListItems(listId: number, logger: FastifyBaseLogger): Promise<TraktListItemPayload[]> {
+    return this.fetchAllPages<TraktListItemPayload>(`/users/me/lists/${listId}/items/movie,show`, logger);
+  }
+
+  // No `startAt` means "everything Trakt has", not "the recent window with no
+  // lower bound": the request goes out without `start_at` and under the much
+  // larger backfill page cap, so a first sync brings in years of history rather
+  // than the tail an incremental poll is sized for.
   async fetchMovieHistory(logger: FastifyBaseLogger, startAt?: string): Promise<TraktMovieHistoryPayload[]> {
     return this.fetchAllPages<TraktMovieHistoryPayload>(
       "/sync/history/movies",
       logger,
       startAt ? { start_at: startAt } : undefined,
-      POLL_MAX_PAGES
+      startAt ? POLL_MAX_PAGES : BACKFILL_MAX_PAGES
     );
   }
 
@@ -189,7 +343,7 @@ export class TraktClient {
       "/sync/history/episodes",
       logger,
       startAt ? { start_at: startAt } : undefined,
-      POLL_MAX_PAGES
+      startAt ? POLL_MAX_PAGES : BACKFILL_MAX_PAGES
     );
   }
 

@@ -4,7 +4,7 @@ import { api, DetailedWatchStats, WatchStats, YearInReviewStats } from "../api";
 import { TicketTile } from "../components/TicketTile";
 import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
 import { useCachedState } from "../hooks/useCachedState";
-import { formatRating, ratingLabel } from "../utils/rating";
+import { formatRating, formatStars, ratingLabel, starsLabel } from "../utils/rating";
 import { PAGE_TITLE, SECTION_TITLE, KICKER } from "../components/typography";
 
 const MONTH_NAMES = [
@@ -46,7 +46,11 @@ export function StatsPage() {
   const [loading, setLoading] = useState(!statsMeta.hadCachedValue || !detailedMeta.hadCachedValue);
   const [error, setError] = useState<string | null>(null);
   const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
-  const [year, setYear] = useState(() => new Date().getFullYear() - 1);
+  // The year you're in, not the one that just ended. A "year in review" that
+  // opens on last year reads as stale for the eleven months after January —
+  // the current year is listed right above it in the picker, empty-looking by
+  // comparison, and nothing says the panel isn't showing it.
+  const [year, setYear] = useState(() => new Date().getFullYear());
   const [yearReview, setYearReview] = useState<YearInReviewStats | null>(null);
   const [yearError, setYearError] = useState<string | null>(null);
 
@@ -393,8 +397,11 @@ export function StatsPage() {
                             <Film className="h-8 w-8" style={{ color: "var(--text-mute)" }} />
                           </div>
                         )}
-                        <div role="img" aria-label={ratingLabel(item.rating)} title={ratingLabel(item.rating)} className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
-                          <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-amber-400">{formatRating(item.rating)}</span>
+                        {/* Your own rating, so it wears the five-star scale the
+                            pickers use — unlike the community score on the card
+                            above, which is TMDB's and stays out of ten. */}
+                        <div role="img" aria-label={starsLabel(item.rating)} title={starsLabel(item.rating)} className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
+                          <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-amber-400">{formatStars(item.rating)}</span>
                         </div>
                       </div>
                       <p className="mt-1.5 truncate text-sm font-medium" style={{ color: "var(--text)" }}>{item.name ?? item.imdbId}</p>

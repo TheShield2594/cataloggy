@@ -1,5 +1,5 @@
 import { ItemType, ListItemType, MetadataType, Prisma } from "@prisma/client";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, RouteHandlerMethod } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { getTmdb } from "../lib/tmdb-client.js";
 import { upsertMetadata } from "../lib/metadata.js";
@@ -12,6 +12,11 @@ import {
   syncTraktWatchlist,
   computeTokenExpiresAt,
 } from "../lib/trakt-client.js";
+import {
+  importTraktCollection,
+  importTraktPersonalLists,
+  importTraktRatings,
+} from "../lib/trakt-import.js";
 import { renderOAuthHtml } from "../lib/html.js";
 import { consumeOAuthState, createOAuthState } from "../lib/trakt-oauth-state.js";
 import { getDefaultProfileId, resolveProfile } from "../lib/profile.js";
@@ -24,6 +29,30 @@ import type { SeriesProgressCandidate } from "../lib/types.js";
 // can pile up. Matches the limit PIN verification already uses; completing the
 // linking flow takes one request, not ten.
 const OAUTH_RATE_LIMIT = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
+
+// A full import walks the entire account and can run for minutes. Two at once
+// do the same work twice against the same rows — every write is idempotent, so
+// the result is correct either way, but the second run only adds contention and
+// Trakt requests. A second click gets told to wait instead.
+let importInProgress = false;
+
+/**
+ * Refuses a second import while one is running, and releases the flag however
+ * the first ends — a failed import must not lock the route until restart.
+ */
+const withImportLock =
+  (handler: RouteHandlerMethod): RouteHandlerMethod =>
+  async function (request, reply) {
+    if (importInProgress) {
+      return reply.code(409).send({ error: "A Trakt import is already running. Wait for it to finish." });
+    }
+    importInProgress = true;
+    try {
+      return await handler.call(this, request, reply);
+    } finally {
+      importInProgress = false;
+    }
+  };
 
 const traktRoutes: FastifyPluginAsync = async (app) => {
   app.get("/trakt/status", async (_request, reply) => {
@@ -178,7 +207,10 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
 
   // Imports land in the profile that asked for them, so this route — unlike the
   // OAuth dance and the request-less /trakt/poll below — resolves the caller.
-  app.post("/trakt/import", { preHandler: resolveProfile }, async (request, reply) => {
+  app.post(
+    "/trakt/import",
+    { preHandler: resolveProfile },
+    withImportLock(async (request, reply) => {
     let client: Awaited<ReturnType<typeof getTraktClient>>;
     try {
       client = await getTraktClient();
@@ -194,9 +226,48 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
       client.fetchWatchlistShows(request.log),
     ]);
 
-    const imported = { movies: 0, episodes: 0, watchlistMovies: 0, watchlistShows: 0 };
+    const imported = {
+      movies: 0,
+      episodes: 0,
+      watchlistMovies: 0,
+      watchlistShows: 0,
+      historyMovies: 0,
+      historyEpisodes: 0,
+      ratings: 0,
+      collectionMovies: 0,
+      collectionShows: 0,
+      lists: 0,
+      listItems: 0,
+      skipped: 0,
+    };
     const profileId = request.profileId!;
     const watchlist = await getDefaultWatchlist(profileId);
+
+    // The complete play history, every play with its own date — not just the
+    // most recent watch of each item, which is all /sync/watched reports. This
+    // runs first so the watched-list pass below can tell which items it already
+    // covers. It also resets the incremental poll's watermark, so the scheduled
+    // poll picks up from this import rather than re-walking the same history.
+    const history = await pollTraktHistory(request.log, profileId, { full: true });
+    imported.historyMovies = history.importedWatchEvents.movies;
+    imported.historyEpisodes = history.importedWatchEvents.episodes;
+
+    // Everything else the account holds: ratings, the collection, and personal
+    // lists. Together with the history above this is the whole of what
+    // Cataloggy can hold from Trakt — the point being that one run is enough to
+    // stop depending on Trakt, rather than history arriving here and ratings
+    // staying over there.
+    const [ratings, collection, lists] = await Promise.all([
+      importTraktRatings(client, request.log, profileId),
+      importTraktCollection(client, request.log, profileId),
+      importTraktPersonalLists(client, request.log, profileId),
+    ]);
+    imported.ratings = ratings.movies + ratings.shows + ratings.seasons + ratings.episodes;
+    imported.collectionMovies = collection.movies;
+    imported.collectionShows = collection.shows;
+    imported.lists = lists.lists;
+    imported.listItems = lists.items;
+    imported.skipped = ratings.skipped + collection.skipped + lists.skipped;
 
     for (const entry of watchlistMovies) {
       const imdbId = entry.movie?.ids?.imdb;
@@ -243,17 +314,15 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
       const watchedAt = entry.last_watched_at;
       if (!imdbId || !watchedAt) continue;
 
+      // Gap-fill only. The history import above already wrote one event per
+      // play, each with its own date; overwriting one of those rows with this
+      // entry's aggregate play count would count the same watches twice.
       const existing = await prisma.watchEvent.findFirst({ where: { profileId, type: "movie", imdbId } });
-      if (existing) {
-        await prisma.watchEvent.update({
-          where: { id: existing.id },
-          data: { watchedAt: new Date(watchedAt), plays: entry.plays ?? 1 },
-        });
-      } else {
-        await prisma.watchEvent.create({
-          data: { type: "movie", imdbId, watchedAt: new Date(watchedAt), plays: entry.plays ?? 1, profileId },
-        });
-      }
+      if (existing) continue;
+
+      await prisma.watchEvent.create({
+        data: { type: "movie", imdbId, watchedAt: new Date(watchedAt), plays: entry.plays ?? 1, profileId },
+      });
       imported.movies += 1;
     }
 
@@ -270,16 +339,12 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
           const watchedAt = ep.last_watched_at;
           if (episodeNumber === undefined || !watchedAt) continue;
 
+          // Gap-fill only, for the same reason as the movie pass above.
           const existing = await prisma.watchEvent.findFirst({
             where: { profileId, type: "episode", seriesImdbId, season: seasonNumber, episode: episodeNumber },
           });
 
-          if (existing) {
-            await prisma.watchEvent.update({
-              where: { id: existing.id },
-              data: { watchedAt: new Date(watchedAt), plays: ep.plays ?? 1 },
-            });
-          } else {
+          if (!existing) {
             await prisma.watchEvent.create({
               data: {
                 type: "episode",
@@ -292,6 +357,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
                 profileId,
               },
             });
+            imported.episodes += 1;
           }
 
           const watchedAtDate = new Date(watchedAt);
@@ -310,8 +376,6 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
               lastWatchedAt: watchedAtDate,
             });
           }
-
-          imported.episodes += 1;
         }
       }
     }
@@ -320,24 +384,51 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
       await upsertSeriesProgressIfNewer(profileId, seriesImdbId, progress);
     }
 
-    const movieImdbIds = watchedMovies
-      .map((e) => e.movie?.ids?.imdb)
-      .filter((id): id is string => !!id);
+    // Every title this import touched, whatever brought it in. A film that was
+    // only rated or only collected has no other reason to be fetched from TMDB,
+    // and without this would show as a bare IMDb id.
     const seriesImdbIds = [
       ...new Set([
         ...watchedShows.map((e) => e.show?.ids?.imdb).filter((id): id is string => !!id),
         ...watchlistShows.map((e) => e.show?.ids?.imdb).filter((id): id is string => !!id),
+        ...ratings.imdbIds.series,
+        ...collection.imdbIds.series,
+        ...lists.imdbIds.series,
       ]),
     ];
-    const watchlistMovieImdbIds = watchlistMovies
-      .map((e) => e.movie?.ids?.imdb)
-      .filter((id): id is string => !!id);
-    const allMovieIds = [...new Set([...movieImdbIds, ...watchlistMovieImdbIds])];
+    const allMovieIds = [
+      ...new Set([
+        ...watchedMovies.map((e) => e.movie?.ids?.imdb).filter((id): id is string => !!id),
+        ...watchlistMovies.map((e) => e.movie?.ids?.imdb).filter((id): id is string => !!id),
+        ...ratings.imdbIds.movies,
+        ...collection.imdbIds.movies,
+        ...lists.imdbIds.movies,
+      ]),
+    ];
+
+    // Only the titles that have no metadata row yet. Re-running an import used
+    // to re-fetch every title in the library from TMDB, and this import widened
+    // that set to everything rated, collected or listed — a request per title,
+    // for rows that were already there.
+    const [knownMovies, knownSeries] = await Promise.all([
+      prisma.metadata.findMany({
+        where: { type: MetadataType.movie, imdbId: { in: allMovieIds } },
+        select: { imdbId: true },
+      }),
+      prisma.metadata.findMany({
+        where: { type: MetadataType.series, imdbId: { in: seriesImdbIds } },
+        select: { imdbId: true },
+      }),
+    ]);
+    const knownMovieIds = new Set(knownMovies.map((row) => row.imdbId));
+    const knownSeriesIds = new Set(knownSeries.map((row) => row.imdbId));
+    const missingMovieIds = allMovieIds.filter((id) => !knownMovieIds.has(id));
+    const missingSeriesIds = seriesImdbIds.filter((id) => !knownSeriesIds.has(id));
 
     void (async () => {
       try {
         const tmdb = await getTmdb();
-        for (const id of allMovieIds) {
+        for (const id of missingMovieIds) {
           try {
             const payload = await tmdb.findByImdbId(MetadataType.movie, id);
             if (payload) await upsertMetadata(payload);
@@ -345,7 +436,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
             request.log.warn({ imdbId: id, error }, "Trakt import: movie metadata backfill failed");
           }
         }
-        for (const id of seriesImdbIds) {
+        for (const id of missingSeriesIds) {
           try {
             const payload = await tmdb.findByImdbId(MetadataType.series, id);
             if (payload) await upsertMetadata(payload);
@@ -359,12 +450,17 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
     })();
 
     return reply.code(200).send({ imported });
-  });
+    })
+  );
 
+  // `{ "full": true }` forces a complete history backfill instead of resuming
+  // from the last poll — the way to recover history an earlier windowed sync
+  // never imported, without disconnecting and reconnecting the account.
   app.post("/trakt/poll", async (request, reply) => {
     try {
+      const { full } = (request.body ?? {}) as { full?: boolean };
       const profileId = await getDefaultProfileId();
-      const history = await pollTraktHistory(request.log, profileId);
+      const history = await pollTraktHistory(request.log, profileId, { full: full === true });
       const watchlist = await syncTraktWatchlist(request.log, profileId);
       return reply.code(200).send({ ...history, watchlist });
     } catch (error) {

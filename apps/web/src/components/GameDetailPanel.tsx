@@ -6,6 +6,8 @@ import { useScrollLock } from "../hooks/useScrollLock";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useExitAnimation } from "../hooks/useExitAnimation";
 import { formatPlaytime } from "../utils/playtime";
+import { StarPicker } from "./StarPicker";
+import { STARS_MAX } from "../utils/rating";
 import { PAGE_TITLE, KICKER } from "./typography";
 
 function formatDate(value: string | null): string | null {
@@ -24,7 +26,6 @@ function GameStarRating({
   onChange: (game: Game) => void;
   onError: (message: string) => void;
 }) {
-  const [hoverRating, setHoverRating] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
   const handleRate = async (rating: number) => {
@@ -37,68 +38,17 @@ function GameStarRating({
       onError(err instanceof Error ? err.message : "Failed to save rating");
     } finally {
       setSaving(false);
-      setHoverRating(null);
     }
   };
-
-  const displayRating = hoverRating ?? game.rating ?? 0;
 
   return (
     <div>
       <h3 className={`mb-2 flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
-        <Star className="h-3.5 w-3.5" /> Your Rating <span className="font-normal">(1-10)</span>
+        <Star className="h-3.5 w-3.5" /> Your Rating <span className="font-normal">(out of {STARS_MAX})</span>
       </h3>
-      {/* Same two-star construction as the media panel's rating: an outline
-          that tints on preview, and a filled star stacked on it that pops in
-          when the rating is committed and shakes on hover. A game rating is
-          the same gesture as a film rating and should answer the same way. */}
-      <div className="flex flex-wrap items-center gap-1">
-        {Array.from({ length: 10 }, (_, i) => i + 1).map((star) => {
-          const isFilled = game.rating !== null && star <= game.rating;
-          const isPreview = star <= displayRating;
-          const isCurrentRating = game.rating === star;
-          return (
-            <button
-              key={star}
-              type="button"
-              disabled={saving}
-              onClick={() => void handleRate(star)}
-              onMouseEnter={() => setHoverRating(star)}
-              onMouseLeave={() => setHoverRating(null)}
-              onFocus={() => setHoverRating(star)}
-              onBlur={() => setHoverRating(null)}
-              className="relative flex p-0.5 disabled:opacity-50"
-              // The current rating's button does the opposite of every other
-              // one — it clears the rating — and `title` is the only place that
-              // said so, which a screen reader may never announce and a touch
-              // user never sees at all.
-              aria-label={isCurrentRating ? `Your rating: ${star} out of 10. Activate to remove it` : `Rate ${star} out of 10`}
-              aria-pressed={isCurrentRating}
-              title={isCurrentRating ? "Click again to remove your rating" : undefined}
-            >
-              <span className="relative grid h-5 w-5 place-items-center">
-                <Star
-                  className={`absolute h-5 w-5 transition-colors duration-slow ${isPreview ? "text-amber-400" : ""}`}
-                  style={isPreview ? undefined : { color: "var(--text-mute)" }}
-                />
-                {/* Gated on the preview as well as the commit, so hovering
-                    below a saved rating actually previews the lower score —
-                    on `isFilled` alone the stars above the pointer stayed
-                    solid and nothing showed what the click would do. `star-pop`
-                    stays tied to `isFilled` so the pop plays when a rating is
-                    committed, not every time the pointer leaves. */}
-                <Star
-                  className={`star-shake-target absolute h-5 w-5 fill-amber-400 text-amber-400 transition-opacity duration-slow ${isFilled ? "star-pop" : ""} ${isFilled && isPreview ? "opacity-100" : "opacity-0"}`}
-                />
-              </span>
-              {isFilled && <span className="sr-only">(rated)</span>}
-            </button>
-          );
-        })}
-        <span className="ml-1 text-sm font-semibold tabular-nums text-amber-500">
-          {hoverRating != null ? `${hoverRating}/10` : game.rating !== null ? `${game.rating}/10` : ""}
-        </span>
-      </div>
+      {/* The same picker the media panel uses: rating a game is the same
+          gesture as rating a film and should answer the same way. */}
+      <StarPicker value={game.rating} onRate={(value) => void handleRate(value)} disabled={saving} />
     </div>
   );
 }

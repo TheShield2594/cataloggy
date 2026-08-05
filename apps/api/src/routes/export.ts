@@ -102,7 +102,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
     const ratings: ExportRating[] = ratingRows.map((row) => ({
       imdbId: row.imdbId,
       type: row.type,
-      season: row.type === "episode" ? row.season : undefined,
+      season: row.type === "season" || row.type === "episode" ? row.season : undefined,
       episode: row.type === "episode" ? row.episode : undefined,
       rating: row.rating,
       note: row.note,
@@ -274,16 +274,25 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       if (
         !imdbId ||
         value === null ||
-        (rating.type !== "movie" && rating.type !== "series" && rating.type !== "episode")
+        (rating.type !== "movie" &&
+          rating.type !== "series" &&
+          rating.type !== "season" &&
+          rating.type !== "episode")
       ) {
         continue;
       }
       const type = rating.type as MetadataType;
-      // Episode ratings carry a season/episode; anything else pins both to 0,
-      // as the column defaults do. An episode rating that names one but with a
-      // value the column can't hold is dropped rather than filed under 0.
-      const season = type === "episode" && rating.season != null ? boundedInt(rating.season, 0, MAX_SEASON) : 0;
-      const episode = type === "episode" && rating.episode != null ? boundedInt(rating.episode, 0, MAX_EPISODE) : 0;
+      // Season and episode ratings are located by a season, episode ratings
+      // also by an episode; movie and series ratings pin both to 0, as the
+      // column defaults do. A rating whose type needs one of those numbers and
+      // hasn't got a usable one is dropped, not filed under season 0 — that is
+      // Specials, a real season, and would land the rating on something else.
+      // Same rule POST /ratings applies.
+      const carriesSeason = type === "season" || type === "episode";
+      if (carriesSeason && rating.season == null) continue;
+      if (type === "episode" && rating.episode == null) continue;
+      const season = carriesSeason ? boundedInt(rating.season, 0, MAX_SEASON) : 0;
+      const episode = type === "episode" ? boundedInt(rating.episode, 0, MAX_EPISODE) : 0;
       if (season === null || episode === null) continue;
 
       ratingInputs.push({

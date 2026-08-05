@@ -286,9 +286,41 @@ export type TrendingMeta = {
   rating?: number;
 };
 
+/**
+ * What a rating can be about. Wider than `MediaType` because a series can be
+ * rated as a whole, season by season, or episode by episode — `season` and
+ * `episode` ratings carry the numbers that locate them, keyed by the series'
+ * IMDb id.
+ */
+export type RatingType = MediaType | "season" | "episode";
+
+/**
+ * Only season and episode ratings carry the numbers that locate them; sending
+ * them for a movie or series rating would be noise the API pins to 0 anyway.
+ */
+const ratingTarget = (type: RatingType, target?: RatingTarget) =>
+  type === "season"
+    ? { season: target?.season ?? 0 }
+    : type === "episode"
+      ? { season: target?.season ?? 0, episode: target?.episode ?? 0 }
+      : {};
+
+const ratingQuery = (type: RatingType, target?: RatingTarget) => {
+  const params = new URLSearchParams(
+    Object.entries(ratingTarget(type, target)).map(([k, v]) => [k, String(v)])
+  );
+  const query = params.toString();
+  return query ? `?${query}` : "";
+};
+
+/** Locates a season or episode rating; omitted entirely for movies and series. */
+export type RatingTarget = { season?: number; episode?: number };
+
 export type UserRating = {
   imdbId: string;
-  type: MediaType;
+  type: RatingType;
+  season?: number;
+  episode?: number;
   rating: number;
   ratedAt: string;
 };
@@ -791,7 +823,9 @@ export const api = {
     return request<{ url: string }>("/trakt/oauth/authorize");
   },
   traktImport() {
-    return request<{ imported: Record<string, number> }>("/trakt/import", { method: "POST", timeoutMs: 120000 });
+    // A full history import walks every play on the account, so this is sized
+    // for a decade-old library on a slow connection rather than a routine sync.
+    return request<{ imported: Record<string, number> }>("/trakt/import", { method: "POST", timeoutMs: 900000 });
   },
   traktDisconnect() {
     return request<{ disconnected: boolean }>("/trakt/disconnect", { method: "POST" });
@@ -876,23 +910,35 @@ export const api = {
     return request<{ metas: TrendingMeta[] }>(`/popular?type=${type}`);
   },
   // Ratings
-  setRating(imdbId: string, type: MediaType, rating: number) {
+  setRating(imdbId: string, type: RatingType, rating: number, target?: RatingTarget) {
     return request<{ rating: UserRating }>("/ratings", {
       method: "POST",
-      body: JSON.stringify({ imdbId, type, rating }),
+      body: JSON.stringify({ imdbId, type, rating, ...ratingTarget(type, target) }),
     });
   },
-  getRating(type: MediaType, imdbId: string) {
-    return request<{ rating: UserRating }>(`/ratings/${type}/${encodeURIComponent(imdbId)}`);
+  getRating(type: RatingType, imdbId: string, target?: RatingTarget) {
+    return request<{ rating: UserRating }>(
+      `/ratings/${type}/${encodeURIComponent(imdbId)}${ratingQuery(type, target)}`
+    );
   },
-  deleteRating(type: MediaType, imdbId: string) {
-    return request<void>(`/ratings/${type}/${encodeURIComponent(imdbId)}`, { method: "DELETE" });
+  deleteRating(type: RatingType, imdbId: string, target?: RatingTarget) {
+    return request<void>(`/ratings/${type}/${encodeURIComponent(imdbId)}${ratingQuery(type, target)}`, {
+      method: "DELETE",
+    });
   },
-  getAllRatings(type?: MediaType, limit = 50) {
+  getAllRatings(type?: RatingType, limit = 50) {
     const params = new URLSearchParams();
     if (type) params.set("type", type);
     params.set("limit", String(limit));
     return request<{ ratings: UserRating[] }>(`/ratings?${params}`);
+  },
+  /**
+   * Every rating recorded against one title — the series itself, its seasons
+   * and its episodes — in a single request, so the seasons panel doesn't fire
+   * one per row.
+   */
+  getTitleRatings(imdbId: string) {
+    return request<{ ratings: UserRating[] }>(`/ratings?imdbId=${encodeURIComponent(imdbId)}`);
   },
   // Recommendations
   getPersonalRecommendations(type: MediaType, limit = 20) {

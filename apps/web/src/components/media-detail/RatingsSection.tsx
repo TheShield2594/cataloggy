@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, Star } from "lucide-react";
-import { api, ApiError, MediaType } from "../../api";
+import { api, ApiError, MediaType, RatingType } from "../../api";
 import { ImdbLogo, RtLogo, McIcon, TmdbLogo } from "./RatingLogos";
+import { StarPicker } from "../StarPicker";
+import { STARS_MAX } from "../../utils/rating";
 import { KICKER } from "../typography";
 
 export function ExternalLinks({
@@ -95,126 +97,87 @@ export function ExternalRatings({
 }
 
 export function StarRating({
-  imdbId, type, onError,
+  imdbId, type, season, episode, onError,
 }: {
-  imdbId: string; type: MediaType; onError?: (message: string) => void;
+  imdbId: string;
+  type: RatingType;
+  /** Required for `season` and `episode` ratings; ignored otherwise. */
+  season?: number;
+  episode?: number;
+  onError?: (message: string) => void;
 }) {
   const [userRating, setUserRating] = useState<number | null>(null);
-  const [hoverRating, setHoverRating] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const canceledRef = useRef(false);
+
+  const target = useMemo(() => ({ season, episode }), [season, episode]);
+
+  // What this control is currently about. A cancelled flag can't carry a
+  // request across a change of subject: the next effect resets it before the
+  // previous request lands, so the old answer arrives looking current and
+  // writes another title's rating into these stars. Comparing identities
+  // instead means a reply is only ever applied to the thing it was asked about.
+  const identity = `${type}:${imdbId}:${season ?? ""}:${episode ?? ""}`;
+  const identityRef = useRef(identity);
+  identityRef.current = identity;
+  const isCurrent = (requested: string) => identityRef.current === requested;
+
+  const load = useCallback(async () => {
+    const requested = `${type}:${imdbId}:${season ?? ""}:${episode ?? ""}`;
+    try {
+      const res = await api.getRating(type, imdbId, target);
+      if (isCurrent(requested)) setUserRating(res.rating.rating);
+    } catch (err) {
+      if (isCurrent(requested)) {
+        // A title you haven't rated is the common case, not a failure.
+        if (err instanceof ApiError && err.status === 404) setUserRating(null);
+        else setLoadError(err instanceof Error ? err.message : "Failed to load rating");
+      }
+    } finally {
+      if (isCurrent(requested)) setLoaded(true);
+    }
+  }, [type, imdbId, season, episode, target]);
 
   useEffect(() => {
-    setUserRating(null); setHoverRating(null); setLoaded(false); setLoadError(null);
-    canceledRef.current = false;
-    void (async () => {
-      try {
-        const res = await api.getRating(type, imdbId);
-        if (!canceledRef.current) setUserRating(res.rating.rating);
-      } catch (err) {
-        if (!canceledRef.current) {
-          if (!(err instanceof ApiError && err.status === 404)) {
-            setLoadError(err instanceof Error ? err.message : "Failed to load rating");
-          }
-        }
-      } finally {
-        if (!canceledRef.current) setLoaded(true);
-      }
-    })();
-    return () => { canceledRef.current = true; };
-  }, [imdbId, type]);
+    setUserRating(null); setLoaded(false); setLoadError(null);
+    void load();
+  }, [load]);
 
   const handleRate = async (rating: number) => {
     if (saving) return;
-    if (userRating === rating) {
-      setSaving(true);
-      try { await api.deleteRating(type, imdbId); setUserRating(null); setHoverRating(null); }
-      catch (err) { onError?.(err instanceof Error ? err.message : "Failed to remove rating"); }
-      finally { setSaving(false); }
-      return;
-    }
+    const requested = identity;
     setSaving(true);
-    try { const res = await api.setRating(imdbId, type, rating); setUserRating(res.rating.rating); setHoverRating(null); }
-    catch (err) { onError?.(err instanceof Error ? err.message : "Failed to save rating"); }
-    finally { setSaving(false); }
+    try {
+      if (userRating === rating) {
+        await api.deleteRating(type, imdbId, target);
+        if (isCurrent(requested)) setUserRating(null);
+      } else {
+        const res = await api.setRating(imdbId, type, rating, target);
+        if (isCurrent(requested)) setUserRating(res.rating.rating);
+      }
+    } catch (err) {
+      if (isCurrent(requested)) onError?.(err instanceof Error ? err.message : "Failed to save rating");
+    } finally {
+      // Unconditional: if the panel moved on mid-save, the control still has to
+      // come back to life for whatever it is showing now.
+      setSaving(false);
+    }
   };
 
   const retryLoadRating = useCallback(() => {
     setLoadError(null); setLoaded(false);
-    void (async () => {
-      try {
-        const res = await api.getRating(type, imdbId);
-        if (!canceledRef.current) setUserRating(res.rating.rating);
-      } catch (err) {
-        if (!canceledRef.current && !(err instanceof ApiError && err.status === 404)) {
-          setLoadError(err instanceof Error ? err.message : "Failed to load rating");
-        }
-      } finally {
-        if (!canceledRef.current) setLoaded(true);
-      }
-    })();
-  }, [imdbId, type]);
+    void load();
+  }, [load]);
 
   if (!loaded) return <div className="skeleton h-8 w-40 rounded-lg" />;
 
-  const displayRating = hoverRating ?? userRating ?? 0;
-  const groups: number[][] = [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]];
   return (
     <div>
       <h3 className={`mb-2 flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
-        <Star className="h-3.5 w-3.5" /> Your Rating <span className="font-normal">(1-10)</span>
+        <Star className="h-3.5 w-3.5" /> Your Rating <span className="font-normal">(out of {STARS_MAX})</span>
       </h3>
-      <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
-        {groups.map((group, groupIndex) => (
-          <div key={groupIndex} className="flex items-center gap-0 sm:gap-0.5">
-            {group.map((star) => {
-              const isFilled = userRating !== null && star <= userRating;
-              const isPreview = star <= displayRating;
-              const isCurrentRating = userRating === star;
-              return (
-                <button
-                  key={star} type="button" disabled={saving}
-                  onClick={() => void handleRate(star)}
-                  onMouseEnter={() => setHoverRating(star)}
-                  onMouseLeave={() => setHoverRating(null)}
-                  onFocus={() => setHoverRating(star)}
-                  onBlur={() => setHoverRating(null)}
-                  className="relative flex flex-col items-center gap-0.5 p-0.5 before:absolute before:inset-[-4px] before:content-[''] disabled:opacity-50 sm:p-1"
-                  // The current rating's button does the opposite of every
-                  // other one — it clears the rating — and `title` is the only
-                  // place that said so, which a screen reader may never
-                  // announce and a touch user never sees at all.
-                  aria-label={isCurrentRating ? `Your rating: ${star} out of 10. Activate to remove it` : `Rate ${star} out of 10`}
-                  aria-pressed={isCurrentRating}
-                  title={isCurrentRating ? "Click again to remove your rating" : undefined}
-                >
-                  <span className="relative grid h-5 w-5 place-items-center sm:h-7 sm:w-7">
-                    <Star
-                      className={`absolute h-5 w-5 transition-colors duration-slow sm:h-7 sm:w-7 ${isPreview ? "text-amber-400" : ""}`}
-                      style={isPreview ? undefined : { color: "var(--text-mute)" }}
-                    />
-                    {/* Gated on the preview as well as the commit, so hovering
-                        below a saved rating actually previews the lower score —
-                        on `isFilled` alone the stars above the pointer stayed
-                        solid and nothing showed what the click would do.
-                        `star-pop` stays tied to `isFilled` so the pop plays when
-                        a rating is committed, not every time the pointer
-                        leaves. */}
-                    <Star
-                      className={`star-shake-target absolute h-5 w-5 fill-amber-400 text-amber-400 transition-opacity duration-slow sm:h-7 sm:w-7 ${isFilled ? "star-pop" : ""} ${isFilled && isPreview ? "opacity-100" : "opacity-0"}`}
-                    />
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        ))}
-        <span className="ml-1 text-xs font-semibold text-amber-500 sm:text-sm">
-          {hoverRating != null ? `Rating: ${hoverRating}/10` : userRating !== null ? `${userRating}/10` : ""}
-        </span>
-      </div>
+      <StarPicker value={userRating} onRate={(value) => void handleRate(value)} disabled={saving} />
       {userRating !== null && (
         <p className="mt-1 text-2xs" style={{ color: "var(--text-mute)" }}>Click your current rating again to remove it.</p>
       )}

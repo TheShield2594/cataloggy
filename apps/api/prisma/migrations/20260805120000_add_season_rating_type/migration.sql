@@ -1,0 +1,14 @@
+-- A season is something you can judge on its own, and both Trakt and TMDB
+-- treat it that way — Trakt has a whole /sync/ratings/seasons endpoint whose
+-- contents previously had nowhere to land here.
+--
+-- A season rating could almost be stored as a series rating carrying a season
+-- number, since "Rating" is already keyed by (type, imdbId, season, episode).
+-- It can't: season 0 is Specials, which is ratable, and (series, 0, 0) is
+-- already the key the show's own rating uses. The two would collide on exactly
+-- the case a self-hoster is least likely to check.
+--
+-- Placed after 'series' so the enum reads in the order the values nest.
+-- Nothing writes "Metadata" rows of this type: TMDB metadata is fetched per
+-- title, not per season.
+ALTER TYPE "MetadataType" ADD VALUE 'season' AFTER 'series';

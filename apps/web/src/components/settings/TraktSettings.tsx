@@ -3,6 +3,43 @@ import { api } from "../../api";
 import { Link, Loader2, Check, AlertCircle, Unplug } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
 
+// The server's counters, in the order they read best as a summary. Anything the
+// server adds later still shows, under its raw key, rather than disappearing.
+const IMPORT_LABELS: Record<string, string> = {
+  historyMovies: "movie plays",
+  historyEpisodes: "episode plays",
+  movies: "movies watched (no play history)",
+  episodes: "episodes watched (no play history)",
+  ratings: "ratings",
+  watchlistMovies: "watchlist movies",
+  watchlistShows: "watchlist shows",
+  collectionMovies: "collection movies",
+  collectionShows: "collection shows",
+  lists: "lists",
+  listItems: "list items",
+};
+
+const summarizeImport = (imported: Record<string, number>): string => {
+  const order = Object.keys(IMPORT_LABELS);
+  const parts = Object.entries(imported)
+    .filter(([key, count]) => count > 0 && key !== "skipped")
+    .sort(([a], [b]) => {
+      const rank = (key: string) => (order.indexOf(key) === -1 ? order.length : order.indexOf(key));
+      return rank(a) - rank(b);
+    })
+    .map(([key, count]) => `${count.toLocaleString()} ${IMPORT_LABELS[key] ?? key}`);
+
+  const imports =
+    parts.length > 0 ? `Imported ${parts.join(", ")}.` : "Already up to date — nothing new to import.";
+
+  // Its own sentence: what was skipped was not imported, and reading "…, 12
+  // skipped" at the end of the list makes it sound as though it was.
+  const skipped = imported.skipped ?? 0;
+  return skipped > 0
+    ? `${imports} Skipped ${skipped.toLocaleString()} ${skipped === 1 ? "entry" : "entries"} Cataloggy could not match.`
+    : imports;
+};
+
 export function TraktSettings() {
   const [status, setStatus] = useState<{ connected: boolean; configured: boolean; redirectUri?: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,8 +89,7 @@ export function TraktSettings() {
     setError(null);
     try {
       const result = await api.traktImport();
-      const entries = Object.entries(result.imported);
-      setImportResult(entries.length > 0 ? entries.map(([k, v]) => `${k}: ${v}`).join(", ") : "No new items imported");
+      setImportResult(summarizeImport(result.imported));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed");
     } finally {
@@ -105,7 +141,7 @@ export function TraktSettings() {
               disabled={importing}
               className="btn-primary"
             >
-              {importing ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : "Run Import"}
+              {importing ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : "Run Full Import"}
             </button>
             <button
               type="button"
@@ -125,13 +161,21 @@ export function TraktSettings() {
         )}
       </div>
 
+      {status?.connected && (
+        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
+          A full import pulls everything Cataloggy can hold from Trakt: your entire watch history (every play,
+          however far back, with its own date), ratings, watchlist, collection and personal lists. It can take
+          several minutes on a large library; after it finishes, scheduled syncs only fetch what is new.
+        </p>
+      )}
+
       {importResult && (
-        <p className="flex items-center gap-2 text-sm text-emerald-600">
-          <Check size={16} /> {importResult}
+        <p role="status" aria-live="polite" className="flex items-start gap-2 text-sm text-emerald-600">
+          <Check size={16} className="shrink-0 mt-0.5" /> {importResult}
         </p>
       )}
       {error && (
-        <p className="flex items-center gap-2 text-sm text-rose-600">
+        <p role="alert" className="flex items-center gap-2 text-sm text-rose-600">
           <AlertCircle size={16} /> {error}
         </p>
       )}
