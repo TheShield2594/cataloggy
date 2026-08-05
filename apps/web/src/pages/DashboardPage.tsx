@@ -591,11 +591,35 @@ function StatChipsSkeleton() {
   );
 }
 
+/**
+ * The bites out of the header strip's left and right edges that make it a
+ * ticket stub — the collectible-stat idea the Stats page's `TicketTile` is
+ * named for, spent here on the row that actually carries the numbers on every
+ * visit rather than on the page people open once a month.
+ *
+ * Page-coloured circles centred on the strip's edge: the half that lands
+ * inside erases the border it crosses, and an interrupted border is what the
+ * eye reads as a notch. Absolutely positioned on purpose — this row is one
+ * line of chips wide on a laptop with the sidebar pinned, and a decoration
+ * that took any width at all would spend the last of it and wrap the date
+ * onto a second line. It sits in the padding, so it never meets the text.
+ */
+function TicketNotches() {
+  const notch = "pointer-events-none absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full";
+  return (
+    <span aria-hidden="true">
+      <span className={`${notch} -left-1.5`} style={{ background: "var(--bg-0)" }} />
+      <span className={`${notch} -right-1.5`} style={{ background: "var(--bg-0)" }} />
+    </span>
+  );
+}
+
 function StatChip({ icon: Icon, label, value, accent }: { icon: React.ElementType; label: string; value: string | number; accent?: boolean }) {
   return (
     <span className="flex items-center gap-1.5 text-sm" style={{ color: accent ? undefined : "var(--text-dim)" }}>
       <Icon className={`h-3.5 w-3.5 ${accent ? "text-claw-text" : ""}`} style={accent ? undefined : { color: "var(--text-mute)" }} />
-      <span className={accent ? "font-semibold text-claw-text" : ""}>
+      {/* Tabular figures so a ticking count doesn't shuffle the label beside it. */}
+      <span className={`tabular-nums ${accent ? "font-semibold text-claw-text" : ""}`}>
         {typeof value === "number" ? value.toLocaleString() : value}
       </span>
       <span className="hidden sm:inline" style={{ color: "var(--text-mute)" }}>{label}</span>
@@ -630,10 +654,11 @@ function DashboardHeader({
   const today = now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   return (
     <div
-      className="flex flex-col gap-2.5 rounded-xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+      className="relative flex flex-col gap-2.5 rounded-xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
       <PageHeading />
+      <TicketNotches />
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
         <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{timeOfDayGreeting(now)}</span>
         <span style={{ color: "var(--border-strong)" }}>&middot;</span>
