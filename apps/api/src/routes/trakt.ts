@@ -12,6 +12,11 @@ import {
   syncTraktWatchlist,
   computeTokenExpiresAt,
 } from "../lib/trakt-client.js";
+import {
+  importTraktCollection,
+  importTraktPersonalLists,
+  importTraktRatings,
+} from "../lib/trakt-import.js";
 import { renderOAuthHtml } from "../lib/html.js";
 import { consumeOAuthState, createOAuthState } from "../lib/trakt-oauth-state.js";
 import { getDefaultProfileId, resolveProfile } from "../lib/profile.js";
@@ -201,6 +206,12 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
       watchlistShows: 0,
       historyMovies: 0,
       historyEpisodes: 0,
+      ratings: 0,
+      collectionMovies: 0,
+      collectionShows: 0,
+      lists: 0,
+      listItems: 0,
+      skipped: 0,
     };
     const profileId = request.profileId!;
     const watchlist = await getDefaultWatchlist(profileId);
@@ -213,6 +224,23 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
     const history = await pollTraktHistory(request.log, profileId, { full: true });
     imported.historyMovies = history.importedWatchEvents.movies;
     imported.historyEpisodes = history.importedWatchEvents.episodes;
+
+    // Everything else the account holds: ratings, the collection, and personal
+    // lists. Together with the history above this is the whole of what
+    // Cataloggy can hold from Trakt — the point being that one run is enough to
+    // stop depending on Trakt, rather than history arriving here and ratings
+    // staying over there.
+    const [ratings, collection, lists] = await Promise.all([
+      importTraktRatings(client, request.log, profileId),
+      importTraktCollection(client, request.log, profileId),
+      importTraktPersonalLists(client, request.log, profileId),
+    ]);
+    imported.ratings = ratings.movies + ratings.shows + ratings.episodes;
+    imported.collectionMovies = collection.movies;
+    imported.collectionShows = collection.shows;
+    imported.lists = lists.lists;
+    imported.listItems = lists.items;
+    imported.skipped = ratings.skipped + collection.skipped + lists.skipped;
 
     for (const entry of watchlistMovies) {
       const imdbId = entry.movie?.ids?.imdb;
@@ -329,19 +357,27 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
       await upsertSeriesProgressIfNewer(profileId, seriesImdbId, progress);
     }
 
-    const movieImdbIds = watchedMovies
-      .map((e) => e.movie?.ids?.imdb)
-      .filter((id): id is string => !!id);
+    // Every title this import touched, whatever brought it in. A film that was
+    // only rated or only collected has no other reason to be fetched from TMDB,
+    // and without this would show as a bare IMDb id.
     const seriesImdbIds = [
       ...new Set([
         ...watchedShows.map((e) => e.show?.ids?.imdb).filter((id): id is string => !!id),
         ...watchlistShows.map((e) => e.show?.ids?.imdb).filter((id): id is string => !!id),
+        ...ratings.imdbIds.series,
+        ...collection.imdbIds.series,
+        ...lists.imdbIds.series,
       ]),
     ];
-    const watchlistMovieImdbIds = watchlistMovies
-      .map((e) => e.movie?.ids?.imdb)
-      .filter((id): id is string => !!id);
-    const allMovieIds = [...new Set([...movieImdbIds, ...watchlistMovieImdbIds])];
+    const allMovieIds = [
+      ...new Set([
+        ...watchedMovies.map((e) => e.movie?.ids?.imdb).filter((id): id is string => !!id),
+        ...watchlistMovies.map((e) => e.movie?.ids?.imdb).filter((id): id is string => !!id),
+        ...ratings.imdbIds.movies,
+        ...collection.imdbIds.movies,
+        ...lists.imdbIds.movies,
+      ]),
+    ];
 
     void (async () => {
       try {

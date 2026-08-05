@@ -51,6 +51,74 @@ type TraktShowPayload = {
   };
 };
 
+export type TraktRatedMoviePayload = {
+  rated_at?: string;
+  rating?: number;
+  movie?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+};
+
+export type TraktRatedShowPayload = {
+  rated_at?: string;
+  rating?: number;
+  show?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+};
+
+export type TraktRatedEpisodePayload = {
+  rated_at?: string;
+  rating?: number;
+  episode?: {
+    season?: number;
+    number?: number;
+    title?: string;
+    ids?: TraktIds;
+  };
+  show?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+};
+
+export type TraktCollectedMoviePayload = {
+  collected_at?: string;
+  movie?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+};
+
+export type TraktCollectedShowPayload = {
+  last_collected_at?: string;
+  show?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+};
+
+export type TraktPersonalListPayload = {
+  ids?: { trakt?: number; slug?: string };
+  name?: string;
+  description?: string | null;
+  item_count?: number;
+};
+
+export type TraktListItemPayload = {
+  type?: string;
+  movie?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+  show?: {
+    title?: string;
+    ids?: TraktIds;
+  };
+};
+
 type TraktEpisodeHistoryPayload = {
   id?: number;
   watched_at?: string;
@@ -184,6 +252,56 @@ export class TraktClient {
 
   async fetchWatchedShows(logger: FastifyBaseLogger): Promise<TraktWatchedShowPayload[]> {
     return this.fetchAllPages<TraktWatchedShowPayload>("/sync/watched/shows", logger);
+  }
+
+  async fetchRatedMovies(logger: FastifyBaseLogger): Promise<TraktRatedMoviePayload[]> {
+    return this.fetchAllPages<TraktRatedMoviePayload>("/sync/ratings/movies", logger);
+  }
+
+  async fetchRatedShows(logger: FastifyBaseLogger): Promise<TraktRatedShowPayload[]> {
+    return this.fetchAllPages<TraktRatedShowPayload>("/sync/ratings/shows", logger);
+  }
+
+  async fetchRatedEpisodes(logger: FastifyBaseLogger): Promise<TraktRatedEpisodePayload[]> {
+    return this.fetchAllPages<TraktRatedEpisodePayload>("/sync/ratings/episodes", logger);
+  }
+
+  async fetchCollectionMovies(logger: FastifyBaseLogger): Promise<TraktCollectedMoviePayload[]> {
+    return this.fetchAllPages<TraktCollectedMoviePayload>("/sync/collection/movies", logger);
+  }
+
+  async fetchCollectionShows(logger: FastifyBaseLogger): Promise<TraktCollectedShowPayload[]> {
+    return this.fetchAllPages<TraktCollectedShowPayload>("/sync/collection/shows", logger);
+  }
+
+  /**
+   * The user's own lists. Unlike the /sync endpoints this one is not paginated
+   * — asking for page 2 returns the same full array again — so it is fetched as
+   * a single request rather than through fetchAllPages, which would read that
+   * repeat as more data and import every list twice.
+   */
+  async fetchPersonalLists(logger: FastifyBaseLogger): Promise<TraktPersonalListPayload[]> {
+    const response = await this.request("/users/me/lists", {
+      method: "GET",
+      headers: {
+        "trakt-api-version": "2",
+        "trakt-api-key": this.clientId,
+        Authorization: `Bearer ${this.accessToken}`
+      },
+      logger
+    });
+
+    try {
+      return (await response.json()) as TraktPersonalListPayload[];
+    } catch {
+      throw new Error(`Trakt API returned non-JSON response for /users/me/lists (status ${response.status})`);
+    }
+  }
+
+  // Movies and shows only: a personal list can also hold people, seasons and
+  // episodes, none of which a Cataloggy list can hold.
+  async fetchPersonalListItems(listId: number, logger: FastifyBaseLogger): Promise<TraktListItemPayload[]> {
+    return this.fetchAllPages<TraktListItemPayload>(`/users/me/lists/${listId}/items/movie,show`, logger);
   }
 
   // No `startAt` means "everything Trakt has", not "the recent window with no

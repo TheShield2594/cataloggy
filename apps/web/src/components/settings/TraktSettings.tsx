@@ -3,6 +3,36 @@ import { api } from "../../api";
 import { Link, Loader2, Check, AlertCircle, Unplug } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
 
+// The server's counters, in the order they read best as a summary. Anything the
+// server adds later still shows, under its raw key, rather than disappearing.
+const IMPORT_LABELS: Record<string, string> = {
+  historyMovies: "movie plays",
+  historyEpisodes: "episode plays",
+  movies: "movies watched (no play history)",
+  episodes: "episodes watched (no play history)",
+  ratings: "ratings",
+  watchlistMovies: "watchlist movies",
+  watchlistShows: "watchlist shows",
+  collectionMovies: "collection movies",
+  collectionShows: "collection shows",
+  lists: "lists",
+  listItems: "list items",
+  skipped: "skipped (nothing Cataloggy could match)",
+};
+
+const summarizeImport = (imported: Record<string, number>): string => {
+  const order = Object.keys(IMPORT_LABELS);
+  const parts = Object.entries(imported)
+    .filter(([, count]) => count > 0)
+    .sort(([a], [b]) => {
+      const rank = (key: string) => (order.indexOf(key) === -1 ? order.length : order.indexOf(key));
+      return rank(a) - rank(b);
+    })
+    .map(([key, count]) => `${count.toLocaleString()} ${IMPORT_LABELS[key] ?? key}`);
+
+  return parts.length > 0 ? `Imported ${parts.join(", ")}.` : "Already up to date — nothing new to import.";
+};
+
 export function TraktSettings() {
   const [status, setStatus] = useState<{ connected: boolean; configured: boolean; redirectUri?: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,8 +82,7 @@ export function TraktSettings() {
     setError(null);
     try {
       const result = await api.traktImport();
-      const entries = Object.entries(result.imported);
-      setImportResult(entries.length > 0 ? entries.map(([k, v]) => `${k}: ${v}`).join(", ") : "No new items imported");
+      setImportResult(summarizeImport(result.imported));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed");
     } finally {
@@ -127,14 +156,15 @@ export function TraktSettings() {
 
       {status?.connected && (
         <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-          A full import pulls your entire Trakt history — every play, however far back — plus your watchlist.
-          It can take several minutes on a large library; after it finishes, scheduled syncs only fetch what is new.
+          A full import pulls everything Cataloggy can hold from Trakt: your entire watch history (every play,
+          however far back, with its own date), ratings, watchlist, collection and personal lists. It can take
+          several minutes on a large library; after it finishes, scheduled syncs only fetch what is new.
         </p>
       )}
 
       {importResult && (
-        <p className="flex items-center gap-2 text-sm text-emerald-600">
-          <Check size={16} /> {importResult}
+        <p className="flex items-start gap-2 text-sm text-emerald-600">
+          <Check size={16} className="shrink-0 mt-0.5" /> {importResult}
         </p>
       )}
       {error && (
