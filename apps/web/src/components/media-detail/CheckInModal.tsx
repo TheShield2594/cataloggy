@@ -3,6 +3,7 @@ import { Radio, X } from "lucide-react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useScrollLock } from "../../hooks/useScrollLock";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
+import { useExitAnimation } from "../../hooks/useExitAnimation";
 
 export function CheckInModal({
   seriesName,
@@ -22,9 +23,10 @@ export function CheckInModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useFocusTrap<HTMLDivElement>();
+  const { exiting, requestClose, onExitAnimationEnd } = useExitAnimation(onClose);
 
   useScrollLock();
-  useEscapeKey(onClose);
+  useEscapeKey(requestClose);
 
   const submit = async () => {
     const s = parseInt(season, 10);
@@ -34,7 +36,7 @@ export function CheckInModal({
     setError(null);
     try {
       await onCheckIn(s, ep);
-      onClose();
+      requestClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to check in");
       setSaving(false);
@@ -42,23 +44,24 @@ export function CheckInModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
+    <div className={`overlay-scrim overlay-fade fixed inset-0 z-[60] flex items-center justify-center p-4 ${exiting ? "overlay-exit" : ""}`} onClick={requestClose}>
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="checkin-modal-title"
         tabIndex={-1}
-        className="w-full max-w-sm rounded-2xl border shadow-md"
+        className={`overlay-dialog w-full max-w-sm rounded-2xl border shadow-md ${exiting ? "overlay-exit" : ""}`}
         style={{ borderColor: "var(--border)", background: "var(--bg-0)" }}
         onClick={(e) => e.stopPropagation()}
+        onAnimationEnd={onExitAnimationEnd}
       >
         <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <div className="flex items-center gap-2">
             <Radio className="h-4 w-4 text-claw-text" />
             <h3 id="checkin-modal-title" className="text-base font-bold" style={{ color: "var(--text)" }}>Check In</h3>
           </div>
-          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 hover:bg-[var(--surface-strong)]" style={{ color: "var(--text-mute)" }}>
+          <button onClick={requestClose} aria-label="Close" className="rounded-lg p-1.5 hover:bg-[var(--surface-strong)]" style={{ color: "var(--text-mute)" }}>
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -89,7 +92,7 @@ export function CheckInModal({
           {error && <p className="text-xs text-rose-400">{error}</p>}
           <div className="flex gap-3 pt-1">
             <button
-              type="button" onClick={onClose}
+              type="button" onClick={requestClose}
               className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)]"
               style={{ background: "var(--surface)", color: "var(--text-dim)" }}
             >

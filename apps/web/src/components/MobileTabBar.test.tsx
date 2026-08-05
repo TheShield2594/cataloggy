@@ -1,8 +1,14 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitForElementToBeRemoved, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { MemoryRouter } from "react-router";
 import { MORE_NAV_ITEMS, MobileTabBar, PRIMARY_NAV_ITEMS } from "./MobileTabBar";
+
+// Closing the sheet plays its exit animation before it leaves the DOM. jsdom
+// never fires animationend on its own, so these tests ride useExitAnimation's
+// fallback timer — the same one that covers a real browser dropping the
+// animation.
+const dismissSheet = () => waitForElementToBeRemoved(() => screen.queryByRole("dialog"));
 
 const renderBar = (pathname = "/") =>
   render(
@@ -83,7 +89,7 @@ describe("MobileTabBar", () => {
 
     await userEvent.keyboard("{Escape}");
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await dismissSheet();
     expect(moreTab).toHaveFocus();
   });
 
@@ -93,7 +99,7 @@ describe("MobileTabBar", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Close menu" }));
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await dismissSheet();
   });
 
   it("closes when a destination behind More is chosen", async () => {
@@ -102,6 +108,6 @@ describe("MobileTabBar", () => {
 
     await userEvent.click(screen.getByRole("link", { name: "Settings" }));
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await dismissSheet();
   });
 });

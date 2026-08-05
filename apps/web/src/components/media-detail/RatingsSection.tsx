@@ -41,13 +41,29 @@ export function ExternalLinks({
 }
 
 export function ExternalRatings({
-  imdbRating, rtScore, mcScore,
+  imdbRating, rtScore, mcScore, loading = false,
 }: {
   imdbRating: number | null | undefined;
   rtScore: number | null | undefined;
   mcScore: number | null | undefined;
+  /** True while the detail bundle that may enrich these scores is in flight. */
+  loading?: boolean;
 }) {
-  if (imdbRating == null && rtScore == null && mcScore == null) return null;
+  if (imdbRating == null && rtScore == null && mcScore == null) {
+    // Scores often arrive with the detail bundle rather than on the item
+    // itself; hold the row's space instead of springing it open mid-read.
+    if (!loading) return null;
+    return (
+      <div>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Ratings</h3>
+        <div className="flex flex-wrap items-center gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="skeleton h-5 w-16 rounded" />
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
     <div>
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Ratings</h3>

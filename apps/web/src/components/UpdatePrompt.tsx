@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { registerSW } from "virtual:pwa-register";
 import { RefreshCw, X } from "lucide-react";
+import { useExitAnimation } from "../hooks/useExitAnimation";
 
 // registerType is "prompt" (see vite.config.ts) rather than "autoUpdate" —
 // a new service worker install/reload is surfaced here instead of silently
@@ -9,6 +10,7 @@ import { RefreshCw, X } from "lucide-react";
 export function UpdatePrompt() {
   const [needRefresh, setNeedRefresh] = useState(false);
   const [updateSW, setUpdateSW] = useState<((reloadPage?: boolean) => Promise<void>) | null>(null);
+  const { exiting, requestClose, onExitAnimationEnd, reset } = useExitAnimation(() => setNeedRefresh(false));
 
   useEffect(() => {
     const update = registerSW({
@@ -17,6 +19,12 @@ export function UpdatePrompt() {
     });
     setUpdateSW(() => update);
   }, []);
+
+  // A later update can raise the prompt again after a dismissal; clear the
+  // previous exit state so it doesn't render already-exiting.
+  useEffect(() => {
+    if (needRefresh) reset();
+  }, [needRefresh, reset]);
 
   if (!needRefresh) return null;
 
@@ -28,8 +36,13 @@ export function UpdatePrompt() {
     // run off both edges.
     <div
       role="status"
-      className="fixed bottom-6 left-1/2 z-[110] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-xl border px-5 py-3.5 shadow-md max-sm:bottom-[calc(5rem+env(safe-area-inset-bottom))]"
+      // `overlay-fade`, not `overlay-dialog`: this element centers itself with
+      // -translate-x-1/2, and a running keyframe on `transform` would replace
+      // that translate for its duration, lurching the banner sideways. Opacity
+      // doesn't collide.
+      className={`overlay-fade fixed bottom-6 left-1/2 z-[110] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-xl border px-5 py-3.5 shadow-md max-sm:bottom-[calc(5rem+env(safe-area-inset-bottom))] ${exiting ? "overlay-exit" : ""}`}
       style={{ borderLeftWidth: "4px", borderColor: "var(--border)", background: "var(--bg-1)" }}
+      onAnimationEnd={onExitAnimationEnd}
     >
       <RefreshCw aria-hidden="true" className="h-5 w-5 flex-none text-claw-text" />
       <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
@@ -44,7 +57,7 @@ export function UpdatePrompt() {
       </button>
       <button
         type="button"
-        onClick={() => setNeedRefresh(false)}
+        onClick={requestClose}
         aria-label="Dismiss update notification"
         className="ml-1 flex-none rounded-md p-1 hover:bg-[var(--surface-strong)]"
         style={{ color: "var(--text-mute)" }}

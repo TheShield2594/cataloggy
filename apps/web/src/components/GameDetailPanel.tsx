@@ -4,6 +4,7 @@ import { api, Game } from "../api";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import { useExitAnimation } from "../hooks/useExitAnimation";
 import { formatPlaytime } from "../utils/playtime";
 
 function formatDate(value: string | null): string | null {
@@ -92,8 +93,9 @@ export function GameDetailPanel({
   onShowToast: (message: string, type: "success" | "error" | "info") => void;
 }) {
   const dialogRef = useFocusTrap<HTMLDivElement>();
+  const { exiting, requestClose, onExitAnimationEnd } = useExitAnimation(onClose);
   useScrollLock();
-  useEscapeKey(onClose);
+  useEscapeKey(requestClose);
 
   const [notes, setNotes] = useState(game.notes ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -168,7 +170,7 @@ export function GameDetailPanel({
   const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/70 backdrop-blur-sm sm:p-6" onClick={onClose}>
+    <div className={`overlay-scrim overlay-fade fixed inset-0 z-50 flex items-center justify-center overflow-hidden sm:p-6 ${exiting ? "overlay-exit" : ""}`} onClick={requestClose}>
       <div
         ref={dialogRef}
         role="dialog"
@@ -176,12 +178,13 @@ export function GameDetailPanel({
         aria-label={game.title}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="glass-surface relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-feature sm:h-auto sm:max-h-[85vh] sm:max-w-3xl sm:flex-row sm:rounded-3xl sm:border"
+        onAnimationEnd={onExitAnimationEnd}
+        className={`glass-surface overlay-panel relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-feature sm:h-auto sm:max-h-[85vh] sm:max-w-3xl sm:flex-row sm:rounded-3xl sm:border ${exiting ? "overlay-exit" : ""}`}
         style={{ background: "var(--bg-0)", borderColor: "var(--border)" }}
       >
         <button
           type="button"
-          onClick={onClose}
+          onClick={requestClose}
           className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full shadow-lg backdrop-blur transition-colors hover:text-white"
           style={{ background: "color-mix(in srgb, var(--bg-0) 80%, transparent)", color: "var(--bg-2)" }}
           aria-label="Close detail panel"

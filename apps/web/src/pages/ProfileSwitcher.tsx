@@ -23,13 +23,13 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
   if (onClose) {
     return (
       <div
-        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 px-6 py-12"
+        className="overlay-scrim overlay-fade fixed inset-0 z-[200] flex items-center justify-center px-6 py-12"
         onClick={onClose}
         role="dialog"
         aria-modal="true"
         aria-label="Switch profile"
       >
-        <div ref={dialogRef} tabIndex={-1} className="w-full max-w-md space-y-6" onClick={(e) => e.stopPropagation()}>
+        <div ref={dialogRef} tabIndex={-1} className="overlay-dialog w-full max-w-md space-y-6" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-center gap-2.5">
             <BrandMark className="h-10 w-10 flex-none" />
             <span className={`text-2xl ${BRAND_WORDMARK}`} style={{ color: "var(--text)" }}>Cataloggy</span>
