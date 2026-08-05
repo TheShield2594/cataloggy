@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Star } from "lucide-react";
 import { STARS_MAX, formatStars } from "../utils/rating";
 
@@ -13,9 +13,14 @@ import { STARS_MAX, formatStars } from "../utils/rating";
  * precision on the way in or out.
  *
  * Each star carries two invisible buttons over its halves. That keeps the ten
- * values individually clickable, focusable and announceable — a single slider
- * would be smaller in markup but would lose the "click your current rating to
- * clear it" gesture the panels rely on.
+ * values individually clickable and announceable — a single slider would be
+ * smaller in markup but would lose the "click your current rating to clear it"
+ * gesture the panels rely on.
+ *
+ * Only one of the ten is in the tab order at a time, with the arrow keys moving
+ * between them: a seasons list holds a picker per season and per episode, and
+ * ten tab stops apiece would put hundreds of them between the top of the panel
+ * and anything below it.
  */
 export function StarPicker({
   value,
@@ -34,8 +39,18 @@ export function StarPicker({
   subject?: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
+  const buttonsRef = useRef<(HTMLButtonElement | null)[]>([]);
 
   const shown = hover ?? value ?? 0;
+  // The one button that carries the tab stop: whichever holds the rating, or
+  // the first when there isn't one yet.
+  const activeValue = value ?? 1;
+
+  const moveFocus = (from: number, delta: number) => {
+    const next = Math.min(STARS_MAX * 2, Math.max(1, from + delta));
+    if (next === from) return;
+    buttonsRef.current[next - 1]?.focus();
+  };
   const starClass = size === "sm" ? "h-4 w-4" : "h-5 w-5 sm:h-7 sm:w-7";
   const boxClass = size === "sm" ? "h-4 w-4" : "h-5 w-5 sm:h-7 sm:w-7";
 
@@ -73,12 +88,25 @@ export function StarPicker({
               return (
                 <button
                   key={side}
+                  ref={(node) => {
+                    buttonsRef.current[target - 1] = node;
+                  }}
                   type="button"
                   disabled={disabled}
+                  tabIndex={target === activeValue ? 0 : -1}
                   onClick={() => onRate(target)}
                   onMouseEnter={() => setHover(target)}
                   onFocus={() => setHover(target)}
                   onBlur={() => setHover(null)}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+                      event.preventDefault();
+                      moveFocus(target, 1);
+                    } else if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+                      event.preventDefault();
+                      moveFocus(target, -1);
+                    }
+                  }}
                   className={`absolute inset-y-0 ${side === 0 ? "left-0" : "right-0"} w-1/2 disabled:cursor-not-allowed`}
                   // The current rating's button does the opposite of every
                   // other one — it clears the rating — and saying so only in

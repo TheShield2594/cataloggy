@@ -17,20 +17,27 @@ const IMPORT_LABELS: Record<string, string> = {
   collectionShows: "collection shows",
   lists: "lists",
   listItems: "list items",
-  skipped: "skipped (nothing Cataloggy could match)",
 };
 
 const summarizeImport = (imported: Record<string, number>): string => {
   const order = Object.keys(IMPORT_LABELS);
   const parts = Object.entries(imported)
-    .filter(([, count]) => count > 0)
+    .filter(([key, count]) => count > 0 && key !== "skipped")
     .sort(([a], [b]) => {
       const rank = (key: string) => (order.indexOf(key) === -1 ? order.length : order.indexOf(key));
       return rank(a) - rank(b);
     })
     .map(([key, count]) => `${count.toLocaleString()} ${IMPORT_LABELS[key] ?? key}`);
 
-  return parts.length > 0 ? `Imported ${parts.join(", ")}.` : "Already up to date — nothing new to import.";
+  const imports =
+    parts.length > 0 ? `Imported ${parts.join(", ")}.` : "Already up to date — nothing new to import.";
+
+  // Its own sentence: what was skipped was not imported, and reading "…, 12
+  // skipped" at the end of the list makes it sound as though it was.
+  const skipped = imported.skipped ?? 0;
+  return skipped > 0
+    ? `${imports} Skipped ${skipped.toLocaleString()} ${skipped === 1 ? "entry" : "entries"} Cataloggy could not match.`
+    : imports;
 };
 
 export function TraktSettings() {
@@ -163,12 +170,12 @@ export function TraktSettings() {
       )}
 
       {importResult && (
-        <p className="flex items-start gap-2 text-sm text-emerald-600">
+        <p role="status" aria-live="polite" className="flex items-start gap-2 text-sm text-emerald-600">
           <Check size={16} className="shrink-0 mt-0.5" /> {importResult}
         </p>
       )}
       {error && (
-        <p className="flex items-center gap-2 text-sm text-rose-600">
+        <p role="alert" className="flex items-center gap-2 text-sm text-rose-600">
           <AlertCircle size={16} /> {error}
         </p>
       )}

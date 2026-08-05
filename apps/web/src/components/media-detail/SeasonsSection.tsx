@@ -58,17 +58,19 @@ export function SeasonsSection({
     api.getTitleRatings(imdbId)
       .then((res) => {
         if (cancelled) return;
-        const seasons: Record<number, number> = {};
-        const episodes: Record<string, number> = {};
+        // Not `seasons`/`episodes`: `seasons` is a prop of this component, and
+        // shadowing it here reads as the season list rather than its ratings.
+        const bySeason: Record<number, number> = {};
+        const byEpisode: Record<string, number> = {};
         for (const rating of res.ratings) {
           if (rating.type === "season" && rating.season != null) {
-            seasons[rating.season] = rating.rating;
+            bySeason[rating.season] = rating.rating;
           } else if (rating.type === "episode" && rating.season != null && rating.episode != null) {
-            episodes[episodeKey(rating.season, rating.episode)] = rating.rating;
+            byEpisode[episodeKey(rating.season, rating.episode)] = rating.rating;
           }
         }
-        setSeasonRatings(seasons);
-        setEpisodeRatings(episodes);
+        setSeasonRatings(bySeason);
+        setEpisodeRatings(byEpisode);
       })
       .catch(() => { /* best-effort */ });
     return () => { cancelled = true; };
@@ -330,7 +332,11 @@ export function SeasonsSection({
                             </span>
                           </button>
                           {ep.airDate && (
-                            <time className="hidden flex-none text-2xs sm:block" style={{ color: "var(--text-mute)" }}>
+                            <time
+                              dateTime={ep.airDate}
+                              className="hidden flex-none text-2xs sm:block"
+                              style={{ color: "var(--text-mute)" }}
+                            >
                               {new Date(ep.airDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
                             </time>
                           )}

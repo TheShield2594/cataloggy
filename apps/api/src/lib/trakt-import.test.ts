@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Prisma } from "@prisma/client";
 import type { FastifyBaseLogger } from "fastify";
 import type { TraktClient } from "../trakt.js";
 
@@ -16,9 +15,9 @@ const makeLogger = (): FastifyBaseLogger =>
   }) as unknown as FastifyBaseLogger;
 
 const prismaMock = {
-  item: { upsert: vi.fn() },
+  item: { createMany: vi.fn() },
   list: { findFirst: vi.fn(), create: vi.fn() },
-  listItem: { create: vi.fn() },
+  listItem: { createMany: vi.fn() },
 };
 
 vi.mock("./prisma.js", () => ({ prisma: prismaMock }));
@@ -43,14 +42,14 @@ const makeClient = (overrides: Partial<Record<string, unknown>>): TraktClient =>
     ...overrides,
   }) as unknown as TraktClient;
 
-const duplicateError = () =>
-  new Prisma.PrismaClientKnownRequestError("duplicate", { code: "P2002", clientVersion: "test" });
-
 describe("trakt-import", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    prismaMock.item.upsert.mockResolvedValue({});
-    prismaMock.listItem.create.mockResolvedValue({});
+    prismaMock.item.createMany.mockResolvedValue({ count: 0 });
+    // Every row written unless a test says otherwise.
+    prismaMock.listItem.createMany.mockImplementation(async ({ data }: { data: unknown[] }) => ({
+      count: data.length,
+    }));
     collectionMock.getDefaultCollection.mockResolvedValue({ id: "collection-1" });
     batchRatingsMock.batchUpsertRatings.mockResolvedValue(0);
   });
@@ -128,16 +127,20 @@ describe("trakt-import", () => {
       const result = await importTraktCollection(client, makeLogger(), "profile-1");
 
       expect(result).toMatchObject({ movies: 1, shows: 1, skipped: 0 });
-      expect(prismaMock.listItem.create).toHaveBeenCalledWith({
-        data: { listId: "collection-1", type: "movie", imdbId: "tt1" },
+      expect(prismaMock.listItem.createMany).toHaveBeenCalledWith({
+        data: [{ listId: "collection-1", type: "movie", imdbId: "tt1" }],
+        skipDuplicates: true,
       });
-      expect(prismaMock.listItem.create).toHaveBeenCalledWith({
-        data: { listId: "collection-1", type: "series", imdbId: "tt2" },
+      expect(prismaMock.listItem.createMany).toHaveBeenCalledWith({
+        data: [{ listId: "collection-1", type: "series", imdbId: "tt2" }],
+        skipDuplicates: true,
       });
     });
 
     it("counts an item already in the list as unchanged rather than failing the import", async () => {
-      prismaMock.listItem.create.mockRejectedValue(duplicateError());
+      // skipDuplicates passes over the existing row, and createMany reports
+      // only what it actually wrote.
+      prismaMock.listItem.createMany.mockResolvedValue({ count: 0 });
       const client = makeClient({
         fetchCollectionMovies: vi.fn().mockResolvedValue([{ movie: { ids: { imdb: "tt1" } } }]),
       });
@@ -166,6 +169,8 @@ describe("trakt-import", () => {
       const result = await importTraktPersonalLists(client, makeLogger(), "profile-1");
 
       expect(result).toMatchObject({ lists: 1, items: 2, skipped: 1 });
+      // One statement for the whole list, not one per item.
+      expect(prismaMock.listItem.createMany).toHaveBeenCalledTimes(1);
       expect(prismaMock.list.create).toHaveBeenCalledWith({
         data: { profileId: "profile-1", kind: "custom", name: "Comfort films" },
       });
@@ -183,8 +188,9 @@ describe("trakt-import", () => {
 
       expect(result).toMatchObject({ lists: 0, items: 1 });
       expect(prismaMock.list.create).not.toHaveBeenCalled();
-      expect(prismaMock.listItem.create).toHaveBeenCalledWith({
-        data: { listId: "existing-1", type: "movie", imdbId: "tt1" },
+      expect(prismaMock.listItem.createMany).toHaveBeenCalledWith({
+        data: [{ listId: "existing-1", type: "movie", imdbId: "tt1" }],
+        skipDuplicates: true,
       });
     });
 

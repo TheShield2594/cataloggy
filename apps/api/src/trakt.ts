@@ -267,28 +267,32 @@ export class TraktClient {
     return this.fetchAllPages<TraktWatchedShowPayload>("/sync/watched/shows", logger);
   }
 
+  // Ratings and the collection are only ever fetched in full, as part of a
+  // one-time import, so they take the backfill cap rather than the poll-sized
+  // default — a library past 10,000 entries would otherwise be cut off with
+  // nothing to resume from.
   async fetchRatedMovies(logger: FastifyBaseLogger): Promise<TraktRatedMoviePayload[]> {
-    return this.fetchAllPages<TraktRatedMoviePayload>("/sync/ratings/movies", logger);
+    return this.fetchAllPages<TraktRatedMoviePayload>("/sync/ratings/movies", logger, undefined, BACKFILL_MAX_PAGES);
   }
 
   async fetchRatedShows(logger: FastifyBaseLogger): Promise<TraktRatedShowPayload[]> {
-    return this.fetchAllPages<TraktRatedShowPayload>("/sync/ratings/shows", logger);
+    return this.fetchAllPages<TraktRatedShowPayload>("/sync/ratings/shows", logger, undefined, BACKFILL_MAX_PAGES);
   }
 
   async fetchRatedSeasons(logger: FastifyBaseLogger): Promise<TraktRatedSeasonPayload[]> {
-    return this.fetchAllPages<TraktRatedSeasonPayload>("/sync/ratings/seasons", logger);
+    return this.fetchAllPages<TraktRatedSeasonPayload>("/sync/ratings/seasons", logger, undefined, BACKFILL_MAX_PAGES);
   }
 
   async fetchRatedEpisodes(logger: FastifyBaseLogger): Promise<TraktRatedEpisodePayload[]> {
-    return this.fetchAllPages<TraktRatedEpisodePayload>("/sync/ratings/episodes", logger);
+    return this.fetchAllPages<TraktRatedEpisodePayload>("/sync/ratings/episodes", logger, undefined, BACKFILL_MAX_PAGES);
   }
 
   async fetchCollectionMovies(logger: FastifyBaseLogger): Promise<TraktCollectedMoviePayload[]> {
-    return this.fetchAllPages<TraktCollectedMoviePayload>("/sync/collection/movies", logger);
+    return this.fetchAllPages<TraktCollectedMoviePayload>("/sync/collection/movies", logger, undefined, BACKFILL_MAX_PAGES);
   }
 
   async fetchCollectionShows(logger: FastifyBaseLogger): Promise<TraktCollectedShowPayload[]> {
-    return this.fetchAllPages<TraktCollectedShowPayload>("/sync/collection/shows", logger);
+    return this.fetchAllPages<TraktCollectedShowPayload>("/sync/collection/shows", logger, undefined, BACKFILL_MAX_PAGES);
   }
 
   /**

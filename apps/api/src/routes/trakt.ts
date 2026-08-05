@@ -1,5 +1,5 @@
 import { ItemType, ListItemType, MetadataType, Prisma } from "@prisma/client";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, RouteHandlerMethod } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { getTmdb } from "../lib/tmdb-client.js";
 import { upsertMetadata } from "../lib/metadata.js";
@@ -29,6 +29,30 @@ import type { SeriesProgressCandidate } from "../lib/types.js";
 // can pile up. Matches the limit PIN verification already uses; completing the
 // linking flow takes one request, not ten.
 const OAUTH_RATE_LIMIT = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
+
+// A full import walks the entire account and can run for minutes. Two at once
+// do the same work twice against the same rows — every write is idempotent, so
+// the result is correct either way, but the second run only adds contention and
+// Trakt requests. A second click gets told to wait instead.
+let importInProgress = false;
+
+/**
+ * Refuses a second import while one is running, and releases the flag however
+ * the first ends — a failed import must not lock the route until restart.
+ */
+const withImportLock =
+  (handler: RouteHandlerMethod): RouteHandlerMethod =>
+  async function (request, reply) {
+    if (importInProgress) {
+      return reply.code(409).send({ error: "A Trakt import is already running. Wait for it to finish." });
+    }
+    importInProgress = true;
+    try {
+      return await handler.call(this, request, reply);
+    } finally {
+      importInProgress = false;
+    }
+  };
 
 const traktRoutes: FastifyPluginAsync = async (app) => {
   app.get("/trakt/status", async (_request, reply) => {
@@ -183,7 +207,10 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
 
   // Imports land in the profile that asked for them, so this route — unlike the
   // OAuth dance and the request-less /trakt/poll below — resolves the caller.
-  app.post("/trakt/import", { preHandler: resolveProfile }, async (request, reply) => {
+  app.post(
+    "/trakt/import",
+    { preHandler: resolveProfile },
+    withImportLock(async (request, reply) => {
     let client: Awaited<ReturnType<typeof getTraktClient>>;
     try {
       client = await getTraktClient();
@@ -379,10 +406,29 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
       ]),
     ];
 
+    // Only the titles that have no metadata row yet. Re-running an import used
+    // to re-fetch every title in the library from TMDB, and this import widened
+    // that set to everything rated, collected or listed — a request per title,
+    // for rows that were already there.
+    const [knownMovies, knownSeries] = await Promise.all([
+      prisma.metadata.findMany({
+        where: { type: MetadataType.movie, imdbId: { in: allMovieIds } },
+        select: { imdbId: true },
+      }),
+      prisma.metadata.findMany({
+        where: { type: MetadataType.series, imdbId: { in: seriesImdbIds } },
+        select: { imdbId: true },
+      }),
+    ]);
+    const knownMovieIds = new Set(knownMovies.map((row) => row.imdbId));
+    const knownSeriesIds = new Set(knownSeries.map((row) => row.imdbId));
+    const missingMovieIds = allMovieIds.filter((id) => !knownMovieIds.has(id));
+    const missingSeriesIds = seriesImdbIds.filter((id) => !knownSeriesIds.has(id));
+
     void (async () => {
       try {
         const tmdb = await getTmdb();
-        for (const id of allMovieIds) {
+        for (const id of missingMovieIds) {
           try {
             const payload = await tmdb.findByImdbId(MetadataType.movie, id);
             if (payload) await upsertMetadata(payload);
@@ -390,7 +436,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
             request.log.warn({ imdbId: id, error }, "Trakt import: movie metadata backfill failed");
           }
         }
-        for (const id of seriesImdbIds) {
+        for (const id of missingSeriesIds) {
           try {
             const payload = await tmdb.findByImdbId(MetadataType.series, id);
             if (payload) await upsertMetadata(payload);
@@ -404,7 +450,8 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
     })();
 
     return reply.code(200).send({ imported });
-  });
+    })
+  );
 
   // `{ "full": true }` forces a complete history backfill instead of resuming
   // from the last poll — the way to recover history an earlier windowed sync

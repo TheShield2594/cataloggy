@@ -108,7 +108,7 @@ describe("ratings routes", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      expect(res.json().error).toContain("season must be a non-negative integer");
+      expect(res.json().error).toContain("season must be an integer");
       expect(prismaMock.rating.upsert).not.toHaveBeenCalled();
       await app.close();
     });
@@ -121,6 +121,17 @@ describe("ratings routes", () => {
       const read = await app.inject({ method: "GET", url: "/ratings/season/tt2?season=2" });
       expect(read.statusCode).toBe(200);
       expect(read.json().rating).toMatchObject({ type: "season", season: 2 });
+      expect(prismaMock.rating.findUnique).toHaveBeenCalledWith({
+        where: {
+          profileId_type_imdbId_season_episode: {
+            profileId: PROFILE_ID,
+            type: "season",
+            imdbId: "tt2",
+            season: 2,
+            episode: 0,
+          },
+        },
+      });
 
       const removed = await app.inject({ method: "DELETE", url: "/ratings/season/tt2?season=2" });
       expect(removed.statusCode).toBe(204);
@@ -135,6 +146,49 @@ describe("ratings routes", () => {
           },
         },
       });
+      await app.close();
+    });
+
+    it("refuses to read or delete a season rating with no season, rather than answering for Specials", async () => {
+      // `season` omitted used to coerce to 0 — which is Specials, a real
+      // rating for something else entirely.
+      const app = await buildApp();
+
+      const read = await app.inject({ method: "GET", url: "/ratings/season/tt2" });
+      expect(read.statusCode).toBe(400);
+      expect(prismaMock.rating.findUnique).not.toHaveBeenCalled();
+
+      const removed = await app.inject({ method: "DELETE", url: "/ratings/season/tt2" });
+      expect(removed.statusCode).toBe(400);
+      expect(prismaMock.rating.delete).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it("rejects a season number too large for the column to hold", async () => {
+      const app = await buildApp();
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/ratings",
+        payload: { imdbId: "tt2", type: "season", season: 999_999_999, rating: 9 },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(prismaMock.rating.upsert).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it("rejects an episode number too large for the column to hold", async () => {
+      const app = await buildApp();
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/ratings",
+        payload: { imdbId: "tt2", type: "episode", season: 1, episode: 999_999_999, rating: 9 },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(prismaMock.rating.upsert).not.toHaveBeenCalled();
       await app.close();
     });
 

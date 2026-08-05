@@ -1,4 +1,4 @@
-import { ItemType, ListItemType, ListKind, MetadataType, Prisma } from "@prisma/client";
+import { ItemType, ListItemType, ListKind, MetadataType } from "@prisma/client";
 import type { FastifyRequest } from "fastify";
 import type { TraktClient } from "../trakt.js";
 import { prisma } from "./prisma.js";
@@ -156,26 +156,55 @@ export const importTraktRatings = async (
   return result;
 };
 
-/**
- * Adds a list item, reporting whether it was new. A unique-violation means
- * another path (an earlier run, a manual add) got there first, which is a
- * no-op rather than an error — re-running an import must be safe.
- */
-const addListItem = async (listId: string, type: ListItemType, imdbId: string): Promise<boolean> => {
-  const itemType = type === ListItemType.movie ? ItemType.movie : ItemType.series;
-  await prisma.item.upsert({
-    where: { type_imdbId: { type: itemType, imdbId } },
-    create: { type: itemType, imdbId },
-    update: {},
-  });
+/** Rows per statement — Postgres caps a statement at 65535 bind parameters. */
+const CHUNK_SIZE = 1_000;
 
-  try {
-    await prisma.listItem.create({ data: { listId, type, imdbId } });
-    return true;
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return false;
-    throw error;
+const chunk = <T>(items: T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+};
+
+/**
+ * Files a whole list's worth of items in a handful of statements rather than
+ * two per entry — a collection of a few thousand titles is a few thousand
+ * sequential round trips inside one request otherwise.
+ *
+ * `skipDuplicates` carries the idempotence the per-row version got from
+ * catching unique violations: an item another path already added (an earlier
+ * run, a manual add) is passed over, and `createMany` reports how many rows it
+ * actually wrote, which is exactly the "newly added" count.
+ */
+const addListItems = async (
+  listId: string,
+  entries: { type: ListItemType; imdbId: string }[]
+): Promise<number> => {
+  if (entries.length === 0) return 0;
+
+  // Same title twice in one Trakt list would otherwise be two rows in the same
+  // statement, which `skipDuplicates` does not deduplicate.
+  const deduped = [...new Map(entries.map((e) => [`${e.type}:${e.imdbId}`, e])).values()];
+
+  for (const batch of chunk(deduped, CHUNK_SIZE)) {
+    await prisma.item.createMany({
+      data: batch.map((entry) => ({
+        type: entry.type === ListItemType.movie ? ItemType.movie : ItemType.series,
+        imdbId: entry.imdbId,
+      })),
+      skipDuplicates: true,
+    });
   }
+
+  let added = 0;
+  for (const batch of chunk(deduped, CHUNK_SIZE)) {
+    const { count } = await prisma.listItem.createMany({
+      data: batch.map((entry) => ({ listId, type: entry.type, imdbId: entry.imdbId })),
+      skipDuplicates: true,
+    });
+    added += count;
+  }
+
+  return added;
 };
 
 export type TraktCollectionImportResult = {
@@ -211,7 +240,6 @@ export const importTraktCollection = async (
       continue;
     }
     result.imdbIds.movies.push(imdbId);
-    if (await addListItem(collection.id, ListItemType.movie, imdbId)) result.movies += 1;
   }
 
   for (const entry of collectedShows) {
@@ -221,8 +249,16 @@ export const importTraktCollection = async (
       continue;
     }
     result.imdbIds.series.push(imdbId);
-    if (await addListItem(collection.id, ListItemType.series, imdbId)) result.shows += 1;
   }
+
+  result.movies = await addListItems(
+    collection.id,
+    result.imdbIds.movies.map((imdbId) => ({ type: ListItemType.movie, imdbId }))
+  );
+  result.shows = await addListItems(
+    collection.id,
+    result.imdbIds.series.map((imdbId) => ({ type: ListItemType.series, imdbId }))
+  );
 
   return result;
 };
@@ -274,6 +310,7 @@ export const importTraktPersonalLists = async (
       existing ?? (await prisma.list.create({ data: { profileId, kind: ListKind.custom, name } }));
     if (!existing) result.lists += 1;
 
+    const entries: { type: ListItemType; imdbId: string }[] = [];
     for (const item of items) {
       const imdbId = item.movie?.ids?.imdb ?? item.show?.ids?.imdb;
       const type = item.movie ? ListItemType.movie : item.show ? ListItemType.series : null;
@@ -283,8 +320,10 @@ export const importTraktPersonalLists = async (
       }
       if (type === ListItemType.movie) result.imdbIds.movies.push(imdbId);
       else result.imdbIds.series.push(imdbId);
-      if (await addListItem(list.id, type, imdbId)) result.items += 1;
+      entries.push({ type, imdbId });
     }
+
+    result.items += await addListItems(list.id, entries);
   }
 
   return result;

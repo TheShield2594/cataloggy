@@ -2,6 +2,7 @@ import { MetadataType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { resolveProfile } from "../lib/profile.js";
+import { MAX_EPISODE, MAX_SEASON } from "../lib/import-validation.js";
 
 const isValidType = (v: unknown): v is MetadataType =>
   v === "movie" || v === "series" || v === "season" || v === "episode";
@@ -22,6 +23,35 @@ const locateRating = (type: MetadataType, season: number, episode: number) => ({
   episode: type === "episode" ? episode : 0,
 });
 
+/**
+ * Rejects a season/episode a rating type needs but hasn't been given.
+ *
+ * Every handler has to run this, not just the writer: reading or deleting
+ * `/ratings/season/tt2` with no `season` used to coerce the missing number to
+ * 0, which is Specials — so an omitted parameter silently answered with, or
+ * deleted, a real rating for a different thing. The bounds are the columns'
+ * own, so a number too large to store is a 400 rather than a failed insert.
+ */
+const invalidLocation = (type: MetadataType, season: unknown, episode: unknown): string | null => {
+  const bounded = (value: unknown, max: number) =>
+    Number.isInteger(value) && (value as number) >= 0 && (value as number) <= max;
+
+  if ((type === "season" || type === "episode") && !bounded(season, MAX_SEASON)) {
+    return `season must be an integer between 0 and ${MAX_SEASON} when type is ${type}`;
+  }
+  if (type === "episode" && !bounded(episode, MAX_EPISODE)) {
+    return `episode must be an integer between 0 and ${MAX_EPISODE} when type is episode`;
+  }
+  return null;
+};
+
+/** `?season=2` → `2`; absent or unparseable → `null`, which never validates. */
+const numericQuery = (raw: string | undefined): number | null => {
+  if (raw === undefined || raw.trim() === "") return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 const ratingsRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", resolveProfile);
 
@@ -39,16 +69,8 @@ const ratingsRoutes: FastifyPluginAsync = async (app) => {
     }
     const type = body.type;
 
-    if (type === "season" || type === "episode") {
-      if (!Number.isInteger(body.season) || (body.season as number) < 0) {
-        return reply.code(400).send({ error: `season must be a non-negative integer when type is ${type}` });
-      }
-    }
-    if (type === "episode") {
-      if (!Number.isInteger(body.episode) || (body.episode as number) < 0) {
-        return reply.code(400).send({ error: "episode must be a non-negative integer when type is episode" });
-      }
-    }
+    const locationError = invalidLocation(type, body.season, body.episode);
+    if (locationError) return reply.code(400).send({ error: locationError });
     const { season, episode } = locateRating(type, body.season as number, body.episode as number);
 
     const rating =
@@ -81,11 +103,11 @@ const ratingsRoutes: FastifyPluginAsync = async (app) => {
       if (!isValidType(type)) {
         return reply.code(400).send({ error: TYPE_ERROR });
       }
-      const { season, episode } = locateRating(
-        type,
-        Number(request.query.season) || 0,
-        Number(request.query.episode) || 0
-      );
+      const queriedSeason = numericQuery(request.query.season);
+      const queriedEpisode = numericQuery(request.query.episode);
+      const locationError = invalidLocation(type, queriedSeason, queriedEpisode);
+      if (locationError) return reply.code(400).send({ error: locationError });
+      const { season, episode } = locateRating(type, queriedSeason as number, queriedEpisode as number);
 
       const row = await prisma.rating.findUnique({
         where: {
@@ -105,11 +127,11 @@ const ratingsRoutes: FastifyPluginAsync = async (app) => {
       if (!isValidType(type)) {
         return reply.code(400).send({ error: TYPE_ERROR });
       }
-      const { season, episode } = locateRating(
-        type,
-        Number(request.query.season) || 0,
-        Number(request.query.episode) || 0
-      );
+      const queriedSeason = numericQuery(request.query.season);
+      const queriedEpisode = numericQuery(request.query.episode);
+      const locationError = invalidLocation(type, queriedSeason, queriedEpisode);
+      if (locationError) return reply.code(400).send({ error: locationError });
+      const { season, episode } = locateRating(type, queriedSeason as number, queriedEpisode as number);
 
       try {
         await prisma.rating.delete({

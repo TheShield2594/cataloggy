@@ -110,46 +110,57 @@ export function StarRating({
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const canceledRef = useRef(false);
 
   const target = useMemo(() => ({ season, episode }), [season, episode]);
 
+  // What this control is currently about. A cancelled flag can't carry a
+  // request across a change of subject: the next effect resets it before the
+  // previous request lands, so the old answer arrives looking current and
+  // writes another title's rating into these stars. Comparing identities
+  // instead means a reply is only ever applied to the thing it was asked about.
+  const identity = `${type}:${imdbId}:${season ?? ""}:${episode ?? ""}`;
+  const identityRef = useRef(identity);
+  identityRef.current = identity;
+  const isCurrent = (requested: string) => identityRef.current === requested;
+
   const load = useCallback(async () => {
+    const requested = `${type}:${imdbId}:${season ?? ""}:${episode ?? ""}`;
     try {
       const res = await api.getRating(type, imdbId, target);
-      if (!canceledRef.current) setUserRating(res.rating.rating);
+      if (isCurrent(requested)) setUserRating(res.rating.rating);
     } catch (err) {
-      if (!canceledRef.current) {
+      if (isCurrent(requested)) {
         // A title you haven't rated is the common case, not a failure.
         if (err instanceof ApiError && err.status === 404) setUserRating(null);
         else setLoadError(err instanceof Error ? err.message : "Failed to load rating");
       }
     } finally {
-      if (!canceledRef.current) setLoaded(true);
+      if (isCurrent(requested)) setLoaded(true);
     }
-  }, [type, imdbId, target]);
+  }, [type, imdbId, season, episode, target]);
 
   useEffect(() => {
     setUserRating(null); setLoaded(false); setLoadError(null);
-    canceledRef.current = false;
     void load();
-    return () => { canceledRef.current = true; };
   }, [load]);
 
   const handleRate = async (rating: number) => {
     if (saving) return;
+    const requested = identity;
     setSaving(true);
     try {
       if (userRating === rating) {
         await api.deleteRating(type, imdbId, target);
-        setUserRating(null);
+        if (isCurrent(requested)) setUserRating(null);
       } else {
         const res = await api.setRating(imdbId, type, rating, target);
-        setUserRating(res.rating.rating);
+        if (isCurrent(requested)) setUserRating(res.rating.rating);
       }
     } catch (err) {
-      onError?.(err instanceof Error ? err.message : "Failed to save rating");
+      if (isCurrent(requested)) onError?.(err instanceof Error ? err.message : "Failed to save rating");
     } finally {
+      // Unconditional: if the panel moved on mid-save, the control still has to
+      // come back to life for whatever it is showing now.
       setSaving(false);
     }
   };

@@ -19,6 +19,7 @@ const prismaMock = {
   item: { upsert: vi.fn() },
   listItem: { findMany: vi.fn(), create: vi.fn(), delete: vi.fn() },
   watchEvent: { update: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
+  $transaction: vi.fn(async (operations: unknown[]) => Promise.all(operations)),
 };
 
 vi.mock("./prisma.js", () => ({ prisma: prismaMock }));
@@ -661,26 +662,35 @@ describe("trakt-client", () => {
       expect(result.fullBackfill).toBe(true);
     });
 
-    it("drops an aggregate play count on a legacy row, whose other plays the backfill imports separately", async () => {
-      prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
-      stubKv({});
-      prismaMock.watchEvent.findUnique.mockResolvedValue(null);
-      prismaMock.watchEvent.findFirst.mockResolvedValue({ id: "legacy-1", traktHistoryId: null, plays: 3 });
-
-      const fetchMock = vi.fn().mockImplementation(async (url: URL) => {
+    // Three plays on the row, three plays in the import: the aggregate can go.
+    const threeMoviePlays = (ids: number[]) =>
+      vi.fn().mockImplementation(async (url: URL) => {
         if (String(url).includes("/sync/history/movies")) {
           return {
             ok: true,
             status: 200,
             headers: new Headers(),
-            json: async () => [
-              { id: 42, watched_at: "2024-01-01T00:00:00Z", movie: { title: "Qux", ids: { imdb: "tt4" } } },
-            ],
+            json: async () =>
+              ids.map((id, i) => ({
+                id,
+                watched_at: `2024-01-0${i + 1}T00:00:00Z`,
+                movie: { title: "Qux", ids: { imdb: "tt4" } },
+              })),
           };
         }
         return { ok: true, status: 200, headers: new Headers(), json: async () => [] };
       });
-      vi.stubGlobal("fetch", fetchMock);
+
+    it("drops an aggregate play count once the backfill carries every play it stood for", async () => {
+      prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
+      stubKv({});
+      prismaMock.watchEvent.findUnique.mockResolvedValue(null);
+      // Only the first entry matches the legacy row by date; the other two are
+      // created as their own events.
+      prismaMock.watchEvent.findFirst
+        .mockResolvedValueOnce({ id: "legacy-1", traktHistoryId: null, plays: 3 })
+        .mockResolvedValue(null);
+      vi.stubGlobal("fetch", threeMoviePlays([42, 43, 44]));
 
       const { pollTraktHistory } = await import("./trakt-client.js");
       await pollTraktHistory(makeLogger(), "profile-1");
@@ -688,6 +698,25 @@ describe("trakt-client", () => {
       expect(prismaMock.watchEvent.update).toHaveBeenCalledWith({
         where: { id: "legacy-1" },
         data: { traktHistoryId: 42n, plays: 1 },
+      });
+    });
+
+    it("keeps an aggregate play count the backfill cannot account for", async () => {
+      // The row stands for three plays but Trakt only reports one — the rest
+      // came from local scrobbles that never reached Trakt, or from a backfill
+      // cut short by its page cap. Resetting to 1 would delete them.
+      prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
+      stubKv({});
+      prismaMock.watchEvent.findUnique.mockResolvedValue(null);
+      prismaMock.watchEvent.findFirst.mockResolvedValue({ id: "legacy-1", traktHistoryId: null, plays: 3 });
+      vi.stubGlobal("fetch", threeMoviePlays([42]));
+
+      const { pollTraktHistory } = await import("./trakt-client.js");
+      await pollTraktHistory(makeLogger(), "profile-1");
+
+      expect(prismaMock.watchEvent.update).toHaveBeenCalledWith({
+        where: { id: "legacy-1" },
+        data: { traktHistoryId: 42n },
       });
     });
 

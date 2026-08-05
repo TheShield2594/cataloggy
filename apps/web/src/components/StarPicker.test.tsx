@@ -34,6 +34,34 @@ describe("StarPicker", () => {
     expect(screen.getByText("4.5/5")).toBeInTheDocument();
   });
 
+  it("previews a rating below the one already saved", async () => {
+    // Hovering under the committed rating has to empty the stars above the
+    // pointer, or nothing shows what the click would do.
+    render(<StarPicker value={9} onRate={vi.fn()} />);
+
+    await userEvent.hover(screen.getByRole("button", { name: "Rate 2 out of 5" }));
+
+    expect(screen.getByText("2/5")).toBeInTheDocument();
+  });
+
+  it("keeps one tab stop per picker, with the arrow keys moving between values", async () => {
+    // A seasons list holds a picker per season and per episode; ten tab stops
+    // apiece would bury everything below them.
+    render(<StarPicker value={9} onRate={vi.fn()} />);
+
+    const tabbable = screen
+      .getAllByRole("button")
+      .filter((button) => button.getAttribute("tabindex") !== "-1");
+    expect(tabbable).toHaveLength(1);
+    expect(tabbable[0]).toHaveAccessibleName("Your rating: 4.5 out of 5. Activate to remove it");
+
+    tabbable[0].focus();
+    await userEvent.keyboard("{ArrowRight}");
+    expect(screen.getByRole("button", { name: "Rate 5 out of 5" })).toHaveFocus();
+    await userEvent.keyboard("{ArrowLeft}{ArrowLeft}");
+    expect(screen.getByRole("button", { name: "Rate 4 out of 5" })).toHaveFocus();
+  });
+
   it("names what is being rated when given a subject", () => {
     render(<StarPicker value={null} onRate={vi.fn()} subject="Season 3" />);
 

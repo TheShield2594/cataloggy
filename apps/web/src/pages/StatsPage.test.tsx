@@ -33,7 +33,8 @@ const yearReview = (year: number): YearInReviewStats => ({
   totalEpisodes: 0,
   totalRuntimeMinutes: 0,
   topGenres: [],
-  topRated: [],
+  // A 9 out of ten, which the panel has to draw as 4.5 out of five.
+  topRated: [{ imdbId: "tt1", name: "Heat", type: "movie", rating: 9, poster: null }],
   busiestMonth: null,
   busiestMonthCount: 0,
 });
@@ -64,6 +65,15 @@ describe("StatsPage — Year in Review", () => {
     const options = Array.from(yearPicker().options).map((option) => option.value);
     expect(options[0]).toBe(String(CURRENT_YEAR));
     expect(options).toContain(String(CURRENT_YEAR - 1));
+  });
+
+  it("shows your own ratings on the five-star scale", async () => {
+    // Your rating, unlike the TMDB community score elsewhere on the page.
+    render(<StatsPage />);
+
+    await waitFor(() => expect(getYearInReview).toHaveBeenCalled());
+    expect(await screen.findByText("4.5")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Rated 4.5 out of 5" })).toBeInTheDocument();
   });
 
   it("loads the year the reader picks", async () => {

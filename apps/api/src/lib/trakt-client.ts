@@ -407,21 +407,56 @@ export const pollTraktHistory = async (
   // trip that writes the value already there.
   const upsertedTitles = new Set<string>();
 
+  // How many plays this run carries for each item, counted before anything is
+  // written. A row's aggregate play count may only be dropped when the backfill
+  // is bringing at least that many individual plays in to replace it — see
+  // reconcileExistingEvent.
+  const playsInThisRun = new Map<string, number>();
+  if (isBackfill) {
+    for (const entry of movieHistory) {
+      const imdbId = entry.movie?.ids?.imdb;
+      if (!imdbId || !entry.watched_at) continue;
+      const key = `movie:${imdbId}`;
+      playsInThisRun.set(key, (playsInThisRun.get(key) ?? 0) + 1);
+    }
+    for (const entry of episodeHistory) {
+      const seriesImdbId = entry.show?.ids?.imdb;
+      const season = entry.episode?.season;
+      const episode = entry.episode?.number;
+      if (!seriesImdbId || !entry.watched_at || season === undefined || episode === undefined) continue;
+      const key = `episode:${seriesImdbId}:${season}:${episode}`;
+      playsInThisRun.set(key, (playsInThisRun.get(key) ?? 0) + 1);
+    }
+  }
+
   // Reconciles a history entry against the event already stored for it.
   //
-  // Beyond stamping the Trakt id on a legacy row, a backfill also has to undo
-  // the aggregate play counts the watched-list import writes (one row carrying
-  // every play of an item). The backfill is bringing those same plays in as
-  // individual events, so the aggregate would count them a second time. Only
-  // correct while the full history is being imported — an incremental poll has
-  // nothing to replace the aggregate with.
+  // Beyond stamping the Trakt id on a legacy row, a backfill has to undo the
+  // aggregate play counts the watched-list import writes (one row carrying
+  // every play of an item), since it is bringing those same plays in as
+  // individual events and counting both would double them.
+  //
+  // Only when this run actually carries them all, though. `plays` also climbs
+  // from local scrobbles, which reach Trakt best-effort and may never have
+  // arrived — and a backfill can be cut short by its page cap. Dropping a row
+  // to a single play on the strength of one matching history entry would throw
+  // away every play the import cannot account for, so the count has to cover
+  // the row before it is replaced.
   const reconcileExistingEvent = async (
     existingEvent: { id: string; traktHistoryId: bigint | null; plays: number },
-    historyId: bigint | null
+    historyId: bigint | null,
+    playsKey: string
   ) => {
     const data: { traktHistoryId?: bigint; plays?: number } = {};
     if (historyId && existingEvent.traktHistoryId == null) data.traktHistoryId = historyId;
-    if (isBackfill && existingEvent.traktHistoryId == null && existingEvent.plays > 1) data.plays = 1;
+    if (
+      isBackfill &&
+      existingEvent.traktHistoryId == null &&
+      existingEvent.plays > 1 &&
+      (playsInThisRun.get(playsKey) ?? 0) >= existingEvent.plays
+    ) {
+      data.plays = 1;
+    }
     if (Object.keys(data).length === 0) return;
     await prisma.watchEvent.update({ where: { id: existingEvent.id }, data });
   };
@@ -454,7 +489,7 @@ export const pollTraktHistory = async (
       (await prisma.watchEvent.findFirst({ where: { profileId, type: "movie", imdbId, watchedAt: watchedAtDate } }));
 
     if (existingEvent) {
-      await reconcileExistingEvent(existingEvent, historyId);
+      await reconcileExistingEvent(existingEvent, historyId, `movie:${imdbId}`);
     } else {
       await prisma.watchEvent.create({
         data: { type: "movie", imdbId, watchedAt: watchedAtDate, plays: 1, traktHistoryId: historyId, profileId },
@@ -497,7 +532,7 @@ export const pollTraktHistory = async (
       }));
 
     if (existingEvent) {
-      await reconcileExistingEvent(existingEvent, historyId);
+      await reconcileExistingEvent(existingEvent, historyId, `episode:${seriesImdbId}:${season}:${episode}`);
     } else {
       await prisma.watchEvent.create({
         data: {
@@ -536,26 +571,16 @@ export const pollTraktHistory = async (
     await upsertSeriesProgressIfNewer(profileId, seriesImdbId, progress);
   }
 
-  // Both written only after every event above landed, so a run that throws
-  // part-way is retried from the same point rather than skipped over.
-  await prisma.kV.upsert({
-    where: { key: TRAKT_LAST_POLLED_AT_KEY },
-    create: {
-      key: TRAKT_LAST_POLLED_AT_KEY,
-      value: pollCompletedAt.toISOString(),
-      updatedAt: pollCompletedAt,
-    },
-    update: {
-      value: pollCompletedAt.toISOString(),
-      updatedAt: pollCompletedAt,
-    },
-  });
-
-  if (isBackfill) {
-    await prisma.kV.upsert({
-      where: { key: TRAKT_HISTORY_BACKFILLED_AT_KEY },
+  // Written only after every event above landed, so a run that throws part-way
+  // is retried from the same point rather than skipped over — and written
+  // together, so a backfill can never record its watermark while failing to
+  // record that it was a backfill, which would leave the account looking
+  // fully imported when it isn't.
+  await prisma.$transaction([
+    prisma.kV.upsert({
+      where: { key: TRAKT_LAST_POLLED_AT_KEY },
       create: {
-        key: TRAKT_HISTORY_BACKFILLED_AT_KEY,
+        key: TRAKT_LAST_POLLED_AT_KEY,
         value: pollCompletedAt.toISOString(),
         updatedAt: pollCompletedAt,
       },
@@ -563,8 +588,24 @@ export const pollTraktHistory = async (
         value: pollCompletedAt.toISOString(),
         updatedAt: pollCompletedAt,
       },
-    });
-  }
+    }),
+    ...(isBackfill
+      ? [
+          prisma.kV.upsert({
+            where: { key: TRAKT_HISTORY_BACKFILLED_AT_KEY },
+            create: {
+              key: TRAKT_HISTORY_BACKFILLED_AT_KEY,
+              value: pollCompletedAt.toISOString(),
+              updatedAt: pollCompletedAt,
+            },
+            update: {
+              value: pollCompletedAt.toISOString(),
+              updatedAt: pollCompletedAt,
+            },
+          }),
+        ]
+      : []),
+  ]);
 
   return {
     since: pollStartAtIso ?? null,
