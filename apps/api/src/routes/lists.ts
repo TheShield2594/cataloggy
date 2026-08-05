@@ -23,6 +23,17 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "kind must be one of: watchlist, custom, collection" });
     }
 
+    // Only `custom` can be created here. The watchlist and the collection are
+    // singletons the app bootstraps for each profile — a second one of either
+    // is never the default (the lookups take the oldest), so it would be a list
+    // that syncs nothing and, since the delete route protects both kinds,
+    // couldn't be removed again.
+    if (body.kind !== ListKind.custom) {
+      return reply.code(409).send({
+        error: "Only custom lists can be created; the default watchlist and collection already exist",
+      });
+    }
+
     const list = await prisma.list.create({
       data: { name: body.name.trim(), kind: body.kind as ListKind, profileId: request.profileId! },
     });

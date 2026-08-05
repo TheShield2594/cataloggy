@@ -93,6 +93,23 @@ describe("lists routes", () => {
       expect(prismaMock.list.create).not.toHaveBeenCalled();
     });
 
+    // A second watchlist is never the default — both lookups take the oldest of
+    // the kind — so it would sync nothing, and the delete route now refuses to
+    // remove anything of that kind, leaving it there for good.
+    it.each(["watchlist", "collection"])("refuses to create another %s", async (kind) => {
+      const app = await buildApp();
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/lists",
+        payload: { name: "Second", kind },
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error).toMatch(/only custom lists/i);
+      expect(prismaMock.list.create).not.toHaveBeenCalled();
+    });
+
     it("rejects a name that is only whitespace", async () => {
       const app = await buildApp();
 
