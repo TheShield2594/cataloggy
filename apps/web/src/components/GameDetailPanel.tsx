@@ -6,6 +6,7 @@ import { useScrollLock } from "../hooks/useScrollLock";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useExitAnimation } from "../hooks/useExitAnimation";
 import { formatPlaytime } from "../utils/playtime";
+import { PAGE_TITLE, KICKER } from "./typography";
 
 function formatDate(value: string | null): string | null {
   if (!value) return null;
@@ -44,7 +45,7 @@ function GameStarRating({
 
   return (
     <div>
-      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+      <h3 className={`mb-2 flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
         <Star className="h-3.5 w-3.5" /> Your Rating <span className="font-normal">(1-10)</span>
       </h3>
       <div className="flex flex-wrap items-center gap-1">
@@ -215,7 +216,7 @@ export function GameDetailPanel({
                 </span>
               )}
             </div>
-            <h2 className="mt-3 font-heading text-2xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{game.title}</h2>
+            <h2 className={`mt-3 ${PAGE_TITLE}`} style={{ color: "var(--text)" }}>{game.title}</h2>
 
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs" style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}>
@@ -257,7 +258,7 @@ export function GameDetailPanel({
           </div>
 
           <div>
-            <h3 id="game-notes-heading" className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Notes</h3>
+            <h3 id="game-notes-heading" className={`mb-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>Notes</h3>
             <textarea
               value={notes}
               onChange={(e) => saveNotes(e.target.value)}

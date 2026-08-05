@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ExternalLink, Star } from "lucide-react";
 import { api, ApiError, MediaType } from "../../api";
 import { ImdbLogo, RtLogo, McIcon, TmdbLogo } from "./RatingLogos";
+import { KICKER } from "../typography";
 
 export function ExternalLinks({
   imdbId, tmdbId, type,
@@ -55,7 +56,7 @@ export function ExternalRatings({
     if (!loading) return null;
     return (
       <div>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Ratings</h3>
+        <h3 className={`mb-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>Ratings</h3>
         <div className="flex flex-wrap items-center gap-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="skeleton h-5 w-16 rounded" />
@@ -66,7 +67,7 @@ export function ExternalRatings({
   }
   return (
     <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Ratings</h3>
+      <h3 className={`mb-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>Ratings</h3>
       <div className="flex flex-wrap items-center gap-4">
         {imdbRating != null && (
           <div className="flex items-center gap-1.5">
@@ -162,7 +163,7 @@ export function StarRating({
   const groups: number[][] = [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]];
   return (
     <div>
-      <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+      <h3 className={`mb-2 flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
         <Star className="h-3.5 w-3.5" /> Your Rating <span className="font-normal">(1-10)</span>
       </h3>
       <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">

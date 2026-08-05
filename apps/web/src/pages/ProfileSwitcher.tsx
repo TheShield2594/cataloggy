@@ -5,6 +5,7 @@ import { BRAND_WORDMARK, BrandLockup, BrandMark } from "../components/BrandMark"
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useScrollLock } from "../hooks/useScrollLock";
+import { SECTION_TITLE } from "../components/typography";
 
 // Standing in for the switcher's own title. As a full page (first run) it is the
 // document's h1; opened as a modal over the app, the page behind already owns the
@@ -106,7 +107,7 @@ function CreateProfileForm({
   return (
     <form onSubmit={submit} className="space-y-4">
       <div>
-        <Heading className="text-lg font-semibold" style={{ color: "var(--text)" }}>{title}</Heading>
+        <Heading className={SECTION_TITLE} style={{ color: "var(--text)" }}>{title}</Heading>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>{subtitle}</p>
       </div>
       <input
@@ -193,7 +194,7 @@ function PinPrompt({
   return (
     <form onSubmit={submit} className="space-y-4">
       <div>
-        <Heading className="text-lg font-semibold" style={{ color: "var(--text)" }}>Enter PIN for {profile.name}</Heading>
+        <Heading className={SECTION_TITLE} style={{ color: "var(--text)" }}>Enter PIN for {profile.name}</Heading>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>This profile is PIN-protected.</p>
       </div>
       <input
@@ -257,7 +258,7 @@ function ProfilePicker({
   return (
     <div className="space-y-4">
       <div>
-        <Heading className="text-lg font-semibold" style={{ color: "var(--text)" }}>Who's watching?</Heading>
+        <Heading className={SECTION_TITLE} style={{ color: "var(--text)" }}>Who's watching?</Heading>
         <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-mute)" }}>Choose a profile to continue.</p>
       </div>
       <div className="space-y-2">

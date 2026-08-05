@@ -35,6 +35,7 @@ import { useToast } from "../hooks/useToast";
 import { timeAgo, timeUntil } from "../utils/timeAgo";
 import { formatRating, ratingLabel } from "../utils/rating";
 import { useCachedState } from "../hooks/useCachedState";
+import { PAGE_TITLE, SECTION_TITLE, KICKER, MICRO_LABEL } from "../components/typography";
 
 /* ─── Skeleton placeholders ─── */
 
@@ -333,7 +334,7 @@ export function ContinueWatchingHero({
         <Poster src={s.poster} alt={s.name} className="h-full w-full" eager sizes="112px" />
       </div>
       <div className="relative z-10 min-w-0 flex-1">
-        <p className="text-2xs font-bold uppercase tracking-wider text-claw-text">Series &middot; In Progress</p>
+        <p className={`${MICRO_LABEL} text-claw-text`}>Series &middot; In Progress</p>
         <p className="mt-1 truncate font-heading text-xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{s.name}</p>
         <p className="mt-0.5 text-sm" style={{ color: "var(--text-dim)" }}>
           S{s.lastSeason}:E{s.lastEpisode}
@@ -437,7 +438,7 @@ function SectionHeader({
   return (
     <div className="mb-4 flex items-center justify-between">
       <div className="flex items-center gap-3">
-        <h2 className="text-lg font-bold" style={{ color: "var(--text)" }}>{title}</h2>
+        <h2 className={SECTION_TITLE} style={{ color: "var(--text)" }}>{title}</h2>
         {count !== undefined && count > 0 && (
           <span
             className="rounded-full px-2.5 py-0.5 text-xs font-medium tabular-nums"
@@ -503,7 +504,7 @@ function DiscoverSubRow({
   return (
     <div>
       <div className="mb-2.5 flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>{label}</h3>
+        <h3 className={KICKER} style={{ color: "var(--text-mute)" }}>{label}</h3>
         {!loading && !failed && items.length > 0 && (
           <ScrollArrows canScrollLeft={scroll.canScrollLeft} canScrollRight={scroll.canScrollRight} onScroll={scroll.scroll} />
         )}
@@ -1097,9 +1098,9 @@ export function DashboardPage() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-claw-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-claw-500" />
                 </span>
-                <span className="text-xs font-semibold uppercase tracking-wider text-claw-text">Now Watching</span>
+                <span className={`${KICKER} text-claw-text`}>Now Watching</span>
               </div>
-              <p className="mt-1 truncate font-heading text-2xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{activeCheckin.name}</p>
+              <p className={`mt-1 truncate ${PAGE_TITLE}`} style={{ color: "var(--text)" }}>{activeCheckin.name}</p>
               {activeCheckin.season != null && activeCheckin.episode != null && (
                 <p className="mt-1 text-sm" style={{ color: "var(--text-dim)" }}>
                   S{String(activeCheckin.season).padStart(2, "0")}:E{String(activeCheckin.episode).padStart(2, "0")}
@@ -1131,7 +1132,7 @@ export function DashboardPage() {
       {/* ── Live: Plex/Jellyfin scrobble sessions ── */}
       {nowPlaying.length > 0 && (
         <section className="space-y-2">
-          <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+          <h3 className={`flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />

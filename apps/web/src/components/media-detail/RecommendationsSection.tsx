@@ -3,6 +3,7 @@ import { Poster } from "../Poster";
 import { CarouselTrack } from "../CarouselTrack";
 import { useHorizontalScroll } from "../carousel-utils";
 import type { TrendingMeta } from "../../api";
+import { KICKER } from "../typography";
 
 export function RecommendationsSection({
   items, loading, onSelect,
@@ -16,7 +17,7 @@ export function RecommendationsSection({
   if (loading) {
     return (
       <div>
-        <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+        <h3 className={`mb-3 flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
           <Sparkles className="h-3.5 w-3.5" /> More Like This
         </h3>
         <div className="flex gap-3 overflow-hidden">
@@ -36,7 +37,7 @@ export function RecommendationsSection({
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+        <h3 className={`flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
           <Sparkles className="h-3.5 w-3.5" /> More Like This
         </h3>
         {/* Mounted even when the row fits, so the cluster fades with layout

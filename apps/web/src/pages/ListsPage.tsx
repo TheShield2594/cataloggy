@@ -10,6 +10,7 @@ import { useCachedState } from "../hooks/useCachedState";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { mergeByRelevance } from "../utils/mergeSearchResults";
+import { PAGE_TITLE, SECTION_TITLE } from "../components/typography";
 
 type SortOption = "added" | "name" | "year" | "rating";
 
@@ -191,7 +192,7 @@ function AddItemModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
-          <h3 id="add-item-modal-title" className="text-lg font-bold" style={{ color: "var(--text)" }}>Add to {listName}</h3>
+          <h3 id="add-item-modal-title" className={SECTION_TITLE} style={{ color: "var(--text)" }}>Add to {listName}</h3>
           <button onClick={onClose} aria-label="Close dialog" className="rounded-lg p-1.5 hover:bg-[var(--surface)] hover:text-[var(--text)]" style={{ color: "var(--text-mute)" }}>
             <X className="h-5 w-5" />
           </button>
@@ -661,7 +662,7 @@ export function ListsPage() {
             <div className="flex h-20 w-20 items-center justify-center rounded-full ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border)" } as React.CSSProperties}>
               <FolderOpen className="h-10 w-10" style={{ color: "var(--text-mute)" }} />
             </div>
-            <p className="mt-4 text-lg font-semibold" style={{ color: "var(--text-dim)" }}>
+            <p className={`mt-4 ${SECTION_TITLE}`} style={{ color: "var(--text-dim)" }}>
               {listNotFound ? "That list no longer exists" : "No list selected"}
             </p>
             <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>
@@ -690,7 +691,7 @@ export function ListsPage() {
                       onBlur={cancelRename}
                       onKeyDown={(e) => { if (e.key === "Escape") cancelRename(); }}
                       aria-label={`Rename list ${selectedList.name}`}
-                      className="min-w-0 flex-1 rounded-lg border px-3 py-1.5 text-2xl font-bold focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
+                      className={`min-w-0 flex-1 rounded-lg border px-3 py-1.5 ${PAGE_TITLE} focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15`}
                       style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
                     />
                     <button
@@ -706,7 +707,7 @@ export function ListsPage() {
                   </form>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <h2 className="truncate text-2xl font-bold" style={{ color: "var(--text)" }}>{selectedList.name}</h2>
+                    <h2 className={`truncate ${PAGE_TITLE}`} style={{ color: "var(--text)" }}>{selectedList.name}</h2>
                     <button
                       type="button"
                       onClick={() => { setRenamingListId(selectedList.id); setRenameValue(selectedList.name); }}
@@ -786,7 +787,7 @@ export function ListsPage() {
                 <div className="flex h-20 w-20 items-center justify-center rounded-full ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border)" } as React.CSSProperties}>
                   <FolderOpen className="h-10 w-10" style={{ color: "var(--text-mute)" }} />
                 </div>
-                <p className="mt-4 text-lg font-semibold" style={{ color: "var(--text-dim)" }}>This list is empty</p>
+                <p className={`mt-4 ${SECTION_TITLE}`} style={{ color: "var(--text-dim)" }}>This list is empty</p>
                 <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>
                   Click <span className="font-semibold text-claw-text">+ Add</span> to search and add titles.
                 </p>
@@ -796,7 +797,7 @@ export function ListsPage() {
                 <div className="flex h-20 w-20 items-center justify-center rounded-full ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border)" } as React.CSSProperties}>
                   <Search className="h-10 w-10" style={{ color: "var(--text-mute)" }} />
                 </div>
-                <p className="mt-4 text-lg font-semibold" style={{ color: "var(--text-dim)" }}>No matches</p>
+                <p className={`mt-4 ${SECTION_TITLE}`} style={{ color: "var(--text-dim)" }}>No matches</p>
                 <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>Try a different search term.</p>
               </div>
             ) : (

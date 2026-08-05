@@ -11,6 +11,7 @@ import { preconnectToGameArtwork } from "../utils/preconnect";
 import { useCachedState } from "../hooks/useCachedState";
 import { formatPlaytime } from "../utils/playtime";
 import { formatRating, ratingLabel, RATING_MAX } from "../utils/rating";
+import { PAGE_TITLE, SECTION_TITLE } from "../components/typography";
 
 const SORT_OPTIONS: { value: GameSort; label: string }[] = [
   { value: "recent", label: "Recently Played" },
@@ -137,7 +138,7 @@ function AddGameModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
-          <h3 id="add-game-modal-title" className="text-lg font-bold" style={{ color: "var(--text)" }}>Add a game</h3>
+          <h3 id="add-game-modal-title" className={SECTION_TITLE} style={{ color: "var(--text)" }}>Add a game</h3>
           <button onClick={onClose} aria-label="Close dialog" className="rounded-lg p-1.5 hover:bg-[var(--surface)] hover:text-[var(--text)]" style={{ color: "var(--text-mute)" }}>
             <X className="h-5 w-5" />
           </button>
@@ -384,7 +385,7 @@ export function GamesPage() {
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Games</h1>
+        <h1 className={PAGE_TITLE} style={{ color: "var(--text)" }}>Games</h1>
         <button
           type="button"
           onClick={() => setShowAddModal(true)}

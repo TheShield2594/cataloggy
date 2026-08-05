@@ -15,6 +15,7 @@ import { PreferencesSettings } from "../components/settings/PreferencesSettings"
 import { PushSettings } from "../components/settings/PushSettings";
 import { ProfileSettings } from "../components/settings/ProfileSettings";
 import { JobStatusSettings } from "../components/settings/JobStatusSettings";
+import { PAGE_TITLE } from "../components/typography";
 
 declare const __APP_VERSION__: string;
 const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "unknown";
@@ -203,7 +204,7 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <h1 className="text-2xl font-bold">Settings</h1>
+      <h1 className={PAGE_TITLE}>Settings</h1>
 
       <div className="relative">
         <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2" style={{ color: "var(--text-mute)" }} />

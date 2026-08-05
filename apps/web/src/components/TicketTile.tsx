@@ -1,3 +1,4 @@
+import { MICRO_LABEL } from "./typography";
 export function MiniBarChart({ data, active = true }: { data: number[]; active?: boolean }) {
   const max = Math.max(...data, 1);
   const barW = 10;
@@ -48,7 +49,7 @@ export function TicketTile({
     >
       <div className="flex items-center gap-1.5">
         <Icon className="h-3.5 w-3.5 text-claw-text" />
-        <span className="text-2xs font-medium uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+        <span className={MICRO_LABEL} style={{ color: "var(--text-mute)" }}>
           {label}
         </span>
       </div>

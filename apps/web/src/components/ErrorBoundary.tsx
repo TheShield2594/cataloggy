@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 import { captureException } from "../sentry";
+import { SECTION_TITLE } from "./typography";
 
 type ErrorBoundaryProps = { children: ReactNode };
 type ErrorBoundaryState = { hasError: boolean; error: Error | null };
@@ -32,7 +33,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <AlertTriangle className="h-7 w-7" />
           </div>
           <div className="space-y-1">
-            <h1 className="text-lg font-semibold" style={{ color: "var(--text)" }}>
+            <h1 className={SECTION_TITLE} style={{ color: "var(--text)" }}>
               Something went wrong
             </h1>
             <p style={{ color: "var(--text-mute)" }}>An unexpected error occurred. Try again, or reload the page.</p>

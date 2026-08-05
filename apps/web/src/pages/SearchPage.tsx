@@ -14,6 +14,7 @@ import {
   GENRE_OPTIONS,
   SORT_LABELS,
 } from "../hooks/useSearchFilters";
+import { PAGE_TITLE, SECTION_TITLE, MICRO_LABEL } from "../components/typography";
 
 /* ─── Helpers ─── */
 
@@ -411,7 +412,7 @@ export function SearchPage() {
 
             {/* Year range */}
             <div className="flex flex-col gap-1">
-              <label className="text-2xs font-medium uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Year</label>
+              <label className={MICRO_LABEL} style={{ color: "var(--text-mute)" }}>Year</label>
               <div className="flex gap-1.5">
                 <input
                   type="number"
@@ -470,7 +471,7 @@ export function SearchPage() {
           <div className="flex h-28 w-28 items-center justify-center rounded-full ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border-strong)" } as React.CSSProperties}>
             <Search className="h-14 w-14" style={{ color: "var(--text-mute)" }} />
           </div>
-          <p className="mt-6 text-2xl font-bold" style={{ color: "var(--text)" }}>Discover your next favorite</p>
+          <p className={`mt-6 ${PAGE_TITLE}`} style={{ color: "var(--text)" }}>Discover your next favorite</p>
           <p className="mt-2 max-w-sm" style={{ color: "var(--text-mute)" }}>
             Search for movies and series to add them to your lists and track what you watch.
           </p>
@@ -483,7 +484,7 @@ export function SearchPage() {
           <div className="flex h-24 w-24 items-center justify-center rounded-full ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border-strong)" } as React.CSSProperties}>
             <Filter className="h-12 w-12" style={{ color: "var(--text-mute)" }} />
           </div>
-          <p className="mt-5 text-lg font-semibold" style={{ color: "var(--text-dim)" }}>
+          <p className={`mt-5 ${SECTION_TITLE}`} style={{ color: "var(--text-dim)" }}>
             {needsTmdb ? "Search needs a TMDB API key" : "No results found"}
           </p>
           <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>
@@ -603,7 +604,7 @@ function FilterSelect({
   const id = useId();
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-2xs font-medium uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>{label}</label>
+      <label htmlFor={id} className={MICRO_LABEL} style={{ color: "var(--text-mute)" }}>{label}</label>
       <div className="relative">
         <select
           id={id}
@@ -836,7 +837,7 @@ function ResultCard({
             className="absolute left-0 right-0 overflow-hidden rounded-xl shadow-lg"
             style={{ background: "var(--bg-0)", borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }}
           >
-            <p className="px-3 py-2.5 text-2xs font-semibold uppercase tracking-wider" style={{ borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: "var(--border)", color: "var(--text-mute)" }}>
+            <p className={`px-3 py-2.5 ${MICRO_LABEL}`} style={{ borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: "var(--border)", color: "var(--text-mute)" }}>
               Add to list
             </p>
             {lists.length === 0 && !creating && (

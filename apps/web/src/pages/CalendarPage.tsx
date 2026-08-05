@@ -10,6 +10,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useToast } from "../hooks/useToast";
 import { useCachedState } from "../hooks/useCachedState";
+import { PAGE_TITLE, SECTION_TITLE, KICKER, MICRO_LABEL } from "../components/typography";
 
 type ViewMode = "agenda" | "month";
 const AGENDA_RANGES = [14, 30, 60, 90] as const;
@@ -130,7 +131,7 @@ function DayEntriesModal({
       >
         <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <div className="min-w-0">
-            <h2 id="calendar-day-modal-title" className="truncate text-base font-bold" style={{ color: "var(--text)" }}>{heading}</h2>
+            <h2 id="calendar-day-modal-title" className={`truncate ${SECTION_TITLE}`} style={{ color: "var(--text)" }}>{heading}</h2>
             <p className="text-xs" style={{ color: "var(--text-mute)" }}>
               {entries.length} {entries.length === 1 ? "episode" : "episodes"}
             </p>
@@ -284,7 +285,7 @@ export function CalendarPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <CalendarDays className="h-6 w-6" style={{ color: "var(--text-dim)" }} />
-          <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Calendar</h1>
+          <h1 className={PAGE_TITLE} style={{ color: "var(--text)" }}>Calendar</h1>
         </div>
 
         {!compact && (
@@ -357,7 +358,7 @@ export function CalendarPage() {
             <div className="space-y-6">
               {agendaGroups.map((group) => (
                 <div key={group.label} className="space-y-2">
-                  <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+                  <h2 className={KICKER} style={{ color: "var(--text-mute)" }}>
                     {group.label}
                   </h2>
                   {group.entries.map((entry) => (
@@ -402,7 +403,7 @@ export function CalendarPage() {
                 Today
               </button>
             </div>
-            <p className="text-lg font-bold" style={{ color: "var(--text)" }}>
+            <p className={SECTION_TITLE} style={{ color: "var(--text)" }}>
               {monthCursor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
             </p>
           </div>
@@ -425,7 +426,7 @@ export function CalendarPage() {
             <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid var(--border)" }}>
               <div className="grid grid-cols-7" style={{ borderBottom: "1px solid var(--border)" }}>
                 {WEEKDAY_LABELS.map((label) => (
-                  <div key={label} className="px-2 py-2 text-center text-2xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+                  <div key={label} className={`px-2 py-2 text-center ${MICRO_LABEL}`} style={{ color: "var(--text-mute)" }}>
                     {label}
                   </div>
                 ))}

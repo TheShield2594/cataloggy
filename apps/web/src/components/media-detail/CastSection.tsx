@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, User } from "lucide-react";
 import { CarouselTrack } from "../CarouselTrack";
 import { useHorizontalScroll } from "../carousel-utils";
+import { KICKER } from "../typography";
 
 export interface CastMember {
   name: string;
@@ -14,7 +15,7 @@ export function CastSection({ cast, loading }: { cast: CastMember[]; loading: bo
   if (loading) {
     return (
       <div>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>Cast</h3>
+        <h3 className={`mb-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>Cast</h3>
         <div className="flex gap-3 overflow-hidden">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="flex-none w-16 space-y-1">
@@ -32,7 +33,7 @@ export function CastSection({ cast, loading }: { cast: CastMember[]; loading: bo
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-mute)" }}>
+        <h3 className={`flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
           <User className="h-3.5 w-3.5" /> Cast
         </h3>
         {/* Mounted even when the row fits, so the cluster fades with layout
