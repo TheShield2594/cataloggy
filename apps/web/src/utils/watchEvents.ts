@@ -19,6 +19,9 @@ export async function relogWatchEvent(event: WatchEvent): Promise<WatchEvent> {
     episode: event.episode,
     watchedAt: event.watchedAt,
     dateUnknown: event.dateUnknown,
+    // Carried across so Undo restores the whole row: the note lives on the
+    // event, and the server mints a new one rather than resurrecting the old.
+    note: event.note ?? null,
   });
   return { ...event, id: watchEvent.id };
 }

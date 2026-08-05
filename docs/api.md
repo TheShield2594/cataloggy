@@ -274,8 +274,7 @@ rotated key doesn't mean editing `.env` and restarting.
 | `GET` | `/rpdb/status` | `{ configured, hasKey }`. |
 | `POST` | `/rpdb/key` | Not validated on save — RPDB has no cheap check, so a bad key shows up as missing posters rather than an error here. Posting an empty key deletes the stored one. |
 | `DELETE` | `/rpdb/key` | |
-| `GET` | `/rpdb/poster/:imdbId` | `404` when no key is set. |
-| `GET` | `/rpdb/config` | Used by the add-on service, which needs the key to build poster URLs itself. |
+| `GET` | `/rpdb/config` | Used by the add-on service, which needs the key to build poster URLs itself. There is no per-title poster endpoint: everywhere else the API substitutes RPDB posters into the metadata it already returns. |
 
 ### AI recommendations
 

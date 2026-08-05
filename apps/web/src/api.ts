@@ -216,6 +216,8 @@ export type WatchEvent = {
   episode?: number;
   watchedAt: string;
   dateUnknown: boolean;
+  /** Free text attached to this watch. Trakt imports carry theirs across. */
+  note?: string | null;
 };
 
 export type WatchStats = {
@@ -1032,7 +1034,15 @@ export const api = {
   deleteWatchEvent(eventId: string) {
     return request<void>(`/watch/${encodeURIComponent(eventId)}`, { method: "DELETE" });
   },
-  logWatch(payload: { type: "movie" | "episode"; imdbId: string; seriesImdbId?: string; season?: number; episode?: number; watchedAt: string; dateUnknown?: boolean }) {
+  // Sets or clears the note on a watch that already exists — the only way to
+  // change one, since the note travels with the event at creation time.
+  updateWatchEventNote(eventId: string, note: string | null) {
+    return request<{ watchEvent: WatchEvent }>(`/watch/${encodeURIComponent(eventId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ note }),
+    });
+  },
+  logWatch(payload: { type: "movie" | "episode"; imdbId: string; seriesImdbId?: string; season?: number; episode?: number; watchedAt: string; dateUnknown?: boolean; note?: string | null }) {
     return request<{ watchEvent: { id: string } }>("/watch", { method: "POST", body: JSON.stringify(payload) });
   },
   // Check-in

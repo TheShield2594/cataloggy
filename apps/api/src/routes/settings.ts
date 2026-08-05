@@ -11,7 +11,7 @@ import {
 } from "../lib/settings.js";
 import { OMDB_API_KEY_KV, getOmdbApiKey } from "../lib/omdb.js";
 import { TMDB_API_KEY_KV, getTmdbApiKey } from "../lib/tmdb-client.js";
-import { RPDB_API_KEY_KV, getRpdbApiKey, buildRpdbPosterUrl } from "../lib/rpdb.js";
+import { RPDB_API_KEY_KV, getRpdbApiKey } from "../lib/rpdb.js";
 import { trendingCache } from "../lib/cache.js";
 import { getFailedJobStatuses } from "../lib/job-status.js";
 
@@ -219,12 +219,10 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
     return { configured: false };
   });
 
-  app.get<{ Params: { imdbId: string } }>("/rpdb/poster/:imdbId", async (request, reply) => {
-    const rpdbKey = await getRpdbApiKey();
-    if (!rpdbKey) return reply.code(404).send({ error: "RPDB not configured" });
-    return { poster: buildRpdbPosterUrl(rpdbKey, request.params.imdbId) };
-  });
-
+  // No per-title poster endpoint: RPDB posters reach a client without one. The
+  // API swaps them in server-side (`withRpdbPoster` / `applyRpdbToMetaList`),
+  // and the add-on reads the key once from `/rpdb/config` and builds its own
+  // URLs — which is what this route is for.
   app.get("/rpdb/config", async () => {
     const apiKey = await getRpdbApiKey();
     return { enabled: !!apiKey, apiKey: apiKey ?? null };

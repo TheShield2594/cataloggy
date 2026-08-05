@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
-import { AlertCircle, Calendar, Film, Trash2, Tv } from "lucide-react";
+import { AlertCircle, Calendar, Film, NotebookPen, Trash2, Tv } from "lucide-react";
 import { api, SearchResult, WatchEvent } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useToast } from "../hooks/useToast";
@@ -54,6 +54,9 @@ export function HistoryPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const sentinelRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
@@ -167,6 +170,44 @@ export function HistoryPage() {
     }
   };
 
+  // A note is written when the watch is logged and was unreachable afterwards —
+  // there was no way to correct or remove one from the app. Editing here writes
+  // through `PATCH /watch/:eventId` and takes the row the server sends back
+  // rather than the draft, so what's on screen is what was stored.
+  const openNoteEditor = (event: WatchEvent) => {
+    setEditingNoteId(event.id);
+    setNoteDraft(event.note ?? "");
+  };
+
+  const closeNoteEditor = () => {
+    setEditingNoteId(null);
+    setNoteDraft("");
+  };
+
+  const handleSaveNote = async (event: WatchEvent) => {
+    const note = noteDraft.trim() || null;
+    if (note === (event.note ?? null)) {
+      closeNoteEditor();
+      return;
+    }
+    setSavingNote(true);
+    try {
+      const { watchEvent } = await api.updateWatchEventNote(event.id, note);
+      const applyNote = (list: WatchEvent[]) =>
+        list.map((e) => (e.id === event.id ? { ...e, note: watchEvent.note ?? null } : e));
+      setFirstPage(applyNote);
+      setExtraPages(applyNote);
+      closeNoteEditor();
+      showToast(note ? "Note saved" : "Note removed", "success");
+    } catch (err) {
+      // The editor stays open with the draft intact, so a failed save is a
+      // retry rather than retyping.
+      showToast(err instanceof Error ? err.message : "Failed to save note", "error");
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
   const groups = useMemo(() => {
     const now = new Date();
     const result: { label: string; events: WatchEvent[] }[] = [];
@@ -265,8 +306,8 @@ export function HistoryPage() {
                 style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
               >
               {group.events.map((event, i) => (
+                <div key={event.id} style={i > 0 ? { borderTop: "1px solid var(--border)" } : undefined}>
                 <div
-                  key={event.id}
                   role="button"
                   tabIndex={0}
                   onClick={() => setSelectedItem(toSearchResult(event))}
@@ -278,7 +319,6 @@ export function HistoryPage() {
                   // other job was restoring the hover answer that an inline
                   // `background` used to beat, and there is no longer one here.
                   className="group flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-claw-400"
-                  style={i > 0 ? { borderTop: "1px solid var(--border)" } : undefined}
                 >
                   {/* A 2:3 box, so a poster fills it instead of being cropped to
                       a square through its middle — the old 48px square showed a
@@ -313,7 +353,22 @@ export function HistoryPage() {
                         timeStyle: "short",
                       })}
                     </p>
+                    {event.note && editingNoteId !== event.id && (
+                      <p className="mt-1 whitespace-pre-wrap text-xs italic" style={{ color: "var(--text-dim)" }}>
+                        {event.note}
+                      </p>
+                    )}
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); openNoteEditor(event); }}
+                    className="flex h-9 w-9 flex-none items-center justify-center rounded-lg opacity-100 transition-all duration-fast sm:opacity-0 sm:group-hover:opacity-100 hover:bg-[var(--surface-strong)] focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+                    aria-label={event.note ? `Edit note on ${event.name || "this watch"}` : `Add note to ${event.name || "this watch"}`}
+                    title={event.note ? "Edit note" : "Add note"}
+                  >
+                    <NotebookPen className="h-4 w-4" style={{ color: event.note ? "var(--accent)" : "var(--text-mute)" }} />
+                  </button>
 
                   <button
                     type="button"
@@ -325,6 +380,41 @@ export function HistoryPage() {
                   >
                     <Trash2 className="h-4 w-4 text-rose-500" />
                   </button>
+                </div>
+
+                {/* Outside the row, which is itself a button: a field nested in
+                    one would open the detail panel on every click into it. */}
+                {editingNoteId === event.id && (
+                  <div className="px-3 pb-3">
+                    <label className="sr-only" htmlFor={`note-${event.id}`}>
+                      Note on {event.name || "this watch"}
+                    </label>
+                    <textarea
+                      id={`note-${event.id}`}
+                      autoFocus
+                      rows={2}
+                      value={noteDraft}
+                      onChange={(e) => setNoteDraft(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); closeNoteEditor(); } }}
+                      placeholder="What did you think?"
+                      className="w-full resize-y rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-claw-400"
+                      style={{ border: "1px solid var(--border)", background: "var(--bg-0)", color: "var(--text)" }}
+                    />
+                    <div className="mt-2 flex justify-end gap-2">
+                      <button type="button" className="btn-secondary btn-sm" onClick={closeNoteEditor} disabled={savingNote}>
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-primary btn-sm"
+                        onClick={() => void handleSaveNote(event)}
+                        disabled={savingNote}
+                      >
+                        {savingNote ? "Saving…" : "Save note"}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 </div>
               ))}
               </div>
