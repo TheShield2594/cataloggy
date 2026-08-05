@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -19,18 +20,19 @@ vi.mock("../lib/profile.js", () => ({
   },
 }));
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: gamesSteamRoutes } = await import("./games-steam.js");
-  const app = Fastify({ logger: false });
-  await app.register(gamesSteamRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./games-steam.js"));
 
 describe("Steam games routes", () => {
+  // The route reads STEAM_ID straight off the environment, so these tests set
+  // it. Restoring whatever was there before matters: a developer with a real
+  // STEAM_ID exported would otherwise have it deleted for every test file that
+  // runs after this one in the same worker.
+  let originalSteamId: string | undefined;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    originalSteamId = process.env.STEAM_ID;
     process.env.STEAM_ID = "76561198000000000";
     getSteam.mockReturnValue({ getPlayerSummary });
     getPlayerSummary.mockResolvedValue({ personaname: "player", avatar: null });
@@ -39,7 +41,8 @@ describe("Steam games routes", () => {
   });
 
   afterEach(() => {
-    delete process.env.STEAM_ID;
+    if (originalSteamId === undefined) delete process.env.STEAM_ID;
+    else process.env.STEAM_ID = originalSteamId;
   });
 
   describe("GET /games/steam/status", () => {
@@ -50,7 +53,6 @@ describe("Steam games routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ configured: true, player: { personaname: "player" } });
-      await app.close();
     });
 
     it("reports unconfigured without calling Steam", async () => {
@@ -62,7 +64,6 @@ describe("Steam games routes", () => {
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ configured: false, player: null });
       expect(getSteam).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("still reports configured when the player lookup fails", async () => {
@@ -75,7 +76,6 @@ describe("Steam games routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ configured: true, player: null });
-      await app.close();
     });
   });
 
@@ -88,7 +88,6 @@ describe("Steam games routes", () => {
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ added: 2, updated: 1 });
       expect(syncSteamLibrary).toHaveBeenCalledWith(expect.anything(), PROFILE_ID);
-      await app.close();
     });
 
     it("returns 500 when Steam is not configured", async () => {
@@ -99,7 +98,6 @@ describe("Steam games routes", () => {
 
       expect(res.statusCode).toBe(500);
       expect(syncSteamLibrary).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("returns 500 when the sync throws", async () => {
@@ -110,7 +108,6 @@ describe("Steam games routes", () => {
 
       expect(res.statusCode).toBe(500);
       expect(res.json().error).toMatch(/sync failed/i);
-      await app.close();
     });
   });
 });

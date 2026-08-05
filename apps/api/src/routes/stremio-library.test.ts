@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 const DEFAULT_PROFILE_ID = "99999999-9999-4999-8999-999999999999";
@@ -37,14 +38,8 @@ vi.mock("../lib/profile.js", () => ({
   },
 }));
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: stremioLibraryRoutes } = await import("./stremio-library.js");
-  const app = Fastify({ logger: false });
-  await app.register(stremioLibraryRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./stremio-library.js"));
 
 const playSignal = (over: Record<string, unknown> = {}) => ({
   type: "movie",
@@ -79,7 +74,6 @@ describe("Stremio library routes", () => {
       expect(res.statusCode).toBe(200);
       expect(connectStremio).toHaveBeenCalledWith("a@example.com", "pw", PROFILE_ID, expect.anything());
       expect(syncStremioLibrary).toHaveBeenCalledWith(expect.anything(), PROFILE_ID, "baseline");
-      await app.close();
     });
 
     it("returns 401 with Stremio's own message on bad credentials", async () => {
@@ -94,7 +88,6 @@ describe("Stremio library routes", () => {
 
       expect(res.statusCode).toBe(401);
       expect(res.json().error).toBe("Wrong password");
-      await app.close();
     });
 
     it("returns 502 when Stremio cannot be reached", async () => {
@@ -108,7 +101,6 @@ describe("Stremio library routes", () => {
       });
 
       expect(res.statusCode).toBe(502);
-      await app.close();
     });
 
     it("undoes the connection when the baseline sync fails", async () => {
@@ -127,7 +119,6 @@ describe("Stremio library routes", () => {
       expect(disconnectStremio).toHaveBeenCalled();
       expect(resetStremioClient).toHaveBeenCalled();
       expect(res.json().error).toMatch(/Nothing was saved/);
-      await app.close();
     });
 
     it("requires both an email and a password", async () => {
@@ -141,7 +132,6 @@ describe("Stremio library routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(connectStremio).not.toHaveBeenCalled();
-      await app.close();
     });
   });
 
@@ -153,7 +143,6 @@ describe("Stremio library routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(syncStremioLibrary).toHaveBeenCalledWith(expect.anything(), PROFILE_ID, "import");
-      await app.close();
     });
 
     it("runs the incremental pass on demand", async () => {
@@ -163,7 +152,6 @@ describe("Stremio library routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(syncStremioLibrary).toHaveBeenCalledWith(expect.anything(), PROFILE_ID, "incremental");
-      await app.close();
     });
 
     it("400s when no account is connected", async () => {
@@ -174,7 +162,6 @@ describe("Stremio library routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(syncStremioLibrary).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("502s when the import throws", async () => {
@@ -184,7 +171,6 @@ describe("Stremio library routes", () => {
       const res = await app.inject({ method: "POST", url: "/stremio/library/import" });
 
       expect(res.statusCode).toBe(502);
-      await app.close();
     });
   });
 
@@ -197,7 +183,6 @@ describe("Stremio library routes", () => {
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ connected: false });
       expect(resetStremioClient).toHaveBeenCalled();
-      await app.close();
     });
   });
 
@@ -215,7 +200,6 @@ describe("Stremio library routes", () => {
       expect(recordPlaySignal).toHaveBeenCalledWith(
         expect.objectContaining({ profileId: PROFILE_ID, imdbId: "tt1", resource: "stream" })
       );
-      await app.close();
     });
 
     it("falls back to the default profile when the reported one is not a UUID", async () => {
@@ -231,7 +215,6 @@ describe("Stremio library routes", () => {
       expect(recordPlaySignal).toHaveBeenCalledWith(
         expect.objectContaining({ profileId: DEFAULT_PROFILE_ID })
       );
-      await app.close();
     });
 
     it("accepts but ignores signals when play detection is off", async () => {
@@ -243,7 +226,6 @@ describe("Stremio library routes", () => {
       expect(res.statusCode).toBe(202);
       expect(res.json()).toEqual({ status: "disabled" });
       expect(recordPlaySignal).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("truncates an over-long client identifier", async () => {
@@ -256,7 +238,6 @@ describe("Stremio library routes", () => {
       });
 
       expect(recordPlaySignal.mock.calls[0][0].client).toHaveLength(200);
-      await app.close();
     });
 
     it("falls back to the request user-agent when no client is sent", async () => {
@@ -270,7 +251,6 @@ describe("Stremio library routes", () => {
       });
 
       expect(recordPlaySignal.mock.calls[0][0].client).toBe("Stremio/5.0");
-      await app.close();
     });
 
     it("rejects an unknown resource", async () => {
@@ -284,7 +264,6 @@ describe("Stremio library routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(recordPlaySignal).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects an unknown watch type", async () => {
@@ -297,7 +276,6 @@ describe("Stremio library routes", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
 
     it("rejects a missing imdbId", async () => {
@@ -310,7 +288,6 @@ describe("Stremio library routes", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
   });
 
@@ -324,7 +301,6 @@ describe("Stremio library routes", () => {
       expect(res.statusCode).toBe(200);
       expect(getPendingPlaySignals).toHaveBeenCalledWith(PROFILE_ID);
       expect(res.json()).toMatchObject({ enabled: true, signals: [{ imdbId: "tt1" }] });
-      await app.close();
     });
   });
 });

@@ -95,8 +95,10 @@ row genuinely is not found.
 - **Caching**: `GET` responses carry an ETag. Send `If-None-Match` and you get a
   `304` with no body. Responses over 1 KB are compressed (`br`, `gzip`,
   `deflate`).
-- **Body size** is capped by `MAX_BODY_SIZE_MB` (default 10). Restoring a large
-  backup is the case that hits it; the `413` says so.
+- **Body size** is capped by `MAX_BODY_SIZE_MB` (default 32, allowed range
+  1–1024). This is the whole request body, so restoring a large backup is the
+  case that hits it; the `413` says so. Row counts are a separate, per-route
+  limit — see [Export and import](#export-and-import).
 
 ## Endpoints
 

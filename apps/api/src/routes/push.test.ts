@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 const ENDPOINT = "https://fcm.googleapis.com/fcm/send/abc123";
@@ -18,14 +19,8 @@ vi.mock("../lib/profile.js", () => ({
   },
 }));
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: pushRoutes } = await import("./push.js");
-  const app = Fastify();
-  await app.register(pushRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./push.js"));
 
 const subscribeBody = (over: Record<string, unknown> = {}) => ({
   endpoint: ENDPOINT,
@@ -50,7 +45,6 @@ describe("push routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ publicKey: "vapid-public-key" });
-      await app.close();
     });
   });
 
@@ -66,7 +60,6 @@ describe("push routes", () => {
         create: { endpoint: ENDPOINT, p256dh: "p256dh-value", auth: "auth-value", profileId: PROFILE_ID },
         update: { p256dh: "p256dh-value", auth: "auth-value", profileId: PROFILE_ID },
       });
-      await app.close();
     });
 
     it("re-subscribing rotates the keys rather than creating a second row", async () => {
@@ -81,7 +74,6 @@ describe("push routes", () => {
       expect(prismaMock.pushSubscription.upsert).toHaveBeenCalledWith(
         expect.objectContaining({ update: expect.objectContaining({ p256dh: "new-p256dh" }) })
       );
-      await app.close();
     });
 
     it("rejects an endpoint that is not a real push service", async () => {
@@ -98,7 +90,6 @@ describe("push routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(prismaMock.pushSubscription.upsert).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects a subscription missing its keys", async () => {
@@ -112,7 +103,6 @@ describe("push routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(resolvePushEndpoint).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects a blank endpoint", async () => {
@@ -125,7 +115,6 @@ describe("push routes", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
   });
 
@@ -144,7 +133,6 @@ describe("push routes", () => {
       expect(prismaMock.pushSubscription.deleteMany).toHaveBeenCalledWith({
         where: { endpoint: ENDPOINT, profileId: PROFILE_ID },
       });
-      await app.close();
     });
 
     it("rejects a missing endpoint", async () => {
@@ -154,7 +142,6 @@ describe("push routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(prismaMock.pushSubscription.deleteMany).not.toHaveBeenCalled();
-      await app.close();
     });
   });
 });

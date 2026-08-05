@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -55,14 +56,8 @@ vi.mock("../lib/profile.js", () => ({
   },
 }));
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: metadataRoutes } = await import("./metadata.js");
-  const app = Fastify({ logger: false });
-  await app.register(metadataRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./metadata.js"));
 
 describe("metadata routes", () => {
   beforeEach(() => {
@@ -87,7 +82,6 @@ describe("metadata routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(loadMeta).toHaveBeenCalledWith("movie", "tt1");
-      await app.close();
     });
 
     it("rejects a type that is not movie or series", async () => {
@@ -97,7 +91,6 @@ describe("metadata routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(loadMeta).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("404s when nothing is found", async () => {
@@ -107,7 +100,6 @@ describe("metadata routes", () => {
       const res = await app.inject({ method: "GET", url: "/meta/movie/tt1" });
 
       expect(res.statusCode).toBe(404);
-      await app.close();
     });
 
     it("returns 500 when the lookup throws", async () => {
@@ -117,7 +109,6 @@ describe("metadata routes", () => {
       const res = await app.inject({ method: "GET", url: "/meta/movie/tt1" });
 
       expect(res.statusCode).toBe(500);
-      await app.close();
     });
   });
 
@@ -129,7 +120,6 @@ describe("metadata routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(loadEpisodes).toHaveBeenCalledWith("tt1", 2, expect.anything());
-      await app.close();
     });
 
     it("rejects season 0 and other non-positive season numbers", async () => {
@@ -139,7 +129,6 @@ describe("metadata routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(loadEpisodes).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects a non-numeric season", async () => {
@@ -148,7 +137,6 @@ describe("metadata routes", () => {
       const res = await app.inject({ method: "GET", url: "/meta/series/tt1/season/two/episodes" });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
   });
 
@@ -160,7 +148,6 @@ describe("metadata routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ providers: EMPTY_PROVIDERS });
-      await app.close();
     });
   });
 
@@ -177,7 +164,6 @@ describe("metadata routes", () => {
       expect(body.director).toBe("A Director");
       expect(body.recommendations).toHaveLength(1);
       expect(body.seasons).toHaveLength(1);
-      await app.close();
     });
 
     it("skips the seasons and dropped lookups for a movie", async () => {
@@ -188,7 +174,6 @@ describe("metadata routes", () => {
       expect(res.json()).toMatchObject({ seasons: [], dropped: false });
       expect(loadSeasons).not.toHaveBeenCalled();
       expect(prismaMock.kV.findUnique).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("reports a series the profile has dropped", async () => {
@@ -198,7 +183,6 @@ describe("metadata routes", () => {
       const res = await app.inject({ method: "GET", url: "/meta/series/tt1/bundle" });
 
       expect(res.json().dropped).toBe(true);
-      await app.close();
     });
 
     it("still renders the panel when an optional section fails", async () => {
@@ -213,7 +197,6 @@ describe("metadata routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ cast: [], director: null, providers: EMPTY_PROVIDERS, recommendations: [] });
-      await app.close();
     });
 
     it("404s when the title itself is missing", async () => {
@@ -223,7 +206,6 @@ describe("metadata routes", () => {
       const res = await app.inject({ method: "GET", url: "/meta/movie/tt1/bundle" });
 
       expect(res.statusCode).toBe(404);
-      await app.close();
     });
   });
 
@@ -240,7 +222,6 @@ describe("metadata routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(syncMetadata).toHaveBeenCalledWith("tt1", "movie");
-      await app.close();
     });
 
     it("404s when TMDB has no record of the title", async () => {
@@ -254,7 +235,6 @@ describe("metadata routes", () => {
       });
 
       expect(res.statusCode).toBe(404);
-      await app.close();
     });
 
     it("requires a type", async () => {
@@ -263,7 +243,6 @@ describe("metadata routes", () => {
       const res = await app.inject({ method: "POST", url: "/metadata/sync", payload: { imdbId: "tt1" } });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
 
     it("requires an imdbId", async () => {
@@ -272,7 +251,6 @@ describe("metadata routes", () => {
       const res = await app.inject({ method: "POST", url: "/metadata/sync", payload: { type: "movie" } });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
   });
 
@@ -285,7 +263,6 @@ describe("metadata routes", () => {
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ refreshed: 0, total: 0, limit: 50 });
       expect(getTmdb).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("caps the limit at 500", async () => {
@@ -294,7 +271,6 @@ describe("metadata routes", () => {
       await app.inject({ method: "POST", url: "/metadata/refresh-all?limit=100000" });
 
       expect(prismaMock.metadata.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 500 }));
-      await app.close();
     });
 
     it("falls back to 50 for a non-numeric limit", async () => {
@@ -303,7 +279,6 @@ describe("metadata routes", () => {
       await app.inject({ method: "POST", url: "/metadata/refresh-all?limit=lots" });
 
       expect(prismaMock.metadata.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 50 }));
-      await app.close();
     });
 
     it("counts only the rows TMDB actually returned", async () => {
@@ -318,7 +293,6 @@ describe("metadata routes", () => {
       const res = await app.inject({ method: "POST", url: "/metadata/refresh-all" });
 
       expect(res.json()).toMatchObject({ refreshed: 1, total: 2 });
-      await app.close();
     });
 
     it("keeps going when one title's refresh throws", async () => {
@@ -334,7 +308,6 @@ describe("metadata routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json().refreshed).toBe(1);
-      await app.close();
     });
 
     it("returns 500 when TMDB cannot be initialised", async () => {
@@ -345,7 +318,6 @@ describe("metadata routes", () => {
       const res = await app.inject({ method: "POST", url: "/metadata/refresh-all" });
 
       expect(res.statusCode).toBe(500);
-      await app.close();
     });
   });
 
@@ -358,7 +330,6 @@ describe("metadata routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json().results).toHaveLength(1);
-      await app.close();
     });
 
     it("requires a query", async () => {
@@ -367,7 +338,6 @@ describe("metadata routes", () => {
       const res = await app.inject({ method: "GET", url: "/metadata/anime-search" });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
 
     it("returns 502 when AniList fails", async () => {
@@ -377,7 +347,6 @@ describe("metadata routes", () => {
       const res = await app.inject({ method: "GET", url: "/metadata/anime-search?q=bebop" });
 
       expect(res.statusCode).toBe(502);
-      await app.close();
     });
   });
 
@@ -392,7 +361,6 @@ describe("metadata routes", () => {
       const res = await app.inject({ method: "GET", url: "/genres" });
 
       expect(res.json().genres).toEqual(["Action", "Crime", "Drama"]);
-      await app.close();
     });
   });
 });

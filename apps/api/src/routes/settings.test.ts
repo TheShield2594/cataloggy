@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const prismaMock = {
   kV: { upsert: vi.fn(), deleteMany: vi.fn() },
@@ -39,14 +40,8 @@ vi.mock("../lib/rpdb.js", () => ({
 vi.mock("../lib/cache.js", () => ({ trendingCache: { clear: () => trendingCacheClear() } }));
 vi.mock("../lib/job-status.js", () => ({ getFailedJobStatuses: () => getFailedJobStatuses() }));
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: settingsRoutes } = await import("./settings.js");
-  const app = Fastify();
-  await app.register(settingsRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./settings.js"));
 
 describe("settings routes", () => {
   beforeEach(() => {
@@ -78,7 +73,6 @@ describe("settings routes", () => {
       expect(body.availableProviders).toEqual(
         expect.arrayContaining([expect.objectContaining({ key: "netflix", name: "Netflix" })])
       );
-      await app.close();
     });
   });
 
@@ -99,7 +93,6 @@ describe("settings routes", () => {
           update: expect.objectContaining({ value: "en-US" }),
         })
       );
-      await app.close();
     });
 
     it("accepts a bare language without a region subtag", async () => {
@@ -115,7 +108,6 @@ describe("settings routes", () => {
       expect(prismaMock.kV.upsert).toHaveBeenCalledWith(
         expect.objectContaining({ update: expect.objectContaining({ value: "fr" }) })
       );
-      await app.close();
     });
 
     it("rejects a malformed language tag", async () => {
@@ -129,7 +121,6 @@ describe("settings routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(prismaMock.kV.upsert).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("uppercases a region code", async () => {
@@ -148,7 +139,6 @@ describe("settings routes", () => {
           update: expect.objectContaining({ value: "GB" }),
         })
       );
-      await app.close();
     });
 
     it("rejects a region that is not two letters", async () => {
@@ -161,7 +151,6 @@ describe("settings routes", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
 
     it("stores spoiler protection when it is switched off", async () => {
@@ -182,7 +171,6 @@ describe("settings routes", () => {
           update: expect.objectContaining({ value: "false" }),
         })
       );
-      await app.close();
     });
 
     it("clears the trending cache so cached rows pick up the new region", async () => {
@@ -191,7 +179,6 @@ describe("settings routes", () => {
       await app.inject({ method: "POST", url: "/settings/preferences", payload: { region: "GB" } });
 
       expect(trendingCacheClear).toHaveBeenCalled();
-      await app.close();
     });
   });
 
@@ -207,7 +194,6 @@ describe("settings routes", () => {
       expect(prismaMock.kV.upsert).toHaveBeenCalledWith(
         expect.objectContaining({ update: expect.objectContaining({ value: "abc123" }) })
       );
-      await app.close();
     });
 
     it("refuses to overwrite a working key with one TMDB rejects", async () => {
@@ -219,7 +205,6 @@ describe("settings routes", () => {
       expect(res.statusCode).toBe(400);
       expect(res.json().error).toMatch(/rejected/i);
       expect(prismaMock.kV.upsert).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("reports a validation failure when TMDB is unreachable", async () => {
@@ -230,7 +215,6 @@ describe("settings routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(res.json().error).toMatch(/could not reach/i);
-      await app.close();
     });
 
     it("rejects an empty key", async () => {
@@ -239,7 +223,6 @@ describe("settings routes", () => {
       const res = await app.inject({ method: "POST", url: "/tmdb/key", payload: { apiKey: "   " } });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
 
     it("reports the env fallback that remains after the saved key is deleted", async () => {
@@ -250,7 +233,6 @@ describe("settings routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ configured: true, source: "env" });
-      await app.close();
     });
   });
 
@@ -263,7 +245,6 @@ describe("settings routes", () => {
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ configured: false });
       expect(prismaMock.kV.deleteMany).toHaveBeenCalledWith({ where: { key: "omdb:apiKey" } });
-      await app.close();
     });
 
     it("surfaces OMDB's own error message for a bad key", async () => {
@@ -277,7 +258,6 @@ describe("settings routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(res.json().error).toBe("Invalid API key!");
-      await app.close();
     });
 
     it("saves a key OMDB accepts", async () => {
@@ -288,7 +268,6 @@ describe("settings routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ configured: true });
-      await app.close();
     });
   });
 
@@ -302,7 +281,6 @@ describe("settings routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(fetchMock).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("404s the poster route when no key is configured", async () => {
@@ -311,7 +289,6 @@ describe("settings routes", () => {
       const res = await app.inject({ method: "GET", url: "/rpdb/poster/tt1" });
 
       expect(res.statusCode).toBe(404);
-      await app.close();
     });
 
     it("builds a poster URL once a key exists", async () => {
@@ -322,7 +299,6 @@ describe("settings routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json().poster).toContain("tt1");
-      await app.close();
     });
   });
 
@@ -337,7 +313,6 @@ describe("settings routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json().failures).toHaveLength(1);
-      await app.close();
     });
 
     it("reports an empty list when every job is healthy", async () => {
@@ -346,7 +321,6 @@ describe("settings routes", () => {
       const res = await app.inject({ method: "GET", url: "/settings/job-status" });
 
       expect(res.json()).toEqual({ failures: [] });
-      await app.close();
     });
   });
 });

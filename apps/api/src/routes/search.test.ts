@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -25,14 +26,8 @@ vi.mock("../lib/profile.js", () => ({
   },
 }));
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: searchRoutes } = await import("./search.js");
-  const app = Fastify();
-  await app.register(searchRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./search.js"));
 
 const result = (over: Record<string, unknown> = {}) => ({
   imdbId: "tt0111161",
@@ -65,7 +60,6 @@ describe("search routes", () => {
     expect(res.statusCode).toBe(200);
     expect(search).toHaveBeenCalledWith("movie", "shawshank");
     expect(searchMulti).not.toHaveBeenCalled();
-    await app.close();
   });
 
   it("defaults to a multi-search across movies and series", async () => {
@@ -75,7 +69,6 @@ describe("search routes", () => {
 
     expect(res.statusCode).toBe(200);
     expect(searchMulti).toHaveBeenCalledWith("shawshank");
-    await app.close();
   });
 
   it("accepts `query` as an alias for `q`", async () => {
@@ -85,7 +78,6 @@ describe("search routes", () => {
 
     expect(res.statusCode).toBe(200);
     expect(searchMulti).toHaveBeenCalledWith("shawshank");
-    await app.close();
   });
 
   it("rejects a blank query", async () => {
@@ -95,7 +87,6 @@ describe("search routes", () => {
 
     expect(res.statusCode).toBe(400);
     expect(getTmdb).not.toHaveBeenCalled();
-    await app.close();
   });
 
   it("rejects a type that is neither movie, series nor all", async () => {
@@ -104,7 +95,6 @@ describe("search routes", () => {
     const res = await app.inject({ method: "GET", url: "/search?type=book&q=x" });
 
     expect(res.statusCode).toBe(400);
-    await app.close();
   });
 
   it("returns 500 when TMDB is not configured", async () => {
@@ -115,7 +105,6 @@ describe("search routes", () => {
 
     expect(res.statusCode).toBe(500);
     expect(res.json().error).toMatch(/not configured/i);
-    await app.close();
   });
 
   it("returns 502 when the TMDB search itself fails", async () => {
@@ -127,7 +116,6 @@ describe("search routes", () => {
     const res = await app.inject({ method: "GET", url: "/search?q=x" });
 
     expect(res.statusCode).toBe(502);
-    await app.close();
   });
 
   it("caps the result set at 20", async () => {
@@ -139,7 +127,6 @@ describe("search routes", () => {
     const res = await app.inject({ method: "GET", url: "/search?q=x" });
 
     expect(res.json()).toHaveLength(20);
-    await app.close();
   });
 
   it("flags results already on the watchlist or in the collection", async () => {
@@ -152,7 +139,6 @@ describe("search routes", () => {
     const res = await app.inject({ method: "GET", url: "/search?q=x" });
 
     expect(res.json()[0]).toMatchObject({ inWatchlist: true, inCollection: true, lists: ["l1", "l2"] });
-    await app.close();
   });
 
   it("does not flag a movie because the series with that imdbId is listed", async () => {
@@ -165,7 +151,6 @@ describe("search routes", () => {
     const res = await app.inject({ method: "GET", url: "/search?q=x" });
 
     expect(res.json()[0]).toMatchObject({ inWatchlist: false, lists: [] });
-    await app.close();
   });
 
   it("only considers lists belonging to the calling profile", async () => {
@@ -178,7 +163,6 @@ describe("search routes", () => {
         where: expect.objectContaining({ list: { profileId: PROFILE_ID } }),
       })
     );
-    await app.close();
   });
 
   it("swaps in an RPDB poster when a key is configured", async () => {
@@ -188,7 +172,6 @@ describe("search routes", () => {
     const res = await app.inject({ method: "GET", url: "/search?q=x" });
 
     expect(res.json()[0].poster).toContain("ratingposterdb.com");
-    await app.close();
   });
 
   it("still returns results when caching a result's metadata fails", async () => {
@@ -201,6 +184,5 @@ describe("search routes", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toHaveLength(1);
-    await app.close();
   });
 });

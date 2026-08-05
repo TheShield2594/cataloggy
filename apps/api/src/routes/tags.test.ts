@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 const TAG_ID = "22222222-2222-4222-8222-222222222222";
@@ -16,14 +17,7 @@ vi.mock("../lib/profile.js", () => ({
   },
 }));
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: tagsRoutes } = await import("./tags.js");
-  const app = Fastify();
-  await app.register(tagsRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> => buildRouteApp(() => import("./tags.js"));
 
 const tagRow = (over: Record<string, unknown> = {}) => ({
   id: TAG_ID,
@@ -49,7 +43,6 @@ describe("tags routes", () => {
         expect.objectContaining({ where: { profileId: PROFILE_ID } })
       );
       expect(res.json().tags[0]).toMatchObject({ name: "comfort", itemCount: 3 });
-      await app.close();
     });
 
     it("scopes to one item when type and imdbId are given", async () => {
@@ -66,7 +59,6 @@ describe("tags routes", () => {
       );
       // The item-scoped shape has no count to report.
       expect(res.json().tags[0]).not.toHaveProperty("itemCount");
-      await app.close();
     });
 
     it("rejects imdbId without a type", async () => {
@@ -77,7 +69,6 @@ describe("tags routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(prismaMock.tag.findMany).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects a type that is not an item type", async () => {
@@ -86,7 +77,6 @@ describe("tags routes", () => {
       const res = await app.inject({ method: "GET", url: "/tags?type=book&imdbId=tt1" });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
   });
 
@@ -103,7 +93,6 @@ describe("tags routes", () => {
         create: { profileId: PROFILE_ID, name: "comfort" },
         update: {},
       });
-      await app.close();
     });
 
     it("rejects an empty name", async () => {
@@ -112,7 +101,6 @@ describe("tags routes", () => {
       const res = await app.inject({ method: "POST", url: "/tags", payload: { name: "   " } });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
 
     it("caps the name at 50 characters", async () => {
@@ -122,7 +110,6 @@ describe("tags routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(prismaMock.tag.upsert).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("accepts a name of exactly 50 characters", async () => {
@@ -132,7 +119,6 @@ describe("tags routes", () => {
       const res = await app.inject({ method: "POST", url: "/tags", payload: { name: "a".repeat(50) } });
 
       expect(res.statusCode).toBe(200);
-      await app.close();
     });
   });
 
@@ -147,7 +133,6 @@ describe("tags routes", () => {
       expect(prismaMock.tag.deleteMany).toHaveBeenCalledWith({
         where: { id: TAG_ID, profileId: PROFILE_ID },
       });
-      await app.close();
     });
   });
 
@@ -169,7 +154,6 @@ describe("tags routes", () => {
           where: { tagId_type_imdbId: { tagId: TAG_ID, type: "series", imdbId: "tt0903747" } },
         })
       );
-      await app.close();
     });
 
     it("is idempotent — re-assigning does not error", async () => {
@@ -183,7 +167,6 @@ describe("tags routes", () => {
 
       expect(first.statusCode).toBe(200);
       expect(second.statusCode).toBe(200);
-      await app.close();
     });
 
     it("rejects a missing tagName", async () => {
@@ -196,7 +179,6 @@ describe("tags routes", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
 
     it("rejects an unknown item type", async () => {
@@ -210,7 +192,6 @@ describe("tags routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(prismaMock.tag.upsert).not.toHaveBeenCalled();
-      await app.close();
     });
   });
 
@@ -230,7 +211,6 @@ describe("tags routes", () => {
       expect(prismaMock.itemTag.deleteMany).toHaveBeenCalledWith({
         where: { tagId: TAG_ID, type: "movie", imdbId: "tt1" },
       });
-      await app.close();
     });
 
     it("404s on a tag owned by another profile", async () => {
@@ -245,7 +225,6 @@ describe("tags routes", () => {
 
       expect(res.statusCode).toBe(404);
       expect(prismaMock.itemTag.deleteMany).not.toHaveBeenCalled();
-      await app.close();
     });
   });
 });

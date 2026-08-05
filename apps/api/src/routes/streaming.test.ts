@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const discoverByProvider = vi.fn();
 const discoverAnime = vi.fn();
@@ -23,14 +24,8 @@ vi.mock("../lib/cache.js", () => ({
   trendingCacheSet: (...a: unknown[]) => trendingCacheSet(...a),
 }));
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: streamingRoutes } = await import("./streaming.js");
-  const app = Fastify();
-  await app.register(streamingRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./streaming.js"));
 
 const payload = (over: Record<string, unknown> = {}) => ({
   imdbId: "tt1",
@@ -64,7 +59,6 @@ describe("streaming routes", () => {
       expect(res.statusCode).toBe(200);
       expect(discoverByProvider).toHaveBeenCalledWith("movie", 8, "US");
       expect(res.json()).toMatchObject({ provider: "Netflix" });
-      await app.close();
     });
 
     it("matches a provider key case-insensitively", async () => {
@@ -73,7 +67,6 @@ describe("streaming routes", () => {
       const res = await app.inject({ method: "GET", url: "/streaming?provider=NETFLIX" });
 
       expect(res.statusCode).toBe(200);
-      await app.close();
     });
 
     it("lists the available providers when none is given", async () => {
@@ -85,7 +78,6 @@ describe("streaming routes", () => {
       expect(res.json().available).toEqual(
         expect.arrayContaining([expect.objectContaining({ key: "netflix" })])
       );
-      await app.close();
     });
 
     it("rejects an unknown provider", async () => {
@@ -95,7 +87,6 @@ describe("streaming routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(discoverByProvider).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects a type that is not movie or series", async () => {
@@ -104,7 +95,6 @@ describe("streaming routes", () => {
       const res = await app.inject({ method: "GET", url: "/streaming?provider=netflix&type=episode" });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
 
     it("prefers an explicit region over the stored setting", async () => {
@@ -114,7 +104,6 @@ describe("streaming routes", () => {
 
       expect(discoverByProvider).toHaveBeenCalledWith("movie", 8, "GB");
       expect(getRegionSetting).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("keys the cache by provider, type and region", async () => {
@@ -123,7 +112,6 @@ describe("streaming routes", () => {
       await app.inject({ method: "GET", url: "/streaming?provider=netflix&type=series&region=GB" });
 
       expect(trendingCacheSet).toHaveBeenCalledWith("streaming:netflix:series:GB", expect.anything());
-      await app.close();
     });
 
     it("serves a cache hit without calling TMDB", async () => {
@@ -135,7 +123,6 @@ describe("streaming routes", () => {
       expect(res.statusCode).toBe(200);
       expect(res.json().metas[0].name).toBe("Cached");
       expect(getTmdb).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("applies RPDB posters to a cached response too", async () => {
@@ -146,7 +133,6 @@ describe("streaming routes", () => {
       const res = await app.inject({ method: "GET", url: "/streaming?provider=netflix" });
 
       expect(res.json().metas[0].poster).toBe("rpdb");
-      await app.close();
     });
 
     it("returns 500 when the discover call fails", async () => {
@@ -157,7 +143,6 @@ describe("streaming routes", () => {
 
       expect(res.statusCode).toBe(500);
       expect(trendingCacheSet).not.toHaveBeenCalled();
-      await app.close();
     });
   });
 
@@ -171,7 +156,6 @@ describe("streaming routes", () => {
       expect(res.json().providers).toEqual(
         expect.arrayContaining([expect.objectContaining({ key: "crunchyroll", name: "Crunchyroll" })])
       );
-      await app.close();
     });
   });
 
@@ -184,7 +168,6 @@ describe("streaming routes", () => {
       expect(res.statusCode).toBe(200);
       expect(discoverAnime).toHaveBeenCalledWith("series");
       expect(trendingCacheSet).toHaveBeenCalledWith("anime:series", expect.anything());
-      await app.close();
     });
 
     it("supports anime films", async () => {
@@ -193,7 +176,6 @@ describe("streaming routes", () => {
       await app.inject({ method: "GET", url: "/anime?type=movie" });
 
       expect(discoverAnime).toHaveBeenCalledWith("movie");
-      await app.close();
     });
 
     it("rejects an unsupported type", async () => {
@@ -202,7 +184,6 @@ describe("streaming routes", () => {
       const res = await app.inject({ method: "GET", url: "/anime?type=episode" });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
 
     it("returns 500 when the anime discover call fails", async () => {
@@ -212,7 +193,6 @@ describe("streaming routes", () => {
       const res = await app.inject({ method: "GET", url: "/anime" });
 
       expect(res.statusCode).toBe(500);
-      await app.close();
     });
   });
 });

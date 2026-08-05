@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 import { P2002 } from "../lib/test-fixtures/prisma-errors.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
@@ -20,14 +21,8 @@ vi.mock("../lib/profile.js", () => ({
   },
 }));
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: gamesRoutes } = await import("./games.js");
-  const app = Fastify();
-  await app.register(gamesRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./games.js"));
 
 const gameRow = (over: Record<string, unknown> = {}) => ({
   id: GAME_ID,
@@ -66,7 +61,6 @@ describe("games routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(orderBy()[0]).toEqual({ lastPlayedAt: { sort: "desc", nulls: "last" } });
-      await app.close();
     });
 
     it("sorts by playtime when asked", async () => {
@@ -75,7 +69,6 @@ describe("games routes", () => {
       await app.inject({ method: "GET", url: "/games?sort=playtime" });
 
       expect(orderBy()[0]).toEqual({ playtimeMinutes: "desc" });
-      await app.close();
     });
 
     it("sorts by rating with unrated games last", async () => {
@@ -84,7 +77,6 @@ describe("games routes", () => {
       await app.inject({ method: "GET", url: "/games?sort=rating" });
 
       expect(orderBy()[0]).toEqual({ rating: { sort: "desc", nulls: "last" } });
-      await app.close();
     });
 
     it("rejects an unknown sort rather than silently defaulting", async () => {
@@ -94,7 +86,6 @@ describe("games routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(prismaMock.game.findMany).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("only returns the calling profile's games", async () => {
@@ -105,7 +96,6 @@ describe("games routes", () => {
       expect(prismaMock.game.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { profileId: PROFILE_ID } })
       );
-      await app.close();
     });
   });
 
@@ -122,7 +112,6 @@ describe("games routes", () => {
         expect.objectContaining({ igdbId: 1, inLibrary: false }),
         expect.objectContaining({ igdbId: 2, inLibrary: true }),
       ]);
-      await app.close();
     });
 
     it("rejects a blank query", async () => {
@@ -132,7 +121,6 @@ describe("games routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(getIgdb).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("returns 500 when IGDB credentials are missing", async () => {
@@ -145,7 +133,6 @@ describe("games routes", () => {
 
       expect(res.statusCode).toBe(500);
       expect(res.json().error).toMatch(/not configured/i);
-      await app.close();
     });
 
     it("returns 502 when IGDB itself fails", async () => {
@@ -155,7 +142,6 @@ describe("games routes", () => {
       const res = await app.inject({ method: "GET", url: "/games/search?q=hollow" });
 
       expect(res.statusCode).toBe(502);
-      await app.close();
     });
   });
 
@@ -179,7 +165,6 @@ describe("games routes", () => {
           genres: ["Metroidvania"],
         }),
       });
-      await app.close();
     });
 
     it("returns 409 when the game is already in the library", async () => {
@@ -193,7 +178,6 @@ describe("games routes", () => {
       });
 
       expect(res.statusCode).toBe(409);
-      await app.close();
     });
 
     it("rejects a non-integer igdbId", async () => {
@@ -206,7 +190,6 @@ describe("games routes", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
 
     it("rejects an unparseable release date", async () => {
@@ -220,7 +203,6 @@ describe("games routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(prismaMock.game.create).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects genres that are not all strings", async () => {
@@ -233,7 +215,6 @@ describe("games routes", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
   });
 
@@ -253,7 +234,6 @@ describe("games routes", () => {
       const data = prismaMock.game.update.mock.calls[0][0].data;
       expect(data.finished).toBe(true);
       expect(data.finishedAt).toBeInstanceOf(Date);
-      await app.close();
     });
 
     it("keeps an existing finish date rather than moving it to today", async () => {
@@ -265,7 +245,6 @@ describe("games routes", () => {
       await app.inject({ method: "PATCH", url: `/games/${GAME_ID}`, payload: { finished: true } });
 
       expect(prismaMock.game.update.mock.calls[0][0].data.finishedAt).toBe(original);
-      await app.close();
     });
 
     it("clears the finish date when a game is un-marked", async () => {
@@ -276,7 +255,6 @@ describe("games routes", () => {
       await app.inject({ method: "PATCH", url: `/games/${GAME_ID}`, payload: { finished: false } });
 
       expect(prismaMock.game.update.mock.calls[0][0].data.finishedAt).toBeNull();
-      await app.close();
     });
 
     it("lets an explicit finishedAt win over the automatic stamp", async () => {
@@ -293,7 +271,6 @@ describe("games routes", () => {
       expect(prismaMock.game.update.mock.calls[0][0].data.finishedAt).toEqual(
         new Date("2025-03-04T00:00:00Z")
       );
-      await app.close();
     });
 
     it("accepts null to clear a rating", async () => {
@@ -309,7 +286,6 @@ describe("games routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(prismaMock.game.update.mock.calls[0][0].data.rating).toBeNull();
-      await app.close();
     });
 
     it("rejects a rating outside 1–10", async () => {
@@ -320,7 +296,6 @@ describe("games routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(prismaMock.game.update).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("404s on another profile's game", async () => {
@@ -330,7 +305,6 @@ describe("games routes", () => {
       const res = await app.inject({ method: "PATCH", url: `/games/${GAME_ID}`, payload: { rating: 5 } });
 
       expect(res.statusCode).toBe(404);
-      await app.close();
     });
 
     it("rejects an id that is not a UUID", async () => {
@@ -340,7 +314,6 @@ describe("games routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(prismaMock.game.findFirst).not.toHaveBeenCalled();
-      await app.close();
     });
   });
 
@@ -354,7 +327,6 @@ describe("games routes", () => {
 
       expect(res.statusCode).toBe(204);
       expect(prismaMock.game.delete).toHaveBeenCalledWith({ where: { id: GAME_ID } });
-      await app.close();
     });
 
     it("404s on another profile's game", async () => {
@@ -365,7 +337,6 @@ describe("games routes", () => {
 
       expect(res.statusCode).toBe(404);
       expect(prismaMock.game.delete).not.toHaveBeenCalled();
-      await app.close();
     });
   });
 });

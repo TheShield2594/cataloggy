@@ -218,11 +218,14 @@ hides it without deleting history, and `DELETE` on the same path undoes it.
 
 ## Import and export
 
-- **413 with `code: "body_too_large"`** — raise `MAX_BODY_SIZE_MB` (default 10).
-  A large backup restore is the usual cause.
-- **413 with `code: "too_many_rows"`** — Letterboxd formats cap at 10,000 rows
-  because each unique title costs a TMDB search; the id-carrying formats
-  (`imdb-ratings`, `simkl`, native JSON) allow far more. Split the file.
+- **413 with `code: "body_too_large"`** — the request body outgrew
+  `MAX_BODY_SIZE_MB` (default 32, allowed range 1–1024). A large backup restore
+  is the usual cause. Raise it and restart the API.
+- **413 with `code: "too_many_rows"`** — a different limit, counted in rows
+  rather than bytes, so raising `MAX_BODY_SIZE_MB` won't help. Letterboxd
+  formats cap at 10,000 rows because each unique title costs a TMDB search; the
+  id-carrying formats (`imdb-ratings`, `simkl`, native JSON) cap at 200,000 per
+  collection. Split the file.
 - **Letterboxd rows are skipped** — those exports carry no IMDb ids, so titles
   are resolved against TMDB by name and year. Ambiguous or obscure titles won't
   match. Rows that do match are still imported; the response summary counts both.

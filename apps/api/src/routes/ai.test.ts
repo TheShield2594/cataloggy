@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
-const MIN_AI_CONFIG_MAX_TOKENS = 2048;
+
+// Read from the real module rather than restated here, so the assertions track
+// the floor the route actually applies. Deferred to call time: importing at the
+// top of the file would run the mock factories before the mocks they close over
+// have been initialised.
+const minAiConfigMaxTokens = async () =>
+  (await import("../lib/ai.js")).MIN_AI_CONFIG_MAX_TOKENS;
 
 const prismaMock = {
   kV: { findUnique: vi.fn(), upsert: vi.fn(), deleteMany: vi.fn() },
@@ -39,13 +46,14 @@ vi.mock("../lib/cache.js", () => ({
   trendingCacheSet: (...a: unknown[]) => trendingCacheSet(...a),
   trendingCacheDeletePrefix: (...a: unknown[]) => trendingCacheDeletePrefix(...a),
 }));
-vi.mock("../lib/ai.js", () => ({
-  AI_CONFIG_KEY: "ai:config",
-  AI_LAST_RECS_GENERATED_AT_KEY: "ai:lastRecsGeneratedAt",
-  MIN_AI_CONFIG_MAX_TOKENS,
+// Only the three functions that reach the database or an AI provider are
+// stubbed. The KV keys, the max-tokens floor and `redactAiConfig` come from the
+// real module: a hand-written redaction stub would only ever prove that the
+// stub redacts, which is not the property worth testing.
+vi.mock("../lib/ai.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/ai.js")>()),
   getAiConfig: () => getAiConfig(),
   isAiConfigured: () => isAiConfigured(),
-  redactAiConfig: (c: Record<string, unknown>) => ({ ...c, headers: { Authorization: "***" } }),
   getAiRecommendations: (...a: unknown[]) => getAiRecommendations(...a),
 }));
 vi.mock("../lib/recommendations.js", () => ({
@@ -61,14 +69,8 @@ vi.mock("../lib/profile.js", () => ({
   },
 }));
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: aiRoutes } = await import("./ai.js");
-  const app = Fastify({ logger: false });
-  await app.register(aiRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./ai.js"));
 
 const tmdbResult = (over: Record<string, unknown> = {}) => ({
   imdbId: "tt1",
@@ -124,7 +126,6 @@ describe("ai routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(loadRecommendations).toHaveBeenCalledWith("series", "series", "tt1");
-      await app.close();
     });
 
     it("requires an imdbId", async () => {
@@ -133,7 +134,6 @@ describe("ai routes", () => {
       const res = await app.inject({ method: "GET", url: "/recommendations" });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
 
     it("rejects an unsupported type", async () => {
@@ -143,7 +143,6 @@ describe("ai routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(loadRecommendations).not.toHaveBeenCalled();
-      await app.close();
     });
   });
 
@@ -155,7 +154,6 @@ describe("ai routes", () => {
 
       expect(res.json()).toEqual({ metas: [] });
       expect(getTmdb).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("seeds movie recommendations from recent watches", async () => {
@@ -168,7 +166,6 @@ describe("ai routes", () => {
       expect(res.statusCode).toBe(200);
       expect(recommendations).toHaveBeenCalledWith("movie", 100);
       expect(res.json().metas).toEqual([expect.objectContaining({ id: "tt2" })]);
-      await app.close();
     });
 
     it("seeds series recommendations from series progress", async () => {
@@ -180,7 +177,6 @@ describe("ai routes", () => {
 
       expect(prismaMock.watchEvent.findMany).not.toHaveBeenCalled();
       expect(recommendations).toHaveBeenCalledWith("series", 900);
-      await app.close();
     });
 
     it("never recommends a seed back to the user", async () => {
@@ -192,7 +188,6 @@ describe("ai routes", () => {
       const res = await app.inject({ method: "GET", url: "/recommendations/personal" });
 
       expect(res.json().metas).toEqual([]);
-      await app.close();
     });
 
     it("clamps the limit to 40", async () => {
@@ -206,7 +201,6 @@ describe("ai routes", () => {
       const res = await app.inject({ method: "GET", url: "/recommendations/personal?limit=1000" });
 
       expect(res.json().metas).toHaveLength(40);
-      await app.close();
     });
 
     it("prefers AI recommendations when the provider is configured", async () => {
@@ -218,7 +212,6 @@ describe("ai routes", () => {
 
       expect(res.json().metas).toEqual([{ id: "ai1" }]);
       expect(prismaMock.watchEvent.findMany).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("falls back to TMDB seeds when the AI call yields nothing", async () => {
@@ -231,7 +224,6 @@ describe("ai routes", () => {
       const res = await app.inject({ method: "GET", url: "/recommendations/personal" });
 
       expect(res.json().metas).toEqual([expect.objectContaining({ id: "tt2" })]);
-      await app.close();
     });
 
     it("degrades to an empty list when TMDB is unavailable", async () => {
@@ -244,7 +236,6 @@ describe("ai routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ metas: [] });
-      await app.close();
     });
 
     it("returns an empty list rather than an error for an unsupported type", async () => {
@@ -254,7 +245,6 @@ describe("ai routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ metas: [] });
-      await app.close();
     });
   });
 
@@ -267,7 +257,6 @@ describe("ai routes", () => {
       const res = await app.inject({ method: "GET", url: "/recommendations/ai" });
 
       expect(res.json()).toEqual({ metas: [{ id: "tt5" }], reasons: { tt5: "because" } });
-      await app.close();
     });
 
     it("falls back to TMDB seeds with no reasons when AI is not configured", async () => {
@@ -279,7 +268,6 @@ describe("ai routes", () => {
 
       expect(res.json()).toMatchObject({ reasons: {} });
       expect(res.json().metas).toHaveLength(1);
-      await app.close();
     });
 
     it("returns an empty result for an unsupported type", async () => {
@@ -288,7 +276,6 @@ describe("ai routes", () => {
       const res = await app.inject({ method: "GET", url: "/recommendations/ai?type=episode" });
 
       expect(res.json()).toEqual({ metas: [], reasons: {} });
-      await app.close();
     });
   });
 
@@ -301,7 +288,6 @@ describe("ai routes", () => {
       expect(res.statusCode).toBe(200);
       expect(trending).toHaveBeenCalledWith("series", "day");
       expect(trendingCacheSet).toHaveBeenCalledWith("trending:series:day", expect.anything());
-      await app.close();
     });
 
     it("treats any window other than `day` as a week", async () => {
@@ -310,7 +296,6 @@ describe("ai routes", () => {
       await app.inject({ method: "GET", url: "/trending?window=month" });
 
       expect(trending).toHaveBeenCalledWith("movie", "week");
-      await app.close();
     });
 
     it("serves trending from cache without calling TMDB", async () => {
@@ -321,7 +306,6 @@ describe("ai routes", () => {
 
       expect(res.json().metas[0].name).toBe("Cached");
       expect(getTmdb).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects an unsupported trending type", async () => {
@@ -330,7 +314,6 @@ describe("ai routes", () => {
       const res = await app.inject({ method: "GET", url: "/trending?type=episode" });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
 
     it("returns 500 when TMDB is unconfigured", async () => {
@@ -340,7 +323,6 @@ describe("ai routes", () => {
       const res = await app.inject({ method: "GET", url: "/popular" });
 
       expect(res.statusCode).toBe(500);
-      await app.close();
     });
 
     it("returns 500 and caches nothing when the popular fetch fails", async () => {
@@ -351,7 +333,6 @@ describe("ai routes", () => {
 
       expect(res.statusCode).toBe(500);
       expect(trendingCacheSet).not.toHaveBeenCalled();
-      await app.close();
     });
   });
 
@@ -366,9 +347,26 @@ describe("ai routes", () => {
       expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.configured).toBe(true);
-      expect(body.config.headers.Authorization).toBe("***");
+      expect(body.config.headers.Authorization).toBe("Bearer ****");
+      // The point of the route, stated directly: the stored key never reaches
+      // the client, in that header or anywhere else in the payload.
+      expect(res.body).not.toContain("sk-test");
       expect(body.lastGeneratedAt).toBe("2026-01-01T00:00:00.000Z");
-      await app.close();
+    });
+
+    it("reports the clamped max_tokens rather than a stale stored value", async () => {
+      // A config saved before the floor existed can still hold a
+      // truncation-prone number; the settings UI should show what will
+      // actually be sent.
+      getAiConfig.mockResolvedValue({
+        ...validConfig,
+        payload: { model: "gpt-4o-mini", max_tokens: 1024 },
+      });
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "GET", url: "/ai/config" });
+
+      expect(res.json().config.payload.max_tokens).toBe(await minAiConfigMaxTokens());
     });
 
     it("reports unconfigured when no config is stored", async () => {
@@ -377,7 +375,6 @@ describe("ai routes", () => {
       const res = await app.inject({ method: "GET", url: "/ai/config" });
 
       expect(res.json()).toMatchObject({ configured: false, config: null });
-      await app.close();
     });
 
     it("saves a valid config and drops the cached recommendations", async () => {
@@ -388,7 +385,6 @@ describe("ai routes", () => {
       expect(res.statusCode).toBe(200);
       expect(prismaMock.kV.upsert).toHaveBeenCalled();
       expect(trendingCacheDeletePrefix).toHaveBeenCalledWith("ai-recs:");
-      await app.close();
     });
 
     it("rejects a URL the SSRF guard refuses", async () => {
@@ -403,7 +399,6 @@ describe("ai routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(prismaMock.kV.upsert).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects a config with no model", async () => {
@@ -416,7 +411,6 @@ describe("ai routes", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
 
     it("rejects headers sent as an array", async () => {
@@ -429,7 +423,6 @@ describe("ai routes", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
 
     it("clamps a too-small max_tokens up to the floor", async () => {
@@ -445,8 +438,7 @@ describe("ai routes", () => {
 
       expect(res.statusCode).toBe(200);
       const saved = JSON.parse(prismaMock.kV.upsert.mock.calls[0][0].create.value);
-      expect(saved.payload.max_tokens).toBe(MIN_AI_CONFIG_MAX_TOKENS);
-      await app.close();
+      expect(saved.payload.max_tokens).toBe(await minAiConfigMaxTokens());
     });
 
     it("keeps a max_tokens already above the floor", async () => {
@@ -460,7 +452,6 @@ describe("ai routes", () => {
 
       const saved = JSON.parse(prismaMock.kV.upsert.mock.calls[0][0].create.value);
       expect(saved.payload.max_tokens).toBe(8000);
-      await app.close();
     });
 
     it("rejects a negative max_tokens", async () => {
@@ -473,7 +464,6 @@ describe("ai routes", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
 
     it("clears both the config and the last-generated marker on delete", async () => {
@@ -485,7 +475,6 @@ describe("ai routes", () => {
       expect(prismaMock.kV.deleteMany).toHaveBeenCalledWith({
         where: { key: { in: ["ai:config", "ai:lastRecsGeneratedAt"] } },
       });
-      await app.close();
     });
   });
 
@@ -503,7 +492,6 @@ describe("ai routes", () => {
       const res = await app.inject({ method: "POST", url: "/ai/test", payload: { config: validConfig } });
 
       expect(res.json()).toEqual({ success: true, response: "OK" });
-      await app.close();
     });
 
     it("does not follow redirects, so an allowed host cannot bounce the request inward", async () => {
@@ -517,7 +505,6 @@ describe("ai routes", () => {
       await app.inject({ method: "POST", url: "/ai/test", payload: { config: validConfig } });
 
       expect(fetchMock.mock.calls[0][1]).toMatchObject({ redirect: "error" });
-      await app.close();
     });
 
     it("reports only the status code, never the upstream body", async () => {
@@ -533,7 +520,6 @@ describe("ai routes", () => {
 
       expect(res.json()).toEqual({ success: false, error: "HTTP 500" });
       expect(res.body).not.toContain("hunter2");
-      await app.close();
     });
 
     it("refuses a URL whose hostname resolves to a blocked address", async () => {
@@ -546,7 +532,6 @@ describe("ai routes", () => {
 
       expect(res.json().success).toBe(false);
       expect(fetchMock).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("reports a transport failure rather than throwing", async () => {
@@ -557,7 +542,6 @@ describe("ai routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ success: false, error: "connect ECONNREFUSED" });
-      await app.close();
     });
 
     it("rejects an invalid config without making a request", async () => {
@@ -569,7 +553,6 @@ describe("ai routes", () => {
 
       expect(res.json().success).toBe(false);
       expect(fetchMock).not.toHaveBeenCalled();
-      await app.close();
     });
   });
 
@@ -581,7 +564,6 @@ describe("ai routes", () => {
 
       expect(res.json()).toEqual({ refreshed: true });
       expect(trendingCacheDeletePrefix).toHaveBeenCalledWith("ai-recs:");
-      await app.close();
     });
   });
 });

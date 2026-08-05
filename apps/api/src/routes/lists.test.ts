@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 import { P2002 } from "../lib/test-fixtures/prisma-errors.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
@@ -38,14 +39,8 @@ vi.mock("../lib/profile.js", () => ({
   },
 }));
 
-const buildApp = async (): Promise<FastifyInstance> => {
-  vi.resetModules();
-  const { default: listsRoutes } = await import("./lists.js");
-  const app = Fastify();
-  await app.register(listsRoutes);
-  await app.ready();
-  return app;
-};
+const buildApp = (): Promise<FastifyInstance> =>
+  buildRouteApp(() => import("./lists.js"));
 
 const listRow = (over: Record<string, unknown> = {}) => ({
   id: LIST_ID,
@@ -83,7 +78,6 @@ describe("lists routes", () => {
         data: { name: "Weekend", kind: "custom", profileId: PROFILE_ID },
       });
       expect(res.json().list).toMatchObject({ name: "Weekend", itemCount: 0 });
-      await app.close();
     });
 
     it("rejects a kind that is not one of the known list kinds", async () => {
@@ -97,7 +91,6 @@ describe("lists routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(prismaMock.list.create).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects a name that is only whitespace", async () => {
@@ -110,7 +103,6 @@ describe("lists routes", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
   });
 
@@ -132,7 +124,6 @@ describe("lists routes", () => {
         expect.objectContaining({ name: "Watchlist", itemCount: 4 }),
         expect.objectContaining({ name: "Collection", itemCount: 0 }),
       ]);
-      await app.close();
     });
   });
 
@@ -153,7 +144,6 @@ describe("lists routes", () => {
         where: { id: LIST_ID },
         data: { name: "Renamed" },
       });
-      await app.close();
     });
 
     it("rejects an id that is not a UUID before touching the database", async () => {
@@ -163,7 +153,6 @@ describe("lists routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(prismaMock.list.findFirst).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("404s on a list belonging to another profile", async () => {
@@ -176,7 +165,6 @@ describe("lists routes", () => {
 
       expect(res.statusCode).toBe(404);
       expect(prismaMock.list.update).not.toHaveBeenCalled();
-      await app.close();
     });
   });
 
@@ -190,7 +178,6 @@ describe("lists routes", () => {
 
       expect(res.statusCode).toBe(204);
       expect(prismaMock.list.delete).toHaveBeenCalledWith({ where: { id: LIST_ID } });
-      await app.close();
     });
 
     it("404s when the list is not the profile's", async () => {
@@ -201,7 +188,6 @@ describe("lists routes", () => {
 
       expect(res.statusCode).toBe(404);
       expect(prismaMock.list.delete).not.toHaveBeenCalled();
-      await app.close();
     });
   });
 
@@ -229,7 +215,6 @@ describe("lists routes", () => {
         { type: "movie", imdbId: "tt0111161" },
         expect.anything()
       );
-      await app.close();
     });
 
     it("does not push to Trakt for a custom list", async () => {
@@ -247,7 +232,6 @@ describe("lists routes", () => {
 
       expect(res.statusCode).toBe(201);
       expect(pushTraktWatchlistChange).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("returns 409 rather than 500 when the item is already in the list", async () => {
@@ -263,7 +247,6 @@ describe("lists routes", () => {
 
       expect(res.statusCode).toBe(409);
       expect(res.json().error).toMatch(/already exists/i);
-      await app.close();
     });
 
     it("validates the body before looking the list up", async () => {
@@ -277,7 +260,6 @@ describe("lists routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(prismaMock.list.findFirst).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("rejects a non-string title instead of storing it", async () => {
@@ -290,7 +272,6 @@ describe("lists routes", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      await app.close();
     });
   });
 
@@ -307,7 +288,6 @@ describe("lists routes", () => {
       expect(prismaMock.listItem.deleteMany).toHaveBeenCalledWith({
         where: { listId: LIST_ID, imdbId: "tt0903747", type: "series" },
       });
-      await app.close();
     });
 
     it("asks for a type when a movie and a series share the imdbId", async () => {
@@ -321,7 +301,6 @@ describe("lists routes", () => {
       expect(res.statusCode).toBe(400);
       expect(res.json().error).toMatch(/type=movie or \?type=series/);
       expect(prismaMock.listItem.deleteMany).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("404s when nothing matches the imdbId", async () => {
@@ -332,7 +311,6 @@ describe("lists routes", () => {
       const res = await app.inject({ method: "DELETE", url: `/lists/${LIST_ID}/items/tt1` });
 
       expect(res.statusCode).toBe(404);
-      await app.close();
     });
 
     it("mirrors the removal to Trakt for a watchlist", async () => {
@@ -351,7 +329,6 @@ describe("lists routes", () => {
         { type: "movie", imdbId: "tt1" },
         expect.anything()
       );
-      await app.close();
     });
   });
 
@@ -367,7 +344,6 @@ describe("lists routes", () => {
       expect(prismaMock.listItem.deleteMany).toHaveBeenCalledWith({
         where: { listId: LIST_ID, type: "movie", imdbId: "tt1" },
       });
-      await app.close();
     });
 
     it("404s when the row does not exist", async () => {
@@ -378,7 +354,6 @@ describe("lists routes", () => {
       const res = await app.inject({ method: "DELETE", url: `/lists/${LIST_ID}/items/movie/tt1` });
 
       expect(res.statusCode).toBe(404);
-      await app.close();
     });
   });
 
@@ -398,7 +373,6 @@ describe("lists routes", () => {
       expect(res.statusCode).toBe(200);
       expect(res.json().items[0].metadata).toMatchObject({ name: "A Movie", year: 2020 });
       expect(prismaMock.item.findMany).not.toHaveBeenCalled();
-      await app.close();
     });
 
     it("falls back to the captured title and schedules a backfill when metadata is missing", async () => {
@@ -418,7 +392,6 @@ describe("lists routes", () => {
         [{ imdbId: "tt1", type: "movie" }],
         expect.anything()
       );
-      await app.close();
     });
 
     it("keeps a movie and a series sharing an imdbId apart", async () => {
@@ -440,7 +413,6 @@ describe("lists routes", () => {
       const items = res.json().items;
       expect(items[0].metadata).toMatchObject({ name: "The Movie" });
       expect(items[1].metadata).toBeNull();
-      await app.close();
     });
   });
 
@@ -464,7 +436,6 @@ describe("lists routes", () => {
         })
       );
       expect(res.json().lists[0]).toMatchObject({ listName: "Watchlist", listKind: "watchlist" });
-      await app.close();
     });
 
     it("ignores a type filter that is not a valid item type", async () => {
@@ -479,7 +450,6 @@ describe("lists routes", () => {
           where: expect.not.objectContaining({ type: expect.anything() }),
         })
       );
-      await app.close();
     });
   });
 });
