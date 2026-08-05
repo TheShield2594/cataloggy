@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -130,6 +131,20 @@ describe("script-src", () => {
     const html = "<!-- inline rather than a <script src>: it is faster -->\n<script>a();</script>";
 
     expect(buildScriptSrc(html)).toBe(buildScriptSrc("<script>a();</script>"));
+  });
+
+  // The mirror of the case above, and the one that would actually break a
+  // page: comment syntax *inside* a script body is script, not a comment. Hash
+  // the body with those bytes removed and the browser — which receives them —
+  // computes a different hash and blocks the script. Matching a comment and a
+  // script as alternatives in one pass is what keeps this whole: the script tag
+  // matches first at that position and swallows its body entire.
+  it("hashes comment syntax inside a script body, since the browser does", () => {
+    const body = 'var a = "<!-- not a comment -->";';
+
+    expect(buildScriptSrc(`<script>${body}</script>`)).toBe(
+      `'self' 'sha256-${createHash("sha256").update(body, "utf8").digest("base64")}'`
+    );
   });
 
   // A second `<!--` inside a comment opens nothing — the comment still ends at
