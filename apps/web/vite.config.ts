@@ -11,12 +11,51 @@ const allowedHosts = (process.env.ALLOWED_HOSTS ?? "")
   .map((host) => host.trim())
   .filter(Boolean);
 
+// The font's @font-face lives inside the app stylesheet, so the browser can only
+// discover it once that stylesheet has downloaded and parsed — a round trip
+// after it already knew it would need it. The filename is content-hashed, so the
+// preload tag can't be written by hand in index.html; it is read off the bundle
+// here instead. Only the latin subset: the others are for text most installs
+// never render, and preloading all three would compete with the app's own JS.
+function preloadLatinFont() {
+  return {
+    name: "cataloggy:preload-latin-font",
+    enforce: "post" as const,
+    transformIndexHtml(html: string, ctx: { bundle?: Record<string, unknown> }) {
+      const file = Object.keys(ctx.bundle ?? {}).find((name) =>
+        /plus-jakarta-sans-latin-wght-normal-[^/]*\.woff2$/.test(name)
+      );
+      if (!file) return html;
+      return {
+        html,
+        tags: [
+          {
+            tag: "link",
+            attrs: {
+              rel: "preload",
+              as: "font",
+              type: "font/woff2",
+              href: `/${file}`,
+              // Fonts are always fetched anonymously, preload included — without
+              // this the preloaded copy sits in a different connection pool and
+              // is simply downloaded twice.
+              crossorigin: "",
+            },
+            injectTo: "head-prepend" as const,
+          },
+        ],
+      };
+    },
+  };
+}
+
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version)
   },
   plugins: [
     react(),
+    preloadLatinFont(),
     VitePWA({
       registerType: "prompt",
       strategies: "injectManifest",

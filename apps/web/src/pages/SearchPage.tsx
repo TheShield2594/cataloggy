@@ -4,6 +4,7 @@ import { Check, ChevronDown, ChevronUp, Film, Filter, Heart, MonitorPlay, Plus, 
 import { api, CatalogList, SearchResult, WatchProvider } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useToast } from "../hooks/useToast";
+import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
 import { mergeByRelevance } from "../utils/mergeSearchResults";
 import {
   useSearchFilters,
@@ -744,9 +745,12 @@ function ResultCard({
         {result.poster ? (
           <img
             src={result.poster}
+            srcSet={buildTmdbSrcSet(result.poster)}
+            sizes={POSTER_GRID_SIZES}
             alt={result.name}
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             loading={eager ? "eager" : "lazy"}
+            fetchPriority={eager ? "high" : "low"}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br" style={{ "--tw-gradient-from": "var(--surface)", "--tw-gradient-to": "var(--surface-strong)" } as React.CSSProperties}>

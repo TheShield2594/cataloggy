@@ -536,6 +536,28 @@ export function notifyServiceWorkerToInvalidateApiCache(): Promise<void> {
   });
 }
 
+declare global {
+  interface Window {
+    /** Set by public/preload-dashboard.js — in-flight responses started during HTML parse. */
+    __CATALOGGY_PRELOAD__?: Record<string, Promise<Response | null>>;
+  }
+}
+
+/**
+ * Claims the response that `preload-dashboard.js` started for `path`, if there
+ * is one. Each is claimed at most once and removed as it is taken, so a later
+ * refresh of the same endpoint goes to the network as normal — this stands in
+ * for the very first request of a session, not for the cache.
+ */
+function claimPreloadedResponse(path: string): Promise<Response | null> | null {
+  const preloaded = window.__CATALOGGY_PRELOAD__;
+  if (!preloaded) return null;
+  const pending = preloaded[path];
+  if (!pending) return null;
+  delete preloaded[path];
+  return pending;
+}
+
 async function request<T>(path: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const method = (init?.method ?? "GET").toUpperCase();
   const controller = new AbortController();
@@ -553,14 +575,24 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
 
   let response: Response;
   try {
-    response = await fetch(`${runtimeConfig.getApiBase()}${path}`, {
-      ...init,
-      signal: controller.signal,
-      headers: {
-        ...authHeaders(init?.body != null),
-        ...(init?.headers ?? {})
-      }
-    });
+    // A GET the preload script already started: adopt it rather than issue a
+    // second one. Only for plain GETs — anything with a body, custom headers or
+    // a caller-supplied signal is not the request that was preloaded.
+    const preloaded =
+      method === "GET" && !init?.body && !init?.headers && !init?.signal
+        ? await claimPreloadedResponse(path)
+        : null;
+
+    response =
+      preloaded ??
+      (await fetch(`${runtimeConfig.getApiBase()}${path}`, {
+        ...init,
+        signal: controller.signal,
+        headers: {
+          ...authHeaders(init?.body != null),
+          ...(init?.headers ?? {})
+        }
+      }));
   } catch (err) {
     if (init?.signal?.aborted) {
       // The caller cancelled this request on purpose (e.g. a newer request

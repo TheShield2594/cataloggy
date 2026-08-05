@@ -1,3 +1,5 @@
+import { isFresh, writeCache } from "./dataCache";
+
 // Every route but the dashboard is code-split, so the first visit to one spends
 // a network round trip fetching its chunk *before* the page mounts and can even
 // start requesting data. That round trip is what the spinner after a nav click
@@ -25,6 +27,39 @@ export const loadNotFoundPage = () => import("../pages/NotFoundPage");
 export const loadProfileSwitcher = () => import("../pages/ProfileSwitcher");
 export const loadSetupWizard = () => import("../pages/SetupWizard");
 export const loadDetailPanel = () => import("../components/media-detail/DetailPanel");
+export const loadCommandPalette = () => import("../components/CommandPalette");
+
+// Warming the chunk only removes half the wait: the page still mounts with an
+// empty cache and starts its requests from zero. These fill the data cache under
+// the same keys the pages read, so arriving finds both the code and the answer
+// already there — and `useCachedState` paints it in the first frame.
+//
+// Deliberately only the one query each page opens with. Prefetching a page's
+// every section would spend a hover on requests the user may never look at.
+const ROUTE_DATA_WARMERS: Record<string, () => Promise<void>> = {
+  "/lists": async () => {
+    const { api } = await import("../api");
+    const { lists } = await api.getLists();
+    writeCache("lists:all", lists);
+  },
+  // 30 days is the calendar's default agenda range, so this is the answer the
+  // page opens with. Pick another range and it fetches that one itself.
+  "/calendar": async () => {
+    const { api } = await import("../api");
+    const { calendar } = await api.getCalendar(30);
+    writeCache("calendar:entries:30", calendar ?? []);
+  },
+  "/history": async () => {
+    const { api } = await import("../api");
+    writeCache("history:events", await api.getWatchHistory(30));
+  },
+  "/stats": async () => {
+    const { api } = await import("../api");
+    const [summary, detailed] = await Promise.all([api.getWatchStats(), api.getDetailedStats()]);
+    writeCache("stats:summary", summary);
+    writeCache("stats:detailed", detailed);
+  },
+};
 
 /** Keyed by the `to` of every nav link that points at a code-split route. */
 const ROUTE_LOADERS: Record<string, Loader> = {
@@ -57,6 +92,36 @@ function start(loader: Loader): void {
 export function prefetchRoute(path: string): void {
   const loader = ROUTE_LOADERS[path];
   if (loader) start(loader);
+
+  warmRouteData(path);
+}
+
+// The key whose freshness stands in for "this page already has what it opens
+// with". Hovering a page visited a moment ago should cost no request at all.
+const PRIMARY_DATA_KEY: Record<string, string> = {
+  "/lists": "lists:all",
+  "/calendar": "calendar:entries:30",
+  "/history": "history:events",
+  "/stats": "stats:summary",
+};
+
+const warmersInFlight = new Set<string>();
+
+function warmRouteData(path: string): void {
+  const warmer = ROUTE_DATA_WARMERS[path];
+  if (!warmer) return;
+  if (warmersInFlight.has(path)) return;
+  if (isFresh(PRIMARY_DATA_KEY[path])) return;
+  // A hover shouldn't spend a request on a metered connection any more than the
+  // idle pass should.
+  if (!prefetchIsWelcome()) return;
+
+  warmersInFlight.add(path);
+  // Cleared on settle rather than kept forever, so a hover after the data has
+  // gone stale warms it again instead of being permanently written off.
+  void warmer()
+    .catch(() => { /* a warm-up is a hint; the page's own load still runs */ })
+    .finally(() => warmersInFlight.delete(path));
 }
 
 /** Warms the detail-panel chunk — the "info page" opened from any poster. */
@@ -89,6 +154,8 @@ function onIdle(run: () => void): void {
 // its download on hover/touch rather than on every session.
 const IDLE_PREFETCH: Loader[] = [
   loadDetailPanel,
+  // ⌘K expects to be instant, and there is no hover to warm it on.
+  loadCommandPalette,
   loadSearchPage,
   loadListsPage,
   loadCalendarPage,
@@ -110,6 +177,7 @@ export function schedulePrefetchOnIdle(): void {
 /** Test seam — prefetches are process-wide and would otherwise leak between cases. */
 export function resetPrefetchStateForTests(): void {
   started.clear();
+  warmersInFlight.clear();
   idleScheduled = false;
 }
 

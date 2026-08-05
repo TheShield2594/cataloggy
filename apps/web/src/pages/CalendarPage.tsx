@@ -159,8 +159,6 @@ export function CalendarPage() {
   const [view, setView] = useState<ViewMode>("agenda");
   const [agendaDays, setAgendaDays] = useState<(typeof AGENDA_RANGES)[number]>(30);
   const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()));
-  const [entries, setEntries, entriesMeta] = useCachedState<CalendarEntry[]>("calendar:entries", []);
-  const [loading, setLoading] = useState(!entriesMeta.hadCachedValue);
   const [error, setError] = useState<string | null>(null);
   const [openDay, setOpenDay] = useState<Date | null>(null);
   const { showToast } = useToast();
@@ -181,6 +179,15 @@ export function CalendarPage() {
     const diff = Math.round((startOfDay(monthEnd).getTime() - today.getTime()) / 86_400_000);
     return Math.min(Math.max(diff, 1), MAX_CALENDAR_DAYS);
   }, [activeView, agendaDays, monthCursor, today]);
+
+  // Keyed by the range, because the range is part of the question: the agenda's
+  // selector and the month grid ask for different spans, and seeding a 7-day
+  // answer into a 30-day view would paint the wrong thing for a frame.
+  const [entries, setEntries, entriesMeta] = useCachedState<CalendarEntry[]>(
+    `calendar:entries:${daysNeeded}`,
+    []
+  );
+  const [loading, setLoading] = useState(!entriesMeta.hadCachedValue);
 
   // The displayed month is entirely beyond what the API can return.
   const monthOutOfRange = useMemo(() => {

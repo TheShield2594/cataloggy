@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, Route, Routes, useLocation } from "react-router";
 import { Clapperboard, Loader2, Search, User } from "lucide-react";
 import { api, Profile, runtimeConfig } from "./api";
-import { CommandPalette, useCommandPalette } from "./components/CommandPalette";
+import { useCommandPalette } from "./hooks/useCommandPalette";
 import { InstallButton } from "./components/InstallButton";
 import { MobileTabBar } from "./components/MobileTabBar";
 import { OfflineBanner } from "./components/OfflineBanner";
@@ -23,6 +23,7 @@ import {
   loadSettingsPage,
   loadSetupWizard,
   loadStatsPage,
+  loadCommandPalette,
   schedulePrefetchOnIdle,
 } from "./utils/routePrefetch";
 
@@ -34,6 +35,12 @@ import {
 // on hover, before the click that renders it.
 const ProfileSwitcher = lazy(() => loadProfileSwitcher().then((m) => ({ default: m.ProfileSwitcher })));
 const SetupWizard = lazy(() => loadSetupWizard().then((m) => ({ default: m.SetupWizard })));
+
+// Closed on every cold start, and plenty of sessions never open it — but once
+// it has been opened it stays mounted, because it keeps rendering a detail panel
+// opened from a result after the palette itself closes. Unmounting on close
+// would take that panel with it.
+const CommandPalette = lazy(() => loadCommandPalette().then((m) => ({ default: m.CommandPalette })));
 
 const CalendarPage = lazy(() => loadCalendarPage().then((m) => ({ default: m.CalendarPage })));
 const GamesPage = lazy(() => loadGamesPage().then((m) => ({ default: m.GamesPage })));
@@ -160,6 +167,10 @@ function AppShell({
   // idle, so it queues behind the dashboard's own render and requests.
   useEffect(() => { schedulePrefetchOnIdle(); }, []);
 
+  // Latches on first open and never unmounts after — see the lazy import above.
+  const [paletteMounted, setPaletteMounted] = useState(paletteOpen);
+  useEffect(() => { if (paletteOpen) setPaletteMounted(true); }, [paletteOpen]);
+
   // Client-side navigation leaves focus on the nav item that was clicked, so a
   // screen reader stays parked in the sidebar while the page behind it swaps
   // out. Move focus into the new content instead — but only on an actual route
@@ -213,7 +224,11 @@ function AppShell({
         profile={profile}
         onSwitchProfile={openSwitcher}
       />
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      {paletteMounted && (
+        <Suspense fallback={null}>
+          <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+        </Suspense>
+      )}
       {switcherOpen && (
         <Suspense fallback={<ProfileSwitcherFallback />}>
           <ProfileSwitcher onSelected={handleProfileSelected} onClose={closeSwitcher} />

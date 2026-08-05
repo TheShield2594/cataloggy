@@ -16,26 +16,6 @@ type Action = {
   run: () => void;
 };
 
-export function useCommandPalette() {
-  const [open, setOpen] = useState(false);
-
-  // Escape is deliberately not handled here — CommandPalette registers it with
-  // useEscapeKey so the palette takes its place in the layer stack instead of
-  // closing alongside whatever is on top of it.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setOpen((v) => !v);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
-
-  return { open, setOpen };
-}
-
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, Award, BarChart3, Calendar, Clock, Film, Flame, Minus, Star, Trophy, TrendingDown, TrendingUp } from "lucide-react";
 import { api, DetailedWatchStats, WatchStats, YearInReviewStats } from "../api";
 import { TicketTile } from "../components/TicketTile";
+import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
 import { useCachedState } from "../hooks/useCachedState";
 
 const MONTH_NAMES = [
@@ -286,7 +287,15 @@ export function StatsPage() {
                   style={{ aspectRatio: "2/3", boxShadow: "inset 0 0 0 1px var(--border)" }}
                 >
                   {item.poster ? (
-                    <img src={item.poster} alt={item.name} className="h-full w-full object-cover" loading={index < 5 ? "eager" : "lazy"} />
+                    <img
+                      src={item.poster}
+                      srcSet={buildTmdbSrcSet(item.poster)}
+                      sizes={POSTER_GRID_SIZES}
+                      alt={item.name}
+                      className="h-full w-full object-cover"
+                      loading={index < 5 ? "eager" : "lazy"}
+                      fetchPriority={index < 5 ? "high" : "low"}
+                    />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center" style={{ background: "var(--surface-strong)" }}>
                       <Film className="h-8 w-8" style={{ color: "var(--text-mute)" }} />

@@ -5,6 +5,7 @@ import { api, CatalogList, ListItemWithMeta, MediaType, SearchResult } from "../
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useToast } from "../hooks/useToast";
+import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
 import { useCachedState } from "../hooks/useCachedState";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useEscapeKey } from "../hooks/useEscapeKey";
@@ -810,7 +811,15 @@ export function ListsPage() {
                         aria-label={`Open details for ${name}`}
                       >
                         {poster ? (
-                          <img src={poster} alt={name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" loading={index < 5 ? "eager" : "lazy"} />
+                          <img
+                            src={poster}
+                            srcSet={buildTmdbSrcSet(poster)}
+                            sizes={POSTER_GRID_SIZES}
+                            alt={name}
+                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            loading={index < 5 ? "eager" : "lazy"}
+                            fetchPriority={index < 5 ? "high" : "low"}
+                          />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[var(--surface)] to-[var(--surface-strong)]">
                             <Film className="h-10 w-10" style={{ color: "var(--text-mute)" }} />

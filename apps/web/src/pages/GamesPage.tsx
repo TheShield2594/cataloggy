@@ -7,6 +7,7 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useToast } from "../hooks/useToast";
+import { preconnectToGameArtwork } from "../utils/preconnect";
 import { useCachedState } from "../hooks/useCachedState";
 
 const SORT_OPTIONS: { value: GameSort; label: string }[] = [
@@ -324,6 +325,10 @@ export function GamesPage() {
   // Keyed by sort order: the list is a different answer per sort, so caching
   // them separately makes flipping back to one already seen instant.
   const [games, setGames, gamesMeta] = useCachedState<Game[] | null>(`games:${sort}`, null);
+
+  // Covers come from IGDB and Steam rather than TMDB, so this is the first point
+  // at which those connections are worth opening.
+  useEffect(() => { preconnectToGameArtwork(); }, []);
   const [loading, setLoading] = useState(!gamesMeta.hadCachedValue);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
