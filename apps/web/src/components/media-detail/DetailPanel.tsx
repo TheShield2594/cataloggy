@@ -302,10 +302,30 @@ export function DetailPanel({
             <X className="h-4 w-4" />
           </button>
 
-          {/* Poster */}
-          <div className="relative z-0 w-full flex-none overflow-hidden aspect-[2/3] max-h-[38vh] sm:aspect-[2/3] sm:max-h-none sm:w-[38%]">
+          {/* Poster.
+              The declared 2:3 box only holds if nothing else sets the height:
+              in the desktop flex row the default `align-items: stretch` sized
+              it from the row (388x805, a 0.48 ratio) and `object-cover` took
+              ~28% off each side of the artwork, so `self-start` lets the ratio
+              apply. On mobile the column is a deliberately shallow band, which
+              cropped the poster to a strip through its middle — the whole
+              poster is drawn inside the band instead, over a blurred copy of
+              itself so the band still fills the width. */}
+          <div className="relative z-0 h-[38vh] w-full flex-none overflow-hidden sm:h-auto sm:max-h-[85vh] sm:aspect-[2/3] sm:w-[38%] sm:self-start">
             {item.poster ? (
-              <img src={item.poster} alt={item.name} className="h-full w-full object-cover" />
+              <>
+                <img
+                  src={item.poster}
+                  alt=""
+                  aria-hidden="true"
+                  className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl"
+                />
+                <img
+                  src={item.poster}
+                  alt={item.name}
+                  className="relative mx-auto h-full w-auto max-w-full object-contain"
+                />
+              </>
             ) : (
               <div className="flex h-full w-full items-center justify-center" style={{ background: "linear-gradient(to bottom right, var(--bg-1), var(--bg-0))" }}>
                 <Film className="h-20 w-20" style={{ color: "var(--border-strong)" }} />
