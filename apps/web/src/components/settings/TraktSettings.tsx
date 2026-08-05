@@ -105,7 +105,7 @@ export function TraktSettings() {
               disabled={importing}
               className="btn-primary"
             >
-              {importing ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : "Run Import"}
+              {importing ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : "Run Full Import"}
             </button>
             <button
               type="button"
@@ -124,6 +124,13 @@ export function TraktSettings() {
           </>
         )}
       </div>
+
+      {status?.connected && (
+        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
+          A full import pulls your entire Trakt history — every play, however far back — plus your watchlist.
+          It can take several minutes on a large library; after it finishes, scheduled syncs only fetch what is new.
+        </p>
+      )}
 
       {importResult && (
         <p className="flex items-center gap-2 text-sm text-emerald-600">

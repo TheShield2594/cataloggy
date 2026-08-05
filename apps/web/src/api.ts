@@ -791,7 +791,9 @@ export const api = {
     return request<{ url: string }>("/trakt/oauth/authorize");
   },
   traktImport() {
-    return request<{ imported: Record<string, number> }>("/trakt/import", { method: "POST", timeoutMs: 120000 });
+    // A full history import walks every play on the account, so this is sized
+    // for a decade-old library on a slow connection rather than a routine sync.
+    return request<{ imported: Record<string, number> }>("/trakt/import", { method: "POST", timeoutMs: 900000 });
   },
   traktDisconnect() {
     return request<{ disconnected: boolean }>("/trakt/disconnect", { method: "POST" });

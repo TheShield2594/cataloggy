@@ -4,15 +4,26 @@ import type { PrismaClient } from "@prisma/client";
 const TRAKT_API_BASE = "https://api.trakt.tv";
 const MAX_PAGES = 100;
 const DEFAULT_POLL_MAX_PAGES = 20;
+// A backfill walks every play the account has ever recorded, so it needs a far
+// higher ceiling than an incremental poll: an account with a decade of history
+// blows past 20 pages (2000 plays) in its first year alone, and anything the
+// cap cuts off is history that silently never arrives.
+const MAX_BACKFILL_PAGES = 1000;
+const DEFAULT_BACKFILL_MAX_PAGES = 500;
 const REQUEST_TIMEOUT_MS = 10_000;
 
-function parsePollMaxPages(raw: string | undefined): number {
+function parseMaxPages(raw: string | undefined, fallback: number, ceiling: number): number {
   const parsed = raw !== undefined ? Number.parseInt(raw, 10) : NaN;
-  if (!Number.isInteger(parsed) || parsed < 1) return DEFAULT_POLL_MAX_PAGES;
-  return Math.min(parsed, MAX_PAGES);
+  if (!Number.isInteger(parsed) || parsed < 1) return fallback;
+  return Math.min(parsed, ceiling);
 }
 
-const POLL_MAX_PAGES = parsePollMaxPages(process.env.TRAKT_POLL_MAX_PAGES);
+const POLL_MAX_PAGES = parseMaxPages(process.env.TRAKT_POLL_MAX_PAGES, DEFAULT_POLL_MAX_PAGES, MAX_PAGES);
+const BACKFILL_MAX_PAGES = parseMaxPages(
+  process.env.TRAKT_BACKFILL_MAX_PAGES,
+  DEFAULT_BACKFILL_MAX_PAGES,
+  MAX_BACKFILL_PAGES
+);
 const DEFAULT_TOKEN_ROW_ID = "default";
 const DEFAULT_TOKEN_EXPIRY_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
@@ -175,12 +186,16 @@ export class TraktClient {
     return this.fetchAllPages<TraktWatchedShowPayload>("/sync/watched/shows", logger);
   }
 
+  // No `startAt` means "everything Trakt has", not "the recent window with no
+  // lower bound": the request goes out without `start_at` and under the much
+  // larger backfill page cap, so a first sync brings in years of history rather
+  // than the tail an incremental poll is sized for.
   async fetchMovieHistory(logger: FastifyBaseLogger, startAt?: string): Promise<TraktMovieHistoryPayload[]> {
     return this.fetchAllPages<TraktMovieHistoryPayload>(
       "/sync/history/movies",
       logger,
       startAt ? { start_at: startAt } : undefined,
-      POLL_MAX_PAGES
+      startAt ? POLL_MAX_PAGES : BACKFILL_MAX_PAGES
     );
   }
 
@@ -189,7 +204,7 @@ export class TraktClient {
       "/sync/history/episodes",
       logger,
       startAt ? { start_at: startAt } : undefined,
-      POLL_MAX_PAGES
+      startAt ? POLL_MAX_PAGES : BACKFILL_MAX_PAGES
     );
   }
 

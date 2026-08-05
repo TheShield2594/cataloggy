@@ -547,4 +547,196 @@ describe("trakt-client", () => {
       });
     });
   });
+
+  describe("pollTraktHistory backfill window", () => {
+    const historyUrls = (fetchMock: ReturnType<typeof vi.fn>) =>
+      fetchMock.mock.calls
+        .map(([url]) => String(url))
+        .filter((href) => href.includes("/sync/history/"));
+
+    // The two KV rows the poll reads answer different questions, so a test that
+    // returns one value for every key can't tell them apart.
+    const stubKv = (rows: { lastPolledAt?: string; backfilledAt?: string }) => {
+      prismaMock.kV.findUnique.mockImplementation(async ({ where }: { where: { key: string } }) => {
+        if (where.key === "trakt:lastPolledAt") {
+          return rows.lastPolledAt ? { value: rows.lastPolledAt } : null;
+        }
+        if (where.key === "trakt:historyBackfilledAt") {
+          return rows.backfilledAt ? { value: rows.backfilledAt } : null;
+        }
+        return null;
+      });
+    };
+
+    const stubEmptyHistory = () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue({ ok: true, status: 200, headers: new Headers(), json: async () => [] });
+      vi.stubGlobal("fetch", fetchMock);
+      return fetchMock;
+    };
+
+    it("imports the entire history — no start_at — when it has never been imported in full", async () => {
+      prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
+      stubKv({});
+      const fetchMock = stubEmptyHistory();
+
+      const { pollTraktHistory } = await import("./trakt-client.js");
+      const result = await pollTraktHistory(makeLogger(), "profile-1");
+
+      const urls = historyUrls(fetchMock);
+      expect(urls).toHaveLength(2);
+      for (const href of urls) expect(href).not.toContain("start_at");
+      expect(result.since).toBeNull();
+      expect(result.fullBackfill).toBe(true);
+    });
+
+    it("resumes from the watermark once the history has been imported in full", async () => {
+      prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
+      stubKv({ lastPolledAt: "2026-01-01T00:00:00.000Z", backfilledAt: "2026-01-01T00:00:00.000Z" });
+      const fetchMock = stubEmptyHistory();
+
+      const { pollTraktHistory } = await import("./trakt-client.js");
+      const result = await pollTraktHistory(makeLogger(), "profile-1");
+
+      for (const href of historyUrls(fetchMock)) {
+        expect(href).toContain("start_at=2026-01-01T00%3A00%3A00.000Z");
+      }
+      expect(result.since).toBe("2026-01-01T00:00:00.000Z");
+      expect(result.fullBackfill).toBe(false);
+    });
+
+    it("backfills an install that has been polling for a while but never imported the full history", async () => {
+      prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
+      stubKv({ lastPolledAt: "2026-01-01T00:00:00.000Z" });
+      const fetchMock = stubEmptyHistory();
+
+      const { pollTraktHistory } = await import("./trakt-client.js");
+      const result = await pollTraktHistory(makeLogger(), "profile-1");
+
+      for (const href of historyUrls(fetchMock)) expect(href).not.toContain("start_at");
+      expect(result.fullBackfill).toBe(true);
+      expect(prismaMock.kV.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { key: "trakt:historyBackfilledAt" } })
+      );
+    });
+
+    it("does not record a completed backfill after a merely incremental poll", async () => {
+      prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
+      stubKv({ lastPolledAt: "2026-01-01T00:00:00.000Z", backfilledAt: "2026-01-01T00:00:00.000Z" });
+      stubEmptyHistory();
+
+      const { pollTraktHistory } = await import("./trakt-client.js");
+      await pollTraktHistory(makeLogger(), "profile-1");
+
+      expect(prismaMock.kV.upsert).toHaveBeenCalledTimes(1);
+      expect(prismaMock.kV.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { key: "trakt:lastPolledAt" } })
+      );
+    });
+
+    it("ignores the watermark when a full backfill is explicitly requested", async () => {
+      prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
+      stubKv({ lastPolledAt: "2026-01-01T00:00:00.000Z", backfilledAt: "2026-01-01T00:00:00.000Z" });
+      const fetchMock = stubEmptyHistory();
+
+      const { pollTraktHistory } = await import("./trakt-client.js");
+      const result = await pollTraktHistory(makeLogger(), "profile-1", { full: true });
+
+      for (const href of historyUrls(fetchMock)) expect(href).not.toContain("start_at");
+      expect(result.fullBackfill).toBe(true);
+    });
+
+    it("drops an aggregate play count on a legacy row, whose other plays the backfill imports separately", async () => {
+      prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
+      stubKv({});
+      prismaMock.watchEvent.findUnique.mockResolvedValue(null);
+      prismaMock.watchEvent.findFirst.mockResolvedValue({ id: "legacy-1", traktHistoryId: null, plays: 3 });
+
+      const fetchMock = vi.fn().mockImplementation(async (url: URL) => {
+        if (String(url).includes("/sync/history/movies")) {
+          return {
+            ok: true,
+            status: 200,
+            headers: new Headers(),
+            json: async () => [
+              { id: 42, watched_at: "2024-01-01T00:00:00Z", movie: { title: "Qux", ids: { imdb: "tt4" } } },
+            ],
+          };
+        }
+        return { ok: true, status: 200, headers: new Headers(), json: async () => [] };
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { pollTraktHistory } = await import("./trakt-client.js");
+      await pollTraktHistory(makeLogger(), "profile-1");
+
+      expect(prismaMock.watchEvent.update).toHaveBeenCalledWith({
+        where: { id: "legacy-1" },
+        data: { traktHistoryId: 42n, plays: 1 },
+      });
+    });
+
+    it("leaves an aggregate play count alone on an incremental poll", async () => {
+      prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
+      stubKv({ lastPolledAt: "2026-01-01T00:00:00.000Z", backfilledAt: "2026-01-01T00:00:00.000Z" });
+      prismaMock.watchEvent.findUnique.mockResolvedValue(null);
+      prismaMock.watchEvent.findFirst.mockResolvedValue({ id: "legacy-1", traktHistoryId: null, plays: 3 });
+
+      const fetchMock = vi.fn().mockImplementation(async (url: URL) => {
+        if (String(url).includes("/sync/history/movies")) {
+          return {
+            ok: true,
+            status: 200,
+            headers: new Headers(),
+            json: async () => [
+              { id: 42, watched_at: "2026-02-01T00:00:00Z", movie: { title: "Qux", ids: { imdb: "tt4" } } },
+            ],
+          };
+        }
+        return { ok: true, status: 200, headers: new Headers(), json: async () => [] };
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { pollTraktHistory } = await import("./trakt-client.js");
+      await pollTraktHistory(makeLogger(), "profile-1");
+
+      expect(prismaMock.watchEvent.update).toHaveBeenCalledWith({
+        where: { id: "legacy-1" },
+        data: { traktHistoryId: 42n },
+      });
+    });
+
+    it("upserts a series title once, however many of its episodes the backfill carries", async () => {
+      prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
+      stubKv({});
+      prismaMock.watchEvent.findUnique.mockResolvedValue(null);
+      prismaMock.watchEvent.findFirst.mockResolvedValue(null);
+
+      const fetchMock = vi.fn().mockImplementation(async (url: URL) => {
+        if (String(url).includes("/sync/history/episodes")) {
+          return {
+            ok: true,
+            status: 200,
+            headers: new Headers(),
+            json: async () =>
+              [1, 2, 3].map((n) => ({
+                id: 100 + n,
+                watched_at: `2024-01-0${n}T00:00:00Z`,
+                episode: { season: 1, number: n },
+                show: { title: "Show", ids: { imdb: "tt9" } },
+              })),
+          };
+        }
+        return { ok: true, status: 200, headers: new Headers(), json: async () => [] };
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { pollTraktHistory } = await import("./trakt-client.js");
+      const result = await pollTraktHistory(makeLogger(), "profile-1");
+
+      expect(result.importedWatchEvents.episodes).toBe(3);
+      expect(prismaMock.item.upsert).toHaveBeenCalledTimes(1);
+    });
+  });
 });

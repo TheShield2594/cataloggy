@@ -318,22 +318,67 @@ export const syncTraktWatchlist = async (
 
 export const TRAKT_LAST_POLLED_AT_KEY = "trakt:lastPolledAt";
 
-const getTraktPollStartAt = async (): Promise<Date> => {
+/**
+ * Set once the account's full history has been imported at least once.
+ *
+ * Separate from the watermark above because the two answer different
+ * questions. An install that has been polling since before backfills existed
+ * has a watermark — it just never covered anything before it — so the
+ * watermark alone can't distinguish "up to date" from "up to date since the
+ * week it was connected". Absent marker means the history was never imported
+ * in full, whatever the watermark says, and the next poll fixes that.
+ */
+export const TRAKT_HISTORY_BACKFILLED_AT_KEY = "trakt:historyBackfilledAt";
+
+const hasCompletedBackfill = async (): Promise<boolean> =>
+  !!(await prisma.kV.findUnique({ where: { key: TRAKT_HISTORY_BACKFILLED_AT_KEY } }));
+
+/**
+ * Where the next history poll starts, or `null` for "no lower bound — import
+ * everything Trakt has".
+ *
+ * A missing or unreadable watermark means this install has never successfully
+ * imported history, so the only safe answer is the whole account. The previous
+ * 7-day default quietly made the first sync a *window*: everything watched
+ * before that week never arrived, and because the poll then wrote a watermark,
+ * no later run ever went back for it — leaving a library that looks like it
+ * only ever contained the last month.
+ */
+const getTraktPollStartAt = async (): Promise<Date | null> => {
   const kvValue = await prisma.kV.findUnique({ where: { key: TRAKT_LAST_POLLED_AT_KEY } });
 
-  if (!kvValue) return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  if (!kvValue) return null;
 
   const parsed = new Date(kvValue.value);
-  if (Number.isNaN(parsed.getTime())) return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  if (Number.isNaN(parsed.getTime())) return null;
 
   return parsed;
 };
 
-export const pollTraktHistory = async (logger: FastifyRequest["log"], profileId: string) => {
+/**
+ * Imports Trakt play history into watch events.
+ *
+ * Incremental by default (from the last successful poll), but runs as a
+ * complete backfill whenever this install has never imported the full history
+ * — including installs upgraded from the version that only ever fetched a
+ * 7-day window, which heal on their next poll without anyone having to know
+ * that's what they need. Pass `{ full: true }` to force one regardless.
+ */
+export const pollTraktHistory = async (
+  logger: FastifyRequest["log"],
+  profileId: string,
+  options: { full?: boolean } = {}
+) => {
   const client = await getTraktClient();
-  const pollStartAt = await getTraktPollStartAt();
+  const pollStartAt =
+    options.full || !(await hasCompletedBackfill()) ? null : await getTraktPollStartAt();
   const pollCompletedAt = new Date();
-  const pollStartAtIso = pollStartAt.toISOString();
+  const pollStartAtIso = pollStartAt?.toISOString();
+  const isBackfill = pollStartAtIso === undefined;
+
+  if (isBackfill) {
+    logger.info("Trakt history poll running as a full backfill — importing the account's entire history");
+  }
 
   const [movieHistory, episodeHistory] = await Promise.all([
     client.fetchMovieHistory(logger, pollStartAtIso),
@@ -342,6 +387,29 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"], profileId:
 
   const importedWatchEvents = { movies: 0, episodes: 0 };
   const seriesProgressByImdb = new Map<string, SeriesProgressCandidate>();
+  // One title upsert per item rather than per play. A backfill can carry
+  // hundreds of plays of the same show, and each upsert is a database round
+  // trip that writes the value already there.
+  const upsertedTitles = new Set<string>();
+
+  // Reconciles a history entry against the event already stored for it.
+  //
+  // Beyond stamping the Trakt id on a legacy row, a backfill also has to undo
+  // the aggregate play counts the watched-list import writes (one row carrying
+  // every play of an item). The backfill is bringing those same plays in as
+  // individual events, so the aggregate would count them a second time. Only
+  // correct while the full history is being imported — an incremental poll has
+  // nothing to replace the aggregate with.
+  const reconcileExistingEvent = async (
+    existingEvent: { id: string; traktHistoryId: bigint | null; plays: number },
+    historyId: bigint | null
+  ) => {
+    const data: { traktHistoryId?: bigint; plays?: number } = {};
+    if (historyId && existingEvent.traktHistoryId == null) data.traktHistoryId = historyId;
+    if (isBackfill && existingEvent.traktHistoryId == null && existingEvent.plays > 1) data.plays = 1;
+    if (Object.keys(data).length === 0) return;
+    await prisma.watchEvent.update({ where: { id: existingEvent.id }, data });
+  };
 
   for (const entry of movieHistory) {
     const imdbId = entry.movie?.ids?.imdb;
@@ -351,12 +419,13 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"], profileId:
     const watchedAtDate = new Date(watchedAt);
     const historyId = entry.id != null ? BigInt(entry.id) : null;
     const title = entry.movie?.title?.trim();
-    if (title) {
+    if (title && !upsertedTitles.has(`movie:${imdbId}`)) {
       await prisma.item.upsert({
         where: { type_imdbId: { type: ItemType.movie, imdbId } },
         create: { type: ItemType.movie, imdbId, title },
         update: { title },
       });
+      upsertedTitles.add(`movie:${imdbId}`);
     }
 
     // Each Trakt history entry represents exactly one play. Re-polling an
@@ -370,9 +439,7 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"], profileId:
       (await prisma.watchEvent.findFirst({ where: { profileId, type: "movie", imdbId, watchedAt: watchedAtDate } }));
 
     if (existingEvent) {
-      if (historyId && existingEvent.traktHistoryId == null) {
-        await prisma.watchEvent.update({ where: { id: existingEvent.id }, data: { traktHistoryId: historyId } });
-      }
+      await reconcileExistingEvent(existingEvent, historyId);
     } else {
       await prisma.watchEvent.create({
         data: { type: "movie", imdbId, watchedAt: watchedAtDate, plays: 1, traktHistoryId: historyId, profileId },
@@ -393,12 +460,13 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"], profileId:
     const watchedAtDate = new Date(watchedAt);
     const historyId = entry.id != null ? BigInt(entry.id) : null;
     const seriesTitle = entry.show?.title?.trim();
-    if (seriesTitle) {
+    if (seriesTitle && !upsertedTitles.has(`series:${seriesImdbId}`)) {
       await prisma.item.upsert({
         where: { type_imdbId: { type: ItemType.series, imdbId: seriesImdbId } },
         create: { type: ItemType.series, imdbId: seriesImdbId, title: seriesTitle },
         update: { title: seriesTitle },
       });
+      upsertedTitles.add(`series:${seriesImdbId}`);
     }
 
     // imdbId mirrors seriesImdbId for episode events, matching the convention
@@ -414,9 +482,7 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"], profileId:
       }));
 
     if (existingEvent) {
-      if (historyId && existingEvent.traktHistoryId == null) {
-        await prisma.watchEvent.update({ where: { id: existingEvent.id }, data: { traktHistoryId: historyId } });
-      }
+      await reconcileExistingEvent(existingEvent, historyId);
     } else {
       await prisma.watchEvent.create({
         data: {
@@ -455,6 +521,8 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"], profileId:
     await upsertSeriesProgressIfNewer(profileId, seriesImdbId, progress);
   }
 
+  // Both written only after every event above landed, so a run that throws
+  // part-way is retried from the same point rather than skipped over.
   await prisma.kV.upsert({
     where: { key: TRAKT_LAST_POLLED_AT_KEY },
     create: {
@@ -468,8 +536,24 @@ export const pollTraktHistory = async (logger: FastifyRequest["log"], profileId:
     },
   });
 
+  if (isBackfill) {
+    await prisma.kV.upsert({
+      where: { key: TRAKT_HISTORY_BACKFILLED_AT_KEY },
+      create: {
+        key: TRAKT_HISTORY_BACKFILLED_AT_KEY,
+        value: pollCompletedAt.toISOString(),
+        updatedAt: pollCompletedAt,
+      },
+      update: {
+        value: pollCompletedAt.toISOString(),
+        updatedAt: pollCompletedAt,
+      },
+    });
+  }
+
   return {
-    since: pollStartAtIso,
+    since: pollStartAtIso ?? null,
+    fullBackfill: isBackfill,
     polledAt: pollCompletedAt.toISOString(),
     importedWatchEvents,
     updatedSeriesProgress: seriesProgressByImdb.size,

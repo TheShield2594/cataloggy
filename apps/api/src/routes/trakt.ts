@@ -194,9 +194,25 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
       client.fetchWatchlistShows(request.log),
     ]);
 
-    const imported = { movies: 0, episodes: 0, watchlistMovies: 0, watchlistShows: 0 };
+    const imported = {
+      movies: 0,
+      episodes: 0,
+      watchlistMovies: 0,
+      watchlistShows: 0,
+      historyMovies: 0,
+      historyEpisodes: 0,
+    };
     const profileId = request.profileId!;
     const watchlist = await getDefaultWatchlist(profileId);
+
+    // The complete play history, every play with its own date — not just the
+    // most recent watch of each item, which is all /sync/watched reports. This
+    // runs first so the watched-list pass below can tell which items it already
+    // covers. It also resets the incremental poll's watermark, so the scheduled
+    // poll picks up from this import rather than re-walking the same history.
+    const history = await pollTraktHistory(request.log, profileId, { full: true });
+    imported.historyMovies = history.importedWatchEvents.movies;
+    imported.historyEpisodes = history.importedWatchEvents.episodes;
 
     for (const entry of watchlistMovies) {
       const imdbId = entry.movie?.ids?.imdb;
@@ -243,17 +259,15 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
       const watchedAt = entry.last_watched_at;
       if (!imdbId || !watchedAt) continue;
 
+      // Gap-fill only. The history import above already wrote one event per
+      // play, each with its own date; overwriting one of those rows with this
+      // entry's aggregate play count would count the same watches twice.
       const existing = await prisma.watchEvent.findFirst({ where: { profileId, type: "movie", imdbId } });
-      if (existing) {
-        await prisma.watchEvent.update({
-          where: { id: existing.id },
-          data: { watchedAt: new Date(watchedAt), plays: entry.plays ?? 1 },
-        });
-      } else {
-        await prisma.watchEvent.create({
-          data: { type: "movie", imdbId, watchedAt: new Date(watchedAt), plays: entry.plays ?? 1, profileId },
-        });
-      }
+      if (existing) continue;
+
+      await prisma.watchEvent.create({
+        data: { type: "movie", imdbId, watchedAt: new Date(watchedAt), plays: entry.plays ?? 1, profileId },
+      });
       imported.movies += 1;
     }
 
@@ -270,16 +284,12 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
           const watchedAt = ep.last_watched_at;
           if (episodeNumber === undefined || !watchedAt) continue;
 
+          // Gap-fill only, for the same reason as the movie pass above.
           const existing = await prisma.watchEvent.findFirst({
             where: { profileId, type: "episode", seriesImdbId, season: seasonNumber, episode: episodeNumber },
           });
 
-          if (existing) {
-            await prisma.watchEvent.update({
-              where: { id: existing.id },
-              data: { watchedAt: new Date(watchedAt), plays: ep.plays ?? 1 },
-            });
-          } else {
+          if (!existing) {
             await prisma.watchEvent.create({
               data: {
                 type: "episode",
@@ -292,6 +302,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
                 profileId,
               },
             });
+            imported.episodes += 1;
           }
 
           const watchedAtDate = new Date(watchedAt);
@@ -310,8 +321,6 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
               lastWatchedAt: watchedAtDate,
             });
           }
-
-          imported.episodes += 1;
         }
       }
     }
@@ -361,10 +370,14 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
     return reply.code(200).send({ imported });
   });
 
+  // `{ "full": true }` forces a complete history backfill instead of resuming
+  // from the last poll — the way to recover history an earlier windowed sync
+  // never imported, without disconnecting and reconnecting the account.
   app.post("/trakt/poll", async (request, reply) => {
     try {
+      const { full } = (request.body ?? {}) as { full?: boolean };
       const profileId = await getDefaultProfileId();
-      const history = await pollTraktHistory(request.log, profileId);
+      const history = await pollTraktHistory(request.log, profileId, { full: full === true });
       const watchlist = await syncTraktWatchlist(request.log, profileId);
       return reply.code(200).send({ ...history, watchlist });
     } catch (error) {

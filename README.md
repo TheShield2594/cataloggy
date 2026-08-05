@@ -261,7 +261,7 @@ Connect the account under **Settings → Stremio Watched Sync**. One connection 
 Trakt is supported but is not a system of record, and nothing depends on it:
 
 - **Metadata** comes from TMDB, never Trakt.
-- **Importing** your Trakt history is a one-time action (**Settings → Trakt Integration → Run Import**) and keeps working whether or not you leave the ongoing poll on.
+- **Importing** your Trakt history is a one-time action (**Settings → Trakt Integration → Run Full Import**) and keeps working whether or not you leave the ongoing poll on. It pulls your *entire* history — every play, however far back, each dated as Trakt recorded it — plus your watchlist, so stats and history go back as far as your Trakt account does. On a large library it can take several minutes; afterwards the scheduled poll only fetches what is new. `TRAKT_BACKFILL_MAX_PAGES` (default `500`, i.e. 50,000 plays) caps how far back a single import walks.
 - **Ongoing polling** (`TRAKT_POLL_INTERVAL_SEC`) is off-switchable: set it to `0`. With Stremio watched sync connected, the poll is no longer the only thing catching what you watch in Stremio.
 - **Removals on Trakt never remove anything locally** unless you opt in with `TRAKT_WATCHLIST_MIRROR_DELETES=true`. Even then, a Trakt watchlist that has gone entirely empty is treated as a fault and never mirrored — so a broken or discontinued Trakt cannot empty your library.
 - **Scrobbles and watchlist changes still push out to Trakt** when it's connected. That direction is a mirror: if Trakt stops answering, the pushes fail quietly and nothing local is affected.
