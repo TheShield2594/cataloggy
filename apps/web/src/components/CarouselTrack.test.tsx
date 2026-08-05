@@ -10,32 +10,52 @@ const renderTrack = (canScrollLeft: boolean, canScrollRight: boolean) =>
   );
 
 const fades = (container: HTMLElement) => container.querySelectorAll("[data-carousel-fade]");
+const fade = (container: HTMLElement, side: "left" | "right") =>
+  container.querySelector(`[data-carousel-fade="${side}"]`) as HTMLElement;
+const isVisible = (el: HTMLElement) => !el.className.includes("opacity-0");
 const track = (container: HTMLElement) => container.querySelector(".overflow-x-auto") as HTMLElement;
 
 describe("CarouselTrack", () => {
-  it("renders no edge fade when the row fits entirely on screen", () => {
+  it("hides both edge fades when the row fits entirely on screen", () => {
     const { container } = renderTrack(false, false);
-    expect(fades(container)).toHaveLength(0);
+    expect(isVisible(fade(container, "left"))).toBe(false);
+    expect(isVisible(fade(container, "right"))).toBe(false);
   });
 
-  it("fades only the right edge at the start of a scrollable row", () => {
+  it("keeps both fades mounted with an opacity transition, so they ease in and out rather than pop", () => {
+    const { container } = renderTrack(false, false);
+    const found = fades(container);
+    expect(found).toHaveLength(2);
+    for (const el of found) expect(el.className).toContain("transition-opacity");
+  });
+
+  it("shows only the right fade at the start of a scrollable row", () => {
     const { container } = renderTrack(false, true);
-    const found = fades(container);
-    expect(found).toHaveLength(1);
-    expect(found[0].getAttribute("data-carousel-fade")).toBe("right");
-    expect(found[0]).toHaveStyle({ background: "linear-gradient(to left, var(--bg-0), transparent)" });
+    expect(isVisible(fade(container, "left"))).toBe(false);
+    expect(isVisible(fade(container, "right"))).toBe(true);
+    expect(fade(container, "right")).toHaveStyle({ background: "linear-gradient(to left, var(--bg-0), transparent)" });
   });
 
-  it("fades only the left edge at the end of a scrollable row", () => {
+  it("shows only the left fade at the end of a scrollable row", () => {
     const { container } = renderTrack(true, false);
-    const found = fades(container);
-    expect(found).toHaveLength(1);
-    expect(found[0].getAttribute("data-carousel-fade")).toBe("left");
+    expect(isVisible(fade(container, "left"))).toBe(true);
+    expect(isVisible(fade(container, "right"))).toBe(false);
   });
 
-  it("fades both edges mid-scroll", () => {
+  it("shows both fades mid-scroll", () => {
     const { container } = renderTrack(true, true);
-    expect([...fades(container)].map((el) => el.getAttribute("data-carousel-fade"))).toEqual(["left", "right"]);
+    expect(isVisible(fade(container, "left"))).toBe(true);
+    expect(isVisible(fade(container, "right"))).toBe(true);
+  });
+
+  it("snaps flicks to card boundaries without hijacking mid-row scrolling", () => {
+    const { container } = renderTrack(true, true);
+    const el = track(container);
+    // proximity, not mandatory: only a flick that ends near a boundary settles
+    // on it. snap-start rides on the children, where snap alignment must live.
+    expect(el.className).toContain("snap-x");
+    expect(el.className).toContain("snap-proximity");
+    expect(el.className).toContain("[&>*]:snap-start");
   });
 
   it("keeps the fades out of the accessibility tree and out of the way of clicks", () => {

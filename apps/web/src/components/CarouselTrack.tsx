@@ -21,6 +21,16 @@ import type { ReactNode } from "react";
  *    `overflow-x: auto` clips vertically as well as horizontally. 8px covers
  *    every decoration in play — the 4px `card-lift` translate, the ~2px a
  *    `scale-[1.03]` poster gains, and a 2px ring at a 2px offset.
+ *
+ * Both fades stay mounted and toggle opacity instead of mounting on demand —
+ * reaching an end of the row eases the fade out over 300ms rather than
+ * blinking it away on the frame the scroll position crosses the threshold.
+ *
+ * The track snaps with `snap-proximity` (via `snap-start` on each child):
+ * a flick that ends near a card boundary settles on it instead of stopping
+ * mid-card, while `proximity` — unlike `mandatory` — leaves free scrolling
+ * through the middle of a long row alone. `scroll-px-8` doubles as the snap
+ * padding, so a snapped card lands clear of the fade.
  */
 export function CarouselTrack({
   scrollRef,
@@ -43,22 +53,22 @@ export function CarouselTrack({
     <div className="relative -m-2">
       <div
         ref={scrollRef}
-        className={`flex overflow-x-auto scroll-smooth scroll-px-8 scrollbar-hide p-2 ${className}`}
+        className={`flex overflow-x-auto scroll-smooth scroll-px-8 snap-x snap-proximity [&>*]:snap-start scrollbar-hide p-2 ${className}`}
       >
         {children}
       </div>
-      {canScrollLeft && <EdgeFade side="left" color={fadeColor} />}
-      {canScrollRight && <EdgeFade side="right" color={fadeColor} />}
+      <EdgeFade side="left" color={fadeColor} visible={canScrollLeft} />
+      <EdgeFade side="right" color={fadeColor} visible={canScrollRight} />
     </div>
   );
 }
 
-function EdgeFade({ side, color }: { side: "left" | "right"; color: string }) {
+function EdgeFade({ side, color, visible }: { side: "left" | "right"; color: string; visible: boolean }) {
   return (
     <span
       aria-hidden="true"
       data-carousel-fade={side}
-      className={`pointer-events-none absolute inset-y-0 w-8 ${side === "left" ? "left-0" : "right-0"}`}
+      className={`pointer-events-none absolute inset-y-0 w-8 transition-opacity duration-300 ${side === "left" ? "left-0" : "right-0"} ${visible ? "opacity-100" : "opacity-0"}`}
       style={{ background: `linear-gradient(to ${side === "left" ? "right" : "left"}, ${color}, transparent)` }}
     />
   );
