@@ -214,9 +214,14 @@ export function HistoryPage() {
           replacing the page: switching filters now refetches, and a failed
           fetch used to take the filter pills with it, leaving no way back. */}
       {loading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="skeleton h-16 rounded-xl" />
+        // Two grouped panels rather than eight loose bars, so the shape that
+        // arrives is the shape that was being waited for.
+        <div className="space-y-6">
+          {[4, 4].map((rows, g) => (
+            <div key={g}>
+              <div className="skeleton mb-2 h-3 w-24 rounded" />
+              <div className="skeleton rounded-2xl" style={{ height: `${rows * 4.25}rem` }} />
+            </div>
           ))}
         </div>
       ) : error && events.length === 0 ? (
@@ -244,22 +249,44 @@ export function HistoryPage() {
       ) : (
         <div className="space-y-6">
           {groups.map((group) => (
-            <div key={`${group.label}-${group.events[0].id}`} className="space-y-2">
-              <h2 className={KICKER} style={{ color: "var(--text-mute)" }}>
+            <div key={`${group.label}-${group.events[0].id}`}>
+              <h2 className={`mb-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
                 {group.label}
               </h2>
-              {group.events.map((event) => (
+              {/* One surface per date group, with hairlines between the rows.
+                  Every row used to be its own bordered, rounded card with a gap
+                  to the next, so a normal amount of history stacked 25+ outlined
+                  containers down the page and the dominant visual element was
+                  border rather than content. The date grouping was already doing
+                  the work of making this scannable; it just needed to own the
+                  surface too. */}
+              <div
+                className="glass-panel overflow-hidden rounded-2xl"
+                style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
+              >
+              {group.events.map((event, i) => (
                 <div
                   key={event.id}
                   role="button"
                   tabIndex={0}
                   onClick={() => setSelectedItem(toSearchResult(event))}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedItem(toSearchResult(event)); } }}
-                  className="glass-row group flex cursor-pointer items-center gap-3 rounded-xl p-3 transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
-                  style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
+                  // Not .glass-row: the group container is the .glass-panel now,
+                  // and a row inside it would stack a second blurred layer per
+                  // row and re-tint each one with `!important` — putting the
+                  // wall of separate surfaces back on the Glass theme. Its only
+                  // other job was restoring the hover answer that an inline
+                  // `background` used to beat, and there is no longer one here.
+                  className="group flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-claw-400"
+                  style={i > 0 ? { borderTop: "1px solid var(--border)" } : undefined}
                 >
+                  {/* A 2:3 box, so a poster fills it instead of being cropped to
+                      a square through its middle — the old 48px square showed a
+                      band across the artwork that identified nothing. 40x60 is
+                      as small as a poster can be and still be recognisable, and
+                      it keeps the row close to the height it had. */}
                   <div
-                    className="flex h-12 w-12 flex-none items-center justify-center overflow-hidden rounded-lg"
+                    className="flex aspect-poster w-10 flex-none items-center justify-center overflow-hidden rounded-lg"
                     style={{ background: "var(--surface-strong)" }}
                   >
                     {event.poster ? (
@@ -300,6 +327,7 @@ export function HistoryPage() {
                   </button>
                 </div>
               ))}
+              </div>
             </div>
           ))}
         </div>
