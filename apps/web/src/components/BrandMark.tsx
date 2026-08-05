@@ -28,3 +28,43 @@ export function BrandMark({ className, title }: { className?: string; title?: st
     </svg>
   );
 }
+
+/**
+ * The wordmark's type, wherever it sits beside the mark.
+ *
+ * Heavier and tighter than anything else in the app on purpose: at the UI's own
+ * `font-bold` and default tracking, "Cataloggy" is set identically to a page
+ * heading like "Games" or "Calendar", and the eye reads it as one more label
+ * rather than as the product's name. 800 with tracking pulled in is the smallest
+ * change that makes it a wordmark. Size stays with the caller — it ranges from
+ * the 16px sidebar rail to the 30px first-run splash.
+ */
+export const BRAND_WORDMARK = "font-extrabold tracking-tight";
+
+/** Carried over from the old logo art, which had it set under the name. */
+const TAGLINE = "Track your movies & shows";
+
+/**
+ * The stacked lockup, for the two screens that are nothing but brand: first run
+ * and the profile picker. Centred, mark above the name, tagline underneath.
+ *
+ * The tagline is doing structural work as much as it is saying anything — it
+ * gives the name a base to sit on, so a tall mark over a single short word
+ * stops reading as two things that happen to be near each other.
+ */
+export function BrandLockup() {
+  return (
+    <div className="flex flex-col items-center text-center">
+      <BrandMark className="h-16 w-16" />
+      <span className={`mt-3 text-3xl ${BRAND_WORDMARK}`} style={{ color: "var(--text)" }}>
+        Cataloggy
+      </span>
+      <span
+        className="mt-1.5 text-2xs font-semibold uppercase tracking-[0.2em]"
+        style={{ color: "var(--text-mute)" }}
+      >
+        {TAGLINE}
+      </span>
+    </div>
+  );
+}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router";
 import { BarChart3, CalendarDays, Clapperboard, Gamepad2, History, Pin, PinOff, Search, List, Settings, User } from "lucide-react";
 import { Profile } from "../api";
-import { BrandMark } from "./BrandMark";
+import { BRAND_WORDMARK, BrandMark } from "./BrandMark";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { prefetchRoute } from "../utils/routePrefetch";
 
@@ -131,7 +131,7 @@ export function Sidebar({
         <div className="flex items-center gap-2.5 px-4 pb-5" style={{ color: "var(--text)" }}>
           <BrandMark className="h-8 w-8 flex-none" />
           <span
-            className="whitespace-nowrap text-base font-bold transition-opacity"
+            className={`whitespace-nowrap text-base transition-opacity ${BRAND_WORDMARK}`}
             style={{ opacity: expanded ? 1 : 0 }}
           >
             Cataloggy

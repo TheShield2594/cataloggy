@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { AlertCircle, ArrowRight, Loader2, Lock, Plus, X } from "lucide-react";
 import { api, ApiError, Profile, runtimeConfig } from "../api";
-import { BrandMark } from "../components/BrandMark";
+import { BRAND_WORDMARK, BrandLockup, BrandMark } from "../components/BrandMark";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useScrollLock } from "../hooks/useScrollLock";
@@ -31,8 +31,8 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
       >
         <div ref={dialogRef} tabIndex={-1} className="w-full max-w-md space-y-6" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-center gap-2.5">
-            <BrandMark className="h-12 w-12 flex-none" />
-            <span className="text-2xl font-bold" style={{ color: "var(--text)" }}>Cataloggy</span>
+            <BrandMark className="h-10 w-10 flex-none" />
+            <span className={`text-2xl ${BRAND_WORDMARK}`} style={{ color: "var(--text)" }}>Cataloggy</span>
           </div>
 
           <div className="relative rounded-2xl border p-6 shadow-sm" style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}>
@@ -55,10 +55,7 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
   return (
     <div className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-md space-y-6">
-        <div className="flex items-center justify-center gap-2.5">
-          <BrandMark className="h-12 w-12 flex-none" />
-          <span className="text-2xl font-bold" style={{ color: "var(--text)" }}>Cataloggy</span>
-        </div>
+        <BrandLockup />
 
         <div className="rounded-2xl border p-6 shadow-sm" style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}>
           {children}

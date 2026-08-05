@@ -3,7 +3,7 @@ import { Link, Route, Routes, useLocation } from "react-router";
 import { Search, User } from "lucide-react";
 import { api, Profile, runtimeConfig } from "./api";
 import { useCommandPalette } from "./hooks/useCommandPalette";
-import { BrandMark } from "./components/BrandMark";
+import { BRAND_WORDMARK, BrandMark } from "./components/BrandMark";
 import { GhostLoader } from "./components/GhostLoader";
 import { InstallButton } from "./components/InstallButton";
 import { MobileTabBar } from "./components/MobileTabBar";
@@ -235,7 +235,7 @@ function AppShell({
         style={{ borderBottom: "1px solid var(--border)", backgroundColor: "color-mix(in srgb, var(--bg-0) 90%, transparent)" }}
       >
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-6 py-3">
-          <Link to="/" className="flex items-center gap-2.5 text-lg font-bold sm:hidden" style={{ color: "var(--text)" }}>
+          <Link to="/" className={`flex items-center gap-2.5 text-lg sm:hidden ${BRAND_WORDMARK}`} style={{ color: "var(--text)" }}>
             <BrandMark className="h-8 w-8 flex-none" />
             <span>Cataloggy</span>
           </Link>

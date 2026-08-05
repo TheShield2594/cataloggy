@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Check, Eye, EyeOff, Loader2, AlertCircle, ArrowLeft, ArrowRight } from "lucide-react";
 import { api, ApiError, runtimeConfig } from "../api";
-import { BrandMark } from "../components/BrandMark";
+import { BrandLockup } from "../components/BrandMark";
 import { StatusBadge } from "../components/settings/StatusBadge";
 import { TraktSettings } from "../components/settings/TraktSettings";
 
@@ -37,10 +37,7 @@ function WizardShell({ step, children }: { step: Step; children: React.ReactNode
   return (
     <div className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-md space-y-6">
-        <div className="flex items-center justify-center gap-2.5">
-          <BrandMark className="h-12 w-12 flex-none" />
-          <span className="text-2xl font-bold">Cataloggy</span>
-        </div>
+        <BrandLockup />
 
         {/* The bars alone say nothing to a screen reader and give no sense of
             how much is left to anyone else, so the count carries the meaning
