@@ -1,16 +1,25 @@
 #!/usr/bin/env node
 // Renders dist/serve.json (the config `serve` reads for its response headers)
 // from serve.template.json, filling in a `connect-src` scoped to the origins
-// this container was actually configured to talk to.
+// this container was actually configured to talk to, and a `script-src` that
+// names the built page's inline script by hash.
 //
 // Run from docker-entrypoint.sh on every container start, alongside the
 // dist/config.js write — both exist because VITE_* values are baked in at image
-// build time, which is no use to a self-hoster configuring via .env.
+// build time, which is no use to a self-hoster configuring via .env. The
+// script-src hashes are here for a related reason: they describe the built
+// HTML, which the template cannot know either.
 import { readFileSync, writeFileSync } from "node:fs";
-import { buildConnectSrc, renderServeConfig } from "./csp.mjs";
+import { dirname, resolve } from "node:path";
+import { buildConnectSrc, buildScriptSrc, renderServeConfig } from "./csp.mjs";
 
-const [templatePath = "/app/serve.template.json", outputPath = "/app/dist/serve.json"] =
-  process.argv.slice(2);
+const [
+  templatePath = "/app/serve.template.json",
+  outputPath = "/app/dist/serve.json",
+  // The page whose inline scripts get hashed — a sibling of the output by
+  // default, since both live in dist/.
+  htmlPath = resolve(dirname(outputPath), "index.html"),
+] = process.argv.slice(2);
 
 const connectSrc = buildConnectSrc({
   apiBase: process.env.VITE_API_BASE,
@@ -19,6 +28,21 @@ const connectSrc = buildConnectSrc({
   extra: process.env.CSP_CONNECT_SRC_EXTRA,
 });
 
-writeFileSync(outputPath, renderServeConfig(readFileSync(templatePath, "utf8"), connectSrc));
+// A missing index.html is not worth refusing to start over: the container would
+// have nothing to serve anyway, and the fallback — 'self' with no hashes — is
+// exactly the policy that shipped before hashing existed.
+let html = "";
+try {
+  html = readFileSync(htmlPath, "utf8");
+} catch {
+  console.warn(`Could not read ${htmlPath}; script-src will allow no inline scripts`);
+}
+const scriptSrc = buildScriptSrc(html);
+
+writeFileSync(
+  outputPath,
+  renderServeConfig(readFileSync(templatePath, "utf8"), connectSrc, scriptSrc)
+);
 
 console.log(`Rendered ${outputPath} with connect-src ${connectSrc}`);
+console.log(`Rendered ${outputPath} with script-src ${scriptSrc}`);

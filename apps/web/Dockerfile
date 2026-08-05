@@ -24,6 +24,10 @@ COPY --from=build /app/apps/web/dist ./dist
 # a connect-src that depends on runtime env, so it cannot be baked in here.
 COPY apps/web/serve.template.json ./serve.template.json
 COPY apps/web/scripts/csp.mjs apps/web/scripts/render-serve-json.mjs ./scripts/
+# csp.mjs reads the artwork-CDN list from here — the same list the service
+# worker in dist/ was built against, so `connect-src` cannot fall behind what
+# the worker fetches. Keep the path: the import is relative to scripts/.
+COPY apps/web/src/image-cdn-hosts.mjs ./src/image-cdn-hosts.mjs
 COPY apps/web/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
