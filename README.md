@@ -68,7 +68,7 @@ cataloggy/
    - `CATALOGGY_API_BASE` (addon service) — internal URL the addon uses to call the API (e.g. `http://api:7000`). Only needs to change if you rename the `api` service or run it elsewhere.
    - `CATALOGGY_API_PUBLIC` (api service) — externally reachable URL for the API, used to build the Trakt OAuth redirect URI. Set this to the LAN IP or domain you actually use to reach the API.
    - `ADDON_PUBLIC_BASE` (addon service) — externally reachable URL for the addon, used when generating manifest/catalog URLs for clients like Apple TV.
-   - `CATALOGGY_WEB_PUBLIC` (api and addon services) — externally reachable URL for the web UI, used to build the "Configure" link Stremio shows on the addon's manifest (it redirects to the Settings page).
+   - `CATALOGGY_WEB_PUBLIC` (api and addon services) — externally reachable URL for the web UI, used to build the "Configure" link Stremio shows on the addon's manifest (it redirects to the Settings page), and the link a notification channel gives you to tap.
    - `VITE_ADDON_BASE` (web service) — externally reachable URL for the addon, used to build the manifest URL shown on the Settings page. Should match `ADDON_PUBLIC_BASE`.
 
 2. Start everything:
@@ -275,6 +275,37 @@ Trakt is supported but is not a system of record, and nothing depends on it:
 - **Scrobbles and watchlist changes still push out to Trakt** when it's connected. That direction is a mirror: if Trakt stops answering, the pushes fail quietly and nothing local is affected.
 
 Everything Cataloggy knows can be exported as a single JSON file (lists, watch history, series progress, ratings) — see [Export / import your data](#export--import-your-data).
+
+## Notifications
+
+Cataloggy can tell you when the next episode of something you're watching airs.
+Two ways to receive that, set up under **Settings → Notifications**:
+
+- **Browser push** — needs no other software, but has prerequisites a LAN
+  install often can't meet: browsers refuse service-worker push over plain
+  http, so `http://192.168.1.25:7002` won't do, and on iOS the site has to be
+  added to the home screen first.
+- **A notification channel** — one HTTP POST to something you already run, so
+  none of the above applies:
+  - **ntfy** — paste the full topic URL (`https://ntfy.sh/my-topic`, or your own
+    server). A token is only needed for a protected topic.
+  - **Gotify** — your server's URL plus an application token.
+  - **Discord** — a channel webhook URL.
+  - **Webhook** — any URL, which receives a JSON POST (`event`, `title`,
+    `message`, `url`, and the episode's details) — enough for Home Assistant,
+    Slack, n8n or a script of your own.
+
+Channels belong to a profile, so a household can point each one somewhere
+different, and a profile can have several. **Send a test notification** on a
+saved channel POSTs for real and reports what came back, rather than leaving you
+to find out at the next episode. Set `CATALOGGY_WEB_PUBLIC` if you want the
+notifications to link back into the app.
+
+A channel URL is checked the same way the AI provider endpoint is: http(s)
+only, never the cloud-metadata/link-local range, by DNS result as well as by
+name, and re-checked immediately before each send. LAN and loopback addresses
+are allowed, since that is the point. A channel that starts failing shows up
+under **Settings → Sync Status**.
 
 ## Nginx Proxy Manager Setup
 

@@ -264,6 +264,19 @@ export type StremioSyncSummary = {
   skipped: number;
 };
 
+export type NotificationChannelKind = "ntfy" | "gotify" | "discord" | "webhook";
+
+export type NotificationChannel = {
+  id: string;
+  kind: NotificationChannelKind;
+  name: string;
+  url: string;
+  /** The token itself is write-only — the API never sends it back. */
+  hasToken: boolean;
+  enabled: boolean;
+  createdAt: string;
+};
+
 export type PlaySignal = {
   id: string;
   type: "movie" | "episode";
@@ -1108,6 +1121,42 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ endpoint }),
     });
+  },
+  // Notification channels (ntfy, Gotify, Discord, generic webhook)
+  getNotificationChannels() {
+    return request<{ channels: NotificationChannel[] }>("/notifications/channels");
+  },
+  createNotificationChannel(payload: {
+    kind: NotificationChannelKind;
+    name?: string;
+    url: string;
+    token?: string;
+  }) {
+    return request<{ channel: NotificationChannel }>("/notifications/channels", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  // Omitting `token` keeps the stored one; an empty string clears it.
+  updateNotificationChannel(
+    id: string,
+    payload: { name?: string; url?: string; token?: string; enabled?: boolean }
+  ) {
+    return request<{ channel: NotificationChannel }>(`/notifications/channels/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteNotificationChannel(id: string) {
+    return request<{ deleted: boolean }>(`/notifications/channels/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  },
+  testNotificationChannel(id: string) {
+    return request<{ success: boolean; error?: string }>(
+      `/notifications/channels/${encodeURIComponent(id)}/test`,
+      { method: "POST", timeoutMs: 20000 }
+    );
   },
   // Profiles
   getProfiles() {

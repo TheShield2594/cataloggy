@@ -38,6 +38,13 @@ enum MetadataType {
   episode
 }
 
+enum NotificationChannelKind {
+  ntfy
+  gotify
+  discord
+  webhook
+}
+
 enum ScrobbleStatus {
   playing
   paused
@@ -56,6 +63,8 @@ model Profile {
   notifiedEpisodes  NotifiedEpisode[]
   scrobbleSessions  ScrobbleSession[]
   pushSubscriptions PushSubscription[]
+
+  notificationChannels NotificationChannel[]
   ratings           Rating[]
   tags              Tag[]
   checkIn           CheckIn?
@@ -187,6 +196,37 @@ model PushSubscription {
   endpoint  String   @unique
   p256dh    String
   auth      String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  profileId String  @db.Uuid
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+}
+
+// An outbound notification target that isn't the browser: ntfy, Gotify, a
+// Discord webhook, or any URL that accepts a JSON POST. Web push is the only
+// channel that needs VAPID keys, https and (on iOS) an installed home-screen
+// app, none of which a plain http://192.168.x.x deployment has — these are the
+// channels a self-hoster already has running for everything else.
+//
+// Per-profile like PushSubscription, so "whose upcoming episodes" has the same
+// answer for both and a household can point each profile at its own topic.
+model NotificationChannel {
+  id   String                  @id @default(uuid()) @db.Uuid
+  kind NotificationChannelKind
+  // User-supplied label, so several channels of the same kind stay tellable
+  // apart in Settings.
+  name String
+  // What this means depends on the kind: the topic URL for ntfy, the server's
+  // base URL for Gotify, the full webhook URL for Discord and generic
+  // webhooks. Validated against the SSRF rules on save and re-resolved before
+  // every send — see lib/ssrf.ts.
+  url  String
+  // Gotify application token, or an ntfy access token for a protected topic.
+  // Never returned by the API.
+  token     String?
+  enabled   Boolean  @default(true)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
 
   profileId String  @db.Uuid

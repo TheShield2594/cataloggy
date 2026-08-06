@@ -31,6 +31,7 @@ something on top of it.
   - [Stremio library](#stremio-library)
   - [Stremio add-on](#stremio-add-on)
   - [Push notifications](#push-notifications)
+  - [Notification channels](#notification-channels)
   - [Export and import](#export-and-import)
   - [Webhooks](#webhooks)
 
@@ -341,6 +342,29 @@ Catalog data also has plain-JSON equivalents used by the web UI: `/watchlist`,
 | `GET` | `/push/public-key` | VAPID public key. |
 | `POST` | `/push/subscribe` | `{ endpoint, keys: { p256dh, auth } }`. The endpoint must resolve to a real push service over https — including its DNS result — so a stolen API token can't turn the notification job into an SSRF proxy. |
 | `POST` | `/push/unsubscribe` | `{ endpoint }`. |
+
+### Notification channels
+
+Non-push notification targets, scoped to the calling profile: `ntfy`, `gotify`,
+`discord` and `webhook`. Unlike a push endpoint, these may point at a LAN or
+loopback address — reaching a self-hosted ntfy is the point — so the URL is held
+to the same rules as the AI provider endpoint instead: http(s) only, never the
+cloud-metadata/link-local range, checked by DNS as well as by name, and
+re-resolved immediately before each send. Redirects are refused, not followed.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/notifications/channels` | The profile's channels. The stored token is never returned — only `hasToken`. |
+| `POST` | `/notifications/channels` | `{ kind, url, name?, token?, enabled? }`. An ntfy URL must include its topic; Gotify requires a token. Ten channels per profile. |
+| `PATCH` | `/notifications/channels/:id` | `{ name?, url?, token?, enabled? }`. Omitting `token` keeps the stored one; `""` clears it. |
+| `DELETE` | `/notifications/channels/:id` | |
+| `POST` | `/notifications/channels/:id/test` | Sends a real test notification. Returns `{ success, error? }` — an upstream failure is a result, not a `500`, and the upstream body is never echoed back. |
+
+A generic `webhook` receives `{ event, title, message, url, data }`; for an
+upcoming episode, `data` carries `seriesImdbId`, `seriesName`, `season`,
+`episode` and `episodeName`. Links (`url`, and the tap target on ntfy, Gotify
+and Discord) are only included when `CATALOGGY_WEB_PUBLIC` tells the API where
+the web UI lives.
 
 ### Export and import
 

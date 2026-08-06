@@ -1,0 +1,271 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { FastifyInstance } from "fastify";
+import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
+
+const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
+const OTHER_PROFILE_ID = "22222222-2222-4222-8222-222222222222";
+
+const prismaMock = {
+  notificationChannel: {
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+    count: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    deleteMany: vi.fn(),
+  },
+};
+const sendToChannel = vi.fn();
+
+vi.mock("../lib/prisma.js", () => ({ prisma: prismaMock }));
+vi.mock("../lib/profile.js", () => ({
+  resolveProfile: async (request: { profileId?: string }) => {
+    request.profileId = PROFILE_ID;
+  },
+}));
+vi.mock("../lib/notification-channels.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/notification-channels.js")>()),
+  sendToChannel: (...args: unknown[]) => sendToChannel(...args),
+}));
+
+const buildApp = (): Promise<FastifyInstance> => buildRouteApp(() => import("./notifications.js"));
+
+const storedChannel = (over: Record<string, unknown> = {}) => ({
+  id: "channel-1",
+  kind: "ntfy",
+  name: "Phone",
+  url: "https://ntfy.sh/cataloggy",
+  token: null,
+  enabled: true,
+  createdAt: new Date("2026-08-06T12:00:00Z"),
+  profileId: PROFILE_ID,
+  ...over,
+});
+
+describe("notification channel routes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaMock.notificationChannel.findMany.mockResolvedValue([storedChannel()]);
+    prismaMock.notificationChannel.findFirst.mockResolvedValue(storedChannel());
+    prismaMock.notificationChannel.count.mockResolvedValue(0);
+    prismaMock.notificationChannel.create.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => storedChannel(data)
+    );
+    prismaMock.notificationChannel.update.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => storedChannel(data)
+    );
+    prismaMock.notificationChannel.deleteMany.mockResolvedValue({ count: 1 });
+    sendToChannel.mockResolvedValue(undefined);
+  });
+
+  describe("GET /notifications/channels", () => {
+    it("lists the calling profile's channels without their tokens", async () => {
+      prismaMock.notificationChannel.findMany.mockResolvedValue([storedChannel({ token: "secret-token" })]);
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "GET", url: "/notifications/channels" });
+
+      expect(res.statusCode).toBe(200);
+      expect(prismaMock.notificationChannel.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { profileId: PROFILE_ID } })
+      );
+      // The token is a credential for someone else's server, and nothing in the
+      // UI needs it back — only whether one is set.
+      expect(res.json().channels[0]).toMatchObject({ hasToken: true });
+      expect(JSON.stringify(res.json())).not.toContain("secret-token");
+    });
+  });
+
+  describe("POST /notifications/channels", () => {
+    const create = (app: FastifyInstance, payload: Record<string, unknown>) =>
+      app.inject({ method: "POST", url: "/notifications/channels", payload });
+
+    it("stores a channel against the calling profile", async () => {
+      const app = await buildApp();
+
+      const res = await create(app, { kind: "ntfy", name: "Phone", url: "https://ntfy.sh/cataloggy" });
+
+      expect(res.statusCode).toBe(201);
+      expect(prismaMock.notificationChannel.create).toHaveBeenCalledWith({
+        data: {
+          kind: "ntfy",
+          name: "Phone",
+          url: "https://ntfy.sh/cataloggy",
+          token: null,
+          enabled: true,
+          profileId: PROFILE_ID,
+        },
+      });
+    });
+
+    it("allows a LAN target, which is the whole point of these channels", async () => {
+      const app = await buildApp();
+
+      const res = await create(app, { kind: "gotify", url: "http://192.168.1.25:8080", token: "app-token" });
+
+      expect(res.statusCode).toBe(201);
+    });
+
+    it("rejects an unknown kind", async () => {
+      const app = await buildApp();
+
+      const res = await create(app, { kind: "telegram", url: "https://example.com/x" });
+
+      expect(res.statusCode).toBe(400);
+      expect(prismaMock.notificationChannel.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects a URL that targets the metadata service or isn't http(s)", async () => {
+      const app = await buildApp();
+
+      // A background job POSTs to this URL, so it gets the same treatment as
+      // the AI provider endpoint and the push endpoint.
+      for (const url of ["http://169.254.169.254/latest/meta-data/", "file:///etc/passwd", "nope"]) {
+        expect((await create(app, { kind: "webhook", url })).statusCode).toBe(400);
+      }
+      expect(prismaMock.notificationChannel.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects an ntfy URL with no topic in it", async () => {
+      const app = await buildApp();
+
+      // Posting to the bare server would 404 at send time, hours later.
+      expect((await create(app, { kind: "ntfy", url: "https://ntfy.sh" })).statusCode).toBe(400);
+      expect((await create(app, { kind: "ntfy", url: "https://ntfy.sh/" })).statusCode).toBe(400);
+    });
+
+    it("requires a token for Gotify, which rejects an unauthenticated message", async () => {
+      const app = await buildApp();
+
+      const res = await create(app, { kind: "gotify", url: "http://gotify.lan" });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toMatch(/token is required/);
+    });
+
+    it("names an unnamed channel after its kind", async () => {
+      const app = await buildApp();
+
+      await create(app, { kind: "discord", url: "https://discord.com/api/webhooks/1/abc" });
+
+      expect(prismaMock.notificationChannel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ name: "Discord" }) })
+      );
+    });
+
+    it("refuses to add more than the per-profile ceiling", async () => {
+      prismaMock.notificationChannel.count.mockResolvedValue(10);
+      const app = await buildApp();
+
+      const res = await create(app, { kind: "ntfy", url: "https://ntfy.sh/topic" });
+
+      expect(res.statusCode).toBe(400);
+      expect(prismaMock.notificationChannel.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("PATCH /notifications/channels/:id", () => {
+    const patch = (app: FastifyInstance, payload: Record<string, unknown>) =>
+      app.inject({ method: "PATCH", url: "/notifications/channels/channel-1", payload });
+
+    it("scopes the lookup to the calling profile", async () => {
+      prismaMock.notificationChannel.findFirst.mockResolvedValue(null);
+      const app = await buildApp();
+
+      const res = await patch(app, { enabled: false });
+
+      expect(res.statusCode).toBe(404);
+      expect(prismaMock.notificationChannel.findFirst).toHaveBeenCalledWith({
+        where: { id: "channel-1", profileId: PROFILE_ID },
+      });
+      expect(prismaMock.notificationChannel.update).not.toHaveBeenCalled();
+    });
+
+    it("disables a channel without touching the rest of it", async () => {
+      const app = await buildApp();
+
+      const res = await patch(app, { enabled: false });
+
+      expect(res.statusCode).toBe(200);
+      expect(prismaMock.notificationChannel.update).toHaveBeenCalledWith({
+        where: { id: "channel-1" },
+        data: { url: "https://ntfy.sh/cataloggy", token: null, enabled: false },
+      });
+    });
+
+    it("keeps a stored token when the field is omitted, and clears it on an empty string", async () => {
+      prismaMock.notificationChannel.findFirst.mockResolvedValue(
+        storedChannel({ kind: "webhook", token: "existing" })
+      );
+      const app = await buildApp();
+
+      // The UI never sees the token, so it can't send it back — omitting the
+      // field has to mean "leave it alone".
+      await patch(app, { name: "Renamed" });
+      expect(prismaMock.notificationChannel.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ token: "existing", name: "Renamed" }) })
+      );
+
+      await patch(app, { token: "" });
+      expect(prismaMock.notificationChannel.update).toHaveBeenLastCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ token: null }) })
+      );
+    });
+
+    it("re-validates a changed URL against the same rules as a new one", async () => {
+      const app = await buildApp();
+
+      const res = await patch(app, { url: "http://169.254.169.254/x" });
+
+      expect(res.statusCode).toBe(400);
+      expect(prismaMock.notificationChannel.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("DELETE /notifications/channels/:id", () => {
+    it("deletes only the calling profile's channel", async () => {
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "DELETE", url: `/notifications/channels/${OTHER_PROFILE_ID}` });
+
+      expect(res.statusCode).toBe(200);
+      expect(prismaMock.notificationChannel.deleteMany).toHaveBeenCalledWith({
+        where: { id: OTHER_PROFILE_ID, profileId: PROFILE_ID },
+      });
+    });
+
+    it("404s when nothing matched", async () => {
+      prismaMock.notificationChannel.deleteMany.mockResolvedValue({ count: 0 });
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "DELETE", url: "/notifications/channels/channel-1" });
+
+      expect(res.statusCode).toBe(404);
+    });
+  });
+
+  describe("POST /notifications/channels/:id/test", () => {
+    it("sends a real notification through the channel", async () => {
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "POST", url: "/notifications/channels/channel-1/test" });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ success: true });
+      expect(sendToChannel).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "channel-1" }),
+        expect.objectContaining({ event: "test" })
+      );
+    });
+
+    it("reports a failure as a result rather than a 500", async () => {
+      sendToChannel.mockRejectedValue(new Error("Phone: HTTP 403"));
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "POST", url: "/notifications/channels/channel-1/test" });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ success: false, error: "Phone: HTTP 403" });
+    });
+  });
+});
