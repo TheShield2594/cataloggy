@@ -192,6 +192,71 @@ describe("CommandPalette", () => {
     }
   });
 
+  // Whatever aria-activedescendant names has to be in the document. Two ways it
+  // could stop being: a search that leaves the previous titles in state while it
+  // runs (the title rows come off screen, but the row count they contributed
+  // doesn't), and a list that empties under a highlight the arrow keys have
+  // already moved.
+  const activeDescendantIsRendered = (input: HTMLElement) => {
+    const id = input.getAttribute("aria-activedescendant");
+    if (id === null) return;
+    const target = document.getElementById(id);
+    expect(target).not.toBeNull();
+    expect(target).toHaveAttribute("role", "option");
+  };
+
+  it("never points at a row that isn't rendered", async () => {
+    const user = userEvent.setup();
+    search.mockImplementation(async (type) => (type === "movie" ? [result("Solaris")] : []));
+    renderPalette();
+
+    const input = screen.getByLabelText("Search everything");
+    await user.type(input, "se");
+    await screen.findByRole("option", { name: /Solaris/ });
+    activeDescendantIsRendered(input);
+
+    // A second search, held open. The Solaris row is gone from the screen while
+    // it runs, but it is still in `results`. One shared promise, so releasing it
+    // settles every call the debounce made rather than only the last.
+    let release: () => void = () => {};
+    const pending = new Promise<SearchResult[]>((r) => { release = () => r([]); });
+    search.mockImplementation((type) => (type === "movie" ? pending : Promise.resolve([])));
+    await user.type(input, "a");
+
+    // The visible line spells it with three dots; the live region uses an
+    // ellipsis, so an exact string picks out the one on screen.
+    await waitFor(() => {
+      expect(screen.getByText("Searching...")).toBeInTheDocument();
+      expect(screen.queryByRole("option", { name: /Solaris/ })).not.toBeInTheDocument();
+    });
+    activeDescendantIsRendered(input);
+
+    await user.keyboard("{ArrowDown}");
+    activeDescendantIsRendered(input);
+
+    release();
+    await waitFor(() => expect(screen.queryByText("Searching...")).not.toBeInTheDocument());
+    activeDescendantIsRendered(input);
+  });
+
+  it("points at nothing when there are no options to point at", async () => {
+    const user = userEvent.setup();
+    search.mockResolvedValue([]);
+    renderPalette();
+
+    const input = screen.getByLabelText("Search everything");
+    // A query no title and no action label matches, so the listbox is empty.
+    await user.type(input, "zzzz");
+
+    await waitFor(() => expect(screen.queryAllByRole("option")).toHaveLength(0));
+    expect(input).not.toHaveAttribute("aria-activedescendant");
+    expect(input).toHaveAttribute("aria-expanded", "false");
+
+    await user.keyboard("{ArrowDown}");
+    expect(input).not.toHaveAttribute("aria-activedescendant");
+    activeDescendantIsRendered(input);
+  });
+
   it("says search is unavailable instead of reporting no matches", async () => {
     const user = userEvent.setup();
     search.mockRejectedValue(new Error("TMDB is not configured"));

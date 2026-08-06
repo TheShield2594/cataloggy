@@ -126,7 +126,16 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     ? actions.filter((a) => a.label.toLowerCase().includes(query.toLowerCase()))
     : actions;
 
-  const totalItems = results.length + visibleActions.length;
+  /*
+   * The titles actually on screen, which is not the same as `results`: a newer
+   * search leaves the previous results in state while it is in flight, and the
+   * title group is not rendered during one. Everything that indexes rows —
+   * the option ids, the count the arrow keys clamp to, what Enter opens — has
+   * to agree with what was rendered, or `aria-activedescendant` names an
+   * element that isn't in the document.
+   */
+  const shownResults = searching ? [] : results;
+  const totalItems = shownResults.length + visibleActions.length;
 
   /*
    * The palette is a combobox over a list, and it was none of that in the
@@ -144,6 +153,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const listId = useId();
   const optionId = (index: number) => `${listId}-option-${index}`;
   const hasList = totalItems > 0;
+  // `activeIndex` is only clamped when an arrow key moves it, so a list that
+  // shrinks underneath it can leave it past the end until the next keypress.
+  const activeOptionId = hasList && activeIndex < totalItems ? optionId(activeIndex) : undefined;
 
   // Empty until a query has been typed — an announcement on open would be
   // "10 commands" before the user has asked anything.
@@ -166,11 +178,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       setActiveIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (activeIndex < results.length) {
-        const r = results[activeIndex];
+      if (activeIndex < shownResults.length) {
+        const r = shownResults[activeIndex];
         if (r) openDetail(r);
       } else {
-        const action = visibleActions[activeIndex - results.length];
+        const action = visibleActions[activeIndex - shownResults.length];
         if (action) action.run();
         else if (query.trim()) goToSearch(query);
       }
@@ -238,7 +250,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             role="combobox"
             aria-expanded={hasList}
             aria-controls={hasList ? listId : undefined}
-            aria-activedescendant={hasList ? optionId(activeIndex) : undefined}
+            aria-activedescendant={activeOptionId}
             aria-autocomplete="list"
           />
           <kbd
@@ -271,12 +283,12 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           )}
 
           <div id={listId} role="listbox" aria-label="Suggestions">
-            {!searching && results.length > 0 && (
+            {shownResults.length > 0 && (
               <div className="px-2 pb-2" role="group" aria-label="Titles">
                 <p aria-hidden="true" className={`px-2 pb-1 ${MICRO_LABEL}`} style={{ color: "var(--text-mute)" }}>
                   Titles
                 </p>
-                {results.map((r, i) => (
+                {shownResults.map((r, i) => (
                   <button
                     key={r.imdbId}
                     id={optionId(i)}
@@ -317,7 +329,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                 </p>
               )}
               {visibleActions.map((action, i) => {
-                const idx = results.length + i;
+                const idx = shownResults.length + i;
                 return (
                   <button
                     key={action.id}

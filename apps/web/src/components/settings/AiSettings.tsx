@@ -535,25 +535,39 @@ export function AiSettings() {
               background: "var(--bg-1)",
             }}
             spellCheck={false}
+            aria-invalid={advancedJsonError ? true : undefined}
+            aria-describedby={advancedJsonError ? "ai-advanced-json-error" : undefined}
           />
           {advancedJsonError && (
-            <p role="alert" className="mt-1 text-xs text-danger">{advancedJsonError}</p>
+            <p id="ai-advanced-json-error" role="alert" className="mt-1 text-xs text-danger">{advancedJsonError}</p>
           )}
         </div>
       )}
 
-      {testStatus && (
-        <p
-          className={`flex items-center gap-2 text-sm ${testStatus === "ok" ? "text-success" : "text-danger"}`}
-        >
-          {testStatus === "ok" ? (
-            <Check size={14} />
-          ) : (
-            <AlertCircle size={14} />
-          )}
-          {testMessage}
-        </p>
-      )}
+      {/* The result of a connection test the user asked for, and until now it
+          arrived silently. Kept mounted rather than rendered under `testStatus`
+          so the region exists before it has anything to say — a live region
+          inserted together with its text is announced unreliably. Empty it has
+          no children and so no height.
+
+          A failure is assertive, a success polite: one of them means the thing
+          the user just tried did not work. */}
+      <p
+        role={testStatus === "error" ? "alert" : "status"}
+        aria-live={testStatus === "error" ? "assertive" : "polite"}
+        className={`flex items-center gap-2 text-sm ${testStatus === "ok" ? "text-success" : "text-danger"}`}
+      >
+        {testStatus && (
+          <>
+            {testStatus === "ok" ? (
+              <Check aria-hidden="true" size={14} />
+            ) : (
+              <AlertCircle aria-hidden="true" size={14} />
+            )}
+            {testMessage}
+          </>
+        )}
+      </p>
 
       <div className="flex flex-wrap gap-2">
         <button

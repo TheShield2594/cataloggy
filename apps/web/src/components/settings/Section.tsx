@@ -101,9 +101,12 @@ export function Section({
           the outline, and a button inside a heading keeps its own role. */}
       <h2 className="m-0">
         {alwaysOpen ? (
-          <div id={headerId} className="flex w-full items-center gap-3 px-5 py-[1.125rem]">
+          // A span, not a div: a heading's content model is phrasing content,
+          // and the button in the other branch already qualifies. `flex` comes
+          // from the class either way, so this renders identically.
+          <span id={headerId} className="flex w-full items-center gap-3 px-5 py-[1.125rem]">
             {header}
-          </div>
+          </span>
         ) : (
           <button
             id={headerId}
