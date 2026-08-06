@@ -140,7 +140,7 @@ function TokenStep({ onVerified }: { onVerified: () => void }) {
         </button>
       </div>
       {error && (
-        <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>
+        <p role="alert" className="flex items-center gap-2 text-sm text-danger"><AlertCircle size={16} /> {error}</p>
       )}
       <button
         type="submit"
@@ -205,7 +205,7 @@ function DoneStep({ onFinish, onBack }: { onFinish: () => void; onBack: () => vo
   return (
     <div className="space-y-4 text-center">
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/20">
-        <Check className="h-7 w-7 text-emerald-600" />
+        <Check className="h-7 w-7 text-success" />
       </div>
       <div>
         <h1 className={SECTION_TITLE}>You're all set</h1>

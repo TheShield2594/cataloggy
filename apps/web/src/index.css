@@ -12,9 +12,21 @@
  *                 themes need it darker than --accent, dark themes lighter.
  *
  * Every pairing below is measured at >= 4.5:1 (WCAG AA, normal text) against
- * --bg-0, --bg-1 and accent tints up to bg-claw-500/20. --accent-strong-rgb —
- * the `hover:bg-claw-600` fill — is tuned to stay above 4.5:1 against
- * --on-accent too, so hover states don't quietly drop below the threshold.
+ * --bg-0, --bg-1, the --surface / --surface-strong tints, and accent tints up
+ * to bg-claw-500/20. --accent-strong-rgb — the `hover:bg-claw-600` fill — is
+ * tuned to stay above 4.5:1 against --on-accent too, so hover states don't
+ * quietly drop below the threshold.
+ *
+ * Status colours are the --status-* trio further down, reachable from Tailwind
+ * as text-danger / text-success / text-warning. Everything that used a fixed
+ * ramp step instead now reads from them: `text-rose-600` measured 4.20:1 on
+ * light and 4.29:1 on glass, `text-emerald-600` 3.39:1 on light, and
+ * `text-amber-400` 1.37:1 on the Stats chips.
+ *
+ * --focus-ring answers SC 1.4.11 rather than 1.4.3: a focus indicator has to
+ * reach 3:1 against whatever it is drawn over, and the light theme's --accent-2
+ * managed 1.72:1 against its own surfaces. Focus rings take this token instead
+ * of an accent.
  */
 
 :root,
@@ -31,8 +43,8 @@
   --border: rgba(28,24,20,0.08);
   --border-strong: rgba(28,24,20,0.14);
   --text: #1c1814;
-  --text-dim: #6f6457;
-  --text-mute: #73685b;
+  --text-dim: #635849;
+  --text-mute: #6c6155;
   --accent: #d97742;
   --accent-2: #e89163;
   --accent-3: #10b981;
@@ -45,6 +57,7 @@
   --on-accent: rgb(var(--on-accent-rgb));
   --accent-text-rgb: 149 72 30;
   --accent-text: rgb(var(--accent-text-rgb));
+  --focus-ring: #b8501f;
 }
 
 [data-theme="dark"] {
@@ -61,7 +74,7 @@
   --border-strong: rgba(250,245,240,0.18);
   --text: #faf5f0;
   --text-dim: #b5ab9a;
-  --text-mute: #8f8475;
+  --text-mute: #958b7c;
   --accent: #e89163;
   --accent-2: #f0ad88;
   --accent-3: #34d399;
@@ -74,6 +87,7 @@
   --on-accent: rgb(var(--on-accent-rgb));
   --accent-text-rgb: 232 145 99;
   --accent-text: rgb(var(--accent-text-rgb));
+  --focus-ring: #f0ad88;
 }
 
 [data-theme="glass"] {
@@ -90,7 +104,7 @@
   --border-strong: rgba(255,255,255,0.20);
   --text: #f5f6f8;
   --text-dim: #b7bcc6;
-  --text-mute: #80869a;
+  --text-mute: #8e94a5;
   --accent: #0a84ff;
   --accent-2: #5e9eff;
   --accent-3: #30d158;
@@ -116,6 +130,7 @@
   --glass-tint-row-hover: rgba(38,44,58,0.72);
   --glass-tint-row-hover-flat: rgba(38,44,58,0.94);
   --glass-tint-panel-flat: rgba(17,20,27,0.86);
+  --focus-ring: #5e9eff;
 }
 
 [data-theme="midnight"] {
@@ -132,7 +147,7 @@
   --border-strong: rgba(244,241,234,0.16);
   --text: #f4f1ea;
   --text-dim: #a3a6b8;
-  --text-mute: #797c90;
+  --text-mute: #878a9c;
   --accent: #e02f44;
   --accent-2: #ff5a6e;
   --accent-3: #f0c419;
@@ -145,6 +160,7 @@
   --on-accent: rgb(var(--on-accent-rgb));
   --accent-text-rgb: 230 89 106;
   --accent-text: rgb(var(--accent-text-rgb));
+  --focus-ring: #ff5a6e;
 }
 
 [data-theme="letterboxd"] {
@@ -161,7 +177,7 @@
   --border-strong: rgba(255,255,255,0.16);
   --text: #ffffff;
   --text-dim: #9ab;
-  --text-mute: #7b8b9c;
+  --text-mute: #909eac;
   --accent: #ff8000;
   --accent-2: #00e054;
   --accent-3: #40bcf4;
@@ -174,6 +190,7 @@
   --on-accent: rgb(var(--on-accent-rgb));
   --accent-text-rgb: 255 128 0;
   --accent-text: rgb(var(--accent-text-rgb));
+  --focus-ring: #00e054;
 }
 
 /*
@@ -272,13 +289,16 @@
  *
  * Only the text colour is a token. Fills and hairlines are mixed out of it
  * (see .status-chip), so a fill can never drift away from the text it sits
- * behind. Every value clears 4.5:1 against its themes' --bg-0 and --bg-1.
+ * behind. Every value clears 4.5:1 against its themes' --bg-0 and --bg-1, the
+ * --surface / --surface-strong tints, and the 10-20% chip fills these are read
+ * on — the light trio was measured against the two backgrounds only, and sat
+ * at 3.77-4.03:1 once the chip fill underneath it was counted.
  */
 :root,
 [data-theme="light"] {
-  --status-ok: #047857;
-  --status-bad: #be123c;
-  --status-warn: #b45309;
+  --status-ok: #036249;
+  --status-bad: #a80f34;
+  --status-warn: #96450a;
 }
 
 [data-theme="dark"],
@@ -326,6 +346,30 @@ html {
      page under the reader rather than just widening it. */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+
+  /*
+   * Keeps a control the browser has just scrolled to clear of the fixed chrome.
+   *
+   * Tab moves focus and the browser scrolls the new target barely into view —
+   * it has no idea the app has pinned a 76px header to the top and, below `sm`,
+   * a tab bar to the bottom. Tabbing down the mobile dashboard landed the
+   * carousel's "Scroll right" button at y=800 in an 844px viewport: entirely
+   * behind the tab bar, which is what SC 2.4.11 is about. Scroll padding is
+   * what tells the browser those bands are occupied.
+   *
+   * The header is 76px on every viewport. The tab bar is `sm:hidden` and sits
+   * on the safe-area inset, so the bottom padding is only claimed below that
+   * breakpoint — see the media query below.
+   */
+  scroll-padding-top: 5.5rem;
+  scroll-padding-bottom: 1rem;
+}
+
+@media (width < 40rem) {
+  html {
+    /* Tab bar (~4.25rem) + its safe-area inset + a little air. */
+    scroll-padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
 }
 
 html[data-display-mode="standalone"] {
@@ -528,6 +572,30 @@ body {
   }
 
   /*
+   * The focus indicator for the controls we repaint ourselves — checkbox,
+   * switch, select. They all set `appearance: none`, which takes the platform's
+   * focus treatment with it, so each has to draw its own.
+   *
+   * What they drew before was the accent at 0.35 alpha (0.15 for the select),
+   * which is a glow rather than an indicator: blended against its own
+   * background that measured 1.42:1 on the light theme and 1.16:1 on the
+   * select, against the 3:1 SC 1.4.11 asks of a focus indicator. `outline`
+   * rather than a box-shadow ring so it survives on a control that already
+   * carries a shadow, and `outline-offset` so the 2px gap doesn't need a
+   * separately themed offset colour the way Tailwind's ring does.
+   *
+   * --focus-ring is measured at >= 3:1 against every surface in every theme;
+   * see the note at the top of this file.
+   */
+  .checkbox-control:focus-visible,
+  .switch-control:focus-visible,
+  .select-control:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+
+  /*
    * Radius ranks. Three, matching the three elevation tiers, so a surface's
    * corner and its shadow agree about how big it is:
    *
@@ -596,11 +664,6 @@ body {
     border-color: rgb(var(--accent-rgb));
   }
 
-  .checkbox-control:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.35);
-  }
-
   .checkbox-control:disabled {
     opacity: 0.5;
     cursor: default;
@@ -665,11 +728,6 @@ body {
     border-color: rgb(var(--accent-rgb));
   }
 
-  .switch-control:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.35);
-  }
-
   .switch-control:disabled {
     opacity: 0.5;
     cursor: default;
@@ -705,9 +763,7 @@ body {
   }
 
   .select-control:focus-visible {
-    outline: none;
-    border-color: rgb(var(--accent-rgb));
-    box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.15);
+    border-color: var(--focus-ring);
   }
 
   .select-control:disabled {
@@ -750,7 +806,7 @@ body {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold;
     @apply transition-[color,background-color,border-color,box-shadow,transform] duration-base ease-in-out;
     @apply active:scale-[0.98];
-    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-visible:ring-offset-2;
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2;
     @apply disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
     --tw-ring-offset-color: var(--bg-0);
   }
@@ -795,7 +851,7 @@ body {
      matches, so the ring doesn't say "accent" on a button that means danger. */
   .btn-danger {
     @apply bg-rose-600 text-white hover:bg-rose-700;
-    @apply focus-visible:ring-rose-400;
+    @apply focus-visible:ring-danger;
   }
 
   /* The settled state of a save button, not a rank of its own: the settings

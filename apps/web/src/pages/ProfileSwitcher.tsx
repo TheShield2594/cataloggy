@@ -41,7 +41,7 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
               style={{ color: "var(--text-mute)" }}
             >
               <X className="h-4 w-4" />
@@ -133,7 +133,7 @@ function CreateProfileForm({
         style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
       />
       {error && (
-        <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>
+        <p role="alert" className="flex items-center gap-2 text-sm text-danger"><AlertCircle size={16} /> {error}</p>
       )}
       <div className="flex gap-2">
         {onCancel && (
@@ -208,7 +208,7 @@ function PinPrompt({
         style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
       />
       {error && (
-        <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>
+        <p role="alert" className="flex items-center gap-2 text-sm text-danger"><AlertCircle size={16} /> {error}</p>
       )}
       <div className="flex gap-2">
         <button
@@ -351,7 +351,7 @@ export function ProfileSwitcher({ onSelected, onClose }: { onSelected: (profile:
     return (
       <Shell onClose={onClose}>
         <Heading className="sr-only">Profiles</Heading>
-        <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>
+        <p role="alert" className="flex items-center gap-2 text-sm text-danger"><AlertCircle size={16} /> {error}</p>
       </Shell>
     );
   }

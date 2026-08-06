@@ -105,9 +105,9 @@ function ToastContainer({
           style={{ borderLeftWidth: "4px", background: "var(--bg-1)" }}
         >
           {toast.type === "success" ? (
-            <Check aria-hidden="true" className="h-5 w-5 flex-none text-emerald-500" />
+            <Check aria-hidden="true" className="h-5 w-5 flex-none text-success" />
           ) : toast.type === "error" ? (
-            <X aria-hidden="true" className="h-5 w-5 flex-none text-rose-500" />
+            <X aria-hidden="true" className="h-5 w-5 flex-none text-danger" />
           ) : (
             <Heart aria-hidden="true" className="h-5 w-5 flex-none text-claw-text" />
           )}
@@ -127,7 +127,7 @@ function ToastContainer({
                 toast.action?.onAction();
                 onDismiss(toast.id);
               }}
-              className="ml-1 flex flex-none items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-claw-text transition-colors hover:bg-claw-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+              className="ml-1 flex flex-none items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-claw-text transition-colors hover:bg-claw-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
             >
               <Undo2 aria-hidden="true" className="h-3.5 w-3.5" />
               {toast.action.label}

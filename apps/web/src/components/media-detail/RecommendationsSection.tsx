@@ -79,7 +79,7 @@ export function RecommendationsSection({
             key={`${item.type}:${item.id}`}
             type="button"
             onClick={() => onSelect(item)}
-            className="group flex-none text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+            className="group flex-none text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
             style={{ width: "7rem" }}
             aria-label={`View details for ${item.name}`}
           >

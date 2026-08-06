@@ -90,7 +90,7 @@ export function CheckInModal({
               />
             </div>
           </div>
-          {error && <p className="text-xs text-rose-400">{error}</p>}
+          {error && <p role="alert" className="text-xs text-danger">{error}</p>}
           <div className="flex gap-3 pt-1">
             <button
               type="button" onClick={requestClose}

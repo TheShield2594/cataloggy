@@ -87,7 +87,7 @@ export function ExternalRatings({
         {rtScore != null && (
           <div className="flex items-center gap-1.5">
             <RtLogo score={rtScore} />
-            <span className={`text-sm font-semibold ${rtScore >= 60 ? "text-green-600" : "text-rose-500"}`}>{rtScore}%</span>
+            <span className={`text-sm font-semibold ${rtScore >= 60 ? "text-success" : "text-danger"}`}>{rtScore}%</span>
           </div>
         )}
         {mcScore != null && (
@@ -188,9 +188,9 @@ export function StarRating({
         <p className="mt-1 text-2xs" style={{ color: "var(--text-mute)" }}>Click your current rating again to remove it.</p>
       )}
       {loadError && (
-        <p className="mt-1 flex items-center gap-2 text-xs text-rose-400">
+        <p role="alert" className="mt-1 flex items-center gap-2 text-xs text-danger">
           {loadError}
-          <button type="button" onClick={retryLoadRating} className="underline hover:text-rose-300">Retry</button>
+          <button type="button" onClick={retryLoadRating} className="underline underline-offset-2 hover:no-underline">Retry</button>
         </p>
       )}
     </div>

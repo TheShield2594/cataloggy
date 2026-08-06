@@ -45,7 +45,7 @@ export function JobStatusSettings() {
   }
 
   if (error) {
-    return <p className="text-sm text-rose-600">{error}</p>;
+    return <p role="alert" className="text-sm text-danger">{error}</p>;
   }
 
   if (failures.length === 0) {
@@ -68,7 +68,7 @@ export function JobStatusSettings() {
           style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}
         >
           <div className="flex items-center gap-2 font-semibold" style={{ color: "var(--text)" }}>
-            <AlertTriangle size={16} className="flex-none text-amber-500" />
+            <AlertTriangle size={16} className="flex-none text-warning" />
             {JOB_LABELS[failure.job] ?? failure.job}
             <span className="ml-auto text-xs font-normal" style={{ color: "var(--text-mute)" }}>
               {timeAgo(failure.failedAt)}

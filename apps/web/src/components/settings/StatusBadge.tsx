@@ -2,7 +2,7 @@ export function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
-        ok ? "bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/20" : "ring-1"
+        ok ? "bg-emerald-500/10 text-success ring-1 ring-emerald-500/20" : "ring-1"
       }`}
       style={ok ? undefined : { background: "var(--surface-strong)", color: "var(--text-mute)", boxShadow: "inset 0 0 0 1px var(--border-strong)" }}
     >

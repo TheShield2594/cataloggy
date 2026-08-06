@@ -124,7 +124,7 @@ export function ListsSection({
           onClick={() => void toggle(list)}
           disabled={pending[list.id]}
           aria-label={`Remove from ${list.name}`}
-          className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/20 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-success ring-1 ring-emerald-500/20 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
         >
           <Check className="h-3 w-3" />{list.name}
           <X className="h-3 w-3" />
@@ -177,7 +177,7 @@ export function ListsSection({
                   className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-[var(--surface)] disabled:opacity-50"
                 >
                   {already ? (
-                    <Check className="h-3.5 w-3.5 text-emerald-500" />
+                    <Check className="h-3.5 w-3.5 text-success" />
                   ) : (
                     <Plus className="h-3.5 w-3.5" style={{ color: "var(--text-mute)" }} />
                   )}

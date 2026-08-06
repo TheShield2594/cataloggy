@@ -69,9 +69,9 @@ function AddonManifestUrl({ profileName, multiProfile }: { profileName: string |
           onClick={copy}
           className={`flex-none inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-base ${
             copied
-              ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/20"
+              ? "bg-emerald-500/15 text-success ring-1 ring-emerald-500/20"
               : copyError
-                ? "bg-rose-500/15 text-rose-600 ring-1 ring-rose-500/20"
+                ? "bg-rose-500/15 text-danger ring-1 ring-rose-500/20"
                 : "hover:bg-[var(--surface-strong)] border"
           }`}
           style={!copied && !copyError ? { color: "var(--text-dim)", borderColor: "var(--border)", background: "var(--bg-0)" } : undefined}
@@ -236,7 +236,7 @@ export function AddonSettings() {
       >
         {saved ? <><Check size={16} /> Saved</> : saving ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : "Save Configuration"}
       </button>
-      {error && <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>}
+      {error && <p role="alert" className="flex items-center gap-2 text-sm text-danger"><AlertCircle size={16} /> {error}</p>}
     </div>
   );
 }

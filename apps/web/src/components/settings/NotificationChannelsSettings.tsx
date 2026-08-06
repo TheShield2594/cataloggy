@@ -187,7 +187,7 @@ export function NotificationChannelsSettings() {
           <Loader2 size={16} className="animate-spin" /> Loading channels...
         </div>
       ) : loadError ? (
-        <p className="flex items-center gap-2 text-sm text-rose-600">
+        <p role="alert" className="flex items-center gap-2 text-sm text-danger">
           <AlertCircle size={16} /> {loadError}
         </p>
       ) : channels.length === 0 ? (
@@ -238,7 +238,7 @@ export function NotificationChannelsSettings() {
                       type="button"
                       onClick={() => remove(channel)}
                       disabled={busyId === channel.id}
-                      className="rounded-lg p-1.5 text-rose-600 hover:bg-[var(--surface-strong)] disabled:opacity-50"
+                      className="rounded-lg p-1.5 text-danger hover:bg-[var(--surface-strong)] disabled:opacity-50"
                       title="Remove channel"
                       aria-label={`Remove ${channel.name}`}
                     >
@@ -251,7 +251,7 @@ export function NotificationChannelsSettings() {
                 </p>
                 {result && (
                   <p
-                    className={`mt-2 flex items-center gap-2 text-xs ${result.ok ? "text-emerald-600" : "text-rose-600"}`}
+                    className={`mt-2 flex items-center gap-2 text-xs ${result.ok ? "text-success" : "text-danger"}`}
                     role="status"
                   >
                     {result.ok ? <Check size={14} /> : <AlertCircle size={14} />} {result.message}
@@ -345,7 +345,7 @@ export function NotificationChannelsSettings() {
         </button>
 
         {addError && (
-          <p className="flex items-center gap-2 text-sm text-rose-600" role="alert">
+          <p className="flex items-center gap-2 text-sm text-danger" role="alert">
             <AlertCircle size={16} /> {addError}
           </p>
         )}

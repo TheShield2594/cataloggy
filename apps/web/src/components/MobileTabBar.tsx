@@ -40,7 +40,7 @@ const isItemActive = (item: NavItem, pathname: string) =>
   item.end ? pathname === item.to : pathname.startsWith(item.to);
 
 const TAB_CLASSES =
-  "relative flex min-w-0 flex-1 flex-col items-center gap-0.5 py-2.5 text-2xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset";
+  "relative flex min-w-0 flex-1 flex-col items-center gap-0.5 py-2.5 text-2xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset";
 
 const TAB_COUNT = PRIMARY_NAV_ITEMS.length + 1;
 
@@ -184,7 +184,7 @@ function MoreSheet({ pathname, onClose }: { pathname: string; onClose: () => voi
                   onTouchStart={() => prefetchRoute(item.to)}
                   onPointerEnter={() => prefetchRoute(item.to)}
                   aria-current={isActive ? "page" : undefined}
-                  className={`flex min-h-11 items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 ${isActive ? "text-claw-text" : ""}`}
+                  className={`flex min-h-11 items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${isActive ? "text-claw-text" : ""}`}
                   style={isActive ? { background: "var(--surface)" } : { color: "var(--text-dim)" }}
                 >
                   <Icon className="h-5 w-5 flex-none" />

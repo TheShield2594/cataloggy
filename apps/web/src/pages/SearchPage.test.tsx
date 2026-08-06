@@ -164,6 +164,27 @@ describe("SearchPage query handling", () => {
     expect(await screen.findByText(/no results found/i)).toBeInTheDocument();
   });
 
+  // The results swap under you as you type, and nothing moves focus when they
+  // do. Without a live region the outcome of a search is only discoverable by
+  // going to look for it.
+  it("announces the outcome of a search, not just the grid", async () => {
+    const user = userEvent.setup();
+    search.mockImplementation(async (type) => (type === "movie" ? [result("Solaris")] : []));
+    renderPage("/search?q=solaris");
+    expect(await screen.findByText("Solaris")).toBeInTheDocument();
+
+    const live = screen.getByRole("status", { name: /search status/i });
+    expect(live).toHaveAttribute("aria-live", "polite");
+    await waitFor(() => expect(live).toHaveTextContent(/showing 1 match/i));
+
+    // Still the same region afterwards — one that unmounts announces nothing.
+    search.mockResolvedValue([]);
+    await user.type(queryField(), "zzz");
+    await waitFor(() =>
+      expect(screen.getByRole("status", { name: /search status/i })).toHaveTextContent(/nothing matched/i)
+    );
+  });
+
   it("names the missing TMDB key instead of blaming the search term", async () => {
     search.mockRejectedValue(new Error("TMDB API key is not configured"));
     renderPage("/search?q=alien");

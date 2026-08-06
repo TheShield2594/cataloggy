@@ -67,6 +67,10 @@ function dateLabelFor(airDate: Date, today: Date): string {
 }
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+// The visible headers are abbreviated to fit seven columns on a phone. The
+// column header's accessible name doesn't have that constraint, and "Sun" read
+// aloud is a different word.
+const WEEKDAY_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 function entryKey(entry: CalendarEntry): string {
   return `${entry.seriesImdbId}-s${entry.season}e${entry.episode}`;
@@ -77,7 +81,7 @@ function EntryRow({ entry, onSelect }: { entry: CalendarEntry; onSelect: (entry:
     <button
       type="button"
       onClick={() => onSelect(entry)}
-      className="glass-row flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+      className="glass-row flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
       style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
     >
       <div className="h-16 w-11 flex-none overflow-hidden rounded-lg" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
@@ -305,7 +309,7 @@ export function CalendarPage() {
                 type="button"
                 onClick={() => setView(opt.key)}
                 aria-pressed={activeView === opt.key}
-                className="relative flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+                className="relative flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
                 style={activeView === opt.key ? { background: "var(--accent)", color: "var(--on-accent)" } : { color: "var(--text-dim)" }}
               >
                 <opt.icon className="h-3.5 w-3.5" />
@@ -317,7 +321,7 @@ export function CalendarPage() {
       </div>
 
       {error && (
-        <p className="rounded-xl bg-rose-500/5 border border-rose-500/20 px-4 py-3 text-rose-600 text-sm">{error}</p>
+        <p role="alert" className="rounded-xl bg-rose-500/5 border border-rose-500/20 px-4 py-3 text-danger text-sm">{error}</p>
       )}
 
       {activeView === "agenda" ? (
@@ -421,6 +425,14 @@ export function CalendarPage() {
             </p>
           )}
 
+          {/* The month grid below carries table roles rather than being a
+              <table>: it is a real grid of rows and columns, and without them a
+              screen reader met a stack of unrelated divs — the weekday strip
+              was seven labels for nothing, and a cell said "12" with no way to
+              find out which 12. Roles leave the CSS grid exactly as it is.
+              `role="table"` rather than `role="grid"` because a grid is a
+              composite widget that owes the user arrow-key cell navigation, and
+              this is a layout of links, not a spreadsheet. */}
           {monthOutOfRange ? (
             <div className="glass-panel rounded-2xl p-8 text-center" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
               <CalendarDays className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
@@ -429,22 +441,35 @@ export function CalendarPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid var(--border)" }}>
-              <div className="grid grid-cols-7" style={{ borderBottom: "1px solid var(--border)" }}>
-                {WEEKDAY_LABELS.map((label) => (
-                  <div key={label} className={`px-2 py-2 text-center ${MICRO_LABEL}`} style={{ color: "var(--text-mute)" }}>
-                    {label}
-                  </div>
-                ))}
+            <div
+              className="overflow-hidden rounded-2xl"
+              style={{ border: "1px solid var(--border)" }}
+              role={loading ? undefined : "table"}
+              aria-label={loading ? undefined : `Episodes airing in ${monthCursor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}`}
+            >
+              <div role={loading ? undefined : "rowgroup"} style={{ borderBottom: "1px solid var(--border)" }}>
+                <div className="grid grid-cols-7" role={loading ? undefined : "row"}>
+                  {WEEKDAY_LABELS.map((label, i) => (
+                    <div
+                      key={label}
+                      role={loading ? undefined : "columnheader"}
+                      aria-label={WEEKDAY_FULL[i]}
+                      className={`px-2 py-2 text-center ${MICRO_LABEL}`}
+                      style={{ color: "var(--text-mute)" }}
+                    >
+                      {label}
+                    </div>
+                  ))}
+                </div>
               </div>
               {loading ? (
                 <div className="p-4">
                   <div className="skeleton h-64 rounded-lg" />
                 </div>
               ) : (
-                <div>
+                <div role="rowgroup">
                   {monthWeeks.map((week, wi) => (
-                    <div key={wi} className="grid grid-cols-7" style={{ borderTop: wi > 0 ? "1px solid var(--border)" : undefined }}>
+                    <div key={wi} role="row" className="grid grid-cols-7" style={{ borderTop: wi > 0 ? "1px solid var(--border)" : undefined }}>
                       {week.map((day) => {
                         const inMonth = day.getMonth() === monthCursor.getMonth();
                         const isToday = startOfDay(day).getTime() === today.getTime();
@@ -452,6 +477,7 @@ export function CalendarPage() {
                         return (
                           <div
                             key={day.toISOString()}
+                            role="cell"
                             className="min-h-[6.5rem] p-1.5"
                             style={{
                               borderLeft: "1px solid var(--border)",
@@ -459,7 +485,16 @@ export function CalendarPage() {
                               opacity: inMonth ? 1 : 0.5,
                             }}
                           >
+                            {/* The visible number is the date within a grid
+                                that supplies the rest. Read on its own it is
+                                just "12", and "today" is carried by a fill
+                                colour — neither survives without this. */}
+                            <span className="sr-only">
+                              {day.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+                              {isToday ? " (today)" : ""}
+                            </span>
                             <span
+                              aria-hidden="true"
                               className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-2xs font-semibold ${isToday ? "bg-claw-500 text-claw-on" : ""}`}
                               style={isToday ? undefined : { color: "var(--text-mute)" }}
                             >
@@ -483,7 +518,7 @@ export function CalendarPage() {
                                   type="button"
                                   onClick={() => setOpenDay(day)}
                                   aria-label={`Show all ${dayEntries.length} episodes on ${day.toLocaleDateString(undefined, { month: "long", day: "numeric" })}`}
-                                  className="block w-full rounded px-1 py-0.5 text-left text-2xs font-medium underline-offset-2 transition-colors hover:bg-[var(--surface-strong)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400"
+                                  className="block w-full rounded px-1 py-0.5 text-left text-2xs font-medium underline-offset-2 transition-colors hover:bg-[var(--surface-strong)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                                   style={{ color: "var(--text-mute)" }}
                                 >
                                   +{dayEntries.length - MONTH_CELL_ENTRIES} more

@@ -120,7 +120,7 @@ describe("CommandPalette", () => {
 
     await user.type(screen.getByLabelText("Search everything"), "settings");
 
-    expect(screen.getByRole("button", { name: /go to settings/i })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /go to settings/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /go to lists/i })).not.toBeInTheDocument();
   });
 
@@ -130,7 +130,7 @@ describe("CommandPalette", () => {
     renderPalette();
 
     await user.type(screen.getByLabelText("Search everything"), "sol");
-    await user.click(await screen.findByRole("button", { name: /Solaris/ }));
+    await user.click(await screen.findByRole("option", { name: /Solaris/ }));
 
     expect(await screen.findByText("Detail panel: Solaris")).toBeInTheDocument();
     expect(path()).toBe("/");
@@ -142,11 +142,11 @@ describe("CommandPalette", () => {
     renderPalette();
 
     await user.type(screen.getByLabelText("Search everything"), "sol");
-    await user.click(await screen.findByRole("button", { name: /Solaris/ }));
+    await user.click(await screen.findByRole("option", { name: /Solaris/ }));
     await user.click(screen.getByRole("button", { name: "close panel" }));
 
     expect(await screen.findByLabelText("Search everything")).toHaveValue("sol");
-    expect(screen.getByRole("button", { name: /Solaris/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Solaris/ })).toBeInTheDocument();
   });
 
   it("Enter on the highlighted title opens it rather than running an action", async () => {
@@ -155,10 +155,41 @@ describe("CommandPalette", () => {
     renderPalette();
 
     await user.type(screen.getByLabelText("Search everything"), "sol");
-    await screen.findByRole("button", { name: /Solaris/ });
+    await screen.findByRole("option", { name: /Solaris/ });
     await user.keyboard("{Enter}");
 
     expect(await screen.findByText("Detail panel: Solaris")).toBeInTheDocument();
+  });
+
+  // Arrow keys move a highlight that decides what Enter does, while focus stays
+  // in the input so typing keeps working. Which means the highlight has to be
+  // published as `aria-activedescendant` — a background colour is not a state.
+  it("publishes the highlighted row, not just its background", async () => {
+    const user = userEvent.setup();
+    search.mockImplementation(async (type) => (type === "movie" ? [result("Solaris")] : []));
+    renderPalette();
+
+    const input = screen.getByLabelText("Search everything");
+    // "se" so the list holds the title *and* the actions it matches — with a
+    // single option there is nowhere for ArrowDown to go.
+    await user.type(input, "se");
+    const solaris = await screen.findByRole("option", { name: /Solaris/ });
+
+    expect(input).toHaveAttribute("role", "combobox");
+    expect(input).toHaveAttribute("aria-expanded", "true");
+    expect(solaris).toHaveAttribute("aria-selected", "true");
+    expect(input).toHaveAttribute("aria-activedescendant", solaris.id);
+
+    await user.keyboard("{ArrowDown}");
+
+    await waitFor(() => {
+      expect(solaris).toHaveAttribute("aria-selected", "false");
+      expect(input.getAttribute("aria-activedescendant")).not.toBe(solaris.id);
+    });
+    // The options are reached through the input, so none of them is a tab stop.
+    for (const option of screen.getAllByRole("option")) {
+      expect(option).toHaveAttribute("tabindex", "-1");
+    }
   });
 
   it("says search is unavailable instead of reporting no matches", async () => {

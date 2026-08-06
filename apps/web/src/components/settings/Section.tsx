@@ -87,22 +87,36 @@ export function Section({
 
   return (
     <div className="glass-panel rounded-2xl border shadow-e1 overflow-hidden" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-      {alwaysOpen ? (
-        <div id={headerId} className="flex w-full items-center gap-3 px-5 py-[1.125rem]">
-          {header}
-        </div>
-      ) : (
-        <button
-          id={headerId}
-          type="button"
-          aria-expanded={open}
-          aria-controls={panelId}
-          onClick={toggle}
-          className="flex w-full items-center gap-3 px-5 py-[1.125rem] text-left transition-colors hover:bg-[var(--surface)]"
-        >
-          {header}
-        </button>
-      )}
+      {/* The disclosure pattern, wrapped in a real heading.
+
+          These sections are what the Settings page is made of — a dozen and a
+          half of them, each the size of a small page — and their titles were
+          <span>s. The page's outline was one <h1> and nothing else, so the
+          usual way of moving around a long page with a screen reader (jump by
+          heading) had nowhere to land, and the only way down was to tab
+          through every control on the way.
+
+          <h2> holds the button rather than the other way round: the heading
+          has to be an ancestor of the control for the two to be one entry in
+          the outline, and a button inside a heading keeps its own role. */}
+      <h2 className="m-0">
+        {alwaysOpen ? (
+          <div id={headerId} className="flex w-full items-center gap-3 px-5 py-[1.125rem]">
+            {header}
+          </div>
+        ) : (
+          <button
+            id={headerId}
+            type="button"
+            aria-expanded={open}
+            aria-controls={panelId}
+            onClick={toggle}
+            className="flex w-full items-center gap-3 px-5 py-[1.125rem] text-left transition-colors hover:bg-[var(--surface)]"
+          >
+            {header}
+          </button>
+        )}
+      </h2>
       <div
         id={panelId}
         ref={contentRef}

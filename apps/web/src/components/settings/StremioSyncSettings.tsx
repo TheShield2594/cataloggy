@@ -202,12 +202,12 @@ export function StremioSyncSettings() {
       )}
 
       {result && (
-        <p className="flex items-center gap-2 text-sm text-emerald-600">
+        <p className="flex items-center gap-2 text-sm text-success">
           <Check size={16} /> {result}
         </p>
       )}
       {error && (
-        <p className="flex items-center gap-2 text-sm text-rose-600">
+        <p role="alert" className="flex items-center gap-2 text-sm text-danger">
           <AlertCircle size={16} /> {error}
         </p>
       )}

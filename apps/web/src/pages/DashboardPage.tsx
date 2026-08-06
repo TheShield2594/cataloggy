@@ -99,7 +99,7 @@ export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
       {onSelect && (
         <button
           type="button"
-          className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+          className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
           onClick={() => onSelect(item)}
           aria-label={`View details for ${item.name}`}
         />
@@ -118,7 +118,7 @@ export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
             className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm"
             style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}
           >
-            <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-amber-400">{formatRating(item.rating)}</span>
+            <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-warning">{formatRating(item.rating)}</span>
           </div>
         )}
         {badge && <div className="absolute top-2 right-2">{badge}</div>}
@@ -263,7 +263,7 @@ export function ContinueWatchingCard({
               onClick={onMarkNext}
               aria-label={isMarking ? "Marking" : isDone ? "Marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
               className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all duration-base active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-claw-300 ${
-                isMarking ? "bg-white/10 text-white/50" : isDone ? "bg-emerald-500/20 text-emerald-400" : "bg-white/15 text-white backdrop-blur-sm hover:bg-white/25"
+                isMarking ? "bg-white/10 text-white/50" : isDone ? "bg-emerald-500/20 text-success" : "bg-white/15 text-white backdrop-blur-sm hover:bg-white/25"
               }`}
             >
               {isDone ? (
@@ -418,7 +418,7 @@ function ScrollArrows({
         type="button"
         onClick={() => onScroll("left")}
         disabled={!canScrollLeft}
-        className="flex h-8 w-8 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+        className="flex h-8 w-8 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
         style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
         aria-label="Scroll left"
       >
@@ -428,7 +428,7 @@ function ScrollArrows({
         type="button"
         onClick={() => onScroll("right")}
         disabled={!canScrollRight}
-        className="flex h-8 w-8 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+        className="flex h-8 w-8 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
         style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
         aria-label="Scroll right"
       >
@@ -483,7 +483,7 @@ function SectionError({ message, onRetry }: { message: string; onRetry: () => vo
       <button
         type="button"
         onClick={onRetry}
-        className="text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset rounded"
+        className="text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset rounded"
       >
         Retry
       </button>
@@ -753,7 +753,7 @@ function DashboardHeader({
             <button
               type="button"
               onClick={onRetryStats}
-              className="rounded text-xs font-medium underline-offset-2 transition-colors hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+              className="rounded text-xs font-medium underline-offset-2 transition-colors hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
               style={{ color: "var(--text-mute)" }}
             >
               Streak unavailable &middot; Retry
@@ -1291,7 +1291,7 @@ export function DashboardPage() {
                   <button
                     type="button"
                     onClick={() => void loadTrending()}
-                    className="mt-1 rounded text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+                    className="mt-1 rounded text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
                   >
                     Retry
                   </button>
@@ -1362,7 +1362,7 @@ export function DashboardPage() {
                           isToday
                             ? "bg-claw-500/15 text-claw-text"
                             : isTomorrow
-                              ? "bg-amber-500/15 text-amber-400"
+                              ? "bg-amber-500/15 text-warning"
                               : ""
                         }`}
                         style={!isToday && !isTomorrow ? { background: "var(--surface-strong)", color: "var(--text-dim)" } : undefined}
@@ -1459,7 +1459,7 @@ export function DashboardPage() {
                     card that has exactly one action. */}
                 <button
                   type="button"
-                  className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+                  className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
                   onClick={() => setSelectedItem(toSearchResult(historyItemImdbId(event), event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster }))}
                   aria-label={`View details for ${event.name}`}
                 />
