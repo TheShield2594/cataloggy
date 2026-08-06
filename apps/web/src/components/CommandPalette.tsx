@@ -8,6 +8,7 @@ import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useExitAnimation } from "../hooks/useExitAnimation";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useToast } from "../hooks/useToast";
+import { useVisualViewport } from "../hooks/useVisualViewport";
 import { MICRO_LABEL } from "./typography";
 
 type Action = {
@@ -30,6 +31,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const dialogRef = useFocusTrap<HTMLDivElement>(open);
   const activeRowRef = useRef<HTMLButtonElement>(null);
   const { showToast } = useToast();
+  const viewportStyle = useVisualViewport(open);
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading, detail: panelDetail, detailLoading: panelDetailLoading } = useDetailPanel();
   const { exiting, requestClose, onExitAnimationEnd, reset } = useExitAnimation(onClose);
 
@@ -44,7 +46,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   // Escape closes the panel back to the palette rather than both at once.
   useEscapeKey(requestClose, open);
 
-  // Arrowing past the fold of the max-h-[60vh] scroller would otherwise move
+  // Arrowing past the fold of the results scroller would otherwise move
   // the highlight somewhere the user can't see. "nearest" makes this a no-op
   // when the row is already visible, so mouse hover doesn't yank the list.
   useEffect(() => {
@@ -175,7 +177,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-start justify-center px-4 pt-[12vh]"
+      className="fixed inset-0 z-[100] flex items-start justify-center p-4 sm:pt-[12vh]"
+      style={viewportStyle}
       onClick={requestClose}
       role="dialog"
       aria-modal="true"
@@ -187,12 +190,12 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className={`glass-surface overlay-dialog relative w-full max-w-lg overflow-hidden rounded-3xl shadow-e3 ${exiting ? "overlay-exit" : ""}`}
+        className={`glass-surface overlay-dialog relative flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-3xl shadow-e3 ${exiting ? "overlay-exit" : ""}`}
         style={{ background: "var(--bg-0)", border: "1px solid var(--border-strong)" }}
         onClick={(e) => e.stopPropagation()}
         onAnimationEnd={onExitAnimationEnd}
       >
-        <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: "1px solid var(--border)" }}>
+        <div className="flex flex-none items-center gap-3 px-4 py-3.5" style={{ borderBottom: "1px solid var(--border)" }}>
           <Search className="h-4 w-4 flex-none" style={{ color: "var(--text-mute)" }} />
           <input
             ref={inputRef}
@@ -212,7 +215,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           </kbd>
         </div>
 
-        <div className="max-h-[60vh] overflow-y-auto py-2">
+        <div className="min-h-0 flex-auto overflow-y-auto py-2 sm:max-h-[60vh]">
           {searching && (
             <p className="px-4 py-3 text-xs" style={{ color: "var(--text-dim)" }}>Searching...</p>
           )}

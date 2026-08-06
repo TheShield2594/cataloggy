@@ -9,6 +9,7 @@ import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
 import { useCachedState } from "../hooks/useCachedState";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import { useVisualViewport } from "../hooks/useVisualViewport";
 import { mergeByRelevance } from "../utils/mergeSearchResults";
 import { PAGE_TITLE, SECTION_TITLE } from "../components/typography";
 
@@ -92,6 +93,7 @@ function AddItemModal({
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useFocusTrap<HTMLDivElement>();
   const { showToast } = useToast();
+  const viewportStyle = useVisualViewport();
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -179,19 +181,23 @@ function AddItemModal({
   };
 
   return (
-    <div className="overlay-scrim overlay-fade fixed inset-0 z-50 flex items-start justify-center pt-[10vh]" onClick={onClose}>
+    <div
+      className="overlay-scrim overlay-fade fixed inset-0 z-50 flex items-start justify-center p-4 sm:pt-[10vh]"
+      style={viewportStyle}
+      onClick={onClose}
+    >
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-item-modal-title"
         tabIndex={-1}
-        className="glass-surface overlay-dialog w-full max-w-lg rounded-3xl border shadow-e3"
+        className="glass-surface overlay-dialog flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-3xl border shadow-e3"
         style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
+        <div className="flex flex-none items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <h3 id="add-item-modal-title" className={SECTION_TITLE} style={{ color: "var(--text)" }}>Add to {listName}</h3>
           <button onClick={onClose} aria-label="Close dialog" className="rounded-lg p-1.5 hover:bg-[var(--surface)] hover:text-[var(--text)]" style={{ color: "var(--text-mute)" }}>
             <X className="h-5 w-5" />
@@ -199,7 +205,7 @@ function AddItemModal({
         </div>
 
         {/* Search input */}
-        <div className="border-b px-5 py-3" style={{ borderColor: "var(--border)" }}>
+        <div className="flex-none border-b px-5 py-3" style={{ borderColor: "var(--border)" }}>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--text-mute)" }} />
             <input
@@ -239,8 +245,9 @@ function AddItemModal({
           </div>
         </div>
 
-        {/* Results */}
-        <div className="max-h-[50vh] overflow-y-auto px-5 py-3">
+        {/* Results — sized by what's left of the dialog rather than a `vh`
+            fraction, so the on-screen keyboard can't bury the list. */}
+        <div className="min-h-0 flex-auto overflow-y-auto px-5 py-3 sm:max-h-[50vh]">
           {error && <p className="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-600">{error}</p>}
           {searching && <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>Searching...</p>}
           {!searching && query.trim() && results.length === 0 && (

@@ -4,17 +4,37 @@ const TOKEN_EXPIRY_BUFFER_MS = 60_000;
 const RATE_LIMIT_PER_SECOND = 4;
 const REQUEST_TIMEOUT_MS = 10_000;
 
+// How many rows each of the two search strategies asks for before they are
+// merged and re-ranked. Wider than the caller's limit on purpose: the whole
+// point is that neither strategy alone puts the right game near the top.
+const CANDIDATE_LIMIT = 30;
+
+const GAME_FIELDS =
+  "fields name,cover.image_id,first_release_date,genres.name,total_rating_count,version_parent;";
+
+// A search is the same answer for everyone, so the result is worth holding on
+// to briefly: typing "mario", backspacing and typing it again — or two profiles
+// looking for the same game — otherwise spends IGDB's 4-requests-per-second
+// budget twice over, and every queued request delays the one the user is
+// waiting on.
+const SEARCH_CACHE_TTL_MS = 5 * 60_000;
+const SEARCH_CACHE_MAX_ENTRIES = 100;
+
 type IgdbTokenResponse = {
   access_token: string;
   expires_in: number;
 };
 
-type IgdbGamePayload = {
+export type IgdbGamePayload = {
   id: number;
   name: string;
   cover?: { image_id?: string } | null;
   first_release_date?: number;
   genres?: { name: string }[];
+  total_rating_count?: number | null;
+  // Set on editions, re-releases and regional variants ("… : Limited Edition"),
+  // pointing at the game they are a version of.
+  version_parent?: number | null;
 };
 
 export type IgdbGameSummary = {
@@ -45,6 +65,93 @@ function transformGame(game: IgdbGamePayload): IgdbGameSummary {
 // `Portal 2: "Aperture"` can't break out of the search clause.
 function escapeApicalypseString(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+// Titles are punctuated inconsistently ("Super Mario Bros." vs "Super Mario Bros",
+// "Ratchet & Clank" vs "Ratchet and Clank"), and none of that punctuation is
+// something anyone types deliberately. Comparing on letters and digits alone
+// keeps "super mario bros" an *exact* hit for "Super Mario Bros." rather than a
+// mere substring one.
+function normalizeTitle(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * How well a title answers the query, as a coarse tier — the same exact >
+ * prefix > word-start > substring ladder the movie/series merge uses, plus a
+ * bottom tier for rows IGDB's fuzzy index returned without the title matching
+ * at all (an alternative name, a typo-tolerant hit, or simply a loose one).
+ */
+function titleMatchTier(name: string, normalizedQuery: string): number {
+  const n = normalizeTitle(name);
+  if (!normalizedQuery) return 0;
+  if (n === normalizedQuery) return 4;
+  if (n.startsWith(normalizedQuery)) return 3;
+  if (` ${n}`.includes(` ${normalizedQuery}`)) return 2;
+  if (n.includes(normalizedQuery)) return 1;
+  return 0;
+}
+
+/**
+ * Merges the candidates from both search strategies into one ordered list.
+ *
+ * IGDB's own relevance order is unreliable for the queries people actually
+ * type: "Super Mario" leads with a boxed re-release and a fan game while the
+ * games with those words in their name and millions of players sit below the
+ * cut. So the order here is decided locally — how well the title matches
+ * first, then how many people have rated the game, then whichever strategy
+ * ranked it higher — and an edition or regional variant is demoted a tier,
+ * since a version of a game is never a better answer than the game itself.
+ */
+export function rankGameCandidates(candidates: IgdbGamePayload[], query: string): IgdbGamePayload[] {
+  const normalizedQuery = normalizeTitle(query);
+
+  const seen = new Set<number>();
+  const unique: { game: IgdbGamePayload; tier: number; rank: number }[] = [];
+  candidates.forEach((game, rank) => {
+    if (seen.has(game.id)) return;
+    seen.add(game.id);
+    const isVersion = game.version_parent != null;
+    const tier = Math.max(0, titleMatchTier(game.name, normalizedQuery) - (isVersion ? 1 : 0));
+    unique.push({ game, tier, rank });
+  });
+
+  unique.sort((a, b) => {
+    if (a.tier !== b.tier) return b.tier - a.tier;
+    const popularity = (b.game.total_rating_count ?? 0) - (a.game.total_rating_count ?? 0);
+    if (popularity !== 0) return popularity;
+    return a.rank - b.rank;
+  });
+
+  return unique.map((entry) => entry.game);
+}
+
+type CachedSearch = { at: number; results: IgdbGameSummary[] };
+const searchCache = new Map<string, CachedSearch>();
+
+function readSearchCache(key: string): IgdbGameSummary[] | null {
+  const hit = searchCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > SEARCH_CACHE_TTL_MS) {
+    searchCache.delete(key);
+    return null;
+  }
+  // Re-insert so the eviction below drops the least recently *used* entry.
+  searchCache.delete(key);
+  searchCache.set(key, hit);
+  return hit.results;
+}
+
+function writeSearchCache(key: string, results: IgdbGameSummary[]): void {
+  searchCache.set(key, { at: Date.now(), results });
+  while (searchCache.size > SEARCH_CACHE_MAX_ENTRIES) {
+    const oldest = searchCache.keys().next();
+    if (oldest.done) break;
+    searchCache.delete(oldest.value);
+  }
 }
 
 type QueuedTask = { run: () => Promise<void> };
@@ -91,6 +198,10 @@ const limiter = new RateLimiter(RATE_LIMIT_PER_SECOND);
 
 let cachedToken: string | null = null;
 let tokenExpiresAt: number | null = null;
+// A search fires two IGDB requests at once, and on a cold start both would ask
+// Twitch for a token before either had one to cache. Whoever asks first owns
+// the request; everyone else waits on it.
+let pendingToken: Promise<string> | null = null;
 
 export class IgdbClient {
   private constructor(
@@ -109,14 +220,55 @@ export class IgdbClient {
     return new IgdbClient(clientId, clientSecret);
   }
 
+  /**
+   * Two queries, not one. IGDB's `search` is a fuzzy index that also matches
+   * alternative names, which is what finds a game someone half-remembers — but
+   * it drops well-known titles outright for some queries, and orders what it
+   * does return by a relevance score that favours obscure editions. The second
+   * query is a literal "name contains this" over games with enough ratings to
+   * be the one being looked for, which is the half that reliably surfaces
+   * `Super Mario Sunshine` for `super mario sunshine`.
+   *
+   * Either half failing is survivable — the other's results are still returned,
+   * which is no worse than the single query this replaced.
+   */
   async searchGames(query: string, limit = 20): Promise<IgdbGameSummary[]> {
-    const apicalypse = `fields name,cover.image_id,first_release_date,genres.name; search "${escapeApicalypseString(query)}"; limit ${limit};`;
-    const games = await this.request("/games", apicalypse);
-    return games.map(transformGame);
+    const trimmed = query.trim();
+    if (!trimmed) return [];
+
+    const cacheKey = normalizeTitle(trimmed);
+    const cached = readSearchCache(cacheKey);
+    if (cached) return cached.slice(0, limit);
+
+    const escaped = escapeApicalypseString(trimmed);
+    const [fuzzy, literal] = await Promise.allSettled([
+      this.request("/games", `${GAME_FIELDS} search "${escaped}"; limit ${CANDIDATE_LIMIT};`),
+      this.request(
+        "/games",
+        `${GAME_FIELDS} where name ~ *"${escaped}"* & version_parent = null & total_rating_count != null; sort total_rating_count desc; limit ${CANDIDATE_LIMIT};`
+      )
+    ]);
+
+    if (fuzzy.status === "rejected" && literal.status === "rejected") {
+      throw fuzzy.reason;
+    }
+
+    const candidates = [
+      ...(fuzzy.status === "fulfilled" ? fuzzy.value : []),
+      ...(literal.status === "fulfilled" ? literal.value : [])
+    ];
+
+    const results = rankGameCandidates(candidates, trimmed).map(transformGame);
+    // Only a complete answer is worth caching: a half that failed would
+    // otherwise pin its gap in place for the next five minutes.
+    if (fuzzy.status === "fulfilled" && literal.status === "fulfilled") {
+      writeSearchCache(cacheKey, results);
+    }
+    return results.slice(0, limit);
   }
 
   async getGameById(igdbId: number): Promise<IgdbGameSummary | null> {
-    const apicalypse = `fields name,cover.image_id,first_release_date,genres.name; where id = ${igdbId}; limit 1;`;
+    const apicalypse = `${GAME_FIELDS} where id = ${igdbId}; limit 1;`;
     const games = await this.request("/games", apicalypse);
     return games[0] ? transformGame(games[0]) : null;
   }
@@ -130,18 +282,28 @@ export class IgdbClient {
     const results = await this.searchGames(title, 10);
     if (results.length === 0) return null;
 
-    const normalized = title.trim().toLowerCase();
-    const exact = results.find((game) => game.title.trim().toLowerCase() === normalized);
+    const normalized = normalizeTitle(title);
+    if (!normalized) return null;
+    const exact = results.find((game) => normalizeTitle(game.title) === normalized);
     if (exact) return exact;
 
-    return results.find((game) => game.title.trim().toLowerCase().includes(normalized)) ?? null;
+    return results.find((game) => normalizeTitle(game.title).includes(normalized)) ?? null;
   }
 
   private async getAccessToken(): Promise<string> {
     if (cachedToken && tokenExpiresAt && Date.now() < tokenExpiresAt) {
       return cachedToken;
     }
+    if (pendingToken) return pendingToken;
 
+    const request = this.fetchAccessToken().finally(() => {
+      pendingToken = null;
+    });
+    pendingToken = request;
+    return request;
+  }
+
+  private async fetchAccessToken(): Promise<string> {
     const response = await fetch(TWITCH_TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -194,8 +356,10 @@ export class IgdbClient {
   }
 }
 
-/** Test-only: clears the module-level Twitch token cache between test cases. */
+/** Test-only: clears the module-level Twitch token and search caches between test cases. */
 export function resetIgdbTokenCache(): void {
   cachedToken = null;
   tokenExpiresAt = null;
+  pendingToken = null;
+  searchCache.clear();
 }
