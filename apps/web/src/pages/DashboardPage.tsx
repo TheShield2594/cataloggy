@@ -118,7 +118,11 @@ export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
             className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm"
             style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}
           >
-            <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-warning">{formatRating(item.rating)}</span>
+            {/* Fixed amber rather than --status-warn — the badge is on a black
+                scrim over poster art, not on a theme surface, and the token
+                goes dark on the light theme. Same pairing as the Stats page's
+                rating badges. */}
+            <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-[#f5c451]">{formatRating(item.rating)}</span>
           </div>
         )}
         {badge && <div className="absolute top-2 right-2">{badge}</div>}
@@ -1218,7 +1222,7 @@ export function DashboardPage() {
             <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
               No series in progress. Series you start watching pick up here.
             </p>
-            <Link to="/search" className="mt-1 inline-block text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
+            <Link to="/search" className="mt-1 inline-block py-1 text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
               Find something to watch &rarr;
             </Link>
           </div>
@@ -1279,7 +1283,7 @@ export function DashboardPage() {
                   <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
                     Trending needs a TMDB API key to fetch content.
                   </p>
-                  <Link to="/settings?tab=integrations" className="mt-1 inline-block text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
+                  <Link to="/settings?tab=integrations" className="mt-1 inline-block py-1 text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
                     Set it up in Settings &rarr;
                   </Link>
                 </>
@@ -1439,7 +1443,7 @@ export function DashboardPage() {
             <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
               No watch history yet. Anything you mark watched shows up here.
             </p>
-            <Link to="/search" className="mt-1 inline-block text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
+            <Link to="/search" className="mt-1 inline-block py-1 text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
               Find something to watch &rarr;
             </Link>
           </div>

@@ -360,7 +360,7 @@ export function CalendarPage() {
               <p className="mt-1 text-xs" style={{ color: "var(--text-mute)" }}>
                 The calendar only tracks series you have already started watching.
               </p>
-              <Link to="/search" className="mt-2 inline-block text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
+              <Link to="/search" className="mt-2 inline-block py-1 text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
                 Find a series to follow &rarr;
               </Link>
             </div>

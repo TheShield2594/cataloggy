@@ -348,9 +348,14 @@ export function StatsPage() {
                       <Film className="h-8 w-8" style={{ color: "var(--text-mute)" }} />
                     </div>
                   )}
+                  {/* Fixed amber, not --status-warn: this badge sits on a
+                      black scrim over poster art rather than on a theme
+                      surface, so it can't take a token that goes dark on the
+                      light theme — that pairing measured 1.46:1. Against the
+                      scrim this is 5.2:1 even over a white poster. */}
                   {item.rating != null && (
                     <div role="img" aria-label={ratingLabel(item.rating)} title={ratingLabel(item.rating)} className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
-                      <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-warning">{formatRating(item.rating)}</span>
+                      <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-[#f5c451]">{formatRating(item.rating)}</span>
                     </div>
                   )}
                 </div>
@@ -429,7 +434,7 @@ export function StatsPage() {
                             pickers use — unlike the community score on the card
                             above, which is TMDB's and stays out of ten. */}
                         <div role="img" aria-label={starsLabel(item.rating)} title={starsLabel(item.rating)} className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
-                          <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-warning">{formatStars(item.rating)}</span>
+                          <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-[#f5c451]">{formatStars(item.rating)}</span>
                         </div>
                       </div>
                       <p className="mt-1.5 truncate text-sm font-medium" style={{ color: "var(--text)" }}>{item.name ?? item.imdbId}</p>
