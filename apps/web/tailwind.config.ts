@@ -30,6 +30,17 @@ export default {
           on: "rgb(var(--on-accent-rgb))",
           text: "rgb(var(--accent-text-rgb))",
         },
+        // Status text, themed — the Tailwind-side names for the --status-*
+        // trio, so `text-danger` and `style={{ color: "var(--status-bad)" }}`
+        // are the same colour rather than two that drift. See the note above
+        // those tokens in src/index.css for why a fixed `text-rose-600` can't
+        // do this job across five themes.
+        danger: "var(--status-bad)",
+        success: "var(--status-ok)",
+        warning: "var(--status-warn)",
+        // The focus indicator, which answers SC 1.4.11's 3:1 rather than
+        // 1.4.3's 4.5:1 — `ring-focus` everywhere a control takes a ring.
+        focus: "var(--focus-ring)",
         cream: {
           50: "#faf6ef",
           100: "#f3ecdd",

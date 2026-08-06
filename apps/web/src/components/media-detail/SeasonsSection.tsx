@@ -241,11 +241,14 @@ export function SeasonsSection({
 
           return (
             <div key={s.seasonNumber} className="overflow-hidden rounded-xl border" style={{ borderColor: "var(--border)" }}>
-              <div className="flex items-center gap-2 px-3 py-2.5" style={{ background: "var(--surface)" }}>
+              {/* Wraps because the star picker is 240px wide — the width ten
+                  24px pointer targets need — which a narrow panel can't spare
+                  beside a season name and a "Mark watched" button. */}
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2.5" style={{ background: "var(--surface)" }}>
                 <button
                   type="button"
                   onClick={() => toggleExpand(s.seasonNumber)}
-                  className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                  className="flex min-w-40 flex-1 items-center gap-2.5 text-left"
                   aria-expanded={isExpanded}
                   aria-label={`${isExpanded ? "Collapse" : "Expand"} ${s.name}`}
                 >
@@ -305,14 +308,14 @@ export function SeasonsSection({
                         // watched toggle.
                         <div
                           key={ep.episodeNumber}
-                          className="flex w-full items-center gap-3 px-3 py-2"
+                          className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
                           style={{ borderTop: i > 0 ? "1px solid var(--border)" : undefined }}
                         >
                           <button
                             type="button"
                             onClick={() => void toggleEpisode(s.seasonNumber, ep.episodeNumber)}
                             disabled={pendingEpisode[k]}
-                            className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left transition-opacity hover:opacity-75 disabled:opacity-50"
+                            className="flex min-w-40 flex-1 items-center gap-3 rounded-lg text-left transition-opacity hover:opacity-75 disabled:opacity-50"
                             aria-pressed={isWatched}
                             aria-label={`${isWatched ? "Unmark" : "Mark"} ${ep.name} watched`}
                           >

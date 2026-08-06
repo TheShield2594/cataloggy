@@ -57,6 +57,36 @@ const LoadingFallback = ({ label = "Loading…" }: { label?: string }) => (
   <GhostLoader label={label} className="items-center py-24" />
 );
 
+/**
+ * What each route calls itself in the tab strip and the history menu.
+ *
+ * `index.html` ships one <title> for the whole app, which is right for the
+ * document the server sends and wrong for every screen after it: a router that
+ * never touches document.title leaves nine destinations all announcing
+ * "Cataloggy", so the tab strip, the back-button menu and a screen reader's
+ * page-title announcement carry no information at all.
+ *
+ * Kept beside the <Routes> below rather than on each page, so a new route can't
+ * be added without the omission being visible here.
+ */
+const ROUTE_TITLES: Record<string, string> = {
+  "/": "Dashboard",
+  "/search": "Search",
+  "/lists": "Lists",
+  "/games": "Games",
+  "/calendar": "Calendar",
+  "/history": "Watch History",
+  "/stats": "Watch Statistics",
+  "/settings": "Settings",
+};
+
+const APP_NAME = "Cataloggy";
+
+export function routeTitle(pathname: string): string {
+  const name = ROUTE_TITLES[pathname];
+  return name ? `${name} · ${APP_NAME}` : `Page not found · ${APP_NAME}`;
+}
+
 // The switcher is a full-screen modal, so suspending it to nothing would blank the
 // screen between the click and the chunk arriving. Hold the overlay instead.
 const ProfileSwitcherFallback = () => (
@@ -179,6 +209,12 @@ function AppShell({
     mainRef.current?.focus();
   }, [location.pathname]);
 
+  // Runs on the first render too, unlike the focus move above: the landing
+  // route needs a title as much as a navigated-to one does.
+  useEffect(() => {
+    document.title = routeTitle(location.pathname);
+  }, [location.pathname]);
+
   useEffect(() => {
     let cancelled = false;
     const currentId = runtimeConfig.getProfileId();
@@ -208,7 +244,7 @@ function AppShell({
         href="#main-content"
         // `not-sr-only` zeroes the padding it restores, so the box has to be
         // rebuilt under the same variant rather than set unconditionally.
-        className="sr-only rounded-xl text-sm font-semibold shadow-e2 focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:px-4 focus:py-2.5 focus:outline-none focus:ring-2 focus:ring-claw-400"
+        className="sr-only rounded-xl text-sm font-semibold shadow-e2 focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:px-4 focus:py-2.5 focus:outline-none focus:ring-2 focus:ring-focus"
         style={{ background: "var(--bg-1)", color: "var(--text)", border: "1px solid var(--border-strong)" }}
       >
         Skip to main content
@@ -275,7 +311,7 @@ function AppShell({
               onClick={openSwitcher}
               aria-label={profile ? `Switch profile (currently ${profile.name})` : "Switch profile"}
               title={profile?.name}
-              className="flex h-11 w-11 flex-none items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset sm:hidden"
+              className="flex h-11 w-11 flex-none items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset sm:hidden"
               style={{ color: "var(--text-mute)" }}
             >
               <User className="h-5 w-5" />

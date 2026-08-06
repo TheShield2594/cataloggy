@@ -95,7 +95,7 @@ export function PushSettings() {
         )}
       </button>
 
-      {error && <p className="flex items-center gap-2 text-sm text-rose-400"><AlertCircle size={16} /> {error}</p>}
+      {error && <p role="alert" className="flex items-center gap-2 text-sm text-danger"><AlertCircle size={16} /> {error}</p>}
     </div>
   );
 }

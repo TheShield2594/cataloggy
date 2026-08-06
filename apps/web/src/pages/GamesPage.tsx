@@ -169,7 +169,7 @@ function AddGameModal({
             dialog has left over, so on a phone with the keyboard up it stops
             where the keyboard starts instead of scrolling on behind it. */}
         <div className="min-h-0 flex-auto overflow-y-auto px-5 py-3 sm:max-h-[50vh]">
-          {error && <p className="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-600">{error}</p>}
+          {error && <p role="alert" className="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-danger">{error}</p>}
           {searching && <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>Searching...</p>}
           {!searching && query.trim() && results.length === 0 && !error && (
             <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>No results found.</p>
@@ -198,7 +198,7 @@ function AddGameModal({
                   </p>
                 </div>
                 {r.inLibrary ? (
-                  <Check className="h-4 w-4 flex-none text-emerald-600" />
+                  <Check className="h-4 w-4 flex-none text-success" />
                 ) : (
                   <Plus className="h-4 w-4 flex-none text-claw-text" />
                 )}
@@ -224,7 +224,7 @@ function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => vo
         // Dashboard's themed hairline. --border matches the Dashboard. It stays
         // a ring rather than an inline inset shadow so .card-lift's hover
         // shadow can still replace it; an inline style would outrank that.
-        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-[var(--border)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-[var(--border)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
         style={{ aspectRatio: "var(--poster-ratio)" }}
         onClick={() => onSelect(game)}
         onKeyDown={(e) => {
@@ -248,9 +248,14 @@ function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => vo
           </div>
         )}
 
+        {/* Fixed green rather than --success-text, for the same reason
+            .btn-danger's rose is fixed: this badge sits on cover art, not on a
+            theme surface, so it has to carry its own contrast. The pale
+            emerald-500 it used measured 2.30:1 against the white on top of it;
+            this pairing is 6.8:1 and reads as the same green. */}
         {game.finished && (
-          <span className="absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md bg-emerald-500/90 px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-white shadow-e1">
-            <Check className="h-3 w-3" /> Finished
+          <span className="absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md bg-[#00693e] px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-white shadow-e1">
+            <Check aria-hidden="true" className="h-3 w-3" /> Finished
           </span>
         )}
       </div>
@@ -262,8 +267,8 @@ function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => vo
             <Clock className="h-3 w-3" /> {formatPlaytime(game.playtimeMinutes)}
           </span>
           {game.rating != null && (
-            <span className="flex items-center gap-0.5 text-xs text-amber-600" title={ratingLabel(game.rating)}>
-              <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
+            <span className="flex items-center gap-0.5 text-xs text-warning" title={ratingLabel(game.rating)}>
+              <Star className="h-3 w-3 fill-warning text-warning" />
               {formatRating(game.rating)}
               <span style={{ color: "var(--text-mute)" }}>/{RATING_MAX}</span>
             </span>
@@ -431,7 +436,7 @@ export function GamesPage() {
       </div>
 
       {error && (
-        <p className="mb-4 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-sm text-rose-600">{error}</p>
+        <p role="alert" className="mb-4 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-sm text-danger">{error}</p>
       )}
 
       {loading && (

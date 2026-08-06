@@ -375,9 +375,11 @@ export function AiSettings() {
                 background: "var(--bg-1)",
               }}
               placeholder="https://api.example.com/v1/chat/completions"
+              aria-invalid={fieldErrors.url ? true : undefined}
+              aria-describedby={fieldErrors.url ? "ai-url-error" : undefined}
             />
             {fieldErrors.url && (
-              <p className="mt-1 text-xs text-rose-600">{fieldErrors.url}</p>
+              <p id="ai-url-error" role="alert" className="mt-1 text-xs text-danger">{fieldErrors.url}</p>
             )}
           </div>
 
@@ -411,9 +413,11 @@ export function AiSettings() {
               }}
               placeholder="sk-..."
               autoComplete="off"
+              aria-invalid={fieldErrors.apiKey ? true : undefined}
+              aria-describedby={fieldErrors.apiKey ? "ai-key-error" : undefined}
             />
             {fieldErrors.apiKey && (
-              <p className="mt-1 text-xs text-rose-600">{fieldErrors.apiKey}</p>
+              <p id="ai-key-error" role="alert" className="mt-1 text-xs text-danger">{fieldErrors.apiKey}</p>
             )}
           </div>
 
@@ -441,9 +445,11 @@ export function AiSettings() {
                   color: "var(--text)",
                   background: "var(--bg-1)",
                 }}
+                aria-invalid={fieldErrors.model ? true : undefined}
+                aria-describedby={fieldErrors.model ? "ai-model-error" : undefined}
               />
               {fieldErrors.model && (
-                <p className="mt-1 text-xs text-rose-600">
+                <p id="ai-model-error" role="alert" className="mt-1 text-xs text-danger">
                   {fieldErrors.model}
                 </p>
               )}
@@ -529,25 +535,39 @@ export function AiSettings() {
               background: "var(--bg-1)",
             }}
             spellCheck={false}
+            aria-invalid={advancedJsonError ? true : undefined}
+            aria-describedby={advancedJsonError ? "ai-advanced-json-error" : undefined}
           />
           {advancedJsonError && (
-            <p className="mt-1 text-xs text-rose-600">{advancedJsonError}</p>
+            <p id="ai-advanced-json-error" role="alert" className="mt-1 text-xs text-danger">{advancedJsonError}</p>
           )}
         </div>
       )}
 
-      {testStatus && (
-        <p
-          className={`flex items-center gap-2 text-sm ${testStatus === "ok" ? "text-emerald-600" : "text-rose-600"}`}
-        >
-          {testStatus === "ok" ? (
-            <Check size={14} />
-          ) : (
-            <AlertCircle size={14} />
-          )}
-          {testMessage}
-        </p>
-      )}
+      {/* The result of a connection test the user asked for, and until now it
+          arrived silently. Kept mounted rather than rendered under `testStatus`
+          so the region exists before it has anything to say — a live region
+          inserted together with its text is announced unreliably. Empty it has
+          no children and so no height.
+
+          A failure is assertive, a success polite: one of them means the thing
+          the user just tried did not work. */}
+      <p
+        role={testStatus === "error" ? "alert" : "status"}
+        aria-live={testStatus === "error" ? "assertive" : "polite"}
+        className={`flex items-center gap-2 text-sm ${testStatus === "ok" ? "text-success" : "text-danger"}`}
+      >
+        {testStatus && (
+          <>
+            {testStatus === "ok" ? (
+              <Check aria-hidden="true" size={14} />
+            ) : (
+              <AlertCircle aria-hidden="true" size={14} />
+            )}
+            {testMessage}
+          </>
+        )}
+      </p>
 
       <div className="flex flex-wrap gap-2">
         <button
@@ -575,7 +595,7 @@ export function AiSettings() {
           disabled={saving}
           className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-base ${
             saved
-              ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/20"
+              ? "bg-emerald-500/15 text-success ring-1 ring-emerald-500/20"
               : "bg-plum-500 text-white hover:bg-plum-600 disabled:opacity-40 disabled:cursor-not-allowed"
           }`}
         >
@@ -596,7 +616,11 @@ export function AiSettings() {
             type="button"
             onClick={handleRemove}
             disabled={removing}
-            className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-600 transition-all duration-base hover:bg-rose-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            // Tints of rose-500 rather than the rose-50/100/200 steps this
+            // carried: those are near-white fixed values, so on the four dark
+            // themes the button was a white slab and its own label sat at
+            // 2.18:1 on it. A tint tracks whatever it is laid over.
+            className="inline-flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-danger transition-all duration-base hover:bg-rose-500/15 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {removing ? (
               <>
@@ -609,7 +633,7 @@ export function AiSettings() {
         )}
       </div>
       {error && (
-        <p className="flex items-center gap-2 text-sm text-rose-600">
+        <p role="alert" className="flex items-center gap-2 text-sm text-danger">
           <AlertCircle size={16} /> {error}
         </p>
       )}

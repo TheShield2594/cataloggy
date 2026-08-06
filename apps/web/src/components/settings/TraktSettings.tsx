@@ -106,7 +106,7 @@ export function TraktSettings() {
       <div className="flex items-center gap-3">
         <StatusBadge ok={!!status?.connected} label={status?.connected ? "Connected" : "Not connected"} />
         {status && !status.configured && (
-          <span className="text-xs text-amber-600">Trakt credentials not configured on the server</span>
+          <span className="text-xs text-warning">Trakt credentials not configured on the server</span>
         )}
       </div>
 
@@ -170,12 +170,12 @@ export function TraktSettings() {
       )}
 
       {importResult && (
-        <p role="status" aria-live="polite" className="flex items-start gap-2 text-sm text-emerald-600">
+        <p role="status" aria-live="polite" className="flex items-start gap-2 text-sm text-success">
           <Check size={16} className="shrink-0 mt-0.5" /> {importResult}
         </p>
       )}
       {error && (
-        <p role="alert" className="flex items-center gap-2 text-sm text-rose-600">
+        <p role="alert" className="flex items-center gap-2 text-sm text-danger">
           <AlertCircle size={16} /> {error}
         </p>
       )}

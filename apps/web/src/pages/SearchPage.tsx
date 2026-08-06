@@ -89,6 +89,7 @@ export function SearchPage() {
   const { showToast } = useToast();
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const advancedFiltersId = useId();
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading, detail: panelDetail, detailLoading: panelDetailLoading } = useDetailPanel();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -305,6 +306,22 @@ export function SearchPage() {
   const hasSearched = rawResults !== null;
   const noResults = hasSearched && (results?.length ?? 0) === 0;
 
+  // Empty until something has actually happened, so the region doesn't announce
+  // on mount. Written as whole sentences rather than echoing the labels on
+  // screen: the visible copy sits next to an icon and a heading that supply the
+  // context, and an announcement arrives with none of that around it.
+  const searchStatus = (() => {
+    if (isSearching) return "Searching…";
+    if (!hasSearched) return "";
+    if (needsTmdb) return "A TMDB API key is needed before titles can be searched.";
+    if (searchError) return `Search could not run. ${searchError}`;
+    const count = results?.length ?? 0;
+    if (count === 0) return "Nothing matched that search.";
+    return rawResults && count !== rawResults.length
+      ? `Showing ${count} of ${rawResults.length} matches.`
+      : `Showing ${count} match${count === 1 ? "" : "es"}.`;
+  })();
+
   return (
     <div className="relative space-y-6">
       {/* Search bar.
@@ -337,10 +354,11 @@ export function SearchPage() {
             <button
               type="button"
               onClick={() => { setFilters({ query: "" }); setRawResults(null); }}
+              aria-label="Clear search"
               className="absolute right-4 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold hover:bg-[var(--border-strong)] transition-colors"
               style={{ backgroundColor: "var(--border)", color: "var(--text)" }}
             >
-              <X className="h-3.5 w-3.5" />
+              <X aria-hidden="true" className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
@@ -369,24 +387,35 @@ export function SearchPage() {
             })}
           </div>
 
-          {/* Advanced filters toggle */}
+          {/* Advanced filters toggle.
+
+              The word "Filters" is hidden below `sm`, where the button is icons
+              only — so the name has to come from `aria-label` rather than the
+              text, or the control is anonymous on exactly the viewport where it
+              is hardest to guess at. The label carries the badge's count too,
+              which is otherwise a bare number beside an icon. */}
           <button
             type="button"
             onClick={() => setFiltersOpen((v) => !v)}
+            aria-expanded={filtersOpen}
+            aria-controls={advancedFiltersId}
+            aria-label={activeFilterCount > 0 ? `Filters (${activeFilterCount} active)` : "Filters"}
             className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all duration-base ${
               hasActiveFilters
                 ? "border-claw-500/50 bg-claw-500/10 text-claw-text"
                 : "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-mute)] hover:text-[var(--text)]"
             }`}
           >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
+            <SlidersHorizontal aria-hidden="true" className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Filters</span>
             {activeFilterCount > 0 && (
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-claw-500 text-2xs font-bold text-claw-on">
+              <span aria-hidden="true" className="flex h-5 w-5 items-center justify-center rounded-full bg-claw-500 text-2xs font-bold text-claw-on">
                 {activeFilterCount}
               </span>
             )}
-            {filtersOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            {filtersOpen
+              ? <ChevronUp aria-hidden="true" className="h-3.5 w-3.5" />
+              : <ChevronDown aria-hidden="true" className="h-3.5 w-3.5" />}
           </button>
 
           {hasActiveFilters && (
@@ -410,7 +439,7 @@ export function SearchPage() {
 
         {/* Advanced filters panel */}
         {filtersOpen && (
-          <div className="mt-3 grid grid-cols-2 gap-3 rounded-2xl p-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6" style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)", background: "var(--surface)" }}>
+          <div id={advancedFiltersId} className="mt-3 grid grid-cols-2 gap-3 rounded-2xl p-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6" style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)", background: "var(--surface)" }}>
             {/* Genre */}
             <FilterSelect
               label="Genre"
@@ -473,6 +502,20 @@ export function SearchPage() {
           </div>
         )}
       </form>
+
+      {/* The search runs as you type and swaps the page under you: results
+          appear, a count changes, a filter empties the grid. None of that moves
+          focus, so without a live region the only way to find out anything
+          happened is to go looking — which is what SC 4.1.3 is about.
+
+          One region for every outcome rather than `aria-live` on each of the
+          visible pieces: those come and go as whole subtrees, and a region that
+          unmounts doesn't announce. This one stays mounted and only its text
+          changes. `sr-only` because the same information is already on screen
+          in the count line and the empty states. */}
+      <p className="sr-only" role="status" aria-live="polite" aria-label="Search status">
+        {searchStatus}
+      </p>
 
       {/* Empty state – no search yet */}
       {!hasSearched && !isSearching && (
@@ -748,7 +791,7 @@ function ResultCard({
         // Dashboard's themed hairline. --border matches the Dashboard. It stays
         // a ring rather than an inline inset shadow so .card-lift's hover
         // shadow can still replace it; an inline style would outrank that.
-        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-[var(--border)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-[var(--border)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
         style={{ aspectRatio: "var(--poster-ratio)" }}
         onClick={() => onSelect(result)}
         onKeyDown={(e) => {
@@ -870,7 +913,7 @@ function ResultCard({
                   className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-[var(--surface)] disabled:opacity-50"
                 >
                   {already ? (
-                    <Check className="h-3.5 w-3.5 text-emerald-600" />
+                    <Check className="h-3.5 w-3.5 text-success" />
                   ) : (
                     <Plus className="h-3.5 w-3.5" style={{ color: "var(--text-mute)" }} />
                   )}
@@ -935,8 +978,8 @@ function ResultCard({
         <div className="mt-0.5 flex items-center gap-2">
           <span className="text-xs" style={{ color: "var(--text-mute)" }}>{result.year ?? "Unknown year"}</span>
           {result.rating != null && result.rating > 0 && (
-            <span className="flex items-center gap-0.5 text-xs text-amber-600" title={ratingLabel(result.rating)}>
-              <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
+            <span className="flex items-center gap-0.5 text-xs text-warning" title={ratingLabel(result.rating)}>
+              <Star className="h-3 w-3 fill-warning text-warning" />
               {formatRating(result.rating)}
               <span style={{ color: "var(--text-mute)" }}>/{RATING_MAX}</span>
             </span>

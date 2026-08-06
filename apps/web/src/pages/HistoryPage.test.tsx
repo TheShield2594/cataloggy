@@ -101,29 +101,49 @@ describe("HistoryPage", () => {
     expect(screen.getByRole("button", { name: "Movies" })).toBeInTheDocument();
   });
 
+  // A button inside a button has no defined accessible mapping, and assistive
+  // tech resolves it differently from one implementation to the next — the row
+  // was a role="button" wrapping the note and delete controls. All three are
+  // still here; none of them contains another.
+  it("keeps the row's three controls as siblings, not nested buttons", async () => {
+    renderPage();
+    await screen.findByText("Alien");
+
+    const open = screen.getByRole("button", { name: /view details for alien/i });
+    const note = screen.getByRole("button", { name: /add note to alien/i });
+    const remove = screen.getByRole("button", { name: /delete watch of alien/i });
+
+    for (const [a, b] of [[open, note], [open, remove], [note, remove]]) {
+      expect(a.contains(b)).toBe(false);
+      expect(b.contains(a)).toBe(false);
+    }
+  });
+
   it("removes a row optimistically and offers the way back", async () => {
     const user = userEvent.setup();
     deleteWatchEvent.mockResolvedValue(undefined as never);
     renderPage();
     await screen.findByText("Alien");
 
-    await user.click(screen.getAllByRole("button", { name: "Delete watch event" })[0]);
+    await user.click(screen.getAllByRole("button", { name: /delete watch of alien/i })[0]);
 
     await waitFor(() => expect(screen.queryByText("Alien")).not.toBeInTheDocument());
     expect(await screen.findByText(/Removed Alien from history/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /undo/i })).toBeInTheDocument();
   });
 
-  // The row is a role="button" that swallows Enter and Space, and a keystroke
-  // bubbling up from a button inside it used to be cancelled there — so the
-  // detail panel opened where a keyboard user had asked to delete.
+  // The row's controls used to sit inside a role="button" that swallowed Enter
+  // and Space, so a keystroke bubbling up from one of them was cancelled there
+  // and the detail panel opened where a keyboard user had asked to delete. The
+  // row-opening control is a sibling of these two now, not their ancestor —
+  // which is also what stops the pair reading as a button inside a button.
   it("deletes from the keyboard rather than opening the panel", async () => {
     const user = userEvent.setup();
     deleteWatchEvent.mockResolvedValue(undefined as never);
     renderPage();
     await screen.findByText("Alien");
 
-    screen.getAllByRole("button", { name: "Delete watch event" })[0].focus();
+    screen.getAllByRole("button", { name: /delete watch of alien/i })[0].focus();
     await user.keyboard("{Enter}");
 
     await waitFor(() => expect(deleteWatchEvent).toHaveBeenCalledWith(ALIEN.id));
@@ -148,7 +168,7 @@ describe("HistoryPage", () => {
     renderPage();
     await screen.findByText("Alien");
 
-    await user.click(screen.getAllByRole("button", { name: "Delete watch event" })[0]);
+    await user.click(screen.getAllByRole("button", { name: /delete watch of alien/i })[0]);
 
     expect(await screen.findByText("Server said no")).toBeInTheDocument();
     expect(screen.getByText("Alien")).toBeInTheDocument();

@@ -39,6 +39,21 @@ function toSearchResult(event: WatchEvent): SearchResult {
   };
 }
 
+/**
+ * What a row's controls call the thing they act on.
+ *
+ * The visible row says the title once and the episode number beside it, in two
+ * separate elements; a label built from `event.name` alone would give three
+ * buttons in a row the same name on a series the user watched twice in a day.
+ * The episode number is what tells those rows apart, so it belongs in the name.
+ */
+function eventLabel(event: WatchEvent): string {
+  const name = event.name || "this watch";
+  return event.type === "episode" && event.season != null && event.episode != null
+    ? `${name} S${event.season}E${event.episode}`
+    : name;
+}
+
 export function HistoryPage() {
   // Only the first page goes through the cache. Appended pages are held
   // separately and merged for rendering: writing them through would grow the
@@ -234,7 +249,7 @@ export function HistoryPage() {
               key={opt}
               type="button"
               onClick={() => setTypeFilter(opt)}
-              className="relative rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+              className="relative rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
               style={
                 typeFilter === opt
                   ? { background: "var(--accent)", color: "var(--on-accent)" }
@@ -248,7 +263,7 @@ export function HistoryPage() {
       </div>
 
       {error && events.length > 0 && (
-        <p className="text-sm text-rose-500">{error}</p>
+        <p role="alert" className="text-sm text-danger">{error}</p>
       )}
 
       {/* Skeletons and the failure card render in place of the list rather than
@@ -267,8 +282,8 @@ export function HistoryPage() {
         </div>
       ) : error && events.length === 0 ? (
         <div className="mx-auto max-w-lg rounded-2xl p-8 text-center" style={{ border: "1px solid rgba(244,63,94,0.2)", background: "rgba(244,63,94,0.05)" }}>
-          <AlertCircle className="mx-auto h-12 w-12 text-rose-500" />
-          <p className={`mt-3 ${SECTION_TITLE} text-rose-500`}>{error}</p>
+          <AlertCircle className="mx-auto h-12 w-12 text-danger" />
+          <p role="alert" className={`mt-3 ${SECTION_TITLE} text-danger`}>{error}</p>
         </div>
       ) : events.length === 0 ? (
         <div className="glass-panel rounded-2xl p-8 text-center" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
@@ -283,7 +298,7 @@ export function HistoryPage() {
           </p>
           {/* The search page is the way out of this one: a brand-new install
               lands here with nothing to filter and no other route onward. */}
-          <Link to="/search" className="mt-1 inline-block text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
+          <Link to="/search" className="mt-1 inline-block py-1 text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
             Find something to watch &rarr;
           </Link>
         </div>
@@ -308,25 +323,41 @@ export function HistoryPage() {
               {group.events.map((event, i) => (
                 <div key={event.id} style={i > 0 ? { borderTop: "1px solid var(--border)" } : undefined}>
                 <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setSelectedItem(toSearchResult(event))}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedItem(toSearchResult(event)); } }}
                   // Not .glass-row: the group container is the .glass-panel now,
                   // and a row inside it would stack a second blurred layer per
                   // row and re-tint each one with `!important` — putting the
                   // wall of separate surfaces back on the Glass theme. Its only
                   // other job was restoring the hover answer that an inline
                   // `background` used to beat, and there is no longer one here.
-                  className="group flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-claw-400"
+                  //
+                  // The row is a plain container, not a control. It used to be a
+                  // role="button" with the note and delete buttons inside it —
+                  // a button nested in a button, which has no defined mapping
+                  // and which assistive tech resolves differently from one
+                  // implementation to the next. What opens the panel is now the
+                  // overlay below, a sibling of the two action buttons rather
+                  // than their ancestor.
+                  className="group relative flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-[var(--surface-strong)]"
                 >
+                  {/* Fills the row behind its content, so the whole row is still
+                      one click target and still takes the inset ring on focus.
+                      The content is `pointer-events-none` so clicks fall through
+                      to this; the two action buttons opt back in and stack above
+                      it. */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedItem(toSearchResult(event))}
+                    aria-label={`View details for ${eventLabel(event)}`}
+                    className="absolute inset-0 z-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
+                  />
+
                   {/* A 2:3 box, so a poster fills it instead of being cropped to
                       a square through its middle — the old 48px square showed a
                       band across the artwork that identified nothing. 40x60 is
                       as small as a poster can be and still be recognisable, and
                       it keeps the row close to the height it had. */}
                   <div
-                    className="flex aspect-poster w-10 flex-none items-center justify-center overflow-hidden rounded-lg"
+                    className="pointer-events-none flex aspect-poster w-10 flex-none items-center justify-center overflow-hidden rounded-lg"
                     style={{ background: "var(--surface-strong)" }}
                   >
                     {event.poster ? (
@@ -338,7 +369,7 @@ export function HistoryPage() {
                     )}
                   </div>
 
-                  <div className="min-w-0 flex-1">
+                  <div className="pointer-events-none relative min-w-0 flex-1">
                     <p className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>
                       {event.name}
                       {event.type === "episode" && event.season != null && event.episode != null && (
@@ -360,33 +391,29 @@ export function HistoryPage() {
                     )}
                   </div>
 
-                  {/* Both buttons stop the keystroke as well as the click. The
-                      row is itself a role="button" that calls preventDefault on
-                      Enter and Space — which, for a keystroke that bubbled up
-                      from a focused button, cancels the click the browser was
-                      about to synthesise. Keyboard users got the detail panel
-                      where they had asked to delete or annotate. */}
+                  {/* `relative z-10` puts these above the row overlay, which
+                      would otherwise take the click. They no longer need to stop
+                      the event: the overlay is a sibling, so nothing bubbles
+                      from here to it. */}
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); openNoteEditor(event); }}
-                    onKeyDown={(e) => e.stopPropagation()}
-                    className="flex h-9 w-9 flex-none items-center justify-center rounded-lg opacity-100 transition-all duration-fast sm:opacity-0 sm:group-hover:opacity-100 hover:bg-[var(--surface-strong)] focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
-                    aria-label={event.note ? `Edit note on ${event.name || "this watch"}` : `Add note to ${event.name || "this watch"}`}
+                    onClick={() => openNoteEditor(event)}
+                    className="relative z-10 flex h-9 w-9 flex-none items-center justify-center rounded-lg opacity-100 transition-all duration-fast sm:opacity-0 sm:group-hover:opacity-100 hover:bg-[var(--surface-strong)] focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
+                    aria-label={event.note ? `Edit note on ${eventLabel(event)}` : `Add note to ${eventLabel(event)}`}
                     title={event.note ? "Edit note" : "Add note"}
                   >
-                    <NotebookPen className="h-4 w-4" style={{ color: event.note ? "var(--accent)" : "var(--text-mute)" }} />
+                    <NotebookPen aria-hidden="true" className="h-4 w-4" style={{ color: event.note ? "var(--accent-text)" : "var(--text-mute)" }} />
                   </button>
 
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); void handleDelete(event); }}
-                    onKeyDown={(e) => e.stopPropagation()}
+                    onClick={() => void handleDelete(event)}
                     disabled={deletingId === event.id}
-                    className="flex h-9 w-9 flex-none items-center justify-center rounded-lg opacity-100 transition-all duration-fast sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/10 disabled:opacity-50 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-ring-offset"
-                    aria-label="Delete watch event"
+                    className="relative z-10 flex h-9 w-9 flex-none items-center justify-center rounded-lg opacity-100 transition-all duration-fast sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/10 disabled:opacity-50 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-ring-offset"
+                    aria-label={`Delete watch of ${eventLabel(event)}`}
                     title="Remove from history"
                   >
-                    <Trash2 className="h-4 w-4 text-rose-500" />
+                    <Trash2 aria-hidden="true" className="h-4 w-4 text-danger dark:text-danger" />
                   </button>
                 </div>
 
@@ -405,7 +432,7 @@ export function HistoryPage() {
                       onChange={(e) => setNoteDraft(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); closeNoteEditor(); } }}
                       placeholder="What did you think?"
-                      className="w-full resize-y rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-claw-400"
+                      className="w-full resize-y rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-focus"
                       style={{ border: "1px solid var(--border)", background: "var(--bg-0)", color: "var(--text)" }}
                     />
                     <div className="mt-2 flex justify-end gap-2">

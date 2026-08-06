@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { BarChart3, CalendarDays, Clapperboard, Film, Gamepad2, List, Search, Settings, Tv } from "lucide-react";
 import { api, SearchResult } from "../api";
@@ -126,7 +126,48 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     ? actions.filter((a) => a.label.toLowerCase().includes(query.toLowerCase()))
     : actions;
 
-  const totalItems = results.length + visibleActions.length;
+  /*
+   * The titles actually on screen, which is not the same as `results`: a newer
+   * search leaves the previous results in state while it is in flight, and the
+   * title group is not rendered during one. Everything that indexes rows —
+   * the option ids, the count the arrow keys clamp to, what Enter opens — has
+   * to agree with what was rendered, or `aria-activedescendant` names an
+   * element that isn't in the document.
+   */
+  const shownResults = searching ? [] : results;
+  const totalItems = shownResults.length + visibleActions.length;
+
+  /*
+   * The palette is a combobox over a list, and it was none of that in the
+   * markup: an <input> beside a stack of <button>s, with the highlighted row
+   * marked by a background colour and nothing else. Arrow keys moved
+   * `activeIndex`, which changed what Enter would do — with no way for a screen
+   * reader to know either the highlight had moved or what it had moved to.
+   *
+   * Focus stays in the input (typing has to keep working), so the highlight is
+   * published with `aria-activedescendant` pointing at the active option's id
+   * rather than by moving focus. That is also why every option carries
+   * `tabIndex={-1}`: they are still <button>s so a pointer user can click them,
+   * but a listbox's options must not be tab stops of their own.
+   */
+  const listId = useId();
+  const optionId = (index: number) => `${listId}-option-${index}`;
+  const hasList = totalItems > 0;
+  // `activeIndex` is only clamped when an arrow key moves it, so a list that
+  // shrinks underneath it can leave it past the end until the next keypress.
+  const activeOptionId = hasList && activeIndex < totalItems ? optionId(activeIndex) : undefined;
+
+  // Empty until a query has been typed — an announcement on open would be
+  // "10 commands" before the user has asked anything.
+  const listStatus = !query.trim()
+    ? ""
+    : searching
+      ? "Searching…"
+      : searchError
+        ? "Search is unavailable."
+        : totalItems === 0
+          ? `Nothing matches “${query.trim()}”.`
+          : `${totalItems} suggestion${totalItems === 1 ? "" : "s"}.`;
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
@@ -137,11 +178,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       setActiveIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (activeIndex < results.length) {
-        const r = results[activeIndex];
+      if (activeIndex < shownResults.length) {
+        const r = shownResults[activeIndex];
         if (r) openDetail(r);
       } else {
-        const action = visibleActions[activeIndex - results.length];
+        const action = visibleActions[activeIndex - shownResults.length];
         if (action) action.run();
         else if (query.trim()) goToSearch(query);
       }
@@ -206,6 +247,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             className="w-full bg-transparent text-sm outline-none"
             style={{ color: "var(--text)" }}
             aria-label="Search everything"
+            role="combobox"
+            aria-expanded={hasList}
+            aria-controls={hasList ? listId : undefined}
+            aria-activedescendant={activeOptionId}
+            aria-autocomplete="list"
           />
           <kbd
             className="rounded px-1.5 py-0.5 text-2xs font-medium"
@@ -214,6 +260,12 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             Esc
           </kbd>
         </div>
+
+        {/* Stays mounted across every state below, which come and go as whole
+            subtrees — a live region that unmounts announces nothing. */}
+        <p className="sr-only" role="status" aria-live="polite" aria-label="Palette results">
+          {listStatus}
+        </p>
 
         <div className="min-h-0 flex-auto overflow-y-auto py-2 sm:max-h-[60vh]">
           {searching && (
@@ -230,58 +282,74 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             <p className="px-4 py-3 text-xs" style={{ color: "var(--text-dim)" }}>No results for "{query}".</p>
           )}
 
-          {!searching && results.length > 0 && (
-            <div className="px-2 pb-2">
-              <p className={`px-2 pb-1 ${MICRO_LABEL}`} style={{ color: "var(--text-mute)" }}>
-                Titles
-              </p>
-              {results.map((r, i) => (
-                <button
-                  key={r.imdbId}
-                  ref={activeIndex === i ? activeRowRef : undefined}
-                  type="button"
-                  onClick={() => openDetail(r)}
-                  onMouseEnter={() => setActiveIndex(i)}
-                  className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors"
-                  style={{ background: activeIndex === i ? "var(--surface-strong)" : "transparent" }}
-                >
-                  <div className="h-9 w-7 flex-none overflow-hidden rounded" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
-                    <Poster src={r.poster ?? undefined} alt={r.name} className="h-full w-full" sizes="28px" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>{r.name}</p>
-                    <p className="text-2xs" style={{ color: "var(--text-mute)" }}>
-                      {r.year ?? ""} {r.type === "movie" ? <Film className="inline h-3 w-3" /> : <Tv className="inline h-3 w-3" />}
-                    </p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="px-2">
-            {visibleActions.length > 0 && (
-              <p className={`px-2 pb-1 pt-1 ${MICRO_LABEL}`} style={{ color: "var(--text-mute)" }}>
-                Navigate
-              </p>
+          <div id={listId} role="listbox" aria-label="Suggestions">
+            {shownResults.length > 0 && (
+              <div className="px-2 pb-2" role="group" aria-label="Titles">
+                <p aria-hidden="true" className={`px-2 pb-1 ${MICRO_LABEL}`} style={{ color: "var(--text-mute)" }}>
+                  Titles
+                </p>
+                {shownResults.map((r, i) => (
+                  <button
+                    key={r.imdbId}
+                    id={optionId(i)}
+                    ref={activeIndex === i ? activeRowRef : undefined}
+                    type="button"
+                    role="option"
+                    aria-selected={activeIndex === i}
+                    tabIndex={-1}
+                    onClick={() => openDetail(r)}
+                    onMouseEnter={() => setActiveIndex(i)}
+                    className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors"
+                    style={{ background: activeIndex === i ? "var(--surface-strong)" : "transparent" }}
+                  >
+                    <div aria-hidden="true" className="h-9 w-7 flex-none overflow-hidden rounded" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
+                      <Poster src={r.poster ?? undefined} alt="" className="h-full w-full" sizes="28px" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>{r.name}</p>
+                      {/* The type is a bare icon on screen, so the option's name
+                          would otherwise end at the year. */}
+                      <p className="text-2xs" style={{ color: "var(--text-mute)" }}>
+                        {r.year ?? ""}{" "}
+                        {r.type === "movie"
+                          ? <Film aria-hidden="true" className="inline h-3 w-3" />
+                          : <Tv aria-hidden="true" className="inline h-3 w-3" />}
+                        <span className="sr-only">{r.type === "movie" ? "Movie" : "Series"}</span>
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
             )}
-            {visibleActions.map((action, i) => {
-              const idx = results.length + i;
-              return (
-                <button
-                  key={action.id}
-                  ref={activeIndex === idx ? activeRowRef : undefined}
-                  type="button"
-                  onClick={action.run}
-                  onMouseEnter={() => setActiveIndex(idx)}
-                  className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors"
-                  style={{ background: activeIndex === idx ? "var(--surface-strong)" : "transparent" }}
-                >
-                  <action.icon className="h-4 w-4 flex-none" style={{ color: "var(--text-dim)" }} />
-                  <span className="text-sm" style={{ color: "var(--text)" }}>{action.label}</span>
-                </button>
-              );
-            })}
+
+            <div className="px-2" role="group" aria-label="Navigate">
+              {visibleActions.length > 0 && (
+                <p aria-hidden="true" className={`px-2 pb-1 pt-1 ${MICRO_LABEL}`} style={{ color: "var(--text-mute)" }}>
+                  Navigate
+                </p>
+              )}
+              {visibleActions.map((action, i) => {
+                const idx = shownResults.length + i;
+                return (
+                  <button
+                    key={action.id}
+                    id={optionId(idx)}
+                    ref={activeIndex === idx ? activeRowRef : undefined}
+                    type="button"
+                    role="option"
+                    aria-selected={activeIndex === idx}
+                    tabIndex={-1}
+                    onClick={action.run}
+                    onMouseEnter={() => setActiveIndex(idx)}
+                    className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors"
+                    style={{ background: activeIndex === idx ? "var(--surface-strong)" : "transparent" }}
+                  >
+                    <action.icon aria-hidden="true" className="h-4 w-4 flex-none" style={{ color: "var(--text-dim)" }} />
+                    <span className="text-sm" style={{ color: "var(--text)" }}>{action.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

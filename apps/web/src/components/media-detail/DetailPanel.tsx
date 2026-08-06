@@ -394,8 +394,8 @@ export function DetailPanel({
             {(hasRating || hasRuntime) && (
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {hasRating && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-sm font-semibold text-amber-600 ring-1 ring-amber-500/20" title={ratingLabel(item.rating!)}>
-                    <Star className="h-3.5 w-3.5 fill-amber-500" />{formatRating(item.rating!)}
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-sm font-semibold text-warning ring-1 ring-amber-500/20" title={ratingLabel(item.rating!)}>
+                    <Star className="h-3.5 w-3.5 fill-warning" />{formatRating(item.rating!)}
                     <span className="text-xs font-normal" style={{ color: "var(--text-mute)" }}>/{RATING_MAX}</span>
                   </span>
                 )}

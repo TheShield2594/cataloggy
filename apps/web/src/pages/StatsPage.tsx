@@ -88,8 +88,8 @@ export function StatsPage() {
       <div className="mx-auto max-w-4xl space-y-6">
         <h1 className={PAGE_TITLE} style={{ color: "var(--text)" }}>Watch Statistics</h1>
         <div className="mx-auto max-w-lg rounded-2xl p-8 text-center" style={{ border: "1px solid rgba(244,63,94,0.2)", background: "rgba(244,63,94,0.05)" }}>
-          <AlertCircle className="mx-auto h-12 w-12 text-rose-500" />
-          <p className={`mt-3 ${SECTION_TITLE} text-rose-500`}>{error}</p>
+          <AlertCircle className="mx-auto h-12 w-12 text-danger" />
+          <p role="alert" className={`mt-3 ${SECTION_TITLE} text-danger`}>{error}</p>
         </div>
       </div>
     );
@@ -158,9 +158,9 @@ export function StatsPage() {
               <span
                 className={`flex items-center gap-1 text-xs font-medium ${
                   momComparison.diff > 0
-                    ? "text-emerald-500"
+                    ? "text-success"
                     : momComparison.diff < 0
-                      ? "text-rose-500"
+                      ? "text-danger"
                       : ""
                 }`}
                 style={momComparison.diff === 0 ? { color: "var(--text-dim)" } : undefined}
@@ -178,14 +178,30 @@ export function StatsPage() {
               </span>
             )}
           </div>
+          {/* Twelve columns whose month labels have a min-content width the
+              flex track can't go below. At a 320px viewport that pushed the
+              chart 14px past the edge, where `body { overflow-x: hidden }`
+              clipped December off rather than letting anyone scroll to it —
+              content lost, which is what SC 1.4.10 is about.
+
+              A chart is one of the things 1.4.10 explicitly allows to scroll
+              sideways ("content requiring two-dimensional layout"), so the
+              overflow is moved off the page and into the chart, which keeps
+              its columns readable. `tabIndex` because a scroll container with
+              no focusable children is otherwise unreachable by keyboard; the
+              label and role ride with it. */}
           <div
-            className="flex items-end gap-1.5 sm:gap-2"
-            style={{ height: "180px" }}
+            tabIndex={0}
             role="img"
             aria-label={`Monthly activity chart for ${detailed.monthly
               .map((m) => `${new Date(m.month + "-15").toLocaleDateString(undefined, { month: "long", year: "numeric" })}: ${m.movies} movies, ${m.episodes} episodes`)
               .join("; ")}`}
+            className="-mx-1 overflow-x-auto px-1 pb-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
           >
+            <div
+              className="flex min-w-[21rem] items-end gap-1.5 sm:gap-2"
+              style={{ height: "180px" }}
+            >
             {detailed.monthly.map((m, idx) => {
               const { total, height, movieHeight, episodeHeight } = monthlyBarGeometry(m.movies, m.episodes, maxMonthlyTotal);
               const label = new Date(m.month + "-15").toLocaleDateString(undefined, { month: "short" });
@@ -266,6 +282,7 @@ export function StatsPage() {
                 </div>
               );
             })}
+            </div>
           </div>
           <div className="mt-3 flex items-center gap-4 text-xs" style={{ color: "var(--text-dim)" }}>
             <span className="flex items-center gap-1.5">
@@ -307,7 +324,7 @@ export function StatsPage() {
       {detailed && detailed.topRated.length > 0 && (
         <section className="glass-panel rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
           <h2 className={`mb-4 flex items-center gap-2 ${SECTION_TITLE}`} style={{ color: "var(--text)" }}>
-            <Star className="h-5 w-5 text-amber-400" /> Top Rated Watched
+            <Star className="h-5 w-5 text-warning" /> Top Rated Watched
           </h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
             {detailed.topRated.map((item, index) => (
@@ -331,9 +348,14 @@ export function StatsPage() {
                       <Film className="h-8 w-8" style={{ color: "var(--text-mute)" }} />
                     </div>
                   )}
+                  {/* Fixed amber, not --status-warn: this badge sits on a
+                      black scrim over poster art rather than on a theme
+                      surface, so it can't take a token that goes dark on the
+                      light theme — that pairing measured 1.46:1. Against the
+                      scrim this is 5.2:1 even over a white poster. */}
                   {item.rating != null && (
                     <div role="img" aria-label={ratingLabel(item.rating)} title={ratingLabel(item.rating)} className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
-                      <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-amber-400">{formatRating(item.rating)}</span>
+                      <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-[#f5c451]">{formatRating(item.rating)}</span>
                     </div>
                   )}
                 </div>
@@ -361,7 +383,7 @@ export function StatsPage() {
           </SelectField>
         </div>
 
-        {yearError && <p className="text-sm text-rose-500">{yearError}</p>}
+        {yearError && <p role="alert" className="text-sm text-danger">{yearError}</p>}
 
         {!yearError && yearReview && (
           <div className="space-y-5">
@@ -392,7 +414,7 @@ export function StatsPage() {
             {yearReview.topRated.length > 0 && (
               <div>
                 <h3 className={`mb-2 flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-dim)" }}>
-                  <Star className="h-4 w-4 text-amber-400" /> Top Rated Picks
+                  <Star className="h-4 w-4 text-warning" /> Top Rated Picks
                 </h3>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
                   {yearReview.topRated.map((item) => (
@@ -412,7 +434,7 @@ export function StatsPage() {
                             pickers use — unlike the community score on the card
                             above, which is TMDB's and stays out of ten. */}
                         <div role="img" aria-label={starsLabel(item.rating)} title={starsLabel(item.rating)} className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
-                          <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-amber-400">{formatStars(item.rating)}</span>
+                          <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-[#f5c451]">{formatStars(item.rating)}</span>
                         </div>
                       </div>
                       <p className="mt-1.5 truncate text-sm font-medium" style={{ color: "var(--text)" }}>{item.name ?? item.imdbId}</p>
@@ -459,14 +481,14 @@ function MilestoneBadges({
   return (
     <section className="glass-panel rounded-2xl p-5" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
       <h2 className={`mb-4 flex items-center gap-2 ${SECTION_TITLE}`} style={{ color: "var(--text)" }}>
-        <Award className="h-5 w-5 text-amber-400" /> Achievements
+        <Award className="h-5 w-5 text-warning" /> Achievements
       </h2>
       {earned.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {earned.map((m) => (
             <span
               key={m.label}
-              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-amber-400"
+              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-warning"
               style={{ border: "1px solid rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.1)" }}
             >
               <m.icon className="h-3.5 w-3.5" /> {m.label}

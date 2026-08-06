@@ -174,7 +174,7 @@ export function WatchDateModal({
           </div>
         )}
 
-        {error && <p className="mt-3 text-xs text-rose-400">{error}</p>}
+        {error && <p role="alert" className="mt-3 text-xs text-danger">{error}</p>}
       </div>
     </div>
   );

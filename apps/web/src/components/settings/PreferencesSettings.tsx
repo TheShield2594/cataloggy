@@ -178,7 +178,7 @@ export function PreferencesSettings() {
           button it was announced as that button's own new label. */}
       <p className="flex min-h-5 items-center gap-2 text-xs" aria-live="polite" style={{ color: "var(--text-mute)" }}>
         {error ? (
-          <span className="flex items-center gap-2 text-rose-400"><AlertCircle size={14} /> {error}</span>
+          <span className="flex items-center gap-2 text-danger"><AlertCircle size={14} /> {error}</span>
         ) : saving ? (
           <><Loader2 size={14} className="animate-spin" /> Saving...</>
         ) : saved ? (

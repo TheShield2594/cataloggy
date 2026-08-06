@@ -48,13 +48,13 @@ function RenameForm({ profile, onSaved, onCancel }: { profile: Profile; onSaved:
         className="w-full min-w-0 rounded-lg border px-2.5 py-1.5 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
       />
-      <button type="submit" disabled={saving} aria-label="Save name" className="flex-none rounded-lg p-1.5 text-emerald-600 hover:bg-[var(--surface-strong)]">
+      <button type="submit" disabled={saving} aria-label="Save name" className="flex-none rounded-lg p-1.5 text-success hover:bg-[var(--surface-strong)]">
         {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
       </button>
       <button type="button" onClick={onCancel} aria-label="Cancel rename" className="flex-none rounded-lg p-1.5 hover:bg-[var(--surface-strong)]" style={{ color: "var(--text-mute)" }}>
         <X size={16} />
       </button>
-      {error && <p className="w-full text-xs text-rose-600">{error}</p>}
+      {error && <p role="alert" className="w-full text-xs text-danger">{error}</p>}
     </form>
   );
 }
@@ -125,14 +125,14 @@ function PinForm({ profile, onSaved, onCancel }: { profile: Profile; onSaved: (p
         type="submit"
         disabled={saving || !pin.trim() || (profile.hasPin && !currentPin.trim())}
         aria-label="Save PIN"
-        className="flex-none rounded-lg p-1.5 text-emerald-600 hover:bg-[var(--surface-strong)] disabled:opacity-50"
+        className="flex-none rounded-lg p-1.5 text-success hover:bg-[var(--surface-strong)] disabled:opacity-50"
       >
         {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
       </button>
       <button type="button" onClick={onCancel} aria-label="Cancel" className="flex-none rounded-lg p-1.5 hover:bg-[var(--surface-strong)]" style={{ color: "var(--text-mute)" }}>
         <X size={16} />
       </button>
-      {error && <p className="w-full text-xs text-rose-600">{error}</p>}
+      {error && <p role="alert" className="w-full text-xs text-danger">{error}</p>}
     </form>
   );
 }
@@ -175,13 +175,13 @@ function RemovePinForm({ profile, onSaved, onCancel }: { profile: Profile; onSav
         className="w-full min-w-0 rounded-lg border px-2.5 py-1.5 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
         style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-1)" }}
       />
-      <button type="submit" disabled={saving || !currentPin.trim()} aria-label="Confirm PIN removal" className="flex-none rounded-lg p-1.5 text-emerald-600 hover:bg-[var(--surface-strong)] disabled:opacity-50">
+      <button type="submit" disabled={saving || !currentPin.trim()} aria-label="Confirm PIN removal" className="flex-none rounded-lg p-1.5 text-success hover:bg-[var(--surface-strong)] disabled:opacity-50">
         {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
       </button>
       <button type="button" onClick={onCancel} aria-label="Cancel" className="flex-none rounded-lg p-1.5 hover:bg-[var(--surface-strong)]" style={{ color: "var(--text-mute)" }}>
         <X size={16} />
       </button>
-      {error && <p className="w-full text-xs text-rose-600">{error}</p>}
+      {error && <p role="alert" className="w-full text-xs text-danger">{error}</p>}
     </form>
   );
 }
@@ -231,14 +231,14 @@ function DeleteConfirmForm({ profile, onDeleted, onCancel }: { profile: Profile;
         type="submit"
         disabled={deleting || !pin.trim()}
         aria-label={`Confirm deletion of ${profile.name}`}
-        className="flex-none rounded-lg p-1.5 text-rose-600 hover:bg-rose-500/10 disabled:opacity-50"
+        className="flex-none rounded-lg p-1.5 text-danger hover:bg-rose-500/10 disabled:opacity-50"
       >
         {deleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
       </button>
       <button type="button" onClick={onCancel} aria-label="Cancel deletion" className="flex-none rounded-lg p-1.5 hover:bg-[var(--surface-strong)]" style={{ color: "var(--text-mute)" }}>
         <X size={16} />
       </button>
-      {error && <p className="w-full text-xs text-rose-600">{error}</p>}
+      {error && <p role="alert" className="w-full text-xs text-danger">{error}</p>}
     </form>
   );
 }
@@ -366,7 +366,7 @@ function ProfileRow({
               disabled={deleting || isOnlyProfile}
               title={isOnlyProfile ? "Can't delete the only profile" : "Delete profile"}
               aria-label={`Delete ${profile.name}`}
-              className="flex-none rounded-lg p-1.5 transition-colors hover:bg-rose-500/10 hover:text-rose-600 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[var(--text-mute)]"
+              className="flex-none rounded-lg p-1.5 transition-colors hover:bg-rose-500/10 hover:text-danger disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[var(--text-mute)]"
               style={{ color: "var(--text-mute)" }}
             >
               {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
@@ -374,7 +374,7 @@ function ProfileRow({
           </>
         )}
       </div>
-      {error && <p className="mt-1.5 flex items-center gap-1.5 text-xs text-rose-600"><AlertCircle size={13} /> {error}</p>}
+      {error && <p role="alert" className="mt-1.5 flex items-center gap-1.5 text-xs text-danger"><AlertCircle size={13} /> {error}</p>}
     </div>
   );
 }
@@ -434,7 +434,7 @@ export function ProfileSettings() {
           <Loader2 size={16} className="animate-spin" /> Loading profiles...
         </div>
       ) : error ? (
-        <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>
+        <p role="alert" className="flex items-center gap-2 text-sm text-danger"><AlertCircle size={16} /> {error}</p>
       ) : (
         <div className="space-y-2">
           {profiles.map((profile) => (

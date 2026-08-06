@@ -136,7 +136,7 @@ export function PlayDetectionSettings() {
 
       {error && (
         <div className="space-y-2">
-          <p className="flex items-center gap-2 text-sm text-rose-600">
+          <p role="alert" className="flex items-center gap-2 text-sm text-danger">
             <AlertCircle size={16} /> {error}
           </p>
           {/* Reachable whatever `enabled` is: when the request failed there is

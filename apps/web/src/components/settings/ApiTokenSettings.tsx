@@ -43,7 +43,7 @@ export function ApiTokenSettings() {
           {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
       </div>
-      <p className="text-xs text-amber-600">Only use this on trusted devices.</p>
+      <p className="text-xs text-warning">Only use this on trusted devices.</p>
       <button
         type="submit"
         className={`btn-primary ${saved ? "btn-saved" : ""}`}

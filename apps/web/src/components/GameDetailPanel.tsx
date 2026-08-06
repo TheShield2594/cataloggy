@@ -186,7 +186,7 @@ export function GameDetailPanel({
               </span>
               {releaseYear && <span className="text-sm" style={{ color: "var(--text-mute)" }}>{releaseYear}</span>}
               {game.finished && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-600 ring-1 ring-emerald-500/20">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-success ring-1 ring-emerald-500/20">
                   <Check className="h-3 w-3" /> Finished
                 </span>
               )}
@@ -269,7 +269,7 @@ export function GameDetailPanel({
               <button
                 type="button"
                 onClick={() => setConfirmDelete(true)}
-                className="flex items-center gap-1.5 text-xs font-medium text-rose-500 hover:text-rose-600"
+                className="flex items-center gap-1.5 text-xs font-medium text-danger hover:text-danger"
               >
                 <Trash2 className="h-3.5 w-3.5" /> Remove from library
               </button>

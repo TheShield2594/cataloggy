@@ -121,8 +121,8 @@ export function DataSettings() {
         >
           {syncing ? <><Loader2 size={16} className="animate-spin" /> Syncing...</> : "Sync all metadata"}
         </button>
-        {result && <p className="flex items-center gap-2 text-sm text-emerald-600"><Check size={16} /> {result}</p>}
-        {error && <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {error}</p>}
+        {result && <p className="flex items-center gap-2 text-sm text-success"><Check size={16} /> {result}</p>}
+        {error && <p role="alert" className="flex items-center gap-2 text-sm text-danger"><AlertCircle size={16} /> {error}</p>}
       </div>
 
       <div className="space-y-4 pt-5" style={{ borderTop: "1px solid var(--border)" }}>
@@ -188,8 +188,8 @@ export function DataSettings() {
             {importingCsv ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : <><Upload size={16} /> Import CSV history</>}
           </button>
         </div>
-        {importResult && <p className="flex items-center gap-2 text-sm text-emerald-600"><Check size={16} /> {importResult}</p>}
-        {importError && <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {importError}</p>}
+        {importResult && <p className="flex items-center gap-2 text-sm text-success"><Check size={16} /> {importResult}</p>}
+        {importError && <p role="alert" className="flex items-center gap-2 text-sm text-danger"><AlertCircle size={16} /> {importError}</p>}
       </div>
 
       <div className="space-y-4 pt-5" style={{ borderTop: "1px solid var(--border)" }}>
@@ -231,8 +231,8 @@ export function DataSettings() {
             {importingExternal ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : <><Upload size={16} /> Import CSV</>}
           </button>
         </div>
-        {externalResult && <p className="flex items-center gap-2 text-sm text-emerald-600"><Check size={16} /> {externalResult}</p>}
-        {externalError && <p className="flex items-center gap-2 text-sm text-rose-600"><AlertCircle size={16} /> {externalError}</p>}
+        {externalResult && <p className="flex items-center gap-2 text-sm text-success"><Check size={16} /> {externalResult}</p>}
+        {externalError && <p role="alert" className="flex items-center gap-2 text-sm text-danger"><AlertCircle size={16} /> {externalError}</p>}
       </div>
     </div>
   );

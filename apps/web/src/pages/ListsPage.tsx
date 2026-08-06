@@ -248,7 +248,7 @@ function AddItemModal({
         {/* Results — sized by what's left of the dialog rather than a `vh`
             fraction, so the on-screen keyboard can't bury the list. */}
         <div className="min-h-0 flex-auto overflow-y-auto px-5 py-3 sm:max-h-[50vh]">
-          {error && <p className="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-600">{error}</p>}
+          {error && <p role="alert" className="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-danger">{error}</p>}
           {searching && <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>Searching...</p>}
           {!searching && query.trim() && results.length === 0 && (
             <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>No results found.</p>
@@ -287,7 +287,7 @@ function AddItemModal({
                     />
                   ) : already ? (
                     <span className="flex flex-none items-center gap-1 text-2xs font-semibold" style={{ color: "var(--text-mute)" }}>
-                      <Check className="h-4 w-4 text-emerald-600" />
+                      <Check className="h-4 w-4 text-success" />
                       Added
                     </span>
                   ) : (
@@ -561,7 +561,7 @@ export function ListsPage() {
           click around, so the page keeps a stable hidden h1 above it. */}
       <h1 className="sr-only">Lists</h1>
       {/* Sidebar */}
-      <aside className="w-full shrink-0 md:w-56 lg:w-64">
+      <aside aria-label="Your lists" className="w-full shrink-0 md:w-56 lg:w-64">
         {/* Mobile: horizontal scrollable tabs */}
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide md:flex-col md:overflow-x-visible md:pb-0">
           {lists.map((list) => (
@@ -569,8 +569,8 @@ export function ListsPage() {
               {confirmDeleteId === list.id && list.kind === "custom" ? (
                 <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3">
                   <div className="flex items-center gap-2 mb-2">
-                    <AlertTriangle className="h-4 w-4 flex-none text-rose-500" />
-                    <p className="text-xs font-semibold text-rose-600">Delete "{list.name}"?</p>
+                    <AlertTriangle className="h-4 w-4 flex-none text-danger" />
+                    <p role="alert" className="text-xs font-semibold text-danger">Delete "{list.name}"?</p>
                   </div>
                   <p className="text-xs mb-3" style={{ color: "var(--text-mute)" }}>This will remove the list and all its items.</p>
                   <div className="flex gap-2">
@@ -624,7 +624,7 @@ export function ListsPage() {
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(list.id); }}
-                      className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/15 hover:text-rose-500 transition-all duration-fast focus:opacity-100"
+                      className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/15 hover:text-danger transition-all duration-fast focus:opacity-100"
                       style={{ color: "var(--text-mute)" }}
                       aria-label={`Delete list ${list.name}`}
                     >
@@ -660,7 +660,7 @@ export function ListsPage() {
           and a nested one would give the page two. */}
       <div className="min-w-0 flex-1">
         {error && (
-          <p className="mb-4 rounded-xl bg-rose-500/5 border border-rose-500/20 px-4 py-3 text-rose-600 text-sm">{error}</p>
+          <p role="alert" className="mb-4 rounded-xl bg-rose-500/5 border border-rose-500/20 px-4 py-3 text-danger text-sm">{error}</p>
         )}
 
         {!selectedList ? (
@@ -706,7 +706,7 @@ export function ListsPage() {
                       // Keeps focus in the input, so the click isn't cancelled
                       // by its own blur before it lands.
                       onMouseDown={(e) => e.preventDefault()}
-                      className="rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-500/10"
+                      className="rounded-lg p-1.5 text-success hover:bg-emerald-500/10"
                     >
                       <Check className="h-5 w-5" />
                     </button>
@@ -856,7 +856,7 @@ export function ListsPage() {
                         type="button"
                         disabled={removingIds[item.imdbId]}
                         onClick={() => handleRemove(item)}
-                        className="absolute top-2.5 right-2.5 z-10 rounded-full bg-black/60 p-2 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-all duration-base hover:bg-rose-500 hover:text-white disabled:opacity-50 backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-ring-offset"
+                        className="absolute top-2.5 right-2.5 z-10 rounded-full bg-black/60 p-2 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-all duration-base hover:bg-rose-500 hover:text-white disabled:opacity-50 backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-ring-offset"
                         aria-label="Remove from list"
                       >
                         <Trash2 className="h-4 w-4" />

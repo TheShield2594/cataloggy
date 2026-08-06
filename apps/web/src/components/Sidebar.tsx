@@ -132,6 +132,9 @@ export function Sidebar({
 
   return (
     <aside
+      // Named because the Lists page has a complementary landmark of its own,
+      // and two unnamed ones are indistinguishable in a landmark list.
+      aria-label="Sidebar"
       className="fixed inset-y-0 left-0 z-40 hidden sm:flex"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -175,7 +178,7 @@ export function Sidebar({
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
-                `group relative flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset ${
+                `group relative flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset ${
                   isActive ? "" : "hover:bg-[var(--surface-strong)]"
                 }`
               }
@@ -202,7 +205,7 @@ export function Sidebar({
             <button
               type="button"
               onClick={onSwitchProfile}
-              className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+              className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
               style={{ color: "var(--text-dim)" }}
               aria-label={profile ? `Switch profile (currently ${profile.name})` : "Switch profile"}
               title={expanded ? undefined : (profile?.name ?? "Switch profile")}
@@ -218,7 +221,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={togglePin}
-            className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
+            className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
             style={{ color: "var(--text-dim)" }}
             aria-label={pinned ? "Unpin sidebar" : "Pin sidebar open"}
             title={expanded ? undefined : pinned ? "Unpin sidebar" : "Pin sidebar open"}
