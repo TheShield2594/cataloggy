@@ -204,9 +204,9 @@ Trakt.
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/lists` | Each list with its item count. |
-| `POST` | `/lists` | `{ name, kind }`. `kind` must be `custom`: the watchlist and the collection are per-profile singletons the app creates for you, and a second one of either would sync nothing and couldn't be deleted. `409` otherwise. |
+| `POST` | `/lists` | `{ name, kind }`. `400` for a kind that isn't one of the three; `409` for `watchlist` or `collection`, which are per-profile singletons the app creates for you — only `custom` can be created here. |
 | `PATCH` | `/lists/:id` | `{ name }`. Renaming a default list is allowed — both defaults are looked up by kind, not by name. |
-| `DELETE` | `/lists/:id` | `409` for a `watchlist` or `collection` list: items cascade off the list, so deleting a default takes its contents with it. Only `custom` lists can be deleted. |
+| `DELETE` | `/lists/:id` | `409` for the default watchlist or collection — items cascade off the list, so deleting one takes its contents with it. The default is the oldest row of its kind, so a duplicate left by an older version is still deletable. |
 | `GET` | `/lists/:listId/items` | Items with metadata joined; anything still missing metadata falls back to the title captured when it was added, and a backfill is queued. |
 | `POST` | `/lists/:listId/items` | `{ type, imdbId, title? }`. `409` if already present. |
 | `DELETE` | `/lists/:listId/items/:type/:imdbId` | |

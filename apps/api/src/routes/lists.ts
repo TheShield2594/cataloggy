@@ -73,13 +73,29 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
     // — but ListItem cascades on the list, so the delete takes every item in it
     // and nothing brings those back. The web UI only offers delete on custom
     // lists; this makes a direct API call agree with it.
+    //
+    // Guarded per row rather than per kind: an install can already hold a second
+    // watchlist — from the lookup that used to key on the name too, or from a
+    // POST made before that route was closed — and protecting the kind would
+    // leave that duplicate permanently stuck, syncing nothing and impossible to
+    // remove. The default is the oldest row of its kind, which is what
+    // getDefaultWatchlist/getDefaultCollection resolve to; the lookup is
+    // repeated here rather than called, since those two create a row when they
+    // find none and a delete has no business doing that.
     if (list.kind !== ListKind.custom) {
-      return reply.code(409).send({
-        error:
-          list.kind === ListKind.watchlist
-            ? "The default watchlist can't be deleted"
-            : "The default collection can't be deleted",
+      const defaultForKind = await prisma.list.findFirst({
+        where: { kind: list.kind, profileId: request.profileId! },
+        orderBy: { createdAt: "asc" },
       });
+
+      if (defaultForKind?.id === list.id) {
+        return reply.code(409).send({
+          error:
+            list.kind === ListKind.watchlist
+              ? "The default watchlist can't be deleted"
+              : "The default collection can't be deleted",
+        });
+      }
     }
 
     await prisma.list.delete({ where: { id: list.id } });

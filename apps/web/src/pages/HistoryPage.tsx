@@ -360,9 +360,16 @@ export function HistoryPage() {
                     )}
                   </div>
 
+                  {/* Both buttons stop the keystroke as well as the click. The
+                      row is itself a role="button" that calls preventDefault on
+                      Enter and Space — which, for a keystroke that bubbled up
+                      from a focused button, cancels the click the browser was
+                      about to synthesise. Keyboard users got the detail panel
+                      where they had asked to delete or annotate. */}
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); openNoteEditor(event); }}
+                    onKeyDown={(e) => e.stopPropagation()}
                     className="flex h-9 w-9 flex-none items-center justify-center rounded-lg opacity-100 transition-all duration-fast sm:opacity-0 sm:group-hover:opacity-100 hover:bg-[var(--surface-strong)] focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-400 focus-ring-offset"
                     aria-label={event.note ? `Edit note on ${event.name || "this watch"}` : `Add note to ${event.name || "this watch"}`}
                     title={event.note ? "Edit note" : "Add note"}
@@ -373,6 +380,7 @@ export function HistoryPage() {
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); void handleDelete(event); }}
+                    onKeyDown={(e) => e.stopPropagation()}
                     disabled={deletingId === event.id}
                     className="flex h-9 w-9 flex-none items-center justify-center rounded-lg opacity-100 transition-all duration-fast sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/10 disabled:opacity-50 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-ring-offset"
                     aria-label="Delete watch event"

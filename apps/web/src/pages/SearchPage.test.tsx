@@ -179,9 +179,25 @@ describe("SearchPage query handling", () => {
     search.mockRejectedValue(new Error("Network down"));
     renderPage("/search?q=alien");
 
-    expect(await screen.findByText("Network down")).toBeInTheDocument();
-    expect(screen.getByText(/no results found/i)).toBeInTheDocument();
+    // The toast fades; the page underneath has to keep saying what happened,
+    // rather than settling into "no results" for a search that never ran.
+    expect(await screen.findByText(/search failed/i)).toBeInTheDocument();
+    expect(screen.getAllByText("Network down").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/no results found/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/tmdb api key/i)).not.toBeInTheDocument();
+  });
+
+  it("goes back to offering the filters once a later search succeeds", async () => {
+    const user = userEvent.setup();
+    search.mockRejectedValue(new Error("Network down"));
+    renderPage("/search?q=alien");
+    await screen.findByText(/search failed/i);
+
+    search.mockImplementation(async (type) => (type === "movie" ? [result("Solaris")] : []));
+    await user.type(queryField(), "s");
+
+    expect(await screen.findByText("Solaris")).toBeInTheDocument();
+    expect(screen.queryByText(/search failed/i)).not.toBeInTheDocument();
   });
 
   it("ignores a slow search that lands after a newer one", async () => {

@@ -43,13 +43,14 @@ const renderSettings = async () => {
 };
 
 /** The row for a profile — the name also appears in the "watching as" line. */
-const rowFor = (name: string) =>
-  within(
-    screen
-      .getAllByText(name)
-      .map((el) => el.closest("div.rounded-xl"))
-      .find(Boolean) as HTMLElement
-  );
+const rowFor = (name: string) => {
+  const row = screen
+    .getAllByText(name)
+    .map((el) => el.closest("div.rounded-xl"))
+    .find(Boolean);
+  if (!row) throw new Error(`No profile row found for "${name}"`);
+  return within(row as HTMLElement);
+};
 
 beforeEach(() => {
   activeProfile = ALEX;

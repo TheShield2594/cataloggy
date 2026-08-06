@@ -20,12 +20,15 @@ vi.mock("../api", async (importOriginal) => {
 });
 
 // The panel fetches metadata and history of its own the moment a row opens;
-// none of that is what this file is about.
+// none of that is what this file is about. The setter is hoisted so a case can
+// assert that a row did *not* open it.
+const setSelectedItem = vi.hoisted(() => vi.fn());
+
 vi.mock("../components/MediaDetailPanel", () => ({
   DetailPanel: () => null,
   useDetailPanel: () => ({
     selectedItem: null,
-    setSelectedItem: vi.fn(),
+    setSelectedItem,
     panelHistory: [],
     setPanelHistory: vi.fn(),
     panelHistoryLoading: false,
@@ -109,6 +112,34 @@ describe("HistoryPage", () => {
     await waitFor(() => expect(screen.queryByText("Alien")).not.toBeInTheDocument());
     expect(await screen.findByText(/Removed Alien from history/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /undo/i })).toBeInTheDocument();
+  });
+
+  // The row is a role="button" that swallows Enter and Space, and a keystroke
+  // bubbling up from a button inside it used to be cancelled there — so the
+  // detail panel opened where a keyboard user had asked to delete.
+  it("deletes from the keyboard rather than opening the panel", async () => {
+    const user = userEvent.setup();
+    deleteWatchEvent.mockResolvedValue(undefined as never);
+    renderPage();
+    await screen.findByText("Alien");
+
+    screen.getAllByRole("button", { name: "Delete watch event" })[0].focus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(deleteWatchEvent).toHaveBeenCalledWith(ALIEN.id));
+    expect(setSelectedItem).not.toHaveBeenCalled();
+  });
+
+  it("opens the note editor from the keyboard, on Space as well", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Alien");
+
+    screen.getByRole("button", { name: /add note to alien/i }).focus();
+    await user.keyboard(" ");
+
+    expect(await screen.findByLabelText(/^note on alien$/i)).toBeInTheDocument();
+    expect(setSelectedItem).not.toHaveBeenCalled();
   });
 
   it("puts a row back when the delete fails", async () => {

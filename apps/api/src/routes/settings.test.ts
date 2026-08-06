@@ -282,6 +282,16 @@ describe("settings routes", () => {
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
+    // The per-title poster route was removed as unused; this keeps it removed.
+    it("has no per-title poster route, even with a key configured", async () => {
+      getRpdbApiKey.mockResolvedValue("rpdb-key");
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "GET", url: "/rpdb/poster/tt1" });
+
+      expect(res.statusCode).toBe(404);
+    });
+
     it("reports the key to the add-on, which builds poster URLs itself", async () => {
       getRpdbApiKey.mockResolvedValue("rpdb-key");
       const app = await buildApp();

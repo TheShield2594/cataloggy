@@ -79,6 +79,10 @@ export function SearchPage() {
   const { filters, setFilters, clearFilters, hasActiveFilters, activeFilterCount } = useSearchFilters();
   const [rawResults, setRawResults] = useState<SearchResult[] | null>(null);
   const [needsTmdb, setNeedsTmdb] = useState(false);
+  // Held as state rather than left to the toast: the toast fades, and the page
+  // it fades off said "No results found" — a search that failed reported for
+  // the rest of the session as a search that came back empty.
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [lists, setLists] = useState<CatalogList[]>([]);
   const [pendingAdds, setPendingAdds] = useState<Record<string, boolean>>({});
@@ -138,6 +142,7 @@ export function SearchPage() {
       const requestId = ++requestIdRef.current;
       setIsSearching(true);
       setNeedsTmdb(false);
+      setSearchError(null);
       lastSearchRef.current = { filter: searchFilter, query: searchQuery };
 
       try {
@@ -159,6 +164,7 @@ export function SearchPage() {
         setRawResults([]);
         const message = err instanceof Error ? err.message : "Search failed";
         setNeedsTmdb(/tmdb/i.test(message));
+        setSearchError(message);
         showToast(message, "error");
       } finally {
         if (requestIdRef.current === requestId) {
@@ -191,6 +197,8 @@ export function SearchPage() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       lastSearchRef.current = { filter: filters.filter, query: "" };
       setRawResults(null);
+      setSearchError(null);
+      setNeedsTmdb(false);
       setIsSearching(false);
       return;
     }
@@ -486,14 +494,16 @@ export function SearchPage() {
             <Filter className="h-12 w-12" style={{ color: "var(--text-mute)" }} />
           </div>
           <p className={`mt-5 ${SECTION_TITLE}`} style={{ color: "var(--text-dim)" }}>
-            {needsTmdb ? "Search needs a TMDB API key" : "No results found"}
+            {needsTmdb ? "Search needs a TMDB API key" : searchError ? "Search failed" : "No results found"}
           </p>
           <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>
             {needsTmdb
               ? "Movie and series search is powered by TMDB — set up a free API key to start searching."
-              : hasActiveFilters
-                ? "Try adjusting your filters or search term."
-                : "Try a different search term or filter."}
+              : searchError
+                ? searchError
+                : hasActiveFilters
+                  ? "Try adjusting your filters or search term."
+                  : "Try a different search term or filter."}
           </p>
           {needsTmdb && (
             <Link
@@ -504,7 +514,9 @@ export function SearchPage() {
               Set up TMDB in Settings &rarr;
             </Link>
           )}
-          {hasActiveFilters && !needsTmdb && (
+          {/* Not offered when the search itself failed: clearing filters
+              re-filters nothing, since no results were ever returned. */}
+          {hasActiveFilters && !needsTmdb && !searchError && (
             <button
               onClick={clearFilters}
               className="mt-3 rounded-full px-4 py-2 text-sm font-medium hover:bg-[var(--surface)] transition-colors"

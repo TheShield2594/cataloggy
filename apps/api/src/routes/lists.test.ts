@@ -211,6 +211,23 @@ describe("lists routes", () => {
       expect(prismaMock.list.delete).not.toHaveBeenCalled();
     });
 
+    // An install can already hold two watchlists — the lookup used to key on the
+    // name as well as the kind, so a rename spawned a second one. The younger row
+    // is not the default, syncs nothing, and has to stay removable.
+    it("deletes a duplicate watchlist that isn't the default one", async () => {
+      const duplicate = listRow({ id: OTHER_LIST_ID, createdAt: new Date("2026-02-01T00:00:00Z") });
+      prismaMock.list.findFirst
+        .mockResolvedValueOnce(duplicate) // the row addressed by the URL
+        .mockResolvedValueOnce(listRow()); // the older row, which is the default
+      prismaMock.list.delete.mockResolvedValue(duplicate);
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "DELETE", url: `/lists/${OTHER_LIST_ID}` });
+
+      expect(res.statusCode).toBe(204);
+      expect(prismaMock.list.delete).toHaveBeenCalledWith({ where: { id: OTHER_LIST_ID } });
+    });
+
     it("refuses to delete the default collection", async () => {
       prismaMock.list.findFirst.mockResolvedValue(listRow({ name: "Collection", kind: "collection" }));
       const app = await buildApp();
