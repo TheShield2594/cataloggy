@@ -7,6 +7,13 @@ const resetMocks = () => {
 
 type GamePayload = Record<string, unknown>;
 
+// Which upstream a mocked request went to, matched on the host rather than on
+// the URL containing the host's name — `includes("api.igdb.com")` is true of
+// any URL that merely mentions it, which is what CodeQL objects to.
+const isHost = (url: string | URL, host: string) => new URL(url.toString()).host === host;
+const isTwitch = (url: string | URL) => isHost(url, "id.twitch.tv");
+const isIgdb = (url: string | URL) => isHost(url, "api.igdb.com");
+
 /**
  * Stubs Twitch + IGDB. `respond` is handed the Apicalypse body of each IGDB
  * request, so a test can answer the fuzzy `search` query and the literal
@@ -16,7 +23,7 @@ type GamePayload = Record<string, unknown>;
 function stubIgdb(respond: (body: string) => GamePayload[]) {
   const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
     const href = url.toString();
-    if (href.includes("id.twitch.tv")) {
+    if (isTwitch(href)) {
       return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
     }
     return new Response(JSON.stringify(respond(String(init?.body ?? ""))), { status: 200 });
@@ -60,7 +67,7 @@ describe("igdb", () => {
       const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
         void init;
         const href = url.toString();
-        if (href.includes("id.twitch.tv")) {
+        if (isTwitch(href)) {
           return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
         }
         return new Response(
@@ -93,9 +100,9 @@ describe("igdb", () => {
         }
       ]);
 
-      const twitchCall = fetchMock.mock.calls.find(([url]) => url.toString().includes("id.twitch.tv"));
+      const twitchCall = fetchMock.mock.calls.find(([url]) => isTwitch(url));
       expect(twitchCall).toBeTruthy();
-      const igdbCall = fetchMock.mock.calls.find(([url]) => url.toString().includes("api.igdb.com"));
+      const igdbCall = fetchMock.mock.calls.find(([url]) => isIgdb(url));
       expect(igdbCall?.[1]).toMatchObject({
         headers: expect.objectContaining({ "Client-ID": "client-id", Authorization: "Bearer tok" })
       });
@@ -106,7 +113,7 @@ describe("igdb", () => {
       const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
         void init;
         const href = url.toString();
-        if (href.includes("id.twitch.tv")) {
+        if (isTwitch(href)) {
           tokenRequests += 1;
           return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
         }
@@ -127,7 +134,7 @@ describe("igdb", () => {
       const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
         void init;
         const href = url.toString();
-        if (href.includes("id.twitch.tv")) {
+        if (isTwitch(href)) {
           return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
         }
         return new Response("invalid token", { status: 401 });
@@ -145,7 +152,7 @@ describe("igdb", () => {
       const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
         void init;
         const href = url.toString();
-        if (href.includes("id.twitch.tv")) {
+        if (isTwitch(href)) {
           return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
         }
         return new Response(JSON.stringify([]), { status: 200 });
@@ -157,7 +164,7 @@ describe("igdb", () => {
       const client = IgdbClient.fromEnv();
       await client.searchGames('Portal 2: "Aperture"');
 
-      const igdbCall = fetchMock.mock.calls.find(([url]) => url.toString().includes("api.igdb.com"));
+      const igdbCall = fetchMock.mock.calls.find(([url]) => isIgdb(url));
       expect(igdbCall?.[1]?.body).toContain('search "Portal 2: \\"Aperture\\""');
     });
 
@@ -169,7 +176,7 @@ describe("igdb", () => {
       await IgdbClient.fromEnv().searchGames("super mario sunshine");
 
       const bodies = fetchMock.mock.calls
-        .filter(([url]) => url.toString().includes("api.igdb.com"))
+        .filter(([url]) => isIgdb(url))
         .map(([, init]) => String(init?.body ?? ""));
 
       expect(bodies).toHaveLength(2);
@@ -228,7 +235,7 @@ describe("igdb", () => {
     it("still answers when one of the two queries fails", async () => {
       const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
         const href = url.toString();
-        if (href.includes("id.twitch.tv")) {
+        if (isTwitch(href)) {
           return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
         }
         if (isLiteralSearch(String(init?.body ?? ""))) {
@@ -247,7 +254,7 @@ describe("igdb", () => {
 
     it("throws only when both queries fail", async () => {
       const fetchMock = vi.fn(async (url: string | URL) => {
-        if (url.toString().includes("id.twitch.tv")) {
+        if (isTwitch(url)) {
           return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
         }
         return new Response("upstream is down", { status: 503 });
@@ -271,13 +278,13 @@ describe("igdb", () => {
       const second = await client.searchGames("  hades ");
 
       expect(second.map((r) => r.title)).toEqual(["Hades"]);
-      expect(fetchMock.mock.calls.filter(([url]) => url.toString().includes("api.igdb.com"))).toHaveLength(2);
+      expect(fetchMock.mock.calls.filter(([url]) => isIgdb(url))).toHaveLength(2);
     });
 
     it("does not cache a half-answer", async () => {
       let literalRequests = 0;
       const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
-        if (url.toString().includes("id.twitch.tv")) {
+        if (isTwitch(url)) {
           return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
         }
         if (isLiteralSearch(String(init?.body ?? ""))) {
@@ -295,6 +302,38 @@ describe("igdb", () => {
       await client.searchGames("Hades");
 
       expect(literalRequests).toBe(2);
+    });
+
+    it("keeps two different non-Latin queries apart in the cache", async () => {
+      const fetchMock = stubIgdb((body) =>
+        body.includes("ゼルダ")
+          ? [{ id: 1, name: "ゼルダの伝説" }]
+          : [{ id: 2, name: "スーパーマリオサンシャイン" }]
+      );
+
+      const { IgdbClient, resetIgdbTokenCache } = await import("./igdb.js");
+      resetIgdbTokenCache();
+      const client = IgdbClient.fromEnv();
+      const zelda = await client.searchGames("ゼルダ");
+      // Normalizing on ASCII alone reduced both of these to "", so the second
+      // search read back the first one's results.
+      const mario = await client.searchGames("スーパーマリオ");
+
+      expect(zelda.map((r) => r.title)).toEqual(["ゼルダの伝説"]);
+      expect(mario.map((r) => r.title)).toEqual(["スーパーマリオサンシャイン"]);
+      expect(fetchMock.mock.calls.filter(([url]) => isIgdb(url))).toHaveLength(4);
+    });
+
+    it("does not cache a query that normalizes to nothing", async () => {
+      const fetchMock = stubIgdb(() => []);
+
+      const { IgdbClient, resetIgdbTokenCache } = await import("./igdb.js");
+      resetIgdbTokenCache();
+      const client = IgdbClient.fromEnv();
+      await client.searchGames("!!!");
+      await client.searchGames("???");
+
+      expect(fetchMock.mock.calls.filter(([url]) => isIgdb(url))).toHaveLength(4);
     });
 
     it("skips IGDB entirely for a blank query", async () => {
@@ -321,6 +360,34 @@ describe("igdb", () => {
       );
 
       // The exact title wins on tier despite being rated a hundredth as often.
+      expect(ranked.map((g) => g.id)).toEqual([2, 1]);
+    });
+
+    it("matches an accented title from an unaccented query", async () => {
+      const { rankGameCandidates } = await import("./igdb.js");
+      const ranked = rankGameCandidates(
+        [
+          { id: 1, name: "Pokémon Legends: Arceus", total_rating_count: 400 },
+          { id: 2, name: "Pokémon", total_rating_count: 10 }
+        ],
+        "pokemon"
+      );
+
+      expect(ranked.map((g) => g.id)).toEqual([2, 1]);
+    });
+
+    it("tells non-Latin titles apart instead of flattening them to nothing", async () => {
+      const { rankGameCandidates } = await import("./igdb.js");
+      const ranked = rankGameCandidates(
+        [
+          { id: 1, name: "ゼルダの伝説", total_rating_count: 900 },
+          { id: 2, name: "スーパーマリオサンシャイン", total_rating_count: 500 }
+        ],
+        "スーパーマリオ"
+      );
+
+      // Not the more-rated one: the query is a prefix of the second title and
+      // has nothing to do with the first.
       expect(ranked.map((g) => g.id)).toEqual([2, 1]);
     });
 
@@ -382,7 +449,7 @@ describe("igdb", () => {
       const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
         void init;
         const href = url.toString();
-        if (href.includes("id.twitch.tv")) {
+        if (isTwitch(href)) {
           return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
         }
         return new Response(
@@ -407,7 +474,7 @@ describe("igdb", () => {
       const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
         void init;
         const href = url.toString();
-        if (href.includes("id.twitch.tv")) {
+        if (isTwitch(href)) {
           return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
         }
         return new Response(JSON.stringify([]), { status: 200 });
@@ -426,7 +493,7 @@ describe("igdb", () => {
       const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
         void init;
         const href = url.toString();
-        if (href.includes("id.twitch.tv")) {
+        if (isTwitch(href)) {
           return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
         }
         return new Response(JSON.stringify([{ id: 99, name: "Totally Unrelated Game" }]), { status: 200 });

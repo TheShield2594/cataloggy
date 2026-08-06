@@ -35,7 +35,12 @@ export function useVisualViewport(active = true): CSSProperties | undefined {
   const [rect, setRect] = useState<ViewportRect | null>(() => (active ? readViewport() : null));
 
   useEffect(() => {
-    if (!active) return;
+    if (!active) {
+      // Drop the last measurement rather than keeping geometry nothing is
+      // updating any more — a caller that reactivates gets a fresh one below.
+      setRect(null);
+      return;
+    }
     const vv = window.visualViewport;
     if (!vv) return;
 
@@ -55,7 +60,9 @@ export function useVisualViewport(active = true): CSSProperties | undefined {
     };
   }, [active]);
 
-  if (!rect) return undefined;
+  // `active` as well as `rect`: the render that turns the hook off comes before
+  // the effect that clears the measurement.
+  if (!active || !rect) return undefined;
   // `top`/`left` + `width`/`height` beat the `inset-0` these sit on: an
   // over-constrained box drops `right`/`bottom`, so no `auto` overrides needed.
   return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };

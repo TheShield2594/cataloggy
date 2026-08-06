@@ -80,6 +80,23 @@ describe("useVisualViewport", () => {
     expect(screen.getByTestId("overlay")).toHaveStyle({ top: "64px" });
   });
 
+  it("lets go of the last measurement when it is switched off", () => {
+    installViewport({ height: 380, offsetTop: 120 });
+    const { rerender } = render(<Overlay active />);
+    expect(screen.getByTestId("overlay")).toHaveStyle({ height: "380px" });
+
+    // Nothing updates the geometry once the listeners are gone, so keeping it
+    // would hand the caller a keyboard-sized overlay with no keyboard.
+    rerender(<Overlay active={false} />);
+    // React empties the properties it set but leaves the attribute behind, so
+    // this asks what the element is actually styled with.
+    expect(screen.getByTestId("overlay").style.height).toBe("");
+    expect(screen.getByTestId("overlay").style.top).toBe("");
+
+    rerender(<Overlay active />);
+    expect(screen.getByTestId("overlay")).toHaveStyle({ height: "380px" });
+  });
+
   it("measures nothing while inactive, and stops listening on unmount", () => {
     const { listenerCount } = installViewport({ height: 844 });
 

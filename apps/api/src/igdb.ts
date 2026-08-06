@@ -73,10 +73,20 @@ function escapeApicalypseString(value: string): string {
 // keeps "super mario bros" an *exact* hit for "Super Mario Bros." rather than a
 // mere substring one.
 function normalizeTitle(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  return (
+    value
+      // Decomposing lets a Latin accent be dropped, so "Pokemon" is an exact
+      // hit for "Pokémon". Only after a Latin letter: a Japanese dakuten is a
+      // combining mark too, and stripping that one spells a different word.
+      .normalize("NFD")
+      .replace(/(\p{Script=Latin})\p{M}+/gu, "$1")
+      .toLowerCase()
+      // Letters and digits of any script. An ASCII-only class erased Japanese,
+      // Korean and Cyrillic titles down to nothing, which left every one of
+      // them matching — and caching under — the same empty string.
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim()
+  );
 }
 
 /**
@@ -236,8 +246,10 @@ export class IgdbClient {
     const trimmed = query.trim();
     if (!trimmed) return [];
 
+    // A query of nothing but punctuation or emoji normalizes to the empty
+    // string, which is no key at all — every such query would share it.
     const cacheKey = normalizeTitle(trimmed);
-    const cached = readSearchCache(cacheKey);
+    const cached = cacheKey ? readSearchCache(cacheKey) : null;
     if (cached) return cached.slice(0, limit);
 
     const escaped = escapeApicalypseString(trimmed);
@@ -261,7 +273,7 @@ export class IgdbClient {
     const results = rankGameCandidates(candidates, trimmed).map(transformGame);
     // Only a complete answer is worth caching: a half that failed would
     // otherwise pin its gap in place for the next five minutes.
-    if (fuzzy.status === "fulfilled" && literal.status === "fulfilled") {
+    if (cacheKey && fuzzy.status === "fulfilled" && literal.status === "fulfilled") {
       writeSearchCache(cacheKey, results);
     }
     return results.slice(0, limit);
