@@ -37,7 +37,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
       # Matches the `node:26-alpine` base image every app's Dockerfile ships on,
       # so CI exercises the same runtime as production. Node 20 is also past
