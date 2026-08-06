@@ -35,7 +35,6 @@ vi.mock("../lib/tmdb-client.js", () => ({
 vi.mock("../lib/rpdb.js", () => ({
   RPDB_API_KEY_KV: "rpdb:apiKey",
   getRpdbApiKey: () => getRpdbApiKey(),
-  buildRpdbPosterUrl: (key: string, imdbId: string) => `https://api.ratingposterdb.com/${key}/imdb/poster-default/${imdbId}.jpg`,
 }));
 vi.mock("../lib/cache.js", () => ({ trendingCache: { clear: () => trendingCacheClear() } }));
 vi.mock("../lib/job-status.js", () => ({ getFailedJobStatuses: () => getFailedJobStatuses() }));
@@ -283,7 +282,9 @@ describe("settings routes", () => {
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    it("404s the poster route when no key is configured", async () => {
+    // The per-title poster route was removed as unused; this keeps it removed.
+    it("has no per-title poster route, even with a key configured", async () => {
+      getRpdbApiKey.mockResolvedValue("rpdb-key");
       const app = await buildApp();
 
       const res = await app.inject({ method: "GET", url: "/rpdb/poster/tt1" });
@@ -291,14 +292,23 @@ describe("settings routes", () => {
       expect(res.statusCode).toBe(404);
     });
 
-    it("builds a poster URL once a key exists", async () => {
+    it("reports the key to the add-on, which builds poster URLs itself", async () => {
       getRpdbApiKey.mockResolvedValue("rpdb-key");
       const app = await buildApp();
 
-      const res = await app.inject({ method: "GET", url: "/rpdb/poster/tt1" });
+      const res = await app.inject({ method: "GET", url: "/rpdb/config" });
 
       expect(res.statusCode).toBe(200);
-      expect(res.json().poster).toContain("tt1");
+      expect(res.json()).toEqual({ enabled: true, apiKey: "rpdb-key" });
+    });
+
+    it("reports no key rather than failing when RPDB is unconfigured", async () => {
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "GET", url: "/rpdb/config" });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ enabled: false, apiKey: null });
     });
   });
 

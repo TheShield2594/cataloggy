@@ -23,6 +23,17 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "kind must be one of: watchlist, custom, collection" });
     }
 
+    // Only `custom` can be created here. The watchlist and the collection are
+    // singletons the app bootstraps for each profile — a second one of either
+    // is never the default (the lookups take the oldest), so it would be a list
+    // that syncs nothing and, since the delete route protects both kinds,
+    // couldn't be removed again.
+    if (body.kind !== ListKind.custom) {
+      return reply.code(409).send({
+        error: "Only custom lists can be created; the default watchlist and collection already exist",
+      });
+    }
+
     const list = await prisma.list.create({
       data: { name: body.name.trim(), kind: body.kind as ListKind, profileId: request.profileId! },
     });
@@ -57,6 +68,35 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
       where: { id: request.params.id, profileId: request.profileId! },
     });
     if (!list) return reply.code(404).send({ error: "List not found" });
+
+    // The default lists are find-or-create, so losing one doesn't break the app
+    // — but ListItem cascades on the list, so the delete takes every item in it
+    // and nothing brings those back. The web UI only offers delete on custom
+    // lists; this makes a direct API call agree with it.
+    //
+    // Guarded per row rather than per kind: an install can already hold a second
+    // watchlist — from the lookup that used to key on the name too, or from a
+    // POST made before that route was closed — and protecting the kind would
+    // leave that duplicate permanently stuck, syncing nothing and impossible to
+    // remove. The default is the oldest row of its kind, which is what
+    // getDefaultWatchlist/getDefaultCollection resolve to; the lookup is
+    // repeated here rather than called, since those two create a row when they
+    // find none and a delete has no business doing that.
+    if (list.kind !== ListKind.custom) {
+      const defaultForKind = await prisma.list.findFirst({
+        where: { kind: list.kind, profileId: request.profileId! },
+        orderBy: { createdAt: "asc" },
+      });
+
+      if (defaultForKind?.id === list.id) {
+        return reply.code(409).send({
+          error:
+            list.kind === ListKind.watchlist
+              ? "The default watchlist can't be deleted"
+              : "The default collection can't be deleted",
+        });
+      }
+    }
 
     await prisma.list.delete({ where: { id: list.id } });
 
