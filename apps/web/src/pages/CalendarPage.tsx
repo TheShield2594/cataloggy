@@ -5,6 +5,7 @@ import { api, CalendarEntry, SearchResult } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { Poster } from "../components/Poster";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import { useVisualViewport } from "../hooks/useVisualViewport";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useScrollLock } from "../hooks/useScrollLock";
@@ -114,22 +115,27 @@ function DayEntriesModal({
   const dialogRef = useFocusTrap<HTMLDivElement>();
   useScrollLock();
   useEscapeKey(onClose);
+  const viewportStyle = useVisualViewport();
 
   const heading = date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   return (
-    <div className="overlay-scrim overlay-fade fixed inset-0 z-50 flex items-start justify-center px-4 pt-[10vh]" onClick={onClose}>
+    <div
+      className="overlay-scrim overlay-fade fixed inset-0 z-50 flex items-start justify-center p-4 sm:pt-[10vh]"
+      style={viewportStyle}
+      onClick={onClose}
+    >
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="calendar-day-modal-title"
         tabIndex={-1}
-        className="glass-surface overlay-dialog w-full max-w-md rounded-3xl shadow-e3"
+        className="glass-surface overlay-dialog flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-3xl shadow-e3"
         style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
+        <div className="flex flex-none items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <div className="min-w-0">
             <h2 id="calendar-day-modal-title" className={`truncate ${SECTION_TITLE}`} style={{ color: "var(--text)" }}>{heading}</h2>
             <p className="text-xs tabular-nums" style={{ color: "var(--text-mute)" }}>
@@ -146,7 +152,7 @@ function DayEntriesModal({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="max-h-[60vh] space-y-2 overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-auto space-y-2 overflow-y-auto px-5 py-4 sm:max-h-[60vh]">
           {entries.map((entry) => (
             <EntryRow key={entryKey(entry)} entry={entry} onSelect={onSelect} />
           ))}
