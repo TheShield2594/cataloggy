@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   resolveAiProviderUrl,
+  resolveNotificationUrl,
   resolvePushEndpoint,
   validateAiProviderUrl,
+  validateNotificationUrl,
   validatePushEndpoint,
   type HostResolver,
 } from "./ssrf.js";
@@ -96,6 +98,37 @@ describe("resolveAiProviderUrl", () => {
     // IP literals skip DNS entirely — the literal check already covered them.
     expect(await resolveAiProviderUrl("http://127.0.0.1:8080/", resolver)).not.toBeNull();
     expect(await resolveAiProviderUrl("http://[::1]:8080/", resolver)).not.toBeNull();
+  });
+});
+
+describe("notification channel URLs", () => {
+  it("allows the LAN and localhost targets these channels are for", () => {
+    // A self-hosted ntfy or Gotify on the LAN is the intended configuration,
+    // so the push endpoint's private-range block would reject the common case.
+    expect(validateNotificationUrl("https://ntfy.sh/my-topic")).not.toBeNull();
+    expect(validateNotificationUrl("http://192.168.1.25:8080/cataloggy")).not.toBeNull();
+    expect(validateNotificationUrl("http://localhost:2586")).not.toBeNull();
+    expect(validateNotificationUrl("https://discord.com/api/webhooks/1/abc")).not.toBeNull();
+  });
+
+  it("still blocks the metadata range and non-HTTP schemes", () => {
+    expect(validateNotificationUrl("http://169.254.169.254/latest/meta-data/")).toBeNull();
+    expect(validateNotificationUrl("http://0.0.0.0/x")).toBeNull();
+    expect(validateNotificationUrl("file:///etc/passwd")).toBeNull();
+    expect(validateNotificationUrl("gopher://ntfy.sh/topic")).toBeNull();
+    expect(validateNotificationUrl("not a url")).toBeNull();
+  });
+
+  it("blocks a public hostname that resolves to the metadata service", async () => {
+    expect(validateNotificationUrl("https://ntfy.example.com/topic")).not.toBeNull();
+    expect(
+      await resolveNotificationUrl("https://ntfy.example.com/topic", resolvesTo("169.254.169.254"))
+    ).toBeNull();
+    expect(await resolveNotificationUrl("https://ntfy.example.com/topic", resolvesTo("10.1.2.3"))).not.toBeNull();
+  });
+
+  it("fails closed when the hostname cannot be resolved", async () => {
+    expect(await resolveNotificationUrl("https://ntfy.example.com/topic", failsToResolve)).toBeNull();
   });
 });
 

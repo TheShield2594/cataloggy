@@ -14,6 +14,7 @@ import { AiSettings } from "../components/settings/AiSettings";
 import { DataSettings } from "../components/settings/DataSettings";
 import { PreferencesSettings } from "../components/settings/PreferencesSettings";
 import { PushSettings } from "../components/settings/PushSettings";
+import { NotificationChannelsSettings } from "../components/settings/NotificationChannelsSettings";
 import { ProfileSettings } from "../components/settings/ProfileSettings";
 import { JobStatusSettings } from "../components/settings/JobStatusSettings";
 import { PAGE_TITLE } from "../components/typography";
@@ -66,8 +67,15 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     tab: "preferences",
     title: "Notifications",
     icon: <Bell size={20} />,
-    keywords: "push alerts episode reminders subscribe browser",
-    content: <PushSettings />,
+    keywords: "push alerts episode reminders subscribe browser ntfy gotify discord webhook channels",
+    content: (
+      <div className="space-y-6">
+        <PushSettings />
+        <div className="border-t pt-6" style={{ borderColor: "var(--border)" }}>
+          <NotificationChannelsSettings />
+        </div>
+      </div>
+    ),
   },
   {
     id: "job-status",

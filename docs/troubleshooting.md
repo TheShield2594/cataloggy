@@ -234,9 +234,29 @@ hides it without deleting history, and `DELETE` on the same path undoes it.
 
 ## Notifications
 
-- **Nothing arrives** — push needs VAPID keys and https (or localhost); browsers
-  refuse service-worker push over plain http on a LAN IP. This is a browser
-  rule, not something Cataloggy can work around.
+- **Nothing arrives over push** — push needs VAPID keys and https (or
+  localhost); browsers refuse service-worker push over plain http on a LAN IP.
+  This is a browser rule, not something Cataloggy can work around. On a plain
+  `http://192.168.x.x` deployment, add a notification channel instead
+  (**Settings → Notifications**): ntfy, Gotify, a Discord webhook, or any URL
+  that takes a JSON POST.
+- **A channel is rejected on save** — its URL has to be http(s), and must not
+  point at the cloud-metadata/link-local range, by name or by DNS result. A LAN
+  or loopback address is fine: that check is about `169.254.169.254`, not about
+  your own network. An ntfy URL also has to include the topic
+  (`https://ntfy.sh/my-topic`, not `https://ntfy.sh`), and Gotify needs an
+  application token.
+- **A channel saves but nothing arrives** — use **Send a test notification** on
+  the channel; it POSTs for real and reports the status it got back. `HTTP 401`
+  or `403` is a token the other server didn't accept, `404` on ntfy is usually
+  a topic typo, and a failure to connect at all usually means the address is
+  reachable from your desk but not from inside the `api` container.
+- **Notifications have no link to tap** — set `CATALOGGY_WEB_PUBLIC` to the
+  externally reachable URL of the web UI. Without it the API doesn't know its
+  own address, so it sends the notification without a link rather than a broken
+  one.
+- **A failing channel** is recorded like any other background job failure and
+  shows up under **Settings → Sync Status**.
 - **Subscribing returns 400** — the endpoint must be a real push service over
   https, and it's checked by DNS as well as by name. That check exists so a
   stolen API token can't point the notification job at an internal address.

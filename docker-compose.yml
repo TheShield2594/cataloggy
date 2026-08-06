@@ -84,7 +84,9 @@ services:
       CATALOGGY_ALLOWED_ORIGINS: ${CATALOGGY_ALLOWED_ORIGINS:-http://192.168.1.25:7002,http://localhost:7002,http://127.0.0.1:7002}
       CATALOGGY_API_PUBLIC: ${CATALOGGY_API_PUBLIC:-http://192.168.1.25:7000}
       # Public URL of the web service — used to build the "Configure" link
-      # Stremio shows for this addon's manifest (redirects to /settings).
+      # Stremio shows for this addon's manifest (redirects to /settings), and
+      # the link notification channels point at. Without it, notifications are
+      # still sent, just with nothing to tap.
       CATALOGGY_WEB_PUBLIC: ${CATALOGGY_WEB_PUBLIC:-http://192.168.1.25:7002}
       # Optional integrations — set these in a .env file or export them.
       # Leaving them unset is safe; the API validates at startup/request time

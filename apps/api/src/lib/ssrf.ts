@@ -1,12 +1,16 @@
 // Guards for outbound fetches whose target URL is user-configurable.
 //
-// Two sinks live behind these helpers, with deliberately different policies:
+// Two policies live behind these helpers, applied to three sinks:
 //
 //   * The AI provider endpoint may point at a LAN or localhost LLM server
 //     (Ollama, LM Studio, a self-hosted vLLM, etc.), so we cannot simply
 //     reject private IPs. Instead we block what is *never* a legitimate LLM
 //     host but *is* a classic SSRF target: non-HTTP schemes, the
 //     cloud-metadata / link-local range, and the unspecified address.
+//   * Notification channels (ntfy, Gotify, Discord, generic webhooks) get the
+//     same treatment for the same reason: reaching a self-hosted ntfy on the
+//     LAN is the whole point of the feature, so a private-range block would
+//     reject the intended configuration.
 //   * The web-push endpoint only ever talks to public browser push services,
 //     so it blocks every private range as well.
 //
@@ -137,6 +141,25 @@ export const resolveAiProviderUrl = async (
   if (!url) return null;
   return (await hostnameResolvesSafely(url.hostname, isBlockedAiHostname, resolveHost)) ? url : null;
 };
+
+/**
+ * Validates the *syntax* of a user-supplied notification-channel URL (ntfy
+ * topic, Gotify server, Discord webhook, generic webhook). Same policy as the
+ * AI provider endpoint — a LAN or loopback host is the expected configuration
+ * here, so only the never-legitimate targets are blocked.
+ */
+export const validateNotificationUrl = (raw: string): URL | null => validateAiProviderUrl(raw);
+
+/**
+ * `validateNotificationUrl` plus a DNS check. Run immediately before each send:
+ * a channel is stored once and then POSTed to by a background job for as long
+ * as it exists, so the records behind its hostname can change after it was
+ * saved.
+ */
+export const resolveNotificationUrl = async (
+  raw: string,
+  resolveHost: HostResolver = dnsResolver
+): Promise<URL | null> => resolveAiProviderUrl(raw, resolveHost);
 
 /**
  * Validates the syntax of a browser push-service endpoint: https only, and no
