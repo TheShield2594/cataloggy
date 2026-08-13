@@ -48,6 +48,15 @@ jobs:
           node-version: 26
           cache: pnpm
 
+      # Compose substitutes .env into docker-compose.yml, it does not forward
+      # the file into containers — so a variable the code reads but the service
+      # never receives fails silently at runtime, on the documented install
+      # path, with nothing in the logs to point at it. Runs before the install
+      # because it reads files rather than dependencies, and a mismatch is worth
+      # hearing about in seconds rather than after a full build.
+      - name: Check every env var reaches its container
+        run: pnpm check:env
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

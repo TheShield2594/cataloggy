@@ -318,6 +318,10 @@ Configure Nginx Proxy Manager with one Proxy Host for your domain (for example, 
 
 Set `ALLOWED_HOSTS=cataloggy.domain.com` in your `.env` so the web service accepts requests for that hostname, then restart the `web` service.
 
+Also set `TRUST_PROXY` — to `true`, or to the proxy's IP if you'd rather name it. Without it the api and addon ignore the `X-Forwarded-For` header the proxy sends, so every request looks like it came from the proxy itself: one shared 200/min rate-limit budget for the whole household (the usual cause of "Too many requests" appearing out of nowhere), and `WEBHOOK_ALLOWED_IPS` can never match. It is off by default because trusting that header when nothing sits in front of Cataloggy would let any client claim any address.
+
+The `/api/` and `/addon/` prefixes above are stripped by the services themselves, which expect exactly those two by default. If your proxy mounts them somewhere else, set `API_PROXY_PATH_PREFIXES` / `ADDON_PROXY_PATH_PREFIXES` to match — they are separate variables because the two services need different values, and because giving the api `/addon` would strip the prefix off its own built-in Stremio manifest routes.
+
 Use this Omni add-on URL to install when accessing through your domain:
 
 ```text
