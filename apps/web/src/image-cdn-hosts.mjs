@@ -5,15 +5,16 @@
  *
  *  - `sw.js`, which caches these responses. Caching them means the service
  *    worker handles the request and re-issues it with `fetch()`.
- *  - the CSP's `connect-src`, built in `scripts/csp.mjs`.
+ *  - the CSP, built in `scripts/csp.mjs` — both `img-src` and `connect-src`.
  *
- * The second follows from the first. `img-src` governs an <img> the browser
- * loads itself, and it is permissive here. But once a service worker answers
- * that request, the load becomes a `fetch()` from the worker — and a fetch is
- * a connection, so `connect-src` is the directive that decides. A host missing
- * from it fails the fetch, which the caching strategy has no choice but to
- * turn into a broken image, even though the network would have served the
- * picture perfectly well.
+ * Two directives rather than one, because a poster is fetched two ways.
+ * `img-src` governs an <img> the browser loads itself. But once a service
+ * worker answers that request, the load becomes a `fetch()` from the worker —
+ * and a fetch is a connection, so `connect-src` is the directive that decides
+ * then. A host missing from either fails one of those paths: out of `img-src`
+ * and the tag is blocked outright, out of `connect-src` and the cached fetch
+ * fails, which the caching strategy has no choice but to turn into a broken
+ * image even though the network would have served the picture perfectly well.
  *
  * Plain ESM with an explicit extension because both readers are unusual: one
  * is bundled into a service worker, the other is run by bare `node` inside the

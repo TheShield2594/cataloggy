@@ -910,17 +910,28 @@ export function DashboardPage() {
     }
   }, []);
 
-  const recsToken = useRef(0);
+  // One counter per rail rather than one for both. The rails have separate
+  // Retry buttons and load independently, so retrying movies must not
+  // invalidate the series request that is still in flight beside it — and
+  // `loadAiSection` starts both, so a shared counter would have its second
+  // `loadRecs` call discard the first's answer.
+  const recsToken = useRef<Record<"movie" | "series", number>>({ movie: 0, series: 0 });
   const loadRecs = useCallback(async (kind: "movie" | "series") => {
     const isMovie = kind === "movie";
     const setLoadingFor = isMovie ? setRecsLoading : setSeriesRecsLoading;
     const setFailedFor = isMovie ? setRecsFailed : setSeriesRecsFailed;
-    const token = recsToken.current;
+    // Incremented, like every other loader here. Reading the counter without
+    // advancing it made this no guard at all in the direction that matters: a
+    // request never invalidated the one it replaced, so a Retry and the request
+    // it was retrying both passed the check below, and whichever finished last
+    // won — including a failure landing after good recommendations, which
+    // replaces them with an error offering to fetch them again.
+    const token = ++recsToken.current[kind];
     setLoadingFor(true);
     setFailedFor(false);
     try {
       const res = await api.getAiRecommendations(kind, 20);
-      if (recsToken.current !== token) return;
+      if (recsToken.current[kind] !== token) return;
       if (isMovie) {
         setRecommendations(res.metas ?? []);
         setMovieReasons(res.reasons ?? {});
@@ -930,23 +941,31 @@ export function DashboardPage() {
       }
     } catch (err) {
       console.error(`Failed to fetch ${kind} recommendations:`, err);
-      if (recsToken.current === token) setFailedFor(true);
+      if (recsToken.current[kind] === token) setFailedFor(true);
     } finally {
-      if (recsToken.current === token) setLoadingFor(false);
+      if (recsToken.current[kind] === token) setLoadingFor(false);
     }
   }, []);
 
   // AI config gates both rails: a failure here means neither can be fetched, so
   // it surfaces as a failure on both rather than as two empty rows.
   const loadAiSection = useCallback(async () => {
-    const token = ++recsToken.current;
+    // Both rails restart from here, so both tokens move — an answer from a
+    // request either rail had in flight belongs to the previous run of this
+    // section and is no longer the one on screen.
+    const tokens = {
+      movie: ++recsToken.current.movie,
+      series: ++recsToken.current.series,
+    };
+    const superseded = () =>
+      recsToken.current.movie !== tokens.movie || recsToken.current.series !== tokens.series;
     setRecsLoading(true);
     setSeriesRecsLoading(true);
     setRecsFailed(false);
     setSeriesRecsFailed(false);
     try {
       const configRes = await api.getAiConfig();
-      if (recsToken.current !== token) return;
+      if (superseded()) return;
       setAiActive(configRes.configured);
       setAiLastGeneratedAt(configRes.lastGeneratedAt ?? null);
 
@@ -960,7 +979,7 @@ export function DashboardPage() {
       void loadRecs("series");
     } catch (err) {
       console.error("Failed to fetch AI config:", err);
-      if (recsToken.current !== token) return;
+      if (superseded()) return;
       setRecsFailed(true);
       setSeriesRecsFailed(true);
       setRecsLoading(false);

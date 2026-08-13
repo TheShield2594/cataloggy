@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router";
@@ -265,6 +265,92 @@ describe("CommandPalette", () => {
     await user.type(screen.getByLabelText("Search everything"), "sol");
 
     expect(await screen.findByText(/search is unavailable right now/i)).toBeInTheDocument();
+  });
+
+  /*
+   * The debounce only ever cancelled the timer, which does nothing about a
+   * request already on the wire — so whichever round trip finished last won,
+   * and typing "dun" then "dune" could leave the results for "dun" sitting
+   * under the query "dune".
+   */
+  it("shows the newest query's results even when an older search lands last", async () => {
+    const user = userEvent.setup();
+    let releaseStale: () => void = () => {};
+    const stale = new Promise<SearchResult[]>((r) => {
+      releaseStale = () => r([result("Dungeon")]);
+    });
+    search.mockImplementation((type, query) => {
+      if (query === "dune") return Promise.resolve(type === "movie" ? [result("Dune")] : []);
+      return type === "movie" ? stale : Promise.resolve([]);
+    });
+    renderPalette();
+
+    const input = screen.getByLabelText("Search everything");
+    await user.type(input, "dun");
+    await waitFor(() => expect(search).toHaveBeenCalledWith("movie", "dun", expect.any(AbortSignal)));
+    await user.type(input, "e");
+    expect(await screen.findByRole("option", { name: /Dune/ })).toBeInTheDocument();
+
+    // The abandoned search finally answers. The mocked `api.search` ignores the
+    // abort, which is the point: the request id has to be what keeps it out,
+    // since a response already in flight when the signal fires still arrives.
+    await act(async () => {
+      releaseStale();
+    });
+
+    expect(screen.queryByRole("option", { name: /Dungeon/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Dune/ })).toBeInTheDocument();
+  });
+
+  // The spinner belongs to the live search, so a superseded one clearing it
+  // would report a finished search that is still running.
+  it("keeps the spinner up when the search it replaced finishes", async () => {
+    const user = userEvent.setup();
+    let releaseStale: () => void = () => {};
+    const stale = new Promise<SearchResult[]>((r) => { releaseStale = () => r([]); });
+    const neverSettles = new Promise<SearchResult[]>(() => {});
+    search.mockImplementation((_type, query) => (query === "dune" ? neverSettles : stale));
+    renderPalette();
+
+    const input = screen.getByLabelText("Search everything");
+    await user.type(input, "dun");
+    await waitFor(() => expect(search).toHaveBeenCalledWith("movie", "dun", expect.any(AbortSignal)));
+    await user.type(input, "e");
+    await waitFor(() => expect(search).toHaveBeenCalledWith("movie", "dune", expect.any(AbortSignal)));
+
+    await act(async () => {
+      releaseStale();
+    });
+
+    expect(screen.getByText("Searching...")).toBeInTheDocument();
+  });
+
+  it("gives up the request when the palette closes", async () => {
+    const user = userEvent.setup();
+    const signals: AbortSignal[] = [];
+    search.mockImplementation((_type, _query, signal) => {
+      if (signal) signals.push(signal);
+      return new Promise<SearchResult[]>(() => {});
+    });
+    const onClose = vi.fn();
+    const palette = (open: boolean) => (
+      <MemoryRouter initialEntries={["/"]}>
+        <ToastProvider>
+          <CommandPalette open={open} onClose={onClose} />
+          <LocationProbe />
+        </ToastProvider>
+      </MemoryRouter>
+    );
+    const { rerender } = render(palette(true));
+
+    await user.type(screen.getByLabelText("Search everything"), "sol");
+    await waitFor(() => expect(signals.length).toBeGreaterThan(0));
+    expect(signals.every((s) => !s.aborted)).toBe(true);
+
+    // The palette stays mounted when it closes, so nothing else would stop it.
+    rerender(palette(false));
+
+    expect(signals.every((s) => s.aborted)).toBe(true);
   });
 
   it("closes on Escape", async () => {

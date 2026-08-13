@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { EAGER_ROUTES, ROUTE_LOADERS, prefetchRoute } from "./routePrefetch";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { EAGER_ROUTES, ROUTE_LOADERS, prefetchRoute, resetPrefetchStateForTests } from "./routePrefetch";
+import { readCache, resetDataCacheForTests } from "./dataCache";
 import { MORE_NAV_ITEMS, PRIMARY_NAV_ITEMS } from "../components/MobileTabBar";
 import { SIDEBAR_NAV_ITEMS } from "../components/Sidebar";
 
@@ -12,6 +13,14 @@ import { SIDEBAR_NAV_ITEMS } from "../components/Sidebar";
 // only make the build warn about a mixed static/dynamic import.
 const isCovered = (to: string) => EAGER_ROUTES.has(to) || typeof ROUTE_LOADERS[to] === "function";
 
+// Prefetch state is process-wide, and a stubbed `api` would otherwise be the
+// one the next file's dynamic import resolves to.
+afterEach(() => {
+  vi.doUnmock("../api");
+  resetPrefetchStateForTests();
+  resetDataCacheForTests();
+});
+
 describe("route prefetch coverage", () => {
   it("has a loader for every sidebar destination", () => {
     for (const item of SIDEBAR_NAV_ITEMS) {
@@ -23,6 +32,23 @@ describe("route prefetch coverage", () => {
     for (const item of [...PRIMARY_NAV_ITEMS, ...MORE_NAV_ITEMS]) {
       expect(isCovered(item.to), `no prefetch loader for ${item.to}`).toBe(true);
     }
+  });
+
+  /*
+   * A warmer is only worth running if the page reads what it wrote. History is
+   * keyed by its filter (`history:events:<filter>`) because a filtered page is
+   * a different answer; the warmer fetches unfiltered, so `:all` — under the
+   * bare `history:events` it wrote a key nobody reads, and under a filtered one
+   * it would seed the wrong list.
+   */
+  it("warms the history page under the key its unfiltered view reads", async () => {
+    resetDataCacheForTests();
+    resetPrefetchStateForTests();
+    const events = [{ id: "ev-1", imdbId: "tt1", type: "movie", name: "Alien" }];
+    vi.doMock("../api", () => ({ api: { getWatchHistory: async () => events } }));
+
+    prefetchRoute("/history");
+    await vi.waitFor(() => expect(readCache("history:events:all")).toEqual(events));
   });
 
   it("ignores paths it doesn't know rather than throwing at them", () => {

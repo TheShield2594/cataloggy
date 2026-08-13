@@ -60,10 +60,20 @@ export function HistoryPage() {
   // cached entry without bound as you scroll, and — because a remount restarts
   // pagination at offset 0 — the first load back would then replace a long
   // cached list with a single page, collapsing the view.
-  const [firstPage, setFirstPage, firstPageMeta] = useCachedState<WatchEvent[]>("history:events", []);
+  //
+  // Keyed by the filter, because the filter is part of the question the server
+  // answered. Under one shared key, filtering to Movies and navigating away
+  // left a movies-only list cached as the whole history — and the next mount,
+  // which starts at "All", read it back and painted it as complete, with
+  // `hadCachedValue` suppressing even the skeleton that would have hinted more
+  // was coming. CalendarPage keys on its day range for the same reason.
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [firstPage, setFirstPage, firstPageMeta] = useCachedState<WatchEvent[]>(
+    `history:events:${typeFilter}`,
+    []
+  );
   const [extraPages, setExtraPages] = useState<WatchEvent[]>([]);
   const events = useMemo(() => [...firstPage, ...extraPages], [firstPage, extraPages]);
-  const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(!firstPageMeta.hadCachedValue);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -72,7 +82,6 @@ export function HistoryPage() {
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [savingNote, setSavingNote] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const sentinelRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading, detail: panelDetail, detailLoading: panelDetailLoading } = useDetailPanel();
@@ -85,10 +94,34 @@ export function HistoryPage() {
       type: typeFilter === "all" ? undefined : typeFilter,
       signal,
     });
-    if (signal?.aborted) return [];
-    setHasMore(page.length === PAGE_SIZE);
-    return page;
+    return signal?.aborted ? [] : page;
   }, [typeFilter]);
+
+  // A short page is the end of the list — but only of the list the request was
+  // asking about, so each caller decides this after its own staleness check
+  // rather than having the fetch decide for whichever list is on screen now.
+  const isLastPage = (page: WatchEvent[]) => page.length < PAGE_SIZE;
+
+  /*
+   * Which set of rows the loaded pages describe.
+   *
+   * An offset only means anything against a particular server-side list, and
+   * two things replace that list underneath a request already in flight: a new
+   * filter, and a delete or restore, which shifts every row after it. The reset
+   * effect below moves the generation on both counts; `loadMore` captures it
+   * and drops a page that lands under an older one — otherwise tapping
+   * "Movies" near the bottom of the page appends the episodes page that was
+   * already on its way to the movies-only list.
+   */
+  const generation = useRef(0);
+
+  // Where the next page starts, counted from the rows on screen rather than
+  // tracked alongside them. A delete removes the row here *and* on the server,
+  // so the server's own offsets shift by one at the same time; keeping a
+  // separate counter meant adjusting it by ±1 to compensate, which double-counts
+  // as soon as a delete and a page load overlap. A count can't drift from what
+  // it counts.
+  const offset = events.length;
 
   // Re-runs when loadPage changes identity, i.e. whenever the filter changes —
   // pagination has to restart from 0 against the new result set.
@@ -97,6 +130,7 @@ export function HistoryPage() {
     // shared cache, so a response that arrives after a profile switch has to be
     // dropped at the request, not just ignored at the setter.
     const controller = new AbortController();
+    generation.current++;
     setLoading(true);
     (async () => {
       try {
@@ -104,7 +138,7 @@ export function HistoryPage() {
         if (!controller.signal.aborted) {
           setFirstPage(page);
           setExtraPages([]);
-          setOffset(page.length);
+          setHasMore(!isLastPage(page));
           setError(null);
         }
       } catch (err) {
@@ -117,14 +151,20 @@ export function HistoryPage() {
   }, [loadPage]);
 
   const loadMore = useCallback(async () => {
+    const token = generation.current;
     setLoadingMore(true);
     try {
       const page = await loadPage(offset);
+      if (generation.current !== token) return;
       setExtraPages((prev) => [...prev, ...page]);
-      setOffset((prev) => prev + page.length);
+      setHasMore(!isLastPage(page));
     } catch (err) {
+      if (generation.current !== token) return;
       setError(err instanceof Error ? err.message : "Failed to load more history");
     } finally {
+      // Cleared either way: this is the flag for *this* call, and the scroll
+      // sentinel is re-observed when it flips, which is what asks for the page
+      // again against the list that replaced the one this was reading.
       setLoadingMore(false);
     }
   }, [loadPage, offset]);
@@ -154,7 +194,9 @@ export function HistoryPage() {
             (a, b) => new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime()
           )
     );
-    setOffset((prev) => prev + 1);
+    // The row is back in the server's list too, so every offset past it has
+    // moved: a page already in flight is reading the old numbering.
+    generation.current++;
   };
 
   const handleUndoDelete = async (event: WatchEvent) => {
@@ -174,7 +216,9 @@ export function HistoryPage() {
     // The row can be in either list, so both are filtered.
     setFirstPage((prev) => prev.filter((e) => e.id !== event.id));
     setExtraPages((prev) => prev.filter((e) => e.id !== event.id));
-    setOffset((prev) => prev - 1);
+    // Same as a restore, in the other direction — the rows after this one all
+    // shift up by one server-side.
+    generation.current++;
     try {
       await api.deleteWatchEvent(event.id);
       // Metadata is backfilled in the background, so a row can reach here

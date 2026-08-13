@@ -59,9 +59,12 @@ const ROUTE_DATA_WARMERS: Record<string, (scope: string) => Promise<void>> = {
     const { calendar } = await api.getCalendar(30);
     writeCacheForScope(scope, "calendar:entries:30", calendar ?? []);
   },
+  // Unfiltered, which is the filter the page opens with — hence the `:all`. Any
+  // other filter is a different question with a key of its own, so warming this
+  // one can't seed a movies-only list into a view showing everything.
   "/history": async (scope) => {
     const { api } = await import("../api");
-    writeCacheForScope(scope, "history:events", await api.getWatchHistory(30));
+    writeCacheForScope(scope, "history:events:all", await api.getWatchHistory(30));
   },
   "/stats": async (scope) => {
     const { api } = await import("../api");
@@ -115,7 +118,7 @@ export function prefetchRoute(path: string): void {
 const PRIMARY_DATA_KEY: Record<string, string> = {
   "/lists": "lists:all",
   "/calendar": "calendar:entries:30",
-  "/history": "history:events",
+  "/history": "history:events:all",
   "/stats": "stats:summary",
 };
 

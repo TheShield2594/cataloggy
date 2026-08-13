@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildConnectSrc, buildScriptSrc, renderServeConfig } from "./csp.mjs";
-import { IMAGE_CDN_HOSTS } from "../src/image-cdn-hosts.mjs";
+import { buildConnectSrc, buildImgSrc, buildScriptSrc, renderServeConfig } from "./csp.mjs";
+import { IMAGE_CDN_HOSTS, IMAGE_CDN_ORIGINS } from "../src/image-cdn-hosts.mjs";
 
 // Resolved from the Vitest root (apps/web) — the suite runs under jsdom, where
 // `import.meta.url` is an http: URL rather than a file path.
@@ -107,6 +107,39 @@ describe("connect-src", () => {
   });
 });
 
+describe("img-src", () => {
+  // The regression this replaced: `img-src 'self' data: https:` allowed an
+  // image request to any host on the web, and `new Image().src = "…?t=" + token`
+  // is an exfiltration channel exactly like the `fetch` connect-src was
+  // tightened to stop. Both directives now name the same four hosts.
+  it("names the artwork CDNs rather than the whole https: scheme", () => {
+    const imgSrc = buildImgSrc();
+
+    expect(imgSrc.split(" ")).not.toContain("https:");
+    for (const origin of IMAGE_CDN_ORIGINS) {
+      expect(imgSrc.split(" ")).toContain(origin);
+    }
+  });
+
+  it("keeps 'self' and data: — the shipped icons and the inline placeholders", () => {
+    expect(buildImgSrc().split(" ")).toContain("'self'");
+    expect(buildImgSrc().split(" ")).toContain("data:");
+  });
+
+  // An <img> the browser loads itself is checked against img-src; the same
+  // poster, once the service worker answers it, is a fetch checked against
+  // connect-src. A host in only one of the two breaks one of those paths.
+  it("allows every host connect-src does, so either load path works", () => {
+    const connectSrc = buildConnectSrc({ apiBase: "https://cataloggy.example.com" }).split(" ");
+    const imgSrc = buildImgSrc().split(" ");
+
+    for (const host of IMAGE_CDN_HOSTS) {
+      expect(connectSrc).toContain(`https://${host}`);
+      expect(imgSrc).toContain(`https://${host}`);
+    }
+  });
+});
+
 describe("script-src", () => {
   // A literal digest rather than one this file recomputes: the encoding is the
   // contract with the browser (sha256 of the exact body, base64, nothing
@@ -185,15 +218,28 @@ describe("serve.json rendering", () => {
 
     expect(csp).toContain("connect-src 'self' http://192.168.1.25:7000;");
     expect(csp).toContain("script-src 'self' 'sha256-abc123=';");
+    expect(csp).toContain(`img-src ${buildImgSrc()};`);
     expect(csp).toContain("frame-ancestors 'none';");
     expect(csp).not.toContain("__CONNECT_SRC__");
     expect(csp).not.toContain("__SCRIPT_SRC__");
+    expect(csp).not.toContain("__IMG_SRC__");
+  });
+
+  // `default-src` does not fall back to cover `form-action`, so its absence
+  // left injected markup free to auto-submit a form carrying the token to any
+  // host — the same hole `connect-src` and `img-src` close for their own
+  // request types.
+  it("restricts where a form on the page can submit", () => {
+    expect(cspOf(renderServeConfig(template, "'self'"))).toContain("form-action 'self'");
   });
 
   it("fails loudly if the template loses a placeholder", () => {
     expect(() => renderServeConfig('{"headers": []}', "'self'")).toThrow(/__CONNECT_SRC__/);
     expect(() => renderServeConfig(template.replaceAll("__SCRIPT_SRC__", "'self'"), "'self'")).toThrow(
       /__SCRIPT_SRC__/
+    );
+    expect(() => renderServeConfig(template.replaceAll("__IMG_SRC__", "'self'"), "'self'")).toThrow(
+      /__IMG_SRC__/
     );
   });
 });
