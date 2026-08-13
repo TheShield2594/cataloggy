@@ -2,7 +2,7 @@
 
 Cataloggy is your own personal Netflix-style home page for everything you watch. It pulls together what's on your watchlist, what you're currently binging, and what's trending, and gives you one clean dashboard instead of jumping between five different apps.
 
-Self-host it on your home server, open it on your phone or Apple TV, and keep track of your shows and movies the way you actually want to.
+Self-host it on your home server, open it on your phone or computer, and keep track of your shows and movies the way you actually want to. On the TV, a Stremio add-on puts your catalogs in front of the remote.
 
 ## Why you might like it
 
@@ -10,7 +10,8 @@ Self-host it on your home server, open it on your phone or Apple TV, and keep tr
 - **Works with the tools you already use** — pairs with Stremio, Plex, Jellyfin, Trakt, and Stremio/Omni add-ons
 - **No account you can't walk away from** — watch history comes straight from Stremio, Plex or Jellyfin, and every third-party service is optional and replaceable
 - **Yours, not the cloud's** — runs on your own hardware, your data stays on your network
-- **Phone and TV friendly** — installs as an app on your phone (PWA) and works great on Apple TV and Android TV
+- **Phone friendly** — installs as an app on your phone (PWA)
+- **Works with your TV** — a Stremio add-on puts your catalogs on Apple TV (via Omni) and Android TV
 
 ## Getting Started
 
@@ -174,7 +175,7 @@ Cataloggy's add-on service speaks the standard Stremio add-on protocol, so it wo
 
 > **Important:** Android TV cannot use `localhost` URLs either — use your LAN IP (or your public domain, if set up via the Nginx Proxy Manager section below) so the URL is reachable from the TV.
 
-The web app itself also installs fine as a PWA on Android TV browsers that support it, but the Stremio app gives a better remote-control-friendly experience for browsing/playback on a TV.
+The Stremio app is the way to use Cataloggy on a TV. The web app is built for touch and pointer input: it has no D-pad/arrow-key focus navigation and no 10-foot layout, so while it will load in an Android TV browser, driving it with a remote is painful. Apple TV has no web browser at all, so Omni plus the add-on is the only route there.
 
 ### Profiles and the add-on URL
 
