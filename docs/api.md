@@ -313,7 +313,7 @@ before each outbound request — records can change after a config is saved.
 | `POST` | `/stremio/library/import` | The opt-in backfill, dated from Stremio's own `lastWatched`. |
 | `POST` | `/stremio/library/sync` | The incremental pass, on demand. |
 | `POST` | `/stremio/library/disconnect` | |
-| `POST` | `/stremio/play-signal` | Written by the add-on service, and only by it: the profile id in the body picks which profile a signal is written to, so the route takes the add-on's service token and 404s for anything else. The id itself is validated, not trusted. |
+| `POST` | `/stremio/play-signal` | Written by the add-on service, and only by it: the profile id picks which profile a signal is written to, so the route takes the add-on's service token and 404s for anything else. The id may come as `x-profile-id` (what the add-on sends) or in the body, and is validated rather than trusted either way; absent both, the default profile. |
 | `GET` | `/stremio/play-signals` | Diagnostics: what the add-on has seen but not yet acted on. |
 
 ### Stremio add-on

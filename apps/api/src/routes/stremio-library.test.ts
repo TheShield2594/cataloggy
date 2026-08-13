@@ -38,7 +38,10 @@ vi.mock("../lib/play-signal.js", () => ({
   isPlayDetectionEnabled: () => isPlayDetectionEnabled(),
   recordPlaySignal: (...a: unknown[]) => recordPlaySignal(...a),
 }));
+// Not `importOriginal`: the real module reaches prisma.js, which builds a
+// client at import time, and this suite has no database of any kind.
 vi.mock("../lib/profile.js", () => ({
+  PROFILE_HEADER: "x-profile-id",
   getDefaultProfileId: async () => DEFAULT_PROFILE_ID,
   resolveProfile: async (request: { profileId?: string }) => {
     request.profileId = PROFILE_ID;
@@ -213,6 +216,54 @@ describe("Stremio library routes", () => {
       expect(res.statusCode).toBe(202);
       expect(recordPlaySignal).toHaveBeenCalledWith(
         expect.objectContaining({ profileId: PROFILE_ID, imdbId: "tt1", resource: "stream" })
+      );
+    });
+
+    // The add-on names the profile with `x-profile-id`, the header it puts on
+    // every other call it makes. Reading only the body recorded a signal from a
+    // `/p/<uuid>/` install against the default profile instead — so in a
+    // household, one person's viewing landed in another's history.
+    it("records a signal for the profile the addon names in the header", async () => {
+      const app = await buildApp();
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/stremio/play-signal",
+        headers: { ...addonHeaders, "x-profile-id": PROFILE_ID },
+        payload: playSignal(),
+      });
+
+      expect(res.statusCode).toBe(202);
+      expect(recordPlaySignal).toHaveBeenCalledWith(expect.objectContaining({ profileId: PROFILE_ID }));
+    });
+
+    it("ignores a header that isn't a UUID", async () => {
+      const app = await buildApp();
+
+      await app.inject({
+        method: "POST",
+        url: "/stremio/play-signal",
+        headers: { ...addonHeaders, "x-profile-id": "../../etc/passwd" },
+        payload: playSignal(),
+      });
+
+      expect(recordPlaySignal).toHaveBeenCalledWith(
+        expect.objectContaining({ profileId: DEFAULT_PROFILE_ID })
+      );
+    });
+
+    it("falls back to the default profile when neither names one", async () => {
+      const app = await buildApp();
+
+      await app.inject({
+        method: "POST",
+        url: "/stremio/play-signal",
+        headers: addonHeaders,
+        payload: playSignal(),
+      });
+
+      expect(recordPlaySignal).toHaveBeenCalledWith(
+        expect.objectContaining({ profileId: DEFAULT_PROFILE_ID })
       );
     });
 
