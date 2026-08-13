@@ -84,7 +84,8 @@ export function everyInterval({
   onError,
 }: ScheduleOptions): ScheduledJob {
   let inFlight = false;
-  const timers = new Set<NodeJS.Timeout>();
+  let firstRunTimer: NodeJS.Timeout | undefined;
+  let intervalTimer: NodeJS.Timeout | undefined;
 
   const persist = (job: JobName, write: Promise<void>) =>
     write.catch((error: unknown) => {
@@ -127,23 +128,29 @@ export function everyInterval({
     }
   };
 
-  const startInterval = () => timers.add(setInterval(() => void runTick(), intervalMs));
+  const startInterval = () => {
+    intervalTimer = setInterval(() => void runTick(), intervalMs);
+  };
 
   if (startAfterMs === undefined) {
     startInterval();
   } else {
-    const initial = setTimeout(() => {
-      timers.delete(initial);
+    firstRunTimer = setTimeout(() => {
+      firstRunTimer = undefined;
       void runTick();
       startInterval();
     }, startAfterMs);
-    timers.add(initial);
   }
 
   return {
     stop: () => {
-      for (const timer of timers) clearTimeout(timer);
-      timers.clear();
+      // Held apart so each is cancelled by its own function. Node treats the two
+      // as interchangeable, but a scheduler that says which kind of timer it is
+      // cancelling is worth more than the line it saves.
+      if (firstRunTimer) clearTimeout(firstRunTimer);
+      if (intervalTimer) clearInterval(intervalTimer);
+      firstRunTimer = undefined;
+      intervalTimer = undefined;
     },
   };
 }

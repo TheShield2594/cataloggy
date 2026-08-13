@@ -616,21 +616,27 @@ export async function purgeApiCache(): Promise<void> {
 
 /**
  * Tells the service worker which origin and path prefix the API answers on, so
- * its runtime cache matches the requests this browser actually makes. Resolves
- * once the message is sent, or immediately when no worker is registered.
+ * its runtime cache matches the requests this browser actually makes.
  *
- * The worker reads the same value out of `config.js` at install, which covers
- * the first load; this covers the part `config.js` can't know about — the
- * per-device override — and any later change to it.
+ * Returns without sending anything when there is no active worker to send to —
+ * nothing registered, or one still installing. `navigator.serviceWorker.ready`
+ * would be the obvious thing to await, but it never settles when nothing is
+ * registered: on a browser that supports service workers but has none (a plain
+ * http:// LAN deployment, say) every call would leave a promise pending for the
+ * life of the page. The install-time read of `config.js` covers the worker's
+ * first run either way, and a later call — the override changing, the next page
+ * load — reaches it once it is active.
  */
 export async function tellServiceWorkerWhereTheApiIs(): Promise<void> {
   if (!navigator.serviceWorker) return;
   try {
-    const registration = await navigator.serviceWorker.ready;
-    const worker = navigator.serviceWorker.controller ?? registration.active;
-    worker?.postMessage({ type: "SET_API_BASE", apiBase: runtimeConfig.getApiBase() });
+    const registration = await navigator.serviceWorker.getRegistration();
+    const worker = navigator.serviceWorker.controller ?? registration?.active;
+    if (!worker) return;
+    worker.postMessage({ type: "SET_API_BASE", apiBase: runtimeConfig.getApiBase() });
   } catch {
-    // No worker to tell (unsupported, unregistered, or a non-secure origin).
+    // Nothing to tell (unsupported, or a non-secure origin where the registration
+    // lookup itself throws).
   }
 }
 

@@ -96,14 +96,14 @@ describe("job-status", () => {
       { key: "job-status:steam-sync", value: "Steam API returned 503", updatedAt: new Date("2026-01-01T00:00:00Z") },
     ]);
 
-    const { getFailedJobStatuses } = await import("./job-status.js");
+    const { failuresFrom, getJobRuns } = await import("./job-status.js");
 
-    expect(await getFailedJobStatuses()).toEqual([
+    expect(failuresFrom(await getJobRuns())).toEqual([
       { job: "steam-sync", message: "Steam API returned 503", failedAt: "2026-01-01T00:00:00.000Z" },
     ]);
   });
 
-  it("getFailedJobStatuses strips the KV key prefix and leaves out healthy jobs", async () => {
+  it("failuresFrom keeps the failed runs and leaves out the healthy ones", async () => {
     prismaMock.kV.findMany.mockResolvedValue([
       {
         key: "job-status:steam-sync",
@@ -117,9 +117,9 @@ describe("job-status", () => {
       },
     ]);
 
-    const { getFailedJobStatuses } = await import("./job-status.js");
+    const { failuresFrom, getJobRuns } = await import("./job-status.js");
 
-    expect(await getFailedJobStatuses()).toEqual([
+    expect(failuresFrom(await getJobRuns())).toEqual([
       { job: "steam-sync", message: "boom", failedAt: "2026-01-01T00:00:00.000Z" },
     ]);
     expect(prismaMock.kV.findMany).toHaveBeenCalledWith(
@@ -127,11 +127,11 @@ describe("job-status", () => {
     );
   });
 
-  it("getFailedJobStatuses returns an empty array when nothing has failed", async () => {
+  it("failuresFrom returns an empty array when nothing has failed", async () => {
     prismaMock.kV.findMany.mockResolvedValue([]);
 
-    const { getFailedJobStatuses } = await import("./job-status.js");
+    const { failuresFrom, getJobRuns } = await import("./job-status.js");
 
-    expect(await getFailedJobStatuses()).toEqual([]);
+    expect(failuresFrom(await getJobRuns())).toEqual([]);
   });
 });

@@ -115,8 +115,8 @@ export async function getJobRuns(): Promise<JobRun[]> {
   });
 }
 
-export async function getFailedJobStatuses(): Promise<JobFailure[]> {
-  const runs = await getJobRuns();
+/** The failures among a set of runs, in the shape the Settings page reads. */
+export function failuresFrom(runs: JobRun[]): JobFailure[] {
   return runs
     .filter((run) => run.status === "failed")
     .map((run) => ({ job: run.job, message: run.message ?? "", failedAt: run.at }));

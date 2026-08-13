@@ -150,6 +150,17 @@ describe("API response caching", () => {
     expect(matches(apiRequest("http://192.168.1.25:7000/watchlist"))).toBeTruthy();
   });
 
+  it("never caches a write, only the reads it is safe to serve stale", async () => {
+    await loadWorker("https://cataloggy.example/api");
+
+    expect(
+      apiRoute()({
+        url: new URL("https://cataloggy.example/api/lists/abc/items"),
+        request: { method: "POST", mode: "cors" as RequestMode, destination: "" as RequestDestination },
+      })
+    ).toBeFalsy();
+  });
+
   it("never caches a page navigation, even to a path the API also serves", async () => {
     // "/lists" is both an API endpoint and a React Router route.
     await loadWorker("https://cataloggy.example/api");
@@ -162,18 +173,45 @@ describe("API response caching", () => {
     ).toBeFalsy();
   });
 
+  /** Delivers a message to the worker and waits for whatever it kept hold of. */
+  const sendToWorker = async (data: unknown) => {
+    const waits: Promise<unknown>[] = [];
+    for (const listener of messageListeners) {
+      listener({ data, waitUntil: (p) => waits.push(p) });
+    }
+    await Promise.all(waits);
+  };
+
   it("takes the API base from the page, which is the only place a per-device override exists", async () => {
     await loadWorker("https://cataloggy.example/api");
     expect(apiRoute()(apiRequest("https://override.example/watchlist"))).toBeFalsy();
 
-    const waits: Promise<unknown>[] = [];
-    for (const listener of messageListeners) {
-      listener({ data: { type: "SET_API_BASE", apiBase: "https://override.example" }, waitUntil: (p) => waits.push(p) });
-    }
-    await Promise.all(waits);
+    await sendToWorker({ type: "SET_API_BASE", apiBase: "https://override.example" });
 
     expect(apiRoute()(apiRequest("https://override.example/watchlist"))).toBeTruthy();
     expect(apiRoute()(apiRequest("https://cataloggy.example/api/watchlist"))).toBeFalsy();
+  });
+
+  it("keeps matching the path tail when the page reports an empty API base", async () => {
+    // A page whose config.js was never written sends "". Nothing is known
+    // either way here, so the fallback has to survive the message.
+    await loadWorker(null);
+
+    await sendToWorker({ type: "SET_API_BASE", apiBase: "" });
+
+    expect(apiRoute()(apiRequest("https://cataloggy.example/api/watchlist"))).toBeTruthy();
+    expect(apiRoute()(apiRequest("http://192.168.1.25:7000/watchlist"))).toBeTruthy();
+  });
+
+  it("does not let an empty API base clobber one it already knew", async () => {
+    await loadWorker("https://cataloggy.example/api");
+
+    await sendToWorker({ type: "SET_API_BASE", apiBase: "" });
+
+    expect(apiRoute()(apiRequest("https://cataloggy.example/api/watchlist"))).toBeTruthy();
+    // Falling back to the tail match here would start caching another host's
+    // responses under this origin's cache.
+    expect(apiRoute()(apiRequest("https://somewhere.else/watchlist"))).toBeFalsy();
   });
 });
 

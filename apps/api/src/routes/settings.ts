@@ -13,7 +13,7 @@ import { OMDB_API_KEY_KV, getOmdbApiKey } from "../lib/omdb.js";
 import { TMDB_API_KEY_KV, getTmdbApiKey } from "../lib/tmdb-client.js";
 import { RPDB_API_KEY_KV, getRpdbApiKey } from "../lib/rpdb.js";
 import { trendingCache } from "../lib/cache.js";
-import { getJobRuns } from "../lib/job-status.js";
+import { failuresFrom, getJobRuns } from "../lib/job-status.js";
 
 const settingsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/settings/preferences", async () => {
@@ -239,12 +239,7 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
   // failed.
   app.get("/settings/job-status", async () => {
     const runs = await getJobRuns();
-    return {
-      failures: runs
-        .filter((run) => run.status === "failed")
-        .map((run) => ({ job: run.job, message: run.message ?? "", failedAt: run.at })),
-      runs,
-    };
+    return { failures: failuresFrom(runs), runs };
   });
 };
 

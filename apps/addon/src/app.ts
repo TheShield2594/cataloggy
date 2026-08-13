@@ -864,13 +864,13 @@ addonGet<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", 
   const addonBase = ADDON_PUBLIC_BASE ?? `http://localhost:${process.env.PORT ?? 7001}`;
   // Pin the resolved profile into the mark-watched URL rather than leaving it
   // to be re-resolved later, so the write lands on the profile whose catalog
-  // the user is actually looking at.
+  // the user is actually looking at. A request that arrived without a profile
+  // prefix has already resolved to the default profile by this point, so the
+  // URL handed to Stremio names it explicitly either way.
   const profileSegment = scope.profileId ? `/p/${scope.profileId}` : "";
 
-  // The capability is minted against the profile segment this response is about
-  // to write into the URL, not against the resolved id, so the two sides agree
-  // even for the prefix-less URL (where the segment is absent and the write
-  // re-resolves the default profile at the time it happens).
+  // Minted against the same profile the URL above names, which is the value
+  // /mark-watched reads back out of its own path and verifies against.
   const capabilityFor = (target: MarkWatchedTarget): string | null =>
     mintMarkWatchedToken(scope.profileId, target);
 

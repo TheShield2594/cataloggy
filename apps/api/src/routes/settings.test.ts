@@ -37,7 +37,12 @@ vi.mock("../lib/rpdb.js", () => ({
   getRpdbApiKey: () => getRpdbApiKey(),
 }));
 vi.mock("../lib/cache.js", () => ({ trendingCache: { clear: () => trendingCacheClear() } }));
-vi.mock("../lib/job-status.js", () => ({ getJobRuns: () => getJobRuns() }));
+// `failuresFrom` is a pure projection over whatever `getJobRuns` returned, so
+// the route is tested against the real one rather than a second copy of it.
+vi.mock("../lib/job-status.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/job-status.js")>()),
+  getJobRuns: () => getJobRuns(),
+}));
 
 const buildApp = (): Promise<FastifyInstance> =>
   buildRouteApp(() => import("./settings.js"));
