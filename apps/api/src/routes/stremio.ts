@@ -22,8 +22,17 @@ import {
   resolveProfile,
 } from "../lib/profile.js";
 import { parseMetaType, parseCatalogLimit, UUID_V4_PATTERN } from "../lib/types.js";
-import type { StremioMetaPreview, StremioMetaType } from "../lib/types.js";
+import type { StremioMetaPreview } from "../lib/types.js";
 import type { MetadataPayload } from "../tmdb.js";
+import {
+  catalogRequiresAi,
+  DISCOVERY_CATALOGS,
+  getDiscoveryCatalog,
+  listCatalogId,
+  parseListCatalogId,
+  selectDiscoveryCatalogs,
+} from "@cataloggy/shared";
+import type { AddonConfigResponse, DiscoveryCatalog } from "@cataloggy/shared";
 
 const STREMIO_ADDON_ID = "com.cataloggy.api";
 const STREMIO_ADDON_VERSION = "1.0.0";
@@ -44,50 +53,32 @@ const CORE_STREMIO_CATALOGS = [
   { id: "my_continue_series", type: "series" as const, name: "Continue Watching" },
 ];
 
-const DISCOVERY_CATALOG_MAP: Record<string, { endpoint: string; type: StremioMetaType }> = {
-  "cataloggy-trending-movie":     { endpoint: "trending:movie:week",     type: "movie" },
-  "cataloggy-trending-series":    { endpoint: "trending:series:week",    type: "series" },
-  "cataloggy-popular-movie":      { endpoint: "popular:movie",           type: "movie" },
-  "cataloggy-popular-series":     { endpoint: "popular:series",          type: "series" },
-  "cataloggy-recommended-movie":  { endpoint: "recommended:movie",       type: "movie" },
-  "cataloggy-recommended-series": { endpoint: "recommended:series",      type: "series" },
-  "cataloggy-ai-movie":           { endpoint: "ai-recs:movie",           type: "movie" },
-  "cataloggy-ai-series":          { endpoint: "ai-recs:series",          type: "series" },
-  "cataloggy-anime-series":       { endpoint: "anime:series",            type: "series" },
-  "cataloggy-anime-movie":        { endpoint: "anime:movie",             type: "movie" },
-  "cataloggy-netflix-movie":      { endpoint: "streaming:netflix:movie", type: "movie" },
-  "cataloggy-netflix-series":     { endpoint: "streaming:netflix:series",type: "series" },
-  "cataloggy-disney-movie":       { endpoint: "streaming:disney:movie",  type: "movie" },
-  "cataloggy-disney-series":      { endpoint: "streaming:disney:series", type: "series" },
-  "cataloggy-amazon-movie":       { endpoint: "streaming:amazon:movie",  type: "movie" },
-  "cataloggy-amazon-series":      { endpoint: "streaming:amazon:series", type: "series" },
-  "cataloggy-apple-movie":        { endpoint: "streaming:apple:movie",   type: "movie" },
-  "cataloggy-apple-series":       { endpoint: "streaming:apple:series",  type: "series" },
-  "cataloggy-max-movie":          { endpoint: "streaming:max:movie",     type: "movie" },
-  "cataloggy-max-series":         { endpoint: "streaming:max:series",    type: "series" },
-};
-
-const DISCOVERY_CATALOG_LABELS: Record<string, string> = {
-  "cataloggy-trending-movie":     "Trending Movies",
-  "cataloggy-trending-series":    "Trending Series",
-  "cataloggy-popular-movie":      "Popular Movies",
-  "cataloggy-popular-series":     "Popular Series",
-  "cataloggy-recommended-movie":  "Recommended Movies",
-  "cataloggy-recommended-series": "Recommended Series",
-  "cataloggy-ai-movie":           "AI Picks — Movies",
-  "cataloggy-ai-series":          "AI Picks — Series",
-  "cataloggy-anime-series":       "Anime",
-  "cataloggy-anime-movie":        "Anime Movies",
-  "cataloggy-netflix-movie":      "Netflix Movies",
-  "cataloggy-netflix-series":     "Netflix Series",
-  "cataloggy-disney-movie":       "Disney+ Movies",
-  "cataloggy-disney-series":      "Disney+ Series",
-  "cataloggy-amazon-movie":       "Prime Video Movies",
-  "cataloggy-amazon-series":      "Prime Video Series",
-  "cataloggy-apple-movie":        "Apple TV+ Movies",
-  "cataloggy-apple-series":       "Apple TV+ Series",
-  "cataloggy-max-movie":          "Max Movies",
-  "cataloggy-max-series":         "Max Series",
+// The catalog registry lives in @cataloggy/shared — see the module comment
+// there for why. What stays here is the half only this service can know: how a
+// catalog's rows are actually produced, and where they are cached.
+//
+// The keys are shared with the standalone /trending, /popular, /anime and
+// /streaming routes, which build the same rows for the web UI, so whichever
+// surface asks first fills the entry for both.
+const discoveryCacheKey = (catalog: DiscoveryCatalog, profileId: string, region: string): string => {
+  switch (catalog.source.kind) {
+    case "trending":
+      return `trending:${catalog.type}:week`;
+    case "popular":
+      return `popular:${catalog.type}`;
+    case "anime":
+      return `anime:${catalog.type}`;
+    case "streaming":
+      return `streaming:${catalog.source.provider}:${catalog.type}:${region}`;
+    // Trending/popular/anime/streaming are the same rows for everyone. The two
+    // personal catalogs are not: they are derived from a profile's own history,
+    // so an unkeyed entry would serve whoever asked first to everyone else —
+    // including out of a PIN-protected profile.
+    case "ai":
+      return `ai-recs:${catalog.type}:${profileId}`;
+    case "recommended":
+      return `recommended:${catalog.type}:${profileId}`;
+  }
 };
 
 const stremioRoutes: FastifyPluginAsync = async (app) => {
@@ -232,22 +223,35 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
   // requesting profile's custom lists (a PIN-protected profile's list names are
   // not the shared token holder's business), and enabling a catalog must not
   // enable it for everyone else on the install.
-  app.get("/addon/config", { preHandler: resolveProfile }, async (request) => {
+  app.get("/addon/config", { preHandler: resolveProfile }, async (request): Promise<AddonConfigResponse> => {
     const profileId = request.profileId as string;
-    const config = await getAddonConfig(profileId);
-    const userLists = await prisma.list.findMany({
-      where: { kind: ListKind.custom, profileId },
-      select: { id: true, name: true },
-      orderBy: { createdAt: "asc" },
-    });
+    const [config, aiConfigured, userLists] = await Promise.all([
+      getAddonConfig(profileId),
+      isAiConfigured(),
+      prisma.list.findMany({
+        where: { kind: ListKind.custom, profileId },
+        select: { id: true, name: true },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
     // The manifest URL carries this profile's addon secret, so it can only be
     // handed out from a route that already knows who is asking.
     const secret = deriveStremioSecret(profileId);
     const manifestPath = secret ? `/addon/stremio/${secret}/manifest.json` : null;
     return {
       config,
-      availableCatalogs: ALL_ADDON_CATALOGS,
+      // Labelled here rather than in the Settings picker: a fourth copy of the
+      // catalog names is a fourth thing to keep in step.
+      availableCatalogs: DISCOVERY_CATALOGS.map((catalog) => ({
+        id: catalog.id,
+        label: catalog.label,
+        requiresAi: catalogRequiresAi(catalog),
+      })),
       availableLists: userLists,
+      // The addon service builds its manifest from this response, and it has to
+      // drop the AI catalogs when there is no AI provider for the same reason
+      // the manifest below does.
+      aiConfigured,
       stremioManifestPath: manifestPath,
       stremioManifestUrl:
         manifestPath && CATALOGGY_API_PUBLIC ? `${CATALOGGY_API_PUBLIC}${manifestPath}` : null,
@@ -270,8 +274,8 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
     const enabled = (body.enabledCatalogs as unknown[]).filter((c): c is string => {
       if (typeof c !== "string") return false;
       if (ALL_ADDON_CATALOGS.includes(c)) return true;
-      if (c.startsWith("list:")) return validListIds.has(c.slice(5));
-      return false;
+      const listId = parseListCatalogId(c);
+      return listId !== null && validListIds.has(listId);
     });
 
     const config = { enabledCatalogs: enabled };
@@ -326,25 +330,19 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
   const buildManifest = async (profileId: string) => {
     const [config, aiConfigured] = await Promise.all([getAddonConfig(profileId), isAiConfigured()]);
 
-    const enabledCatalogs = config.enabledCatalogs.filter((id) => {
-      if (id === "cataloggy-ai-movie" || id === "cataloggy-ai-series") return aiConfigured;
-      return true;
-    });
-
     const catalogs: { id: string; type: string; name: string }[] = [
       ...CORE_STREMIO_CATALOGS.map((c) => ({ id: c.id, type: c.type, name: c.name })),
-      ...enabledCatalogs
-        .filter((id) => DISCOVERY_CATALOG_MAP[id])
-        .map((id) => ({
-          id,
-          type: DISCOVERY_CATALOG_MAP[id].type,
-          name: DISCOVERY_CATALOG_LABELS[id] ?? id,
-        })),
+      ...selectDiscoveryCatalogs(config.enabledCatalogs, { aiConfigured }).map((catalog) => ({
+        id: catalog.id,
+        type: catalog.type,
+        name: catalog.label,
+      })),
     ];
 
-    const listCatalogIds = enabledCatalogs.filter((id) => id.startsWith("list:"));
-    if (listCatalogIds.length > 0) {
-      const listIds = listCatalogIds.map((id) => id.slice(5));
+    const listIds = config.enabledCatalogs
+      .map(parseListCatalogId)
+      .filter((id): id is string => id !== null);
+    if (listIds.length > 0) {
       const userLists = await prisma.list.findMany({
         where: { id: { in: listIds }, profileId },
         select: { id: true, name: true },
@@ -353,8 +351,8 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
       for (const listId of listIds) {
         const name = listById.get(listId);
         if (!name) continue;
-        catalogs.push({ id: `list:${listId}`, type: "movie", name: `${name} – Movies` });
-        catalogs.push({ id: `list:${listId}`, type: "series", name: `${name} – Series` });
+        catalogs.push({ id: listCatalogId(listId), type: "movie", name: `${name} – Movies` });
+        catalogs.push({ id: listCatalogId(listId), type: "series", name: `${name} – Series` });
       }
     }
 
@@ -422,8 +420,8 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
       return { metas: await getContinueMetas(limit, profileId) };
     }
 
-    if (catalogId.startsWith("list:")) {
-      const listId = catalogId.slice(5);
+    const listId = parseListCatalogId(catalogId);
+    if (listId !== null) {
       // `List.id` is a Postgres uuid column, so a malformed id is a failed cast
       // — a 500 — rather than a miss. Same guard the legacy list route applies.
       if (!UUID_V4_PATTERN.test(listId)) return reply.code(404).send({ metas: [] });
@@ -444,22 +442,13 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
       return { metas: await getCustomListMetas(listId, type, limit) };
     }
 
-    const discovery = DISCOVERY_CATALOG_MAP[catalogId];
+    const discovery = getDiscoveryCatalog(catalogId);
     if (!discovery) return reply.code(404).send({ metas: [] });
     if (discovery.type !== type) return reply.code(400).send({ metas: [] });
 
-    let cacheKey = discovery.endpoint;
-    if (cacheKey.startsWith("streaming:")) {
-      const region = await getRegionSetting();
-      cacheKey = `${cacheKey}:${region}`;
-    }
-    // Trending/popular/anime/streaming are the same rows for everyone, so they
-    // share one cache entry. The two personal catalogs are not: they are derived
-    // from a profile's own history, so an unkeyed entry would serve whoever
-    // asked first to everyone else — including out of a PIN-protected profile.
-    if (cacheKey.startsWith("ai-recs:") || cacheKey.startsWith("recommended:")) {
-      cacheKey = `${cacheKey}:${profileId}`;
-    }
+    // Only the streaming catalogs vary by region, and the setting is a DB read.
+    const region = discovery.source.kind === "streaming" ? await getRegionSetting() : "";
+    const cacheKey = discoveryCacheKey(discovery, profileId, region);
     const cached = trendingCacheGet(cacheKey);
     if (cached) return { metas: cached.data };
 
@@ -468,17 +457,15 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
       const metaType = discovery.type === "movie" ? MetadataType.movie : MetadataType.series;
       let results: MetadataPayload[];
 
-      if (cacheKey.startsWith("trending:")) {
-        const window = cacheKey.endsWith(":day") ? ("day" as const) : ("week" as const);
-        results = await tmdb.trending(metaType, window);
-      } else if (cacheKey.startsWith("popular:")) {
+      if (discovery.source.kind === "trending") {
+        results = await tmdb.trending(metaType, "week");
+      } else if (discovery.source.kind === "popular") {
         results = await tmdb.popular(metaType);
-      } else if (cacheKey.startsWith("ai-recs:")) {
-        const aiType = cacheKey.split(":")[1] as "movie" | "series";
-        const result = await getAiRecommendations(aiType, 20, profileId);
+      } else if (discovery.source.kind === "ai") {
+        const result = await getAiRecommendations(discovery.type, 20, profileId);
         if (!result) return { metas: [] };
         return { metas: result.metas };
-      } else if (cacheKey.startsWith("recommended:")) {
+      } else if (discovery.source.kind === "recommended") {
         if (await isAiConfigured()) {
           const aiResult = await getAiRecommendations(discovery.type, 20, profileId);
           if (aiResult) {
@@ -529,17 +516,12 @@ const stremioRoutes: FastifyPluginAsync = async (app) => {
           }
         }
         results = merged;
-      } else if (cacheKey.startsWith("anime:")) {
+      } else if (discovery.source.kind === "anime") {
         results = await tmdb.discoverAnime(metaType);
-      } else if (cacheKey.startsWith("streaming:")) {
-        const parts = cacheKey.split(":");
-        const providerKey = parts[1];
-        const provider = STREAMING_PROVIDERS[providerKey];
-        if (!provider) return { metas: [] };
-        const region = parts[parts.length - 1];
-        results = await tmdb.discoverByProvider(metaType, provider.id, region);
       } else {
-        return { metas: [] };
+        const provider = STREAMING_PROVIDERS[discovery.source.provider];
+        if (!provider) return { metas: [] };
+        results = await tmdb.discoverByProvider(metaType, provider.id, region);
       }
 
       await Promise.all(results.map((r) => upsertMetadata(r)));
