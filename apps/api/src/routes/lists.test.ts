@@ -473,6 +473,158 @@ describe("lists routes", () => {
       expect(items[0].metadata).toMatchObject({ name: "The Movie" });
       expect(items[1].metadata).toBeNull();
     });
+
+    it("returns the whole list and no cursor when no limit is asked for", async () => {
+      // The web list page has no paging UI; a default page size here would
+      // silently truncate it.
+      prismaMock.list.findFirst.mockResolvedValue(listRow());
+      prismaMock.listItem.findMany.mockResolvedValue([
+        { listId: LIST_ID, type: "movie", imdbId: "tt1", addedAt: new Date("2026-01-01T00:00:00Z") },
+      ]);
+      prismaMock.metadata.findMany.mockResolvedValue([]);
+      prismaMock.item.findMany.mockResolvedValue([]);
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "GET", url: `/lists/${LIST_ID}/items` });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().nextCursor).toBeUndefined();
+      expect(prismaMock.listItem.findMany).toHaveBeenCalledWith(
+        expect.not.objectContaining({ take: expect.anything() })
+      );
+    });
+
+    it("pushes the type filter into the query instead of returning both types", async () => {
+      prismaMock.list.findFirst.mockResolvedValue(listRow());
+      prismaMock.listItem.findMany.mockResolvedValue([]);
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "GET", url: `/lists/${LIST_ID}/items?type=series` });
+
+      expect(res.statusCode).toBe(200);
+      expect(prismaMock.listItem.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { listId: LIST_ID, type: "series" } })
+      );
+    });
+
+    it("rejects a type that is not a list item type", async () => {
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "GET", url: `/lists/${LIST_ID}/items?type=game` });
+
+      expect(res.statusCode).toBe(400);
+      // Rejected before the list is even looked up.
+      expect(prismaMock.list.findFirst).not.toHaveBeenCalled();
+    });
+
+    it("hands back a cursor when a limit leaves rows behind, and trims the probe row", async () => {
+      prismaMock.list.findFirst.mockResolvedValue(listRow());
+      // The route asks for limit + 1 to learn whether another page exists.
+      prismaMock.listItem.findMany.mockResolvedValue([
+        { listId: LIST_ID, type: "movie", imdbId: "tt1", addedAt: new Date("2026-01-03T00:00:00Z") },
+        { listId: LIST_ID, type: "movie", imdbId: "tt2", addedAt: new Date("2026-01-02T00:00:00Z") },
+        { listId: LIST_ID, type: "movie", imdbId: "tt3", addedAt: new Date("2026-01-01T00:00:00Z") },
+      ]);
+      prismaMock.metadata.findMany.mockResolvedValue([]);
+      prismaMock.item.findMany.mockResolvedValue([]);
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "GET", url: `/lists/${LIST_ID}/items?limit=2` });
+
+      expect(prismaMock.listItem.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 3 }));
+      const body = res.json();
+      expect(body.items.map((item: { imdbId: string }) => item.imdbId)).toEqual(["tt1", "tt2"]);
+      // Points at the last row served, not the probe row that was dropped.
+      expect(Buffer.from(body.nextCursor, "base64url").toString()).toBe("movie:tt2");
+    });
+
+    it("omits the cursor when the last page comes back short", async () => {
+      prismaMock.list.findFirst.mockResolvedValue(listRow());
+      prismaMock.listItem.findMany.mockResolvedValue([
+        { listId: LIST_ID, type: "movie", imdbId: "tt1", addedAt: new Date("2026-01-01T00:00:00Z") },
+      ]);
+      prismaMock.metadata.findMany.mockResolvedValue([]);
+      prismaMock.item.findMany.mockResolvedValue([]);
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "GET", url: `/lists/${LIST_ID}/items?limit=2` });
+
+      expect(res.json().items).toHaveLength(1);
+      expect(res.json().nextCursor).toBeUndefined();
+    });
+
+    it("resumes after the cursor row", async () => {
+      prismaMock.list.findFirst.mockResolvedValue(listRow());
+      prismaMock.listItem.findMany.mockResolvedValue([]);
+      const app = await buildApp();
+      const cursor = Buffer.from("series:tt9").toString("base64url");
+
+      const res = await app.inject({
+        method: "GET",
+        url: `/lists/${LIST_ID}/items?cursor=${cursor}`,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(prismaMock.listItem.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cursor: { listId_type_imdbId: { listId: LIST_ID, type: "series", imdbId: "tt9" } },
+          skip: 1,
+        })
+      );
+    });
+
+    it("orders by the whole unique tuple so a page boundary inside tied timestamps is stable", async () => {
+      // An import stamps a whole batch with one addedAt; ordering on that alone
+      // would let a cursor repeat or skip the rows that tie.
+      prismaMock.list.findFirst.mockResolvedValue(listRow());
+      prismaMock.listItem.findMany.mockResolvedValue([]);
+      const app = await buildApp();
+
+      await app.inject({ method: "GET", url: `/lists/${LIST_ID}/items` });
+
+      expect(prismaMock.listItem.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ addedAt: "desc" }, { type: "asc" }, { imdbId: "asc" }],
+        })
+      );
+    });
+
+    it("caps an oversized limit rather than rejecting it", async () => {
+      prismaMock.list.findFirst.mockResolvedValue(listRow());
+      prismaMock.listItem.findMany.mockResolvedValue([]);
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "GET", url: `/lists/${LIST_ID}/items?limit=100000` });
+
+      expect(res.statusCode).toBe(200);
+      expect(prismaMock.listItem.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 501 }));
+    });
+
+    it.each(["0", "-1", "1.5", "abc", ""])("rejects limit=%j", async (limit) => {
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "GET", url: `/lists/${LIST_ID}/items?limit=${limit}` });
+
+      expect(res.statusCode).toBe(400);
+      expect(prismaMock.listItem.findMany).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["not base64 at all", "!!!!"],
+      ["a tuple with an unknown type", Buffer.from("game:tt1").toString("base64url")],
+      ["a tuple with no imdbId", Buffer.from("movie:").toString("base64url")],
+      ["a value with no separator", Buffer.from("movie").toString("base64url")],
+    ])("rejects %s as a cursor", async (_label, cursor) => {
+      const app = await buildApp();
+
+      const res = await app.inject({
+        method: "GET",
+        url: `/lists/${LIST_ID}/items?cursor=${encodeURIComponent(cursor)}`,
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(prismaMock.listItem.findMany).not.toHaveBeenCalled();
+    });
   });
 
   describe("GET /items/:imdbId/lists", () => {

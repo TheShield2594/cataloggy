@@ -183,7 +183,10 @@ class RateLimiter {
           try {
             resolve(await fn());
           } catch (error) {
-            reject(error);
+            // A queued job can only reject through here, so a non-Error thrown
+            // deep in one would otherwise surface to the caller as a rejection
+            // with no stack. The original value rides along as `cause`.
+            reject(error instanceof Error ? error : new Error(String(error), { cause: error }));
           }
         }
       });

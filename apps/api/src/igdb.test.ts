@@ -14,6 +14,13 @@ const isHost = (url: string | URL, host: string) => new URL(url.toString()).host
 const isTwitch = (url: string | URL) => isHost(url, "id.twitch.tv");
 const isIgdb = (url: string | URL) => isHost(url, "api.igdb.com");
 
+// `RequestInit["body"]` also covers Blob and ReadableStream, which stringify to
+// "[object Object]". Every IGDB call in this file sends an Apicalypse query as a
+// plain string, so anything else is a caller that changed shape and should read
+// as an empty query rather than as a body made of the word "object".
+const requestBody = (init?: RequestInit): string =>
+  typeof init?.body === "string" ? init.body : "";
+
 /**
  * Stubs Twitch + IGDB. `respond` is handed the Apicalypse body of each IGDB
  * request, so a test can answer the fuzzy `search` query and the literal
@@ -26,7 +33,7 @@ function stubIgdb(respond: (body: string) => GamePayload[]) {
     if (isTwitch(href)) {
       return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
     }
-    return new Response(JSON.stringify(respond(String(init?.body ?? ""))), { status: 200 });
+    return new Response(JSON.stringify(respond(requestBody(init))), { status: 200 });
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -177,7 +184,7 @@ describe("igdb", () => {
 
       const bodies = fetchMock.mock.calls
         .filter(([url]) => isIgdb(url))
-        .map(([, init]) => String(init?.body ?? ""));
+        .map(([, init]) => requestBody(init));
 
       expect(bodies).toHaveLength(2);
       expect(bodies.some((b) => b.includes('search "super mario sunshine"'))).toBe(true);
@@ -238,7 +245,7 @@ describe("igdb", () => {
         if (isTwitch(href)) {
           return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
         }
-        if (isLiteralSearch(String(init?.body ?? ""))) {
+        if (isLiteralSearch(requestBody(init))) {
           return new Response("bad filter", { status: 400 });
         }
         return new Response(JSON.stringify([{ id: 1, name: "Hollow Knight" }]), { status: 200 });
@@ -287,7 +294,7 @@ describe("igdb", () => {
         if (isTwitch(url)) {
           return new Response(JSON.stringify({ access_token: "tok", expires_in: 3600 }), { status: 200 });
         }
-        if (isLiteralSearch(String(init?.body ?? ""))) {
+        if (isLiteralSearch(requestBody(init))) {
           literalRequests += 1;
           return new Response("bad filter", { status: 400 });
         }

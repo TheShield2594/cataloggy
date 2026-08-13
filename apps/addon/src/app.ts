@@ -540,17 +540,45 @@ const parseCatalogId = (id: string) => {
   return { listId: match[1], catalogType: match[2] };
 };
 
-const fetchListItems = async (listId: string, profileId: string | null): Promise<CataloggyListItem[]> => {
+// The one catalog input that had no cache at all, and the most expensive to go
+// without: Stremio asks for one catalog per (list, type) pair, so a home screen
+// with three lists installed used to pull all three lists in full, twice each,
+// on every refresh.
+//
+// Shorter-lived than the manifest and lists caches (60s) because list membership
+// is what a user changes and then immediately looks for in Stremio, while the
+// set of lists itself barely moves. Keyed by type as well as list, since the
+// request is now typed and the two types are different payloads.
+const listItemsCache = new Map<string, CacheEntry<CataloggyListItem[]>>();
+const LIST_ITEMS_CACHE_TTL_MS = 30_000;
+
+const fetchListItems = async (
+  listId: string,
+  profileId: string | null,
+  type: string
+): Promise<CataloggyListItem[]> => {
+  const now = Date.now();
+  // Two keys per list rather than one, so this map fills toward MAX_CACHE_ENTRIES
+  // twice as fast as the others — the bound in cacheSet is what keeps that in check.
+  const cacheKey = `${cacheKeyFor(profileId)}:${listId}:${type}`;
+  const cached = listItemsCache.get(cacheKey);
+  if (cached && now < cached.expiry) return cached.data;
+
   const payload = await apiGet(
-    `/lists/${encodeURIComponent(listId)}/items`,
+    `/lists/${encodeURIComponent(listId)}/items?type=${encodeURIComponent(type)}`,
     profileId,
     parseListItemsResponse
   );
+  cacheSet(listItemsCache, cacheKey, { data: payload.items, expiry: now + LIST_ITEMS_CACHE_TTL_MS });
   return payload.items;
 };
 
 const itemsToMetas = (items: CataloggyListItem[], type: string): StremioMetaPreview[] =>
   items
+    // Redundant against a current API, which now filters by type itself, but the
+    // addon and the API are separate containers and a rolling update runs one
+    // version ahead of the other for a minute or two. Dropping this would put
+    // series rows in a movie catalog for exactly that window.
     .filter((item) => item.type === type)
     .map((item) => ({
       id: item.imdbId,
@@ -627,7 +655,7 @@ const handleCatalog = async (type: string, id: string, profileId: string | null,
   if (!list || !isListEnabled(list, config)) return { metas: [] };
 
   const [items, rpdb] = await Promise.all([
-    fetchListItems(parsed.listId, profileId),
+    fetchListItems(parsed.listId, profileId, type),
     fetchRpdbConfig(profileId),
   ]);
   // Default to alphabetical order; Z-A/genre extras (if selected) override below.

@@ -174,6 +174,13 @@ describe("response parsers", () => {
     expect(parsed.items[0].title).toBeNull();
   });
 
+  it("reads the paging cursor, and reports none for an unpaged response", () => {
+    expect(parseListItemsResponse({ items: [], nextCursor: "bW92aWU6dHQx" }).nextCursor).toBe("bW92aWU6dHQx");
+    // A caller that asked for no limit gets every item and no cursor — the key
+    // is absent rather than null, which must not read as a contract breach.
+    expect(parseListItemsResponse({ items: [] }).nextCursor).toBeNull();
+  });
+
   it("reads the enabled catalogs and the AI flag", () => {
     expect(parseAddonConfigResponse({ config: { enabledCatalogs: ["a"] }, aiConfigured: true })).toEqual({
       enabledCatalogs: ["a"],

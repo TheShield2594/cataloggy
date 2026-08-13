@@ -861,14 +861,19 @@ export function DashboardPage() {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, []);
+    // The `setX` names below all come from useCachedState, which memoises its
+    // setter on the cache key — a string literal at every call site here — so
+    // every one of these dependency lists is stable across renders. They are
+    // named rather than omitted so the lists describe what the closures
+    // actually read, which is what makes exhaustive-deps worth enforcing.
+  }, [setProgress, setHistory, setStats]);
 
   const refreshProgress = useCallback(async () => {
     try {
       const progressRes = await api.getSeriesProgress();
       setProgress(progressRes ?? []);
     } catch { /* keep showing the last known list */ }
-  }, []);
+  }, [setProgress]);
 
   const profileId = runtimeConfig.getProfileId();
 
@@ -889,7 +894,7 @@ export function DashboardPage() {
     } finally {
       if (detailedToken.current === token) setDetailedLoading(false);
     }
-  }, []);
+  }, [setDetailedStats]);
 
   const trendingToken = useRef(0);
   const loadTrending = useCallback(async () => {
@@ -908,7 +913,7 @@ export function DashboardPage() {
     } finally {
       if (trendingToken.current === token) setTrendingLoading(false);
     }
-  }, []);
+  }, [setTrendingMovies]);
 
   // One counter per rail rather than one for both. The rails have separate
   // Retry buttons and load independently, so retrying movies must not
@@ -945,7 +950,7 @@ export function DashboardPage() {
     } finally {
       if (recsToken.current[kind] === token) setLoadingFor(false);
     }
-  }, []);
+  }, [setRecommendations, setSeriesRecs]);
 
   // AI config gates both rails: a failure here means neither can be fetched, so
   // it surfaces as a failure on both rather than as two empty rows.
@@ -1001,7 +1006,7 @@ export function DashboardPage() {
     } finally {
       if (calendarToken.current === token) setCalendarLoading(false);
     }
-  }, []);
+  }, [setCalendarEntries]);
 
   useEffect(() => {
     void loadDetailedStats();
@@ -1016,18 +1021,27 @@ export function DashboardPage() {
     return () => controller.abort();
   }, [load, profileId]);
 
+  // Pulled out of the rail objects rather than called as methods on them.
+  // useHorizontalScroll hands back a fresh object literal every render, so a
+  // dependency on `continueScroll` re-arms this timer on every render; the
+  // `checkScroll` it carries is a useCallback with an empty dependency list and
+  // never changes. Same four calls, but now the dependency list says so.
+  const { checkScroll: checkContinueScroll } = continueScroll;
+  const { checkScroll: checkRecentScroll } = recentScroll;
+  const { checkScroll: checkRecsScroll } = recsScroll;
+  const { checkScroll: checkSeriesRecsScroll } = seriesRecsScroll;
+
   useEffect(() => {
     if (loading) return;
     const timer = setTimeout(() => {
-      continueScroll.checkScroll();
-      recentScroll.checkScroll();
-      recsScroll.checkScroll();
-      seriesRecsScroll.checkScroll();
+      checkContinueScroll();
+      checkRecentScroll();
+      checkRecsScroll();
+      checkSeriesRecsScroll();
     }, 50);
     return () => clearTimeout(timer);
   }, [loading, trendingLoading, recsLoading, seriesRecsLoading, progress.length, history.length,
-    continueScroll.checkScroll, recentScroll.checkScroll,
-    recsScroll.checkScroll, seriesRecsScroll.checkScroll]);
+    checkContinueScroll, checkRecentScroll, checkRecsScroll, checkSeriesRecsScroll]);
 
   const handleMarkNext = async (imdbId: string) => {
     setMarkingNext((prev) => new Set(prev).add(imdbId));

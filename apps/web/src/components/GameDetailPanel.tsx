@@ -109,13 +109,21 @@ export function GameDetailPanel({
     }, 600);
   };
 
+  // `persistNotes` closes over `game.id` and the callbacks, so it is a new
+  // function on every render. The flush below has to stay mount-scoped — an
+  // effect that depended on it would tear down and re-run, flushing the draft,
+  // on every keystroke — so the ref is what carries the current closure into a
+  // cleanup that only ever runs once.
+  const persistNotesRef = useRef(persistNotes);
+  persistNotesRef.current = persistNotes;
+
   useEffect(() => () => {
     if (notesDebounceRef.current) clearTimeout(notesDebounceRef.current);
     // Flush a still-pending edit so closing the panel right after typing
     // doesn't silently drop it. Skips onUpdated (the panel is already gone by
     // the time this resolves — calling it would just reopen it).
     if (pendingNotesRef.current !== null) {
-      persistNotes(pendingNotesRef.current, { notifyOnSuccess: false });
+      persistNotesRef.current(pendingNotesRef.current, { notifyOnSuccess: false });
     }
   }, []);
 
