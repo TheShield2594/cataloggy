@@ -332,6 +332,8 @@ export function ListsPage() {
   // Read by the undo handler, which can fire long after the selection changed.
   const selectedListIdRef = useRef(selectedListId);
   selectedListIdRef.current = selectedListId;
+  // The one in-flight items request, so a newer one can cancel it.
+  const itemsRequestRef = useRef<AbortController | null>(null);
   const { showToast } = useToast();
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading, detail: panelDetail, detailLoading: panelDetailLoading } = useDetailPanel();
 
@@ -372,18 +374,32 @@ export function ListsPage() {
     }
   }, []);
 
-  const loadItems = useCallback(async (listId: string, signal?: AbortSignal) => {
+  // Both paths that load items — the effect that follows the selected list, and
+  // the add modal's refetch — go through here, and each cancels the one before
+  // it. Two in flight at once resolve in whatever order the network returns
+  // them, so on a slow connection clicking Watchlist → Sci-Fi Night → Collection
+  // could leave the slowest response on screen: one list's posters under
+  // another's name. That is worse than a display fault, because removing a row
+  // then sends a DELETE against the list being *shown* for an item that is in a
+  // different one.
+  const loadItems = useCallback(async (listId: string) => {
+    itemsRequestRef.current?.abort();
+    const controller = new AbortController();
+    itemsRequestRef.current = controller;
+    const { signal } = controller;
+
     setLoadingItems(true);
     setError(null);
     try {
       const { items: loaded } = await api.getListItems(listId, signal);
-      if (signal?.aborted) return;
+      if (signal.aborted) return;
       setItems(loaded);
     } catch (err) {
-      if (signal?.aborted) return;
+      if (signal.aborted) return;
       setError(err instanceof Error ? err.message : "Failed to load items");
     } finally {
-      if (!signal?.aborted) setLoadingItems(false);
+      // A superseded request leaves the spinner to whichever request replaced it.
+      if (!signal.aborted) setLoadingItems(false);
     }
   }, []);
 
@@ -409,12 +425,15 @@ export function ListsPage() {
 
   useEffect(() => {
     if (!activeListId) {
+      itemsRequestRef.current?.abort();
       setItems([]);
+      setLoadingItems(false);
       return;
     }
-    const controller = new AbortController();
-    void loadItems(activeListId, controller.signal);
-    return () => controller.abort();
+    void loadItems(activeListId);
+    // Covers the add modal's refetch too: whatever is in flight belongs to the
+    // list being left, or to a page that is unmounting.
+    return () => itemsRequestRef.current?.abort();
   }, [activeListId, loadItems]);
 
   const handleCreateList = async (e: FormEvent) => {

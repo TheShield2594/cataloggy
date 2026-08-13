@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { mintProfileToken } from "../lib/profile-token.js";
-import { hasValidProfileToken, invalidateProfileCache } from "../lib/profile.js";
+import { hasValidProfileToken, invalidateProfileCache, isActingAsProfile } from "../lib/profile.js";
 import { hashPin, isValidPinFormat, needsRehash, pinLengthError, pinMatches } from "../lib/pin-hash.js";
 import { UUID_V4_PATTERN } from "../lib/types.js";
 
@@ -231,7 +231,16 @@ const profilesRoutes: FastifyPluginAsync = async (app) => {
       // Changing or removing an *existing* PIN requires proving you know it —
       // otherwise PIN protection is meaningless from Settings (anyone with app
       // access could strip it without ever seeing the PIN). Setting a PIN for
-      // the first time needs no proof, since there's nothing to bypass yet.
+      // the first time needs no proof, since there's nothing to bypass yet —
+      // but then it has to be *your* profile: a first PIN set on someone else's
+      // locks them out of it, and removing it needs the PIN they never chose.
+      if (!profile.pinHash && nextPin && !(await isActingAsProfile(request, profile.id))) {
+        return reply.code(403).send({
+          error: "Switch to this profile to set its PIN",
+          code: "profile_not_active",
+        });
+      }
+
       if (profile.pinHash) {
         const lockout = await getPinLockout(profile.id);
         if (lockout.locked) {

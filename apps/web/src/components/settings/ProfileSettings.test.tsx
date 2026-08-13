@@ -142,6 +142,19 @@ describe("ProfileSettings PINs", () => {
     expect(await screen.findByText("PIN set for Alex")).toBeInTheDocument();
   });
 
+  // Setting a first PIN proves nothing — there is nothing yet to prove — so the
+  // server takes one only for the profile you are in. Offering the button on
+  // someone else's row would be offering a 403, and the household member whose
+  // profile it is would be locked out with a PIN they never chose.
+  it("won't offer a first PIN on a profile you aren't using", async () => {
+    activeProfile = KID;
+    await renderSettings();
+
+    expect(screen.getByRole("button", { name: "Set PIN for Alex" })).toBeDisabled();
+    // Changing one, which does take proof, stays available from any profile.
+    expect(screen.getByRole("button", { name: "Change PIN for Kid" })).toBeEnabled();
+  });
+
   // Otherwise anyone with the app open could replace another profile's PIN
   // without knowing it, which is the whole point of having one.
   it("requires the current PIN to change an existing one", async () => {

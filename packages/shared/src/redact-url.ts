@@ -1,5 +1,3 @@
-import type { FastifyRequest } from "fastify";
-
 // Fastify's request logging includes the full URL, query string and all, and a
 // reverse proxy in front of it writes the same line to its own access log. Any
 // credential that travels as a query parameter therefore ends up in plaintext
@@ -10,6 +8,11 @@ import type { FastifyRequest } from "fastify";
 // only form it can send. Redacting on the way into the log is what keeps that
 // out of the API's own logs — the proxy's copy is outside our reach, which is
 // why the README steers senders that *can* set headers to `x-webhook-secret`.
+//
+// The addon has the same exposure from the other end: every "Mark Watched"
+// click is a `GET /mark-watched/…?token=<capability>`. It lives here rather
+// than in either service so both loggers can share one list of parameters to
+// mask.
 
 const SENSITIVE_QUERY_PARAMS = new Set([
   "token",
@@ -59,11 +62,24 @@ export const redactUrl = (url: string): string => {
 };
 
 /**
+ * The fields Fastify's default `req` serializer reads. Declared structurally so
+ * this package needs no dependency on Fastify itself; a `FastifyRequest`
+ * satisfies it.
+ */
+type LoggableRequest = {
+  method: string;
+  url: string;
+  host?: string;
+  ip?: string;
+  socket?: { remotePort?: number };
+};
+
+/**
  * Fastify's default `req` log serializer with the URL run through
  * {@link redactUrl}. Every other field is reproduced as Fastify emits it, so
  * the shape of an access log line is unchanged.
  */
-export const redactedRequestSerializer = (request: FastifyRequest) => ({
+export const redactedRequestSerializer = (request: LoggableRequest) => ({
   method: request.method,
   url: redactUrl(request.url),
   host: request.host,

@@ -31,6 +31,7 @@ import {
   parseProfilesResponse,
   parseRpdbConfigResponse,
   parseSeriesProgressResponse,
+  redactedRequestSerializer,
   selectDiscoveryCatalogs,
 } from "@cataloggy/shared";
 import type {
@@ -48,7 +49,16 @@ const WEB_PUBLIC_BASE = (process.env.CATALOGGY_WEB_PUBLIC ?? process.env.WEB_PUB
 const PROXY_PATH_PREFIXES = parseProxyPathPrefixes(process.env.PROXY_PATH_PREFIXES, ["/addon"] as const);
 
 export const app = Fastify({
-  logger: { level: process.env.LOG_LEVEL ?? "info" },
+  logger: {
+    level: process.env.LOG_LEVEL ?? "info",
+    // Every "Mark Watched" click arrives as `GET /mark-watched/…?token=<capability>`
+    // — Stremio can only click a link, so the capability has nowhere but the
+    // query string to travel. Fastify's default `req` serializer would write
+    // that URL to the log verbatim, and `docker-compose.yml` keeps 30 MB of
+    // those logs per service on the host, where a log shipper or a support
+    // bundle pasted into an issue can carry the token off with them.
+    serializers: { req: redactedRequestSerializer },
+  },
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   rewriteUrl: (request: RawRequestDefaultExpression) => normalizeProxyPath(request.url ?? "/", PROXY_PATH_PREFIXES)
 });

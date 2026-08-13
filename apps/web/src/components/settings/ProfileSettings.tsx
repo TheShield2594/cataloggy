@@ -261,6 +261,12 @@ function ProfileRow({
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
 
+  // Changing an existing PIN needs the current one, which is proof enough from
+  // any profile. A *first* PIN has nothing to prove, so the server only accepts
+  // it from the profile it belongs to — otherwise setting one on a household
+  // member's profile would lock them out of it with a PIN they never chose.
+  const canSetFirstPin = profile.hasPin || isActive;
+
   const remove = async () => {
     if (
       !window.confirm(
@@ -343,8 +349,10 @@ function ProfileRow({
             <button
               type="button"
               onClick={() => setEditing("pin")}
+              disabled={!canSetFirstPin}
+              title={canSetFirstPin ? undefined : `Switch to ${profile.name} to set a PIN`}
               aria-label={profile.hasPin ? `Change PIN for ${profile.name}` : `Set PIN for ${profile.name}`}
-              className="flex-none rounded-lg p-1.5 transition-colors hover:bg-[var(--surface-strong)]"
+              className="flex-none rounded-lg p-1.5 transition-colors hover:bg-[var(--surface-strong)] disabled:opacity-30 disabled:hover:bg-transparent"
               style={{ color: "var(--text-mute)" }}
             >
               <Lock size={14} />

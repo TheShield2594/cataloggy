@@ -4,6 +4,9 @@ import type { FastifyInstance } from "fastify";
 import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
+const OTHER_PROFILE_ID = "22222222-2222-4222-8222-222222222222";
+/** Headers of a caller acting as `PROFILE_ID`, the way the web client sends them. */
+const ownProfile = { "x-profile-id": PROFILE_ID };
 /**
  * How PINs were stored before the salted KDF. Fixtures still use it, because
  * an existing install's PINs are in exactly this shape and have to keep
@@ -336,7 +339,12 @@ describe("profiles routes", () => {
       prismaMock.profile.update.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: hashPin("9999") });
       const app = await buildApp();
 
-      const response = await app.inject({ method: "PATCH", url: `/profiles/${PROFILE_ID}`, payload: { pin: "9999" } });
+      const response = await app.inject({
+        method: "PATCH",
+        url: `/profiles/${PROFILE_ID}`,
+        headers: ownProfile,
+        payload: { pin: "9999" },
+      });
 
       expect(response.statusCode).toBe(200);
       expect(response.json().profile.hasPin).toBe(true);
@@ -459,7 +467,79 @@ describe("profiles routes", () => {
         prismaMock.profile.update.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: hashPin("9999") });
         const app = await buildApp();
 
+        const response = await app.inject({
+          method: "PATCH",
+          url: `/profiles/${PROFILE_ID}`,
+          headers: ownProfile,
+          payload: { pin: "9999" },
+        });
+
+        expect(response.statusCode).toBe(200);
+      });
+    });
+
+    // A first PIN takes no proof — there is nothing yet to prove — so it is the
+    // one PIN change that has to be scoped to the caller's own profile.
+    // Otherwise any holder of the shared token could PIN-lock a household
+    // member out of their profile, and removing it would then need the PIN they
+    // never chose.
+    describe("setting a first PIN is scoped to the calling profile", () => {
+      it("refuses a first PIN on a profile the caller isn't acting as", async () => {
+        prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: null });
+        const app = await buildApp();
+
+        const response = await app.inject({
+          method: "PATCH",
+          url: `/profiles/${PROFILE_ID}`,
+          headers: { "x-profile-id": OTHER_PROFILE_ID },
+          payload: { pin: "9999" },
+        });
+
+        expect(response.statusCode).toBe(403);
+        expect(response.json().code).toBe("profile_not_active");
+        expect(prismaMock.profile.update).not.toHaveBeenCalled();
+      });
+
+      // The header is optional on a single-profile install, where the only
+      // profile there is is the one the caller is in.
+      it("allows a first PIN with no header when only one profile exists", async () => {
+        prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: null });
+        prismaMock.profile.findMany.mockResolvedValue([{ id: PROFILE_ID, pinHash: null }]);
+        prismaMock.profile.update.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: hashPin("9999") });
+        const app = await buildApp();
+
         const response = await app.inject({ method: "PATCH", url: `/profiles/${PROFILE_ID}`, payload: { pin: "9999" } });
+
+        expect(response.statusCode).toBe(200);
+      });
+
+      it("refuses a first PIN with no header once a second profile exists", async () => {
+        prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: null });
+        prismaMock.profile.findMany.mockResolvedValue([
+          { id: PROFILE_ID, pinHash: null },
+          { id: OTHER_PROFILE_ID, pinHash: null },
+        ]);
+        const app = await buildApp();
+
+        const response = await app.inject({ method: "PATCH", url: `/profiles/${PROFILE_ID}`, payload: { pin: "9999" } });
+
+        expect(response.statusCode).toBe(403);
+        expect(prismaMock.profile.update).not.toHaveBeenCalled();
+      });
+
+      // Changing one carries its own proof, so it stays available from anywhere
+      // — including the household's shared "manage profiles" screen.
+      it("still lets another profile change an existing PIN with the current one", async () => {
+        prismaMock.profile.findUnique.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: hashPin("1234") });
+        prismaMock.profile.update.mockResolvedValue({ id: PROFILE_ID, name: "Alice", pinHash: hashPin("9999") });
+        const app = await buildApp();
+
+        const response = await app.inject({
+          method: "PATCH",
+          url: `/profiles/${PROFILE_ID}`,
+          headers: { "x-profile-id": OTHER_PROFILE_ID },
+          payload: { pin: "9999", currentPin: "1234" },
+        });
 
         expect(response.statusCode).toBe(200);
       });

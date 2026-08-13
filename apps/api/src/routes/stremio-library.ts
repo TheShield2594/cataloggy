@@ -15,7 +15,8 @@ import {
   recordPlaySignal,
   type PlaySignalResource,
 } from "../lib/play-signal.js";
-import { getDefaultProfileId, resolveProfile } from "../lib/profile.js";
+import { getDefaultProfileId, PROFILE_HEADER, resolveProfile } from "../lib/profile.js";
+import { isServiceRequest } from "../lib/service-request.js";
 import { UUID_V4_PATTERN } from "../lib/types.js";
 
 // The connect route takes a password. Rate-limited like the other
@@ -122,9 +123,25 @@ const stremioLibraryRoutes: FastifyPluginAsync = async (app) => {
   // ─── Play signals ───
   //
   // Written only by the addon service, which is the only thing that sees these
-  // requests. The profile comes from the addon's own resolution (the installed
-  // URL), not from a header, so it is validated here rather than trusted.
+  // requests. The profile is the addon's own resolution of the installed URL
+  // (`/p/<uuid>/…`), so it is validated here rather than trusted.
+  //
+  // It may arrive either way round. The addon sends it as `x-profile-id`, the
+  // header it puts on every other call it makes; the body field is the shape
+  // this route was written to and is what an addon old enough to send it uses.
+  // Reading only the body meant a signal from a profile-scoped install was
+  // recorded against the *default* profile, so on a household install one
+  // person's viewing landed in another's history.
+  //
+  // Whichever way it arrives, it names the profile written to and nothing here
+  // goes through `resolveProfile` — so holding `API_TOKEN` was otherwise enough
+  // to write into a PIN-protected profile just by naming its UUID, and
+  // `settleDuePlaySignals` later turns those signals into watch events. The
+  // add-on's derived service token is what separates the add-on from every
+  // other holder of the shared token, so it is the gate; 404, because to
+  // anything else this route does not exist.
   app.post<{ Body: unknown }>("/stremio/play-signal", async (request, reply) => {
+    if (!isServiceRequest(request)) return reply.code(404).send({ error: "Not found" });
     if (!isPlayDetectionEnabled()) return reply.code(202).send({ status: "disabled" });
 
     const body = request.body as {
@@ -148,10 +165,12 @@ const stremioLibraryRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "resource must be one of: stream, subtitles" });
     }
 
-    const profileId =
-      typeof body.profileId === "string" && UUID_V4_PATTERN.test(body.profileId)
-        ? body.profileId
-        : await getDefaultProfileId();
+    const headerValue = request.headers[PROFILE_HEADER];
+    const headerProfileId = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+    const reported = [body.profileId, headerProfileId].find(
+      (candidate): candidate is string => typeof candidate === "string" && UUID_V4_PATTERN.test(candidate)
+    );
+    const profileId = reported ?? (await getDefaultProfileId());
 
     const result = await recordPlaySignal({
       type: body.type as WatchEventType,

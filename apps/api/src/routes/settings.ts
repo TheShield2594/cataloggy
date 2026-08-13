@@ -14,6 +14,7 @@ import { TMDB_API_KEY_KV, getTmdbApiKey } from "../lib/tmdb-client.js";
 import { RPDB_API_KEY_KV, getRpdbApiKey } from "../lib/rpdb.js";
 import { trendingCache } from "../lib/cache.js";
 import { writeSecretKv } from "../lib/secret-store.js";
+import { isServiceRequest } from "../lib/service-request.js";
 import { failuresFrom, getJobRuns } from "../lib/job-status.js";
 
 const settingsRoutes: FastifyPluginAsync = async (app) => {
@@ -212,7 +213,16 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
   // API swaps them in server-side (`withRpdbPoster` / `applyRpdbToMetaList`),
   // and the add-on reads the key once from `/rpdb/config` and builds its own
   // URLs — which is what this route is for.
-  app.get("/rpdb/config", async () => {
+  //
+  // It is the one place a stored third-party key is handed back out, so it is
+  // restricted to the add-on service rather than to `API_TOKEN`: the browser
+  // holds that token too, and has no use for the key. `/rpdb/status` is what
+  // Settings reads, and says only whether one is configured.
+  //
+  // 404 rather than 401 — to anything that isn't the add-on, this route does
+  // not exist.
+  app.get("/rpdb/config", async (request, reply) => {
+    if (!isServiceRequest(request)) return reply.code(404).send({ error: "Not found" });
     const apiKey = await getRpdbApiKey();
     return { enabled: !!apiKey, apiKey: apiKey ?? null };
   });

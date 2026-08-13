@@ -552,6 +552,32 @@ describe("mark-watched capabilities", () => {
     expect(response.body).toContain("rejected this request");
     expect(callsTo("/watch")).toHaveLength(0);
   });
+
+  // Stremio can only follow a link, so a capability has nowhere but the query
+  // string to travel — and Fastify's default request serializer would write the
+  // whole URL to a log that docker-compose keeps 30 MB of.
+  it("does not write the capability in a mark-watched URL to its own log", () => {
+    // Read back off the running instance's logger rather than from a serializer
+    // built here, so this fails if app.ts ever stops installing it.
+    const serializersSymbol = Object.getOwnPropertySymbols(app.log).find(
+      (symbol) => symbol.description === "pino.serializers"
+    );
+    expect(serializersSymbol).toBeDefined();
+
+    const serializers = (app.log as unknown as Record<symbol, Record<string, (req: unknown) => unknown>>)[
+      serializersSymbol as symbol
+    ];
+    const token = capability({ type: "movie", imdbId: "tt0111161" }, OTHER_PROFILE_ID);
+    const logged = serializers.req({
+      method: "GET",
+      url: `/p/${OTHER_PROFILE_ID}/mark-watched/movie/tt0111161.srt?token=${token}`,
+    });
+
+    expect(JSON.stringify(logged)).not.toContain(token);
+    expect(logged).toMatchObject({
+      url: `/p/${OTHER_PROFILE_ID}/mark-watched/movie/tt0111161.srt?token=REDACTED`,
+    });
+  });
 });
 
 describe("play detection", () => {
