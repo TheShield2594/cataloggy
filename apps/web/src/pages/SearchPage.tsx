@@ -517,6 +517,15 @@ export function SearchPage() {
         {searchStatus}
       </p>
 
+      {/* First search of the session: there is no previous answer to hold on to,
+          so the region below the form would otherwise be blank until the
+          response lands — the intro state has gone, the grid hasn't arrived,
+          and a 16px spinner up in the filter row is the only sign anything is
+          happening. On a slow TMDB call that reads as a page that did nothing.
+          Every other async surface in the app answers with a skeleton; this is
+          the same one the lists page uses. */}
+      {isSearching && !hasSearched && <ResultsSkeleton />}
+
       {/* Empty state – no search yet */}
       {!hasSearched && !isSearching && (
         <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -530,98 +539,110 @@ export function SearchPage() {
         </div>
       )}
 
-      {/* No results */}
-      {noResults && (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="flex h-24 w-24 items-center justify-center rounded-full ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border-strong)" } as React.CSSProperties}>
-            <Filter className="h-12 w-12" style={{ color: "var(--text-mute)" }} />
-          </div>
-          <p className={`mt-5 ${SECTION_TITLE}`} style={{ color: "var(--text-dim)" }}>
-            {needsTmdb ? "Search needs a TMDB API key" : searchError ? "Search failed" : "No results found"}
-          </p>
-          <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>
-            {needsTmdb
-              ? "Movie and series search is powered by TMDB — set up a free API key to start searching."
-              : searchError
-                ? searchError
-                : hasActiveFilters
-                  ? "Try adjusting your filters or search term."
-                  : "Try a different search term or filter."}
-          </p>
-          {needsTmdb && (
-            <Link
-              to="/settings?tab=integrations"
-              className="mt-3 rounded-full px-4 py-2 text-sm font-medium text-claw-text transition-colors hover:bg-[var(--surface)]"
-              style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)" }}
-            >
-              Set up TMDB in Settings &rarr;
-            </Link>
-          )}
-          {/* Not offered when the search itself failed: clearing filters
-              re-filters nothing, since no results were ever returned. */}
-          {hasActiveFilters && !needsTmdb && !searchError && (
-            <button
-              onClick={clearFilters}
-              className="mt-3 rounded-full px-4 py-2 text-sm font-medium hover:bg-[var(--surface)] transition-colors"
-              style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", color: "var(--text-dim)" }}
-            >
-              Clear all filters
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Results grid */}
-      {hasSearched && results !== null && results.length > 0 && (
-        <>
-          <div className="flex items-center justify-between">
-            <p className="text-sm tabular-nums" style={{ color: "var(--text-mute)" }}>
-              {results.length} result{results.length !== 1 ? "s" : ""}
-              {rawResults && results.length !== rawResults.length && (
-                <span style={{ color: "var(--text-mute)" }}> (filtered from {rawResults.length})</span>
-              )}
+      {/* Everything a completed search produced — the grid, or the reason there
+          isn't one. A re-search leaves it in place rather than blanking the page,
+          but it describes the *previous* query until the new response lands, so
+          it is dimmed and marked busy for as long as that takes. Undimmed, a
+          grid that hasn't changed yet reads as the answer to what was just
+          typed. */}
+      <div
+        data-testid="search-results"
+        aria-busy={isSearching && hasSearched}
+        className={`space-y-6 transition-opacity duration-slow ${isSearching && hasSearched ? "opacity-40" : ""}`}
+      >
+        {/* No results */}
+        {noResults && (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="flex h-24 w-24 items-center justify-center rounded-full ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border-strong)" } as React.CSSProperties}>
+              <Filter className="h-12 w-12" style={{ color: "var(--text-mute)" }} />
+            </div>
+            <p className={`mt-5 ${SECTION_TITLE}`} style={{ color: "var(--text-dim)" }}>
+              {needsTmdb ? "Search needs a TMDB API key" : searchError ? "Search failed" : "No results found"}
             </p>
-            {/* Inline sort shortcut on desktop */}
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="text-2xs" style={{ color: "var(--text-mute)" }}>Sort:</span>
-              {(["relevance", "rating", "year_desc", "title"] as const).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setFilters({ sort: s })}
-                  className={`rounded-full px-2.5 py-1 text-2xs font-medium transition-all duration-base ${
-                    filters.sort === s
-                      ? "text-white"
-                      : "hover:text-[var(--text)]"
-                  }`}
-                  style={filters.sort === s ? { backgroundColor: "var(--text-dim)" } : { color: "var(--text-mute)" }}
-                >
-                  {SORT_LABELS[s]}
-                </button>
+            <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>
+              {needsTmdb
+                ? "Movie and series search is powered by TMDB — set up a free API key to start searching."
+                : searchError
+                  ? searchError
+                  : hasActiveFilters
+                    ? "Try adjusting your filters or search term."
+                    : "Try a different search term or filter."}
+            </p>
+            {needsTmdb && (
+              <Link
+                to="/settings?tab=integrations"
+                className="mt-3 rounded-full px-4 py-2 text-sm font-medium text-claw-text transition-colors hover:bg-[var(--surface)]"
+                style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)" }}
+              >
+                Set up TMDB in Settings &rarr;
+              </Link>
+            )}
+            {/* Not offered when the search itself failed: clearing filters
+                re-filters nothing, since no results were ever returned. */}
+            {hasActiveFilters && !needsTmdb && !searchError && (
+              <button
+                onClick={clearFilters}
+                className="mt-3 rounded-full px-4 py-2 text-sm font-medium hover:bg-[var(--surface)] transition-colors"
+                style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", color: "var(--text-dim)" }}
+              >
+                Clear all filters
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Results grid */}
+        {hasSearched && results !== null && results.length > 0 && (
+          <>
+            <div className="flex items-center justify-between">
+              <p className="text-sm tabular-nums" style={{ color: "var(--text-mute)" }}>
+                {results.length} result{results.length !== 1 ? "s" : ""}
+                {rawResults && results.length !== rawResults.length && (
+                  <span style={{ color: "var(--text-mute)" }}> (filtered from {rawResults.length})</span>
+                )}
+              </p>
+              {/* Inline sort shortcut on desktop */}
+              <div className="hidden sm:flex items-center gap-2">
+                <span className="text-2xs" style={{ color: "var(--text-mute)" }}>Sort:</span>
+                {(["relevance", "rating", "year_desc", "title"] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setFilters({ sort: s })}
+                    className={`rounded-full px-2.5 py-1 text-2xs font-medium transition-all duration-base ${
+                      filters.sort === s
+                        ? "text-white"
+                        : "hover:text-[var(--text)]"
+                    }`}
+                    style={filters.sort === s ? { backgroundColor: "var(--text-dim)" } : { color: "var(--text-mute)" }}
+                  >
+                    {SORT_LABELS[s]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              {results.map((result, index) => (
+                <ResultCard
+                  key={`${result.type}:${result.imdbId}`}
+                  result={result}
+                  eager={index < 5}
+                  lists={lists}
+                  listMap={listMap}
+                  pendingAdds={pendingAdds}
+                  openDropdown={openDropdown}
+                  dropdownRef={dropdownRef}
+                  onToggleDropdown={(id) => setOpenDropdown(openDropdown === id ? null : id)}
+                  onCloseDropdown={() => setOpenDropdown(null)}
+                  onAdd={handleAdd}
+                  onCreateAndAdd={handleCreateAndAdd}
+                  onSelect={setSelectedItem}
+                />
               ))}
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {results.map((result, index) => (
-              <ResultCard
-                key={`${result.type}:${result.imdbId}`}
-                result={result}
-                eager={index < 5}
-                lists={lists}
-                listMap={listMap}
-                pendingAdds={pendingAdds}
-                openDropdown={openDropdown}
-                dropdownRef={dropdownRef}
-                onToggleDropdown={(id) => setOpenDropdown(openDropdown === id ? null : id)}
-                onCloseDropdown={() => setOpenDropdown(null)}
-                onAdd={handleAdd}
-                onCreateAndAdd={handleCreateAndAdd}
-                onSelect={setSelectedItem}
-              />
-            ))}
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
 
       {/* Detail side panel */}
       {selectedItem && (
@@ -638,6 +659,33 @@ export function SearchPage() {
         />
       )}
 
+    </div>
+  );
+}
+
+/* ─── Results Skeleton ─── */
+
+// Deliberately the same shape as the real grid — two columns on a phone up to
+// five on a wide screen, poster above title above year — so the results replace
+// it in place instead of shoving the page around when they arrive. Ten cards
+// fills two rows at the widest breakpoint, which is enough to read as "results
+// are coming" without pretending to know how many there will be.
+//
+// Hidden from assistive tech: the live region above already says "Searching…",
+// and a screen reader has nothing to gain from ten empty cards.
+function ResultsSkeleton() {
+  return (
+    <div aria-hidden="true" data-testid="search-skeleton">
+      <div className="skeleton h-4 w-24 rounded" />
+      <div className="mt-6 grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        {Array.from({ length: 10 }).map((_, i) => (
+          <div key={i}>
+            <div className="skeleton rounded-xl" style={{ aspectRatio: "2/3" }} />
+            <div className="skeleton mt-2 h-4 w-3/4 rounded" />
+            <div className="skeleton mt-1 h-3 w-1/2 rounded" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
