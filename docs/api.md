@@ -252,7 +252,7 @@ Needs `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` for search, and
 | --- | --- | --- |
 | `GET` | `/profiles` | |
 | `POST` | `/profiles` | `{ name, pin? }`. A PIN is 4–128 characters. |
-| `PATCH` | `/profiles/:id` | `{ name?, pin? }`. Changing or clearing an existing PIN also needs `currentPin`; `pin: null` removes it. |
+| `PATCH` | `/profiles/:id` | `{ name?, pin? }`. Changing or clearing an existing PIN also needs `currentPin`; `pin: null` removes it. A *first* PIN has nothing to prove, so it is instead only accepted for the profile the caller is acting as (`x-profile-id`, or the only profile on a single-profile install) — `403 profile_not_active` otherwise. Without that, one PIN could lock a household member out of their own profile. |
 | `DELETE` | `/profiles/:id` | |
 | `POST` | `/profiles/:id/verify` | `{ pin }` → a profile token for `x-profile-token`. `401` on a wrong PIN, `429` once the profile is locked out after repeated failures — separate from the global rate limit. |
 
@@ -275,7 +275,7 @@ rotated key doesn't mean editing `.env` and restarting.
 | `GET` | `/rpdb/status` | `{ configured, hasKey }`. |
 | `POST` | `/rpdb/key` | Not validated on save — RPDB has no cheap check, so a bad key shows up as missing posters rather than an error here. Posting an empty key deletes the stored one. |
 | `DELETE` | `/rpdb/key` | |
-| `GET` | `/rpdb/config` | Used by the add-on service, which needs the key to build poster URLs itself. There is no per-title poster endpoint: everywhere else the API substitutes RPDB posters into the metadata it already returns. |
+| `GET` | `/rpdb/config` | Used by the add-on service, which needs the key to build poster URLs itself. There is no per-title poster endpoint: everywhere else the API substitutes RPDB posters into the metadata it already returns. This is the one route that hands a stored third-party key back out, so it takes the add-on's service token and 404s for anything else — a browser holds `API_TOKEN` too. `/rpdb/status` is what Settings reads. |
 
 ### AI recommendations
 
@@ -313,7 +313,7 @@ before each outbound request — records can change after a config is saved.
 | `POST` | `/stremio/library/import` | The opt-in backfill, dated from Stremio's own `lastWatched`. |
 | `POST` | `/stremio/library/sync` | The incremental pass, on demand. |
 | `POST` | `/stremio/library/disconnect` | |
-| `POST` | `/stremio/play-signal` | Written by the add-on service. The profile id in the body is validated, not trusted. |
+| `POST` | `/stremio/play-signal` | Written by the add-on service, and only by it: the profile id in the body picks which profile a signal is written to, so the route takes the add-on's service token and 404s for anything else. The id itself is validated, not trusted. |
 | `GET` | `/stremio/play-signals` | Diagnostics: what the add-on has seen but not yet acted on. |
 
 ### Stremio add-on

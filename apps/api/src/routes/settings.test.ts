@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { deriveServiceToken, SERVICE_TOKEN_HEADER } from "@cataloggy/shared";
 import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 import { decryptSecret, kvSecretContext } from "../lib/secret-box.js";
+
+const API_TOKEN = "settings-route-token";
+const originalApiToken = process.env.API_TOKEN;
+/** What the add-on can compute and a browser holding `API_TOKEN` cannot. */
+const addonHeaders = { [SERVICE_TOKEN_HEADER]: deriveServiceToken(API_TOKEN) };
 
 const prismaMock = {
   kV: { upsert: vi.fn(), deleteMany: vi.fn() },
@@ -299,6 +305,17 @@ describe("settings routes", () => {
   });
 
   describe("RPDB", () => {
+    // `/rpdb/config` is gated on a token derived from `API_TOKEN`, so this
+    // block needs one to derive from.
+    beforeEach(() => {
+      process.env.API_TOKEN = API_TOKEN;
+    });
+
+    afterEach(() => {
+      if (originalApiToken === undefined) delete process.env.API_TOKEN;
+      else process.env.API_TOKEN = originalApiToken;
+    });
+
     it("stores a key without calling out to validate it", async () => {
       const fetchMock = vi.fn();
       vi.stubGlobal("fetch", fetchMock);
@@ -324,7 +341,7 @@ describe("settings routes", () => {
       getRpdbApiKey.mockResolvedValue("rpdb-key");
       const app = await buildApp();
 
-      const res = await app.inject({ method: "GET", url: "/rpdb/config" });
+      const res = await app.inject({ method: "GET", url: "/rpdb/config", headers: addonHeaders });
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ enabled: true, apiKey: "rpdb-key" });
@@ -333,10 +350,37 @@ describe("settings routes", () => {
     it("reports no key rather than failing when RPDB is unconfigured", async () => {
       const app = await buildApp();
 
-      const res = await app.inject({ method: "GET", url: "/rpdb/config" });
+      const res = await app.inject({ method: "GET", url: "/rpdb/config", headers: addonHeaders });
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ enabled: false, apiKey: null });
+    });
+
+    // This is the only route that hands a stored third-party key back out, and
+    // the browser holds the same `API_TOKEN` the add-on does — so an XSS'd tab
+    // could read it. Settings reads `/rpdb/status`, which says only whether one
+    // is configured.
+    it("does not exist for a caller that only holds API_TOKEN", async () => {
+      getRpdbApiKey.mockResolvedValue("rpdb-key");
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "GET", url: "/rpdb/config" });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.body).not.toContain("rpdb-key");
+    });
+
+    it("does not accept API_TOKEN itself as the add-on's proof", async () => {
+      getRpdbApiKey.mockResolvedValue("rpdb-key");
+      const app = await buildApp();
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/rpdb/config",
+        headers: { [SERVICE_TOKEN_HEADER]: API_TOKEN },
+      });
+
+      expect(res.statusCode).toBe(404);
     });
   });
 

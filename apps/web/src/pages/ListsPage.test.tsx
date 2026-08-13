@@ -292,6 +292,37 @@ describe("ListsPage add-item modal", () => {
     expect(dialog.queryByRole("button", { name: /Stale Movie/ })).not.toBeInTheDocument();
   });
 
+  // Every add refetches the whole list behind the modal, and that refetch used
+  // to run uncancelled — so it could land after the user had moved on and paint
+  // one list's items under another's name. Worse than a display fault: removing
+  // a row then sends a DELETE against the list on screen for an item that isn't
+  // in it.
+  it("drops an add's refetch when the list is switched before it lands", async () => {
+    const user = userEvent.setup();
+    let releaseRefetch: () => void = () => {};
+    const refetchPending = new Promise<void>((resolve) => { releaseRefetch = resolve; });
+    const dialog = await openModal(user);
+
+    // The refetch the add triggers hangs; everything after it resolves normally.
+    getListItems.mockImplementationOnce(async () => {
+      await refetchPending;
+      return { items: [itemIn(SCIFI, "Solaris"), itemIn(SCIFI, "Sunshine")] };
+    });
+    await user.click(await dialog.findByRole("button", { name: /Sunshine/ }));
+    await waitFor(() => expect(getListItems).toHaveBeenCalledTimes(2));
+
+    await user.click(screen.getByRole("button", { name: "Close dialog" }));
+    await user.click(screen.getByRole("button", { name: /^watchlist/i }));
+    expect(await screen.findByText("Alien")).toBeInTheDocument();
+
+    releaseRefetch();
+    await refetchPending;
+
+    await waitFor(() => expect(screen.getByText("Alien")).toBeInTheDocument());
+    expect(screen.queryByText("Solaris")).not.toBeInTheDocument();
+    expect(screen.queryByText("Sunshine")).not.toBeInTheDocument();
+  });
+
   it("searches only the chosen type once the filter narrows", async () => {
     const user = userEvent.setup();
     const dialog = await openModal(user);

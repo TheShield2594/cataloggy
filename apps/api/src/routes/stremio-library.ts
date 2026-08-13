@@ -16,6 +16,7 @@ import {
   type PlaySignalResource,
 } from "../lib/play-signal.js";
 import { getDefaultProfileId, resolveProfile } from "../lib/profile.js";
+import { isServiceRequest } from "../lib/service-request.js";
 import { UUID_V4_PATTERN } from "../lib/types.js";
 
 // The connect route takes a password. Rate-limited like the other
@@ -124,7 +125,16 @@ const stremioLibraryRoutes: FastifyPluginAsync = async (app) => {
   // Written only by the addon service, which is the only thing that sees these
   // requests. The profile comes from the addon's own resolution (the installed
   // URL), not from a header, so it is validated here rather than trusted.
+  //
+  // Naming a profile in the body is how the addon reports which install a
+  // signal came from, and nothing here goes through `resolveProfile` — so
+  // holding `API_TOKEN` was otherwise enough to write into a PIN-protected
+  // profile just by naming its UUID, and `settleDuePlaySignals` later turns
+  // those signals into watch events. The add-on's derived service token is what
+  // separates the add-on from every other holder of the shared token, so it is
+  // the gate; 404, because to anything else this route does not exist.
   app.post<{ Body: unknown }>("/stremio/play-signal", async (request, reply) => {
+    if (!isServiceRequest(request)) return reply.code(404).send({ error: "Not found" });
     if (!isPlayDetectionEnabled()) return reply.code(202).send({ status: "disabled" });
 
     const body = request.body as {

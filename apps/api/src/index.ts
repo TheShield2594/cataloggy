@@ -1,14 +1,13 @@
 import { Sentry } from "./lib/sentry.js";
-import Fastify, { type FastifyRequest } from "fastify";
+import Fastify from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import compress from "@fastify/compress";
 import {
   parseProxyPathPrefixes,
   normalizeProxyPath,
   parseTrustProxy,
-  deriveServiceToken,
-  matchesServiceToken,
-  SERVICE_TOKEN_HEADER,
+  redactUrl,
+  redactedRequestSerializer,
 } from "@cataloggy/shared";
 import { prisma } from "./lib/prisma.js";
 import { applyCorsHeaders } from "./lib/cors.js";
@@ -29,7 +28,7 @@ import { isSteamSyncConfigured, syncSteamLibrary } from "./lib/steam-sync.js";
 import { cleanupStaleSessions, SCROBBLE_CLEANUP_INTERVAL_MS } from "./routes/scrobble.js";
 import { everyInterval, parseIntervalSec } from "./lib/scheduler.js";
 import { bodyTooLargeMessage, isBodyTooLargeError, mbToBytes, parseMaxBodySizeMb } from "./lib/body-limit.js";
-import { redactUrl, redactedRequestSerializer } from "./lib/redact-url.js";
+import { isServiceRequest } from "./lib/service-request.js";
 
 // Route modules
 import healthRoutes from "./routes/health.js";
@@ -122,20 +121,16 @@ const app = Fastify({
 // refreshing at once is a burst against a single key. Service-to-service calls
 // therefore get their own key and a larger budget.
 //
-// Identification is a token derived from API_TOKEN rather than API_TOKEN itself.
-// The addon authenticates with the same token the browser uses, so the raw token
-// can't tell them apart — only something the addon can compute and the browser is
-// never given. That also means a leaked browser token can't be used to drain the
-// addon's budget, and it needs no extra configuration on either side.
+// Identification is a token derived from API_TOKEN rather than API_TOKEN itself
+// (`lib/service-request.ts`). The addon authenticates with the same token the
+// browser uses, so the raw token can't tell them apart — only something the
+// addon can compute and the browser is never given. That also means a leaked
+// browser token can't be used to drain the addon's budget, and it needs no
+// extra configuration on either side.
 
 const BROWSER_RATE_LIMIT_MAX = 200;
 const SERVICE_RATE_LIMIT_MAX = 1000;
 const SERVICE_RATE_LIMIT_KEY = "service:addon";
-
-const SERVICE_TOKEN = process.env.API_TOKEN ? deriveServiceToken(process.env.API_TOKEN) : null;
-
-const isServiceRequest = (request: FastifyRequest): boolean =>
-  matchesServiceToken(request.headers[SERVICE_TOKEN_HEADER], SERVICE_TOKEN);
 
 app.register(rateLimit, {
   global: true,

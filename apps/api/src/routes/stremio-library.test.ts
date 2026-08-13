@@ -1,9 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { deriveServiceToken, SERVICE_TOKEN_HEADER } from "@cataloggy/shared";
 import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 const DEFAULT_PROFILE_ID = "99999999-9999-4999-8999-999999999999";
+const LOCKED_PROFILE_ID = "33333333-3333-4333-8333-333333333333";
+
+const API_TOKEN = "stremio-library-route-token";
+const originalApiToken = process.env.API_TOKEN;
+/** What the add-on can compute and a browser holding `API_TOKEN` cannot. */
+const addonHeaders = { [SERVICE_TOKEN_HEADER]: deriveServiceToken(API_TOKEN) };
 
 class StremioApiError extends Error {}
 
@@ -51,6 +58,7 @@ const playSignal = (over: Record<string, unknown> = {}) => ({
 describe("Stremio library routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.API_TOKEN = API_TOKEN;
     getStremioStatus.mockResolvedValue({ connected: true, email: "a@example.com" });
     isStremioConnected.mockResolvedValue(true);
     syncStremioLibrary.mockResolvedValue({ imported: 3 });
@@ -59,6 +67,11 @@ describe("Stremio library routes", () => {
     isPlayDetectionEnabled.mockReturnValue(true);
     recordPlaySignal.mockResolvedValue({ status: "pending" });
     getPendingPlaySignals.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    if (originalApiToken === undefined) delete process.env.API_TOKEN;
+    else process.env.API_TOKEN = originalApiToken;
   });
 
   describe("POST /stremio/library/connect", () => {
@@ -193,6 +206,7 @@ describe("Stremio library routes", () => {
       const res = await app.inject({
         method: "POST",
         url: "/stremio/play-signal",
+        headers: addonHeaders,
         payload: playSignal({ profileId: PROFILE_ID }),
       });
 
@@ -209,6 +223,7 @@ describe("Stremio library routes", () => {
       await app.inject({
         method: "POST",
         url: "/stremio/play-signal",
+        headers: addonHeaders,
         payload: playSignal({ profileId: "../../etc/passwd" }),
       });
 
@@ -221,7 +236,12 @@ describe("Stremio library routes", () => {
       isPlayDetectionEnabled.mockReturnValue(false);
       const app = await buildApp();
 
-      const res = await app.inject({ method: "POST", url: "/stremio/play-signal", payload: playSignal() });
+      const res = await app.inject({
+        method: "POST",
+        url: "/stremio/play-signal",
+        headers: addonHeaders,
+        payload: playSignal(),
+      });
 
       expect(res.statusCode).toBe(202);
       expect(res.json()).toEqual({ status: "disabled" });
@@ -234,6 +254,7 @@ describe("Stremio library routes", () => {
       await app.inject({
         method: "POST",
         url: "/stremio/play-signal",
+        headers: addonHeaders,
         payload: playSignal({ client: "x".repeat(500) }),
       });
 
@@ -246,7 +267,7 @@ describe("Stremio library routes", () => {
       await app.inject({
         method: "POST",
         url: "/stremio/play-signal",
-        headers: { "user-agent": "Stremio/5.0" },
+        headers: { ...addonHeaders, "user-agent": "Stremio/5.0" },
         payload: playSignal(),
       });
 
@@ -259,6 +280,7 @@ describe("Stremio library routes", () => {
       const res = await app.inject({
         method: "POST",
         url: "/stremio/play-signal",
+        headers: addonHeaders,
         payload: playSignal({ resource: "meta" }),
       });
 
@@ -272,6 +294,7 @@ describe("Stremio library routes", () => {
       const res = await app.inject({
         method: "POST",
         url: "/stremio/play-signal",
+        headers: addonHeaders,
         payload: playSignal({ type: "season" }),
       });
 
@@ -284,10 +307,55 @@ describe("Stremio library routes", () => {
       const res = await app.inject({
         method: "POST",
         url: "/stremio/play-signal",
+        headers: addonHeaders,
         payload: { type: "movie", resource: "stream" },
       });
 
       expect(res.statusCode).toBe(400);
+    });
+
+    // The body names the profile a signal is written to and nothing here goes
+    // through `resolveProfile`, so holding the shared token was enough to write
+    // into a PIN-protected profile by naming its UUID — signals that
+    // `settleDuePlaySignals` later turns into watch events.
+    describe("only the add-on may write signals", () => {
+      it("does not exist for a caller that only holds API_TOKEN", async () => {
+        const app = await buildApp();
+
+        const res = await app.inject({
+          method: "POST",
+          url: "/stremio/play-signal",
+          payload: playSignal({ profileId: LOCKED_PROFILE_ID }),
+        });
+
+        expect(res.statusCode).toBe(404);
+        expect(recordPlaySignal).not.toHaveBeenCalled();
+      });
+
+      it("does not accept API_TOKEN itself as the add-on's proof", async () => {
+        const app = await buildApp();
+
+        const res = await app.inject({
+          method: "POST",
+          url: "/stremio/play-signal",
+          headers: { [SERVICE_TOKEN_HEADER]: API_TOKEN },
+          payload: playSignal({ profileId: LOCKED_PROFILE_ID }),
+        });
+
+        expect(res.statusCode).toBe(404);
+        expect(recordPlaySignal).not.toHaveBeenCalled();
+      });
+
+      // Refused before the feature flag is even read, so a disabled install
+      // can't be used to probe which profiles exist either.
+      it("refuses before answering whether play detection is on", async () => {
+        isPlayDetectionEnabled.mockReturnValue(false);
+        const app = await buildApp();
+
+        const res = await app.inject({ method: "POST", url: "/stremio/play-signal", payload: playSignal() });
+
+        expect(res.statusCode).toBe(404);
+      });
     });
   });
 
