@@ -1,32 +1,8 @@
 import { useEffect, useState } from "react";
 import { api, runtimeConfig } from "../../api";
+import type { AddonCatalogOption } from "../../api";
 import { Loader2, Check, AlertCircle, Copy, ExternalLink, Sparkles } from "lucide-react";
 import { KICKER } from "../typography";
-
-const AI_CATALOGS = new Set(["cataloggy-ai-movie", "cataloggy-ai-series"]);
-
-const CATALOG_LABELS: Record<string, string> = {
-  "cataloggy-trending-movie": "Trending Movies",
-  "cataloggy-trending-series": "Trending Series",
-  "cataloggy-popular-movie": "Popular Movies",
-  "cataloggy-popular-series": "Popular Series",
-  "cataloggy-recommended-movie": "Recommended Movies",
-  "cataloggy-recommended-series": "Recommended Series",
-  "cataloggy-anime-series": "Anime",
-  "cataloggy-anime-movie": "Anime Movies",
-  "cataloggy-netflix-movie": "Netflix Movies",
-  "cataloggy-netflix-series": "Netflix Series",
-  "cataloggy-disney-movie": "Disney+ Movies",
-  "cataloggy-disney-series": "Disney+ Series",
-  "cataloggy-amazon-movie": "Prime Video Movies",
-  "cataloggy-amazon-series": "Prime Video Series",
-  "cataloggy-apple-movie": "Apple TV+ Movies",
-  "cataloggy-apple-series": "Apple TV+ Series",
-  "cataloggy-max-movie": "Max Movies",
-  "cataloggy-max-series": "Max Series",
-  "cataloggy-ai-movie": "AI Picks — Movies",
-  "cataloggy-ai-series": "AI Picks — Series",
-};
 
 function AddonManifestUrl({ profileName, multiProfile }: { profileName: string | null; multiProfile: boolean }) {
   const [copied, setCopied] = useState(false);
@@ -104,7 +80,7 @@ export function AddonSettings() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<string[]>([]);
-  const [available, setAvailable] = useState<string[]>([]);
+  const [available, setAvailable] = useState<AddonCatalogOption[]>([]);
   const [availableLists, setAvailableLists] = useState<{ id: string; name: string }[]>([]);
   const [aiConfigured, setAiConfigured] = useState(false);
   const [profileName, setProfileName] = useState<string | null>(null);
@@ -121,7 +97,7 @@ export function AddonSettings() {
         setEnabled(res.config.enabledCatalogs);
         setAvailable(res.availableCatalogs);
         setAvailableLists(res.availableLists ?? []);
-        setAiConfigured(aiRes.configured);
+        setAiConfigured(res.aiConfigured ?? aiRes.configured);
         const activeProfileId = runtimeConfig.getProfileId();
         setProfileName(profilesRes.profiles.find((p) => p.id === activeProfileId)?.name ?? null);
         setMultiProfile(profilesRes.profiles.length > 1);
@@ -170,10 +146,10 @@ export function AddonSettings() {
       {/* Discovery catalogs */}
       <div className="space-y-2">
         {available.map((catalog) => {
-          const isAiCatalog = AI_CATALOGS.has(catalog);
+          const isAiCatalog = catalog.requiresAi;
           return (
             <label
-              key={catalog}
+              key={catalog.id}
               className={`flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-colors ${
                 isAiCatalog
                   ? "border-plum-500/30 bg-plum-500/5 hover:bg-plum-500/10"
@@ -183,12 +159,12 @@ export function AddonSettings() {
             >
               <input
                 type="checkbox"
-                checked={enabled.includes(catalog)}
-                onChange={() => toggle(catalog)}
+                checked={enabled.includes(catalog.id)}
+                onChange={() => toggle(catalog.id)}
                 disabled={isAiCatalog && !aiConfigured}
                 className="checkbox-control"
               />
-              <span className="flex-1 text-sm font-medium" style={{ color: "var(--text)" }}>{CATALOG_LABELS[catalog] ?? catalog}</span>
+              <span className="flex-1 text-sm font-medium" style={{ color: "var(--text)" }}>{catalog.label}</span>
               {isAiCatalog && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-plum-500/80 px-1.5 py-0.5 text-2xs font-semibold text-white">
                   <Sparkles className="h-2.5 w-2.5" /> AI
@@ -198,7 +174,7 @@ export function AddonSettings() {
           );
         })}
       </div>
-      {available.some((c) => AI_CATALOGS.has(c)) && !aiConfigured && (
+      {available.some((c) => c.requiresAi) && !aiConfigured && (
         <p className="text-xs italic" style={{ color: "var(--text-mute)" }}>Configure AI Recommendations to enable the AI Picks catalogs.</p>
       )}
 

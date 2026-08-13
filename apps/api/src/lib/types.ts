@@ -1,18 +1,13 @@
 import type { MetadataType } from "@prisma/client";
 import type { FastifyBaseLogger } from "fastify";
+import type { CataloggyMetaPreview, StremioCatalogType } from "@cataloggy/shared";
 
-export type StremioMetaType = "movie" | "series";
+// Both aliases of the api↔addon contract in @cataloggy/shared: this is the
+// shape the addon service parses off the wire, so a change made here has to be
+// a change made there — which is the point.
+export type StremioMetaType = StremioCatalogType;
 
-export type StremioMetaPreview = {
-  id: string;
-  type: StremioMetaType;
-  name: string;
-  poster?: string;
-  year?: number;
-  description?: string;
-  genres?: string[];
-  rating?: number;
-};
+export type StremioMetaPreview = CataloggyMetaPreview;
 
 export type ContinueMetaPreview = StremioMetaPreview & {
   extension: {

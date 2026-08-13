@@ -250,6 +250,15 @@ export type AddonConfig = {
   enabledCatalogs: string[];
 };
 
+// Labelled by the API from the shared catalog registry, so the picker can't
+// name a catalog differently from the manifest that serves it — or offer one no
+// manifest has heard of.
+export type AddonCatalogOption = {
+  id: string;
+  label: string;
+  requiresAi: boolean;
+};
+
 export type StremioLibraryStatus = {
   connected: boolean;
   email: string | null;
@@ -921,7 +930,12 @@ export const api = {
     return request<YearInReviewStats>(`/watch/stats/year/${year}`);
   },
   getAddonConfig() {
-    return request<{ config: AddonConfig; availableCatalogs: string[]; availableLists: { id: string; name: string }[] }>("/addon/config");
+    return request<{
+      config: AddonConfig;
+      availableCatalogs: AddonCatalogOption[];
+      availableLists: { id: string; name: string }[];
+      aiConfigured: boolean;
+    }>("/addon/config");
   },
   updateAddonConfig(enabledCatalogs: string[]) {
     return request<{ config: AddonConfig }>("/addon/config", {

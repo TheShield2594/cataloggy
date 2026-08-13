@@ -1,4 +1,12 @@
 import { ListKind } from "@prisma/client";
+import {
+  DEFAULT_DISCOVERY_CATALOG_IDS,
+  DISCOVERY_CATALOG_IDS,
+  isDiscoveryCatalogId,
+  migrateLegacyCatalogs,
+  parseListCatalogId,
+} from "@cataloggy/shared";
+import type { AddonConfig } from "@cataloggy/shared";
 import { prisma } from "./prisma.js";
 
 // One config row per profile, so two profiles can expose different catalogs to
@@ -7,49 +15,29 @@ import { prisma } from "./prisma.js";
 // profile by the 20260803160000_per_profile_addon_config migration.
 export const addonConfigKey = (profileId: string) => `addon:config:${profileId}`;
 
-export type AddonConfig = {
-  enabledCatalogs: string[];
-};
+export type { AddonConfig };
 
-export const ALL_ADDON_CATALOGS = [
-  "cataloggy-trending-movie", "cataloggy-trending-series",
-  "cataloggy-popular-movie", "cataloggy-popular-series",
-  "cataloggy-recommended-movie", "cataloggy-recommended-series",
-  "cataloggy-ai-movie", "cataloggy-ai-series",
-  "cataloggy-anime-series", "cataloggy-anime-movie",
-  "cataloggy-netflix-movie", "cataloggy-netflix-series",
-  "cataloggy-disney-movie", "cataloggy-disney-series",
-  "cataloggy-amazon-movie", "cataloggy-amazon-series",
-  "cataloggy-apple-movie", "cataloggy-apple-series",
-  "cataloggy-max-movie", "cataloggy-max-series",
-];
+// The catalog set itself lives in @cataloggy/shared, which the addon service
+// builds its manifest from too — one list, so a catalog can't be offered by the
+// picker and then silently dropped by whichever service serves it.
+export const ALL_ADDON_CATALOGS: readonly string[] = DISCOVERY_CATALOG_IDS;
 
-export const DEFAULT_ADDON_CATALOGS = [
-  "cataloggy-trending-movie", "cataloggy-trending-series",
-  "cataloggy-popular-movie", "cataloggy-popular-series",
-  "cataloggy-recommended-movie", "cataloggy-recommended-series",
-];
+export const DEFAULT_ADDON_CATALOGS: readonly string[] = DEFAULT_DISCOVERY_CATALOG_IDS;
 
-export const LEGACY_CATALOG_MAP: Record<string, string> = {
-  my_watchlist_movies: "cataloggy-trending-movie",
-  my_watchlist_series: "cataloggy-trending-series",
-  my_recent_movies: "cataloggy-popular-movie",
-  my_continue_series: "cataloggy-popular-series",
-};
+export { LEGACY_CATALOG_MAP, migrateLegacyCatalogs } from "@cataloggy/shared";
 
-export const migrateLegacyCatalogs = (catalogs: string[]): string[] =>
-  catalogs.map((c) => LEGACY_CATALOG_MAP[c] ?? c);
+const defaults = (): AddonConfig => ({ enabledCatalogs: [...DEFAULT_ADDON_CATALOGS] });
 
 export const getAddonConfig = async (profileId: string): Promise<AddonConfig> => {
   const row = await prisma.kV.findUnique({ where: { key: addonConfigKey(profileId) } });
-  if (!row) return { enabledCatalogs: DEFAULT_ADDON_CATALOGS };
+  if (!row) return defaults();
   try {
     const parsed = JSON.parse(row.value) as AddonConfig;
-    if (!Array.isArray(parsed.enabledCatalogs)) return { enabledCatalogs: DEFAULT_ADDON_CATALOGS };
+    if (!Array.isArray(parsed.enabledCatalogs)) return defaults();
     if (parsed.enabledCatalogs.length === 0) return { enabledCatalogs: [] };
 
     const migrated = migrateLegacyCatalogs(parsed.enabledCatalogs);
-    const listEntries = migrated.filter((c) => c.startsWith("list:"));
+    const listEntries = migrated.filter((c) => parseListCatalogId(c) !== null);
     let validListIds = new Set<string>();
     if (listEntries.length > 0) {
       const customLists = await prisma.list.findMany({
@@ -58,13 +46,12 @@ export const getAddonConfig = async (profileId: string): Promise<AddonConfig> =>
       });
       validListIds = new Set(customLists.map((l) => l.id));
     }
-    const valid = migrated.filter(
-      (c) =>
-        ALL_ADDON_CATALOGS.includes(c) ||
-        (c.startsWith("list:") && validListIds.has(c.slice(5)))
-    );
-    return { enabledCatalogs: valid.length > 0 ? valid : DEFAULT_ADDON_CATALOGS };
+    const valid = migrated.filter((c) => {
+      const listId = parseListCatalogId(c);
+      return listId === null ? isDiscoveryCatalogId(c) : validListIds.has(listId);
+    });
+    return { enabledCatalogs: valid.length > 0 ? valid : [...DEFAULT_ADDON_CATALOGS] };
   } catch {
-    return { enabledCatalogs: DEFAULT_ADDON_CATALOGS };
+    return defaults();
   }
 };

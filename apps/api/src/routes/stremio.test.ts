@@ -44,8 +44,10 @@ vi.mock("../lib/profile.js", async (importOriginal) => ({
     request.headers["x-profile-token"] !== tokenFor(profileId),
 }));
 
+const { aiConfigured } = vi.hoisted(() => ({ aiConfigured: { value: false } }));
+
 vi.mock("../lib/ai.js", () => ({
-  isAiConfigured: async () => false,
+  isAiConfigured: async () => aiConfigured.value,
   getAiRecommendations: async () => null,
 }));
 
@@ -54,6 +56,7 @@ vi.mock("../lib/tmdb-client.js", () => ({ getTmdb: async () => ({}) }));
 const resetMocks = () => {
   vi.clearAllMocks();
   lockedProfileIds.clear();
+  aiConfigured.value = false;
   prismaMock.list.findMany.mockResolvedValue([]);
   prismaMock.list.findFirst.mockResolvedValue(null);
   prismaMock.kV.findUnique.mockResolvedValue(null);
@@ -100,6 +103,41 @@ describe("stremio routes — addon config is per profile", () => {
       const response = await app.inject({ method: "GET", url: "/addon/config" });
 
       expect(response.json().config.enabledCatalogs).toContain("cataloggy-trending-movie");
+    });
+
+    // The picker, this API's manifest and the addon service's manifest all used
+    // to keep their own copy of the catalog list, and they disagreed. The names
+    // now come from the shared registry with the response, so the picker has no
+    // copy left to drift.
+    it("labels every catalog it offers, and flags the ones needing an AI provider", async () => {
+      const app = await buildApp();
+
+      const catalogs = (await app.inject({ method: "GET", url: "/addon/config" })).json()
+        .availableCatalogs as { id: string; label: string; requiresAi: boolean }[];
+
+      expect(catalogs).toContainEqual({
+        id: "cataloggy-trending-movie",
+        label: "Trending Movies",
+        requiresAi: false,
+      });
+      expect(catalogs).toContainEqual({
+        id: "cataloggy-ai-movie",
+        label: "AI Picks — Movies",
+        requiresAi: true,
+      });
+      expect(catalogs.every((c) => c.label.trim().length > 0)).toBe(true);
+    });
+
+    // The addon service builds its manifest from this response and has to make
+    // the same call about the AI catalogs that the manifest below makes.
+    it("tells the caller whether an AI provider is configured", async () => {
+      const withoutAi = await buildApp();
+      expect((await withoutAi.inject({ method: "GET", url: "/addon/config" })).json().aiConfigured).toBe(false);
+      await withoutAi.close();
+
+      aiConfigured.value = true;
+      const withAi = await buildApp();
+      expect((await withAi.inject({ method: "GET", url: "/addon/config" })).json().aiConfigured).toBe(true);
     });
   });
 
@@ -183,6 +221,41 @@ describe("stremio routes — addon config is per profile", () => {
       } finally {
         delete process.env.CATALOGGY_WEB_PUBLIC;
       }
+    });
+
+    it("names discovery catalogs from the shared registry", async () => {
+      prismaMock.kV.findUnique.mockResolvedValue({
+        value: JSON.stringify({ enabledCatalogs: ["cataloggy-netflix-series"] }),
+      });
+      const app = await buildApp();
+
+      const response = await app.inject({ method: "GET", url: "/addon/stremio/manifest.json" });
+
+      expect(response.json().catalogs).toContainEqual({
+        id: "cataloggy-netflix-series",
+        type: "series",
+        name: "Netflix Series",
+      });
+    });
+
+    it("withholds an enabled AI catalog until a provider is configured", async () => {
+      prismaMock.kV.findUnique.mockResolvedValue({
+        value: JSON.stringify({ enabledCatalogs: ["cataloggy-ai-movie"] }),
+      });
+
+      const withoutAi = await buildApp();
+      const before = (await withoutAi.inject({ method: "GET", url: "/addon/stremio/manifest.json" })).json();
+      expect((before.catalogs as { id: string }[]).map((c) => c.id)).not.toContain("cataloggy-ai-movie");
+      await withoutAi.close();
+
+      aiConfigured.value = true;
+      const withAi = await buildApp();
+      const after = (await withAi.inject({ method: "GET", url: "/addon/stremio/manifest.json" })).json();
+      expect(after.catalogs).toContainEqual({
+        id: "cataloggy-ai-movie",
+        type: "movie",
+        name: "AI Picks — Movies",
+      });
     });
 
     it("does not advertise a list catalog owned by another profile", async () => {

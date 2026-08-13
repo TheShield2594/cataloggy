@@ -20,8 +20,17 @@ process.env.LOG_LEVEL = "silent";
 
 type Call = { url: string; method: string; headers: Record<string, string>; body: unknown };
 
+const WATCHLIST_ID = "list-1";
+const CUSTOM_LIST_ID = "aaaaaaaa-1111-4111-8111-111111111111";
+
+type AddonConfigStub = { enabledCatalogs: string[]; aiConfigured: boolean };
+
 let calls: Call[] = [];
 let watchStatus = 200;
+let addonConfig: AddonConfigStub;
+let addonConfigStatus = 200;
+let lists: { id: string; name: string; kind: string }[];
+let genresBody: unknown;
 
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -45,13 +54,29 @@ const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
     return watchStatus === 200 ? jsonResponse({ ok: true }) : jsonResponse({ error: "nope" }, watchStatus);
   }
   if (pathname.startsWith("/scrobble/")) return jsonResponse({ ok: true, action: pathname.slice(10) });
-  if (pathname === "/lists") return jsonResponse({ lists: [{ id: "list-1", name: "Watchlist", kind: "watchlist" }] });
-  if (pathname === "/genres") return jsonResponse({ genres: ["Drama"] });
-  if (pathname === "/addon/config") return jsonResponse({ config: { enabledCatalogs: [] } });
+  if (pathname === "/lists") return jsonResponse({ lists });
+  if (pathname === "/genres") return jsonResponse(genresBody);
+  if (pathname === "/addon/config") {
+    if (addonConfigStatus !== 200) return jsonResponse({ error: "boom" }, addonConfigStatus);
+    return jsonResponse({
+      config: { enabledCatalogs: addonConfig.enabledCatalogs },
+      aiConfigured: addonConfig.aiConfigured,
+    });
+  }
   if (pathname === "/rpdb/config") return jsonResponse({ enabled: false, apiKey: null });
   if (pathname === "/settings/preferences") return jsonResponse({ spoilerProtection: false });
   if (pathname === "/stremio/play-signal") return jsonResponse({ status: "opened" }, 202);
-  if (pathname === "/trending" || pathname === "/popular") {
+  if (pathname.startsWith("/lists/") && pathname.endsWith("/items")) {
+    return jsonResponse({ items: [{ imdbId: "tt0111161", type: "movie", title: "Shawshank", metadata: null }] });
+  }
+  if (
+    pathname === "/trending" ||
+    pathname === "/popular" ||
+    pathname === "/anime" ||
+    pathname === "/streaming" ||
+    pathname === "/recommendations/personal" ||
+    pathname === "/recommendations/ai"
+  ) {
     return jsonResponse({ metas: [{ id: `tt-${searchParams.get("type")}`, type: searchParams.get("type"), name: "X" }] });
   }
 
@@ -72,6 +97,10 @@ const buildApp = async (): Promise<FastifyInstance> => {
 beforeEach(async () => {
   calls = [];
   watchStatus = 200;
+  addonConfig = { enabledCatalogs: [], aiConfigured: false };
+  addonConfigStatus = 200;
+  lists = [{ id: WATCHLIST_ID, name: "Watchlist", kind: "watchlist" }];
+  genresBody = { genres: ["Drama"] };
   fetchMock.mockClear();
   vi.stubGlobal("fetch", fetchMock);
   app = await buildApp();
@@ -80,6 +109,187 @@ beforeEach(async () => {
 afterEach(async () => {
   await app.close();
   vi.unstubAllGlobals();
+});
+
+// The API and this service used to keep separate copies of the catalog list and
+// separate ideas of what the shared config meant, so a catalog could be offered
+// in Settings, honoured by one manifest and silently dropped by the other. Both
+// now derive from the registry in @cataloggy/shared.
+describe("manifest catalogs follow the profile's configuration", () => {
+  type ManifestCatalog = { id: string; type: string; name: string };
+
+  const manifestCatalogs = async (): Promise<ManifestCatalog[]> => {
+    // Rebuilt per case: the manifest and the config it reads are both cached
+    // for a minute, and the stubs change between cases.
+    const fresh = await buildApp();
+    try {
+      const response = await fresh.inject({ method: "GET", url: "/manifest.json" });
+      return (response.json() as { catalogs: ManifestCatalog[] }).catalogs;
+    } finally {
+      await fresh.close();
+    }
+  };
+
+  const idsOf = async () => (await manifestCatalogs()).map((c) => c.id);
+
+  it("advertises the AI Picks catalogs Settings offers, once an AI provider exists", async () => {
+    addonConfig = { enabledCatalogs: ["cataloggy-ai-movie", "cataloggy-ai-series"], aiConfigured: true };
+
+    const catalogs = await manifestCatalogs();
+
+    expect(catalogs.map((c) => c.id)).toEqual(
+      expect.arrayContaining(["cataloggy-ai-movie", "cataloggy-ai-series"])
+    );
+    // The row title comes from the shared registry, so Stremio and Settings
+    // can't name the same catalog differently.
+    expect(catalogs.find((c) => c.id === "cataloggy-ai-movie")?.name).toBe("AI Picks — Movies");
+  });
+
+  it("drops the AI catalogs when no AI provider is configured", async () => {
+    addonConfig = { enabledCatalogs: ["cataloggy-ai-movie", "cataloggy-trending-movie"], aiConfigured: false };
+
+    const ids = await idsOf();
+
+    expect(ids).not.toContain("cataloggy-ai-movie");
+    expect(ids).toContain("cataloggy-trending-movie");
+  });
+
+  it("advertises every catalog family the picker offers, not just trending and popular", async () => {
+    addonConfig = {
+      enabledCatalogs: ["cataloggy-anime-series", "cataloggy-netflix-movie", "cataloggy-recommended-movie"],
+      aiConfigured: false,
+    };
+
+    expect(await idsOf()).toEqual(
+      expect.arrayContaining(["cataloggy-anime-series", "cataloggy-netflix-movie", "cataloggy-recommended-movie"])
+    );
+  });
+
+  it("leaves a custom list out until the profile enables it", async () => {
+    lists = [
+      { id: WATCHLIST_ID, name: "Watchlist", kind: "watchlist" },
+      { id: CUSTOM_LIST_ID, name: "Weekend", kind: "custom" },
+    ];
+    addonConfig = { enabledCatalogs: [], aiConfigured: false };
+
+    const ids = await idsOf();
+
+    expect(ids).not.toContain(`cataloggy-${CUSTOM_LIST_ID}-movie`);
+    // The watchlist has no checkbox in Settings, so it is never gated on one.
+    expect(ids).toContain(`cataloggy-${WATCHLIST_ID}-movie`);
+  });
+
+  it("adds the custom list back once it is ticked", async () => {
+    lists = [
+      { id: WATCHLIST_ID, name: "Watchlist", kind: "watchlist" },
+      { id: CUSTOM_LIST_ID, name: "Weekend", kind: "custom" },
+    ];
+    addonConfig = { enabledCatalogs: [`list:${CUSTOM_LIST_ID}`], aiConfigured: false };
+
+    expect(await idsOf()).toEqual(
+      expect.arrayContaining([`cataloggy-${CUSTOM_LIST_ID}-movie`, `cataloggy-${CUSTOM_LIST_ID}-series`])
+    );
+  });
+
+  it("keeps a Stremio home screen populated when the config can't be read", async () => {
+    // Nothing cached and no config to read: advertising a superset beats
+    // emptying every row the user installed the addon for.
+    addonConfigStatus = 500;
+
+    const ids = await idsOf();
+
+    expect(ids).toContain("cataloggy-trending-movie");
+    expect(ids).not.toContain("cataloggy-ai-movie");
+  });
+});
+
+describe("catalog routes serve only what the manifest advertised", () => {
+  it("fetches AI catalog rows from the API's AI recommendations endpoint", async () => {
+    addonConfig = { enabledCatalogs: ["cataloggy-ai-movie"], aiConfigured: true };
+    const fresh = await buildApp();
+
+    try {
+      const response = await fresh.inject({ method: "GET", url: "/catalog/movie/cataloggy-ai-movie.json" });
+
+      expect(response.json().metas).toHaveLength(1);
+      expect(callsTo("/recommendations/ai")).toHaveLength(1);
+    } finally {
+      await fresh.close();
+    }
+  });
+
+  it("returns nothing for a discovery catalog the profile disabled", async () => {
+    addonConfig = { enabledCatalogs: ["cataloggy-popular-movie"], aiConfigured: false };
+    const fresh = await buildApp();
+
+    try {
+      const response = await fresh.inject({ method: "GET", url: "/catalog/movie/cataloggy-trending-movie.json" });
+
+      expect(response.json()).toEqual({ metas: [] });
+      expect(callsTo("/trending")).toHaveLength(0);
+    } finally {
+      await fresh.close();
+    }
+  });
+
+  it("returns nothing for a custom list the profile unticked", async () => {
+    lists = [{ id: CUSTOM_LIST_ID, name: "Weekend", kind: "custom" }];
+    addonConfig = { enabledCatalogs: [], aiConfigured: false };
+    const fresh = await buildApp();
+
+    try {
+      const response = await fresh.inject({
+        method: "GET",
+        url: `/catalog/movie/cataloggy-${CUSTOM_LIST_ID}-movie.json`,
+      });
+
+      expect(response.json()).toEqual({ metas: [] });
+      expect(callsTo(`/lists/${CUSTOM_LIST_ID}/items`)).toHaveLength(0);
+    } finally {
+      await fresh.close();
+    }
+  });
+
+  it("still serves an enabled custom list", async () => {
+    lists = [{ id: CUSTOM_LIST_ID, name: "Weekend", kind: "custom" }];
+    addonConfig = { enabledCatalogs: [`list:${CUSTOM_LIST_ID}`], aiConfigured: false };
+    const fresh = await buildApp();
+
+    try {
+      const response = await fresh.inject({
+        method: "GET",
+        url: `/catalog/movie/cataloggy-${CUSTOM_LIST_ID}-movie.json`,
+      });
+
+      expect(response.json().metas).toEqual([
+        expect.objectContaining({ id: "tt0111161", name: "Shawshank" }),
+      ]);
+    } finally {
+      await fresh.close();
+    }
+  });
+});
+
+describe("API response contracts", () => {
+  it("treats a response of the wrong shape as a failure rather than serving undefined", async () => {
+    // `response.json() as T` used to make this a manifest full of `undefined`
+    // genre options; now the parser rejects it and the cached-value fallback
+    // that every other API failure already uses takes over.
+    genresBody = { genres: "Drama" };
+    const fresh = await buildApp();
+
+    try {
+      const response = await fresh.inject({ method: "GET", url: "/manifest.json" });
+
+      expect(response.statusCode).toBe(200);
+      const genreExtra = (response.json() as {
+        catalogs: { extra: { name: string; options?: string[] }[] }[];
+      }).catalogs[0]?.extra.find((e) => e.name === "genre");
+      expect(genreExtra?.options).toEqual(["A-Z", "Z-A"]);
+    } finally {
+      await fresh.close();
+    }
+  });
 });
 
 describe("profile scoping", () => {

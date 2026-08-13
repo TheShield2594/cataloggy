@@ -16,6 +16,29 @@ import {
   UUID_V4_PATTERN,
   deriveServiceToken,
   SERVICE_TOKEN_HEADER,
+  ApiContractError,
+  catalogRequiresAi,
+  discoveryApiPath,
+  DISCOVERY_CATALOGS,
+  getDiscoveryCatalog,
+  listCatalogId,
+  parseAddonConfigResponse,
+  parseGenresResponse,
+  parseListItemsResponse,
+  parseListsResponse,
+  parseMetasResponse,
+  parsePreferencesResponse,
+  parseProfilesResponse,
+  parseRpdbConfigResponse,
+  parseSeriesProgressResponse,
+  selectDiscoveryCatalogs,
+} from "@cataloggy/shared";
+import type {
+  AddonManifestConfig,
+  CataloggyList,
+  CataloggyListItem,
+  DiscoveryCatalog,
+  RpdbConfigResponse,
 } from "@cataloggy/shared";
 
 const CATALOGGY_API_BASE = process.env.CATALOGGY_API_BASE ?? "http://api:7000";
@@ -105,14 +128,32 @@ const fetchWithTimeout = async (url: string | URL, init?: RequestInit): Promise<
   }
 };
 
-const apiGet = async <T>(path: string, profileId?: string | null): Promise<T> => {
+// Every response is run through the contract parser for its endpoint rather
+// than asserted into the expected type. An API that changes shape used to
+// surface as an empty Stremio row with nothing in the logs; now it is a named
+// error at the boundary, which every caller here already degrades gracefully on.
+const apiGet = async <T>(
+  path: string,
+  profileId: string | null | undefined,
+  parse: (value: unknown) => T
+): Promise<T> => {
   const url = new URL(path, CATALOGGY_API_BASE);
   const response = await fetchWithTimeout(url, { headers: apiHeaders(profileId) });
   if (!response.ok) throw new Error(`API ${path} returned ${response.status}`);
-  return response.json() as Promise<T>;
+  const payload: unknown = await response.json();
+  try {
+    return parse(payload);
+  } catch (error) {
+    throw new ApiContractError(
+      `API ${path} returned an unexpected shape: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error }
+    );
+  }
 };
 
-const apiPost = async <T>(path: string, body?: unknown, profileId?: string | null): Promise<T> => {
+// Unlike apiGet there is no contract to check: every caller either ignores the
+// response or hands it straight back to the client without reading a field.
+const apiPost = async (path: string, body?: unknown, profileId?: string | null): Promise<unknown> => {
   const url = new URL(path, CATALOGGY_API_BASE);
   const response = await fetchWithTimeout(url, {
     method: "POST",
@@ -123,7 +164,7 @@ const apiPost = async <T>(path: string, body?: unknown, profileId?: string | nul
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   if (!response.ok) throw new Error(`API POST ${path} returned ${response.status}`);
-  return response.json() as Promise<T>;
+  return response.json();
 };
 
 // GET /profiles is ordered oldest-first, so profiles[0] is the same profile the
@@ -137,8 +178,8 @@ const fetchDefaultProfileId = async (): Promise<string | null> => {
   if (cachedDefaultProfileId && now < cachedDefaultProfileId.expiry) return cachedDefaultProfileId.id;
 
   try {
-    const payload = await apiGet<{ profiles?: { id: string }[] }>("/profiles");
-    const id = payload.profiles?.[0]?.id ?? null;
+    const payload = await apiGet("/profiles", null, parseProfilesResponse);
+    const id = payload.profiles[0]?.id ?? null;
     cachedDefaultProfileId = { id, expiry: now + DEFAULT_PROFILE_CACHE_TTL_MS };
     return id;
   } catch (error) {
@@ -181,26 +222,10 @@ const addonPost = <R extends RouteGenericInterface>(path: string, handler: Addon
 };
 
 // ─── Types ───
-
-type CataloggyList = {
-  id: string;
-  name: string;
-  kind: "watchlist" | "custom";
-};
-
-type ListItemResponse = {
-  imdbId: string;
-  type: string;
-  // Title captured when the item was added — stands in until the metadata row lands.
-  title?: string | null;
-  metadata: {
-    name: string;
-    poster: string | null;
-    year: number | null;
-    genres?: string[];
-    rating?: number | null;
-  } | null;
-};
+//
+// Everything the API sends is typed by @cataloggy/shared (see api-contracts
+// there). What stays local is the Stremio wire shape, which is this service's
+// own output and never crosses the API boundary.
 
 type StremioMetaPreview = {
   id: string;
@@ -215,11 +240,6 @@ type StremioSubtitle = {
   id: string;
   url: string;
   lang: string;
-};
-
-type RpdbConfig = {
-  enabled: boolean;
-  apiKey: string | null;
 };
 
 // ─── Caching ───
@@ -253,7 +273,7 @@ const MANIFEST_CACHE_TTL_MS = 60_000;
 let cachedGenres: CacheEntry<string[]> | null = null;
 const GENRES_CACHE_TTL_MS = 300_000;
 
-let cachedRpdb: CacheEntry<RpdbConfig> | null = null;
+let cachedRpdb: CacheEntry<RpdbConfigResponse> | null = null;
 const RPDB_CACHE_TTL_MS = 120_000;
 const RPDB_BASE_URL = "https://api.ratingposterdb.com";
 
@@ -264,9 +284,21 @@ const TRENDING_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 app.get("/health", async () => ({ status: "ok", service: "addon", publicBase: ADDON_PUBLIC_BASE ?? null }));
 
+// Keyed by profile like the manifest it feeds, and read by the catalog routes
+// too so they can apply the same enabled/disabled rule the manifest applied
+// without a round trip per row Stremio draws.
+const listsCache = new Map<string, CacheEntry<CataloggyList[]>>();
+const LISTS_CACHE_TTL_MS = 60_000;
+
 const fetchAllLists = async (profileId: string | null): Promise<CataloggyList[]> => {
-  const payload = await apiGet<{ lists?: CataloggyList[] }>("/lists", profileId);
-  return payload.lists ?? [];
+  const now = Date.now();
+  const cacheKey = cacheKeyFor(profileId);
+  const cached = listsCache.get(cacheKey);
+  if (cached && now < cached.expiry) return cached.data;
+
+  const payload = await apiGet("/lists", profileId, parseListsResponse);
+  cacheSet(listsCache, cacheKey, { data: payload.lists, expiry: now + LISTS_CACHE_TTL_MS });
+  return payload.lists;
 };
 
 const fetchGenres = async (profileId: string | null): Promise<string[]> => {
@@ -274,7 +306,7 @@ const fetchGenres = async (profileId: string | null): Promise<string[]> => {
   if (cachedGenres && now < cachedGenres.expiry) return cachedGenres.data;
 
   try {
-    const payload = await apiGet<{ genres: string[] }>("/genres", profileId);
+    const payload = await apiGet("/genres", profileId, parseGenresResponse);
     cachedGenres = { data: payload.genres, expiry: now + GENRES_CACHE_TTL_MS };
     return payload.genres;
   } catch (error) {
@@ -283,17 +315,17 @@ const fetchGenres = async (profileId: string | null): Promise<string[]> => {
   }
 };
 
-const fetchRpdbConfig = async (profileId: string | null): Promise<RpdbConfig> => {
+const fetchRpdbConfig = async (profileId: string | null): Promise<RpdbConfigResponse> => {
   const now = Date.now();
   if (cachedRpdb && now < cachedRpdb.expiry) return cachedRpdb.data;
 
   try {
-    const payload = await apiGet<RpdbConfig>("/rpdb/config", profileId);
+    const payload = await apiGet("/rpdb/config", profileId, parseRpdbConfigResponse);
     cachedRpdb = { data: payload, expiry: now + RPDB_CACHE_TTL_MS };
     return payload;
   } catch (error) {
     app.log.warn(error, "Failed to fetch RPDB config, using cached value");
-    const fallback: RpdbConfig = { enabled: false, apiKey: null };
+    const fallback: RpdbConfigResponse = { enabled: false, apiKey: null };
     return cachedRpdb?.data ?? fallback;
   }
 };
@@ -309,31 +341,12 @@ const applyRpdbToMetas = (metas: StremioMetaPreview[], rpdbKey: string | null): 
   }));
 };
 
-// ─── Trending/Popular catalog helpers ───
-
-const DISCOVERY_CATALOGS = [
-  { id: "cataloggy-trending-movie", type: "movie" as const, name: "Trending Movies", endpoint: "/trending?type=movie" },
-  { id: "cataloggy-trending-series", type: "series" as const, name: "Trending Series", endpoint: "/trending?type=series" },
-  { id: "cataloggy-popular-movie", type: "movie" as const, name: "Popular Movies", endpoint: "/popular?type=movie" },
-  { id: "cataloggy-popular-series", type: "series" as const, name: "Popular Series", endpoint: "/popular?type=series" },
-  { id: "cataloggy-recommended-movie", type: "movie" as const, name: "Recommended Movies", endpoint: "/recommendations/personal?type=movie" },
-  { id: "cataloggy-recommended-series", type: "series" as const, name: "Recommended Series", endpoint: "/recommendations/personal?type=series" },
-  { id: "cataloggy-anime-series", type: "series" as const, name: "Anime", endpoint: "/anime?type=series" },
-  { id: "cataloggy-anime-movie", type: "movie" as const, name: "Anime Movies", endpoint: "/anime?type=movie" },
-  { id: "cataloggy-netflix-movie", type: "movie" as const, name: "Netflix Movies", endpoint: "/streaming?type=movie&provider=netflix" },
-  { id: "cataloggy-netflix-series", type: "series" as const, name: "Netflix Series", endpoint: "/streaming?type=series&provider=netflix" },
-  { id: "cataloggy-disney-movie", type: "movie" as const, name: "Disney+ Movies", endpoint: "/streaming?type=movie&provider=disney" },
-  { id: "cataloggy-disney-series", type: "series" as const, name: "Disney+ Series", endpoint: "/streaming?type=series&provider=disney" },
-  { id: "cataloggy-amazon-movie", type: "movie" as const, name: "Prime Video Movies", endpoint: "/streaming?type=movie&provider=amazon" },
-  { id: "cataloggy-amazon-series", type: "series" as const, name: "Prime Video Series", endpoint: "/streaming?type=series&provider=amazon" },
-  { id: "cataloggy-apple-movie", type: "movie" as const, name: "Apple TV+ Movies", endpoint: "/streaming?type=movie&provider=apple" },
-  { id: "cataloggy-apple-series", type: "series" as const, name: "Apple TV+ Series", endpoint: "/streaming?type=series&provider=apple" },
-  { id: "cataloggy-max-movie", type: "movie" as const, name: "Max Movies", endpoint: "/streaming?type=movie&provider=max" },
-  { id: "cataloggy-max-series", type: "series" as const, name: "Max Series", endpoint: "/streaming?type=series&provider=max" },
-];
-
-const isDiscoveryCatalog = (id: string) => DISCOVERY_CATALOGS.some((c) => c.id === id);
-const getDiscoveryCatalog = (id: string) => DISCOVERY_CATALOGS.find((c) => c.id === id);
+// ─── Discovery catalog helpers ───
+//
+// Which catalogs exist, what they are called and which API endpoint serves each
+// one all come from @cataloggy/shared, so this service and the API's own
+// manifest can no longer disagree about the set — which is how "AI Picks" came
+// to be offered in Settings and then silently dropped here.
 
 const fetchDiscoveryMetas = async (catalogId: string, profileId: string | null): Promise<StremioMetaPreview[]> => {
   const now = Date.now();
@@ -345,8 +358,8 @@ const fetchDiscoveryMetas = async (catalogId: string, profileId: string | null):
   if (!catalog) return [];
 
   try {
-    const payload = await apiGet<{ metas: Array<{ id: string; type: string; name: string; poster?: string; genres?: string[] }> }>(catalog.endpoint, profileId);
-    const metas: StremioMetaPreview[] = (payload.metas ?? []).map((m) => ({
+    const payload = await apiGet(discoveryApiPath(catalog), profileId, parseMetasResponse);
+    const metas: StremioMetaPreview[] = payload.metas.map((m) => ({
       id: m.id,
       type: m.type,
       name: m.name,
@@ -364,25 +377,25 @@ const fetchDiscoveryMetas = async (catalogId: string, profileId: string | null):
 
 // ─── Manifest ───
 
-// Fetch enabled catalogs from API. The config is per-profile, so the cache is
-// keyed by profile too — otherwise the first profile to build a manifest would
-// decide which catalogs every other profile sees for the next minute.
-const enabledCatalogsCache = new Map<string, CacheEntry<string[]>>();
+// Fetch the enabled-catalog config from the API. It is per-profile, so the
+// cache is keyed by profile too — otherwise the first profile to build a
+// manifest would decide which catalogs every other profile sees for the next
+// minute.
+const enabledCatalogsCache = new Map<string, CacheEntry<AddonManifestConfig>>();
 const ENABLED_CATALOGS_CACHE_TTL_MS = 60_000;
 
-const fetchEnabledCatalogs = async (profileId: string | null): Promise<string[] | null> => {
+const fetchAddonConfig = async (profileId: string | null): Promise<AddonManifestConfig | null> => {
   const now = Date.now();
   const cacheKey = cacheKeyFor(profileId);
   const cached = enabledCatalogsCache.get(cacheKey);
   if (cached && now < cached.expiry) return cached.data;
 
   try {
-    const res = await apiGet<{ config: { enabledCatalogs: string[] } }>("/addon/config", profileId);
-    const catalogs = res.config.enabledCatalogs;
-    cacheSet(enabledCatalogsCache, cacheKey, { data: catalogs, expiry: now + ENABLED_CATALOGS_CACHE_TTL_MS });
-    return catalogs;
+    const config = await apiGet("/addon/config", profileId, parseAddonConfigResponse);
+    cacheSet(enabledCatalogsCache, cacheKey, { data: config, expiry: now + ENABLED_CATALOGS_CACHE_TTL_MS });
+    return config;
   } catch (error) {
-    app.log.warn(error, "Failed to fetch enabled catalogs, using cached value");
+    app.log.warn(error, "Failed to fetch addon config, using cached value");
     return cached?.data ?? null;
   }
 };
@@ -392,46 +405,67 @@ const fetchEnabledCatalogs = async (profileId: string | null): Promise<string[] 
 // as pseudo-genre options alongside the real content genres.
 const SORT_OPTIONS = ["A-Z", "Z-A"];
 
-const buildManifest = (lists: CataloggyList[], genres: string[], enabledCatalogs: string[] | null) => {
+// The Settings picker only offers custom lists, so only custom lists are gated
+// on the config. The watchlist and the collection are core rows with no
+// checkbox anywhere — gating them would remove them with no way to bring them
+// back. Unticking a custom list in Settings now removes it here too, which is
+// what the picker has always claimed it does.
+const isListEnabled = (list: CataloggyList, config: AddonManifestConfig | null): boolean => {
+  if (list.kind !== "custom") return true;
+  if (!config) return true;
+  return config.enabledCatalogs.includes(listCatalogId(list.id));
+};
+
+const isDiscoveryEnabled = (catalog: DiscoveryCatalog, config: AddonManifestConfig): boolean =>
+  selectDiscoveryCatalogs(config.enabledCatalogs, { aiConfigured: config.aiConfigured }).some(
+    (c) => c.id === catalog.id
+  );
+
+const buildManifest = (lists: CataloggyList[], genres: string[], config: AddonManifestConfig | null) => {
   const genreExtra = [{ name: "genre", options: [...SORT_OPTIONS, ...genres], isRequired: false }];
 
-  const listCatalogs = lists.flatMap((list) => [
-    {
-      type: "movie" as const,
-      id: `cataloggy-${list.id}-movie`,
-      name: list.name,
-      extra: [
-        { name: "search", isRequired: false },
-        ...genreExtra,
-      ]
-    },
-    {
-      type: "series" as const,
-      id: `cataloggy-${list.id}-series`,
-      name: list.name,
-      extra: [
-        { name: "search", isRequired: false },
-        ...genreExtra,
-      ]
-    }
-  ]);
+  const listCatalogs = lists
+    .filter((list) => isListEnabled(list, config))
+    .flatMap((list) => [
+      {
+        type: "movie" as const,
+        id: `cataloggy-${list.id}-movie`,
+        name: list.name,
+        extra: [
+          { name: "search", isRequired: false },
+          ...genreExtra,
+        ]
+      },
+      {
+        type: "series" as const,
+        id: `cataloggy-${list.id}-series`,
+        name: list.name,
+        extra: [
+          { name: "search", isRequired: false },
+          ...genreExtra,
+        ]
+      }
+    ]);
 
-  const discoveryCatalogs = DISCOVERY_CATALOGS.map((c) => ({
-    type: c.type,
-    id: c.id,
-    name: c.name,
+  // No config and nothing cached means the API is unreachable. Emptying a
+  // Stremio home screen over a blip is worse than showing a superset, so the
+  // degraded manifest advertises everything the profile could have enabled —
+  // minus the AI catalogs, whose provider we have no way to check for.
+  const selected = config
+    ? selectDiscoveryCatalogs(config.enabledCatalogs, { aiConfigured: config.aiConfigured })
+    : DISCOVERY_CATALOGS.filter((catalog) => !catalogRequiresAi(catalog));
+
+  const discoveryCatalogs = selected.map((catalog) => ({
+    type: catalog.type,
+    id: catalog.id,
+    name: catalog.label,
     extra: [
       { name: "search", isRequired: false },
       ...genreExtra,
     ],
   }));
 
-  // Filter discovery catalogs by enabledCatalogs if available
-  const filteredDiscovery = enabledCatalogs
-    ? discoveryCatalogs.filter((c) => enabledCatalogs.includes(c.id))
-    : discoveryCatalogs;
-
-  const catalogs = [...listCatalogs, ...filteredDiscovery];
+  const catalogs = [...listCatalogs, ...discoveryCatalogs];
 
   const configUrl = WEB_PUBLIC_BASE ? `${WEB_PUBLIC_BASE}/settings` : undefined;
 
@@ -474,12 +508,12 @@ addonGet("/manifest.json", async (request, reply) => {
   }
 
   try {
-    const [lists, genres, enabledCatalogs] = await Promise.all([
+    const [lists, genres, config] = await Promise.all([
       fetchAllLists(scope.profileId),
       fetchGenres(scope.profileId),
-      fetchEnabledCatalogs(scope.profileId),
+      fetchAddonConfig(scope.profileId),
     ]);
-    const data = buildManifest(lists, genres, enabledCatalogs);
+    const data = buildManifest(lists, genres, config);
     cacheSet(manifestCache, cacheKey, { data, expiry: now + MANIFEST_CACHE_TTL_MS });
     return reply.send(data);
   } catch (error) {
@@ -496,12 +530,16 @@ const parseCatalogId = (id: string) => {
   return { listId: match[1], catalogType: match[2] };
 };
 
-const fetchListItems = async (listId: string, profileId: string | null): Promise<ListItemResponse[]> => {
-  const payload = await apiGet<{ items?: ListItemResponse[] }>(`/lists/${encodeURIComponent(listId)}/items`, profileId);
-  return payload.items ?? [];
+const fetchListItems = async (listId: string, profileId: string | null): Promise<CataloggyListItem[]> => {
+  const payload = await apiGet(
+    `/lists/${encodeURIComponent(listId)}/items`,
+    profileId,
+    parseListItemsResponse
+  );
+  return payload.items;
 };
 
-const itemsToMetas = (items: ListItemResponse[], type: string): StremioMetaPreview[] =>
+const itemsToMetas = (items: CataloggyListItem[], type: string): StremioMetaPreview[] =>
   items
     .filter((item) => item.type === type)
     .map((item) => ({
@@ -552,11 +590,15 @@ const applyExtraFilters = (metas: StremioMetaPreview[], extraParams: Record<stri
 
 const handleCatalog = async (type: string, id: string, profileId: string | null, extra?: string) => {
   // Check discovery catalogs first
-  if (isDiscoveryCatalog(id)) {
-    const catalog = getDiscoveryCatalog(id);
-    if (!catalog || catalog.type !== type) return { metas: [] };
+  const discovery = getDiscoveryCatalog(id);
+  if (discovery) {
+    if (discovery.type !== type) return { metas: [] };
 
-    const rpdb = await fetchRpdbConfig(profileId);
+    const [rpdb, config] = await Promise.all([fetchRpdbConfig(profileId), fetchAddonConfig(profileId)]);
+    // A catalog the manifest doesn't advertise is a URL no client should hold,
+    // and serving it anyway is how a disabled row keeps appearing.
+    if (config && !isDiscoveryEnabled(discovery, config)) return { metas: [] };
+
     let metas = await fetchDiscoveryMetas(id, profileId);
     if (extra) {
       metas = applyExtraFilters(metas, parseExtra(extra));
@@ -567,6 +609,12 @@ const handleCatalog = async (type: string, id: string, profileId: string | null,
   // User list catalogs
   const parsed = parseCatalogId(id);
   if (!parsed || type !== parsed.catalogType) return { metas: [] };
+
+  // Same rule the manifest applied: a custom list the profile unticked is not a
+  // list this URL is entitled to serve.
+  const [lists, config] = await Promise.all([fetchAllLists(profileId), fetchAddonConfig(profileId)]);
+  const list = lists.find((l) => l.id === parsed.listId);
+  if (!list || !isListEnabled(list, config)) return { metas: [] };
 
   const [items, rpdb] = await Promise.all([
     fetchListItems(parsed.listId, profileId),
@@ -621,7 +669,7 @@ const isSpoilerProtectionEnabled = async (profileId: string | null): Promise<boo
     return cachedSpoilerProtection.data;
   }
   try {
-    const prefs = await apiGet<{ spoilerProtection?: boolean }>("/settings/preferences", profileId);
+    const prefs = await apiGet("/settings/preferences", profileId, parsePreferencesResponse);
     const enabled = prefs.spoilerProtection === true;
     cachedSpoilerProtection = { data: enabled, expiry: now + SPOILER_CACHE_TTL_MS };
     return enabled;
@@ -677,9 +725,11 @@ addonGet<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async
     const spoilerMsg = "[Spoiler protection enabled — description hidden until you finish this series]";
     let shouldHide = true; // default: hide unless confirmed completed
     try {
-      const progressRes = await apiGet<{
-        progress?: { lastSeason: number; lastEpisode: number; totalEpisodes?: number | null; watchedEpisodes?: number | null };
-      }>(`/series/progress/${encodeURIComponent(imdbId)}`, scope.profileId);
+      const progressRes = await apiGet(
+        `/series/progress/${encodeURIComponent(imdbId)}`,
+        scope.profileId,
+        parseSeriesProgressResponse
+      );
       if (progressRes.progress) {
         const { watchedEpisodes, totalEpisodes } = progressRes.progress;
         // Only show description if user has finished all episodes
