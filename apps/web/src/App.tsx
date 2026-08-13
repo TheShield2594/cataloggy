@@ -4,6 +4,7 @@ import { Search, User } from "lucide-react";
 import { api, Profile, runtimeConfig } from "./api";
 import { useCommandPalette } from "./hooks/useCommandPalette";
 import { BRAND_WORDMARK, BrandMark } from "./components/BrandMark";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { GhostLoader } from "./components/GhostLoader";
 import { InstallButton } from "./components/InstallButton";
 import { MobileTabBar } from "./components/MobileTabBar";
@@ -336,19 +337,31 @@ function AppShell({
             route change anyway — this only extends it to a same-element route
             (the dashboard's own link), where a replay is still what's wanted. */}
         <div key={location.pathname} className="route-enter">
-          <Suspense fallback={<LoadingFallback />}>
-            <Routes key={profile?.id ?? runtimeConfig.getProfileId() ?? "default"}>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/search" element={<SearchPage />} />
-              <Route path="/lists" element={<ListsPage />} />
-              <Route path="/games" element={<GamesPage />} />
-              <Route path="/calendar" element={<CalendarPage />} />
-              <Route path="/history" element={<HistoryPage />} />
-              <Route path="/stats" element={<StatsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="*" element={<NotFoundPage />} />
-            </Routes>
-          </Suspense>
+          {/* The second boundary, inside the shell. main.tsx's wraps the whole
+              tree, so before this one a render error on any page took the
+              header, sidebar and tab bar down with it and left the user with no
+              way to reach a page that still worked. This one contains the
+              damage to the content column.
+
+              Keyed on the pathname so the fallback belongs to the route that
+              threw: without it, navigating away would carry the error state to
+              the next page. It wraps <Suspense> rather than sitting inside it,
+              so a lazy chunk that fails to load is caught here too. */}
+          <ErrorBoundary key={location.pathname} variant="page">
+            <Suspense fallback={<LoadingFallback />}>
+              <Routes key={profile?.id ?? runtimeConfig.getProfileId() ?? "default"}>
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/search" element={<SearchPage />} />
+                <Route path="/lists" element={<ListsPage />} />
+                <Route path="/games" element={<GamesPage />} />
+                <Route path="/calendar" element={<CalendarPage />} />
+                <Route path="/history" element={<HistoryPage />} />
+                <Route path="/stats" element={<StatsPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="*" element={<NotFoundPage />} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
         </div>
       </main>
 

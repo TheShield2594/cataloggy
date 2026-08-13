@@ -7,6 +7,8 @@ import { useToast } from "../hooks/useToast";
 import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
 import { mergeByRelevance } from "../utils/mergeSearchResults";
 import { formatRating, ratingLabel, RATING_MAX } from "../utils/rating";
+import { getCacheScope } from "../utils/dataCache";
+import { createScopedMemoCache } from "../utils/scopedMemoCache";
 import {
   useSearchFilters,
   FilterType,
@@ -1054,7 +1056,12 @@ function ResultCard({
 /* ─── Where to Watch Badge ────────────────────────────────── */
 
 // Module-level cache so repeated searches (and re-mounted cards) skip the network call entirely.
-const providerCache = new Map<string, WatchProvider[]>();
+// Bounded rather than a bare Map: a search returns 10-20 cards, and an
+// afternoon of searching would otherwise hold every provider row it ever
+// fetched until the tab closed. No TTL — streaming availability moves in days,
+// so an entry is good for as long as it survives eviction.
+const PROVIDER_CACHE_LIMIT = 200;
+const providerCache = createScopedMemoCache<WatchProvider[]>({ limit: PROVIDER_CACHE_LIMIT });
 
 // A single shared IntersectionObserver is far cheaper than one per card when a search
 // returns 10-20 results.
@@ -1093,7 +1100,7 @@ function observeOnce(node: Element, callback: IntersectionCallback) {
 
 function WhereToWatchBadge({ type, imdbId }: { type: SearchResult["type"]; imdbId: string }) {
   const cacheKey = `${type}:${imdbId}`;
-  const [providers, setProviders] = useState<WatchProvider[] | null>(providerCache.get(cacheKey) ?? null);
+  const [providers, setProviders] = useState<WatchProvider[] | null>(() => providerCache.get(cacheKey) ?? null);
   const [failed, setFailed] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -1110,13 +1117,14 @@ function WhereToWatchBadge({ type, imdbId }: { type: SearchResult["type"]; imdbI
 
     let cancelled = false;
     const controller = new AbortController();
+    const scope = getCacheScope();
     const fetchProviders = () => {
       api
         .getWatchProviders(type, imdbId, controller.signal)
         .then((r) => {
           const merged = [...r.providers.flatrate, ...r.providers.free];
           const deduped = merged.filter((p, i) => merged.findIndex((q) => q.id === p.id) === i);
-          providerCache.set(cacheKey, deduped);
+          providerCache.setForScope(scope, cacheKey, deduped);
           if (!cancelled) setProviders(deduped);
         })
         .catch((err) => {

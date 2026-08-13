@@ -71,7 +71,12 @@ function ToastContainer({
       role="status"
       aria-live="polite"
       aria-atomic="true"
-      className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 sm:bottom-6 max-sm:bottom-20 max-sm:right-4"
+      // The max-sm offset has to clear the mobile tab bar *and* the safe-area
+      // inset it pads itself with — the bar is ~4.25rem of content plus up to
+      // 34px of inset on a notched phone, so a flat 5rem put the toast, and the
+      // Undo button in it, underneath the nav where it could not be tapped.
+      // Same expression as UpdatePrompt, which sits in the same band.
+      className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 sm:bottom-6 max-sm:bottom-[calc(5rem+env(safe-area-inset-bottom))] max-sm:right-4"
       // Holding the pointer over the stack — or tabbing into it — stops the
       // clock on every toast in it. Reaching for Undo or the close button was
       // otherwise a race against a timer that could pull the button out from

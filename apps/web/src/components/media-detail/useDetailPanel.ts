@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type DetailBundle, SearchResult, WatchEvent } from "../../api";
+import { getCacheScope } from "../../utils/dataCache";
+import { createScopedMemoCache } from "../../utils/scopedMemoCache";
 
 /* ─── Hook: open panel with history + detail loading ───────── */
 
@@ -18,13 +20,28 @@ export type PanelDetail = {
 // enough to cover that and short enough that a rating or a dropped-state change
 // made elsewhere in the app shows up promptly.
 const BUNDLE_CACHE_TTL_MS = 60_000;
-const bundleCache = new Map<string, { at: number; bundle: DetailBundle }>();
+// Enough to cover a browsing run through a carousel and back without letting a
+// long session hold a bundle — cast, recommendations and all — for every title
+// it ever opened.
+const BUNDLE_CACHE_LIMIT = 60;
+// Scoped, because `DetailBundle.dropped` is per-profile state: a plain map of
+// title to bundle let profile B open a title within the TTL of profile A's
+// fetch and be shown A's "Dropped" badge, with an Undrop button that then
+// wrote to B's data. The scope makes A's entries unreachable from B, and
+// drops them, the moment the active profile changes.
+const bundleCache = createScopedMemoCache<DetailBundle>({
+  limit: BUNDLE_CACHE_LIMIT,
+  ttlMs: BUNDLE_CACHE_TTL_MS,
+});
+
+// The id leads so that invalidating a title is a prefix match over both of its
+// possible types — see `invalidateDetailBundle`.
+const bundleCacheKey = (type: string, imdbId: string) => `${imdbId}:${type}`;
 
 /** Called after a mutation that changes what the bundle would return. */
 export function invalidateDetailBundle(imdbId: string): void {
-  for (const key of [...bundleCache.keys()]) {
-    if (key.endsWith(`:${imdbId}`)) bundleCache.delete(key);
-  }
+  // Trailing separator: without it `tt123` would also drop `tt1234`.
+  bundleCache.invalidate(`${imdbId}:`);
 }
 
 export function useDetailPanel() {
@@ -87,20 +104,24 @@ export function useDetailPanel() {
       });
     };
 
-    const cacheKey = `${type}:${imdbId}`;
+    const cacheKey = bundleCacheKey(type, imdbId);
     const cached = bundleCache.get(cacheKey);
-    if (cached && Date.now() - cached.at < BUNDLE_CACHE_TTL_MS) {
+    if (cached) {
       // Synchronously, in the same commit that opened the panel: no spinner, no
       // empty cast row that fills in a moment later.
-      applyBundle(cached.bundle);
+      applyBundle(cached);
       setDetailLoading(false);
     } else {
       setDetail(null);
       setDetailLoading(true);
+      // Captured before the await: a profile switch while the request is in
+      // flight means this answer belongs to the profile that is no longer
+      // active, and must not be cached under the one that is.
+      const scope = getCacheScope();
       void (async () => {
         try {
           const bundle = await api.getDetailBundle(type, imdbId, controller.signal);
-          bundleCache.set(cacheKey, { at: Date.now(), bundle });
+          bundleCache.setForScope(scope, cacheKey, bundle);
           if (!cancelled) applyBundle(bundle);
         } catch {
           // Every section renders an empty state of its own, so a failed bundle
