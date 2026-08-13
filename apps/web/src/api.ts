@@ -50,10 +50,13 @@ export const runtimeConfig = {
     const trimmed = value.trim();
     if (!trimmed) {
       window.localStorage.removeItem(API_BASE_OVERRIDE_KEY);
-      return;
+    } else {
+      window.localStorage.setItem(API_BASE_OVERRIDE_KEY, trimmed);
     }
-
-    window.localStorage.setItem(API_BASE_OVERRIDE_KEY, trimmed);
+    // The service worker decides what to cache by comparing against the API
+    // base, and this override lives only here — a worker never told about it
+    // would go on matching the base the container was built with.
+    void tellServiceWorkerWhereTheApiIs();
   },
   getApiBase() {
     return runtimeConfig.getApiBaseOverride() || API_BASE_DEFAULT;
@@ -553,6 +556,17 @@ export type JobFailure = {
   failedAt: string;
 };
 
+/** The last run of a scheduled job, whether or not it failed. */
+export type JobRun = {
+  job: string;
+  status: "ok" | "failed";
+  message: string | null;
+  durationMs: number | null;
+  /** Ran past its own interval, so the tick that followed was dropped. */
+  overran: boolean;
+  at: string;
+};
+
 /** `source` says which key is in use: one saved here, or `TMDB_API_KEY`. */
 export type TmdbStatus = {
   configured: boolean;
@@ -597,6 +611,32 @@ export async function purgeApiCache(): Promise<void> {
   } catch {
     // Cache Storage is unavailable (private mode in some browsers, non-secure
     // origin) — there is nothing cached to purge in that case either.
+  }
+}
+
+/**
+ * Tells the service worker which origin and path prefix the API answers on, so
+ * its runtime cache matches the requests this browser actually makes.
+ *
+ * Returns without sending anything when there is no active worker to send to —
+ * nothing registered, or one still installing. `navigator.serviceWorker.ready`
+ * would be the obvious thing to await, but it never settles when nothing is
+ * registered: on a browser that supports service workers but has none (a plain
+ * http:// LAN deployment, say) every call would leave a promise pending for the
+ * life of the page. The install-time read of `config.js` covers the worker's
+ * first run either way, and a later call — the override changing, the next page
+ * load — reaches it once it is active.
+ */
+export async function tellServiceWorkerWhereTheApiIs(): Promise<void> {
+  if (!navigator.serviceWorker) return;
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
+    const worker = navigator.serviceWorker.controller ?? registration?.active;
+    if (!worker) return;
+    worker.postMessage({ type: "SET_API_BASE", apiBase: runtimeConfig.getApiBase() });
+  } catch {
+    // Nothing to tell (unsupported, or a non-secure origin where the registration
+    // lookup itself throws).
   }
 }
 
@@ -921,7 +961,7 @@ export const api = {
     return request<{ configured: boolean }>("/omdb/key", { method: "DELETE" });
   },
   getJobStatus() {
-    return request<{ failures: JobFailure[] }>("/settings/job-status");
+    return request<{ failures: JobFailure[]; runs?: JobRun[] }>("/settings/job-status");
   },
   getDetailedStats() {
     return request<DetailedWatchStats>("/watch/stats/detailed");

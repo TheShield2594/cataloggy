@@ -13,7 +13,7 @@ import { OMDB_API_KEY_KV, getOmdbApiKey } from "../lib/omdb.js";
 import { TMDB_API_KEY_KV, getTmdbApiKey } from "../lib/tmdb-client.js";
 import { RPDB_API_KEY_KV, getRpdbApiKey } from "../lib/rpdb.js";
 import { trendingCache } from "../lib/cache.js";
-import { getFailedJobStatuses } from "../lib/job-status.js";
+import { failuresFrom, getJobRuns } from "../lib/job-status.js";
 
 const settingsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/settings/preferences", async () => {
@@ -232,9 +232,14 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
   // Surfaces scheduled-job failures (Steam sync, Trakt poll, episode
   // notifications, AI recs) that would otherwise only be visible in server
   // logs or Sentry (opt-in, off by default) — see lib/job-status.ts.
+  //
+  // `runs` carries the last run of every job, failed or not, with how long it
+  // took: a job that outlasts its own interval has its next tick dropped by the
+  // scheduler, which is invisible from a list of failures because nothing
+  // failed.
   app.get("/settings/job-status", async () => {
-    const failures = await getFailedJobStatuses();
-    return { failures };
+    const runs = await getJobRuns();
+    return { failures: failuresFrom(runs), runs };
   });
 };
 

@@ -26,7 +26,7 @@ import { getDefaultProfileId } from "./lib/profile.js";
 import { checkUpcomingEpisodesAndNotify } from "./lib/notify-episodes.js";
 import { isSteamSyncConfigured, syncSteamLibrary } from "./lib/steam-sync.js";
 import { cleanupStaleSessions, SCROBBLE_CLEANUP_INTERVAL_MS } from "./routes/scrobble.js";
-import { recordJobFailure, recordJobSuccess, type JobName } from "./lib/job-status.js";
+import { everyInterval, parseIntervalSec } from "./lib/scheduler.js";
 import { bodyTooLargeMessage, isBodyTooLargeError, mbToBytes, parseMaxBodySizeMb } from "./lib/body-limit.js";
 import { redactUrl, redactedRequestSerializer } from "./lib/redact-url.js";
 
@@ -57,7 +57,11 @@ import jellyfinWebhookRoutes from "./routes/webhooks/jellyfin.js";
 import gamesRoutes from "./routes/games.js";
 import gamesSteamRoutes from "./routes/games-steam.js";
 
-const TRAKT_POLL_INTERVAL_SEC = Number(process.env.TRAKT_POLL_INTERVAL_SEC ?? 300);
+// Every interval goes through the same validator: reading one as `Number(raw ??
+// fallback)` turns a typo into NaN, and `NaN > 0` is false, so a mistyped value
+// used to disable its job silently while the startup log said it had been "set
+// to 0".
+const TRAKT_POLL_INTERVAL_SEC = parseIntervalSec("TRAKT_POLL_INTERVAL_SEC", process.env.TRAKT_POLL_INTERVAL_SEC, 300);
 
 // Shorter than the Trakt poll because it costs far less: when nothing has been
 // watched, a sync is a single small `datastoreMeta` call that fetches no items
@@ -68,30 +72,24 @@ const TRAKT_POLL_INTERVAL_SEC = Number(process.env.TRAKT_POLL_INTERVAL_SEC ?? 30
 // Off by default: with play detection covering every addon-consuming client,
 // the library poll is for people who want Stremio's own exact watched state
 // rather than an inference. The one-time import stays available either way.
-const STREMIO_POLL_INTERVAL_SEC = Number(process.env.STREMIO_POLL_INTERVAL_SEC ?? 0);
+const STREMIO_POLL_INTERVAL_SEC = parseIntervalSec(
+  "STREMIO_POLL_INTERVAL_SEC",
+  process.env.STREMIO_POLL_INTERVAL_SEC,
+  0
+);
 
 const PLAY_SIGNAL_SETTLE_INTERVAL_MS = 60 * 1000;
-const AI_REFRESH_INTERVAL_SEC = Number(process.env.AI_REFRESH_INTERVAL_SEC ?? 86400);
-const NOTIFICATION_CHECK_INTERVAL_SEC = Number(process.env.NOTIFICATION_CHECK_INTERVAL_SEC ?? 3600);
+const AI_REFRESH_INTERVAL_SEC = parseIntervalSec("AI_REFRESH_INTERVAL_SEC", process.env.AI_REFRESH_INTERVAL_SEC, 86400);
+const NOTIFICATION_CHECK_INTERVAL_SEC = parseIntervalSec(
+  "NOTIFICATION_CHECK_INTERVAL_SEC",
+  process.env.NOTIFICATION_CHECK_INTERVAL_SEC,
+  3600
+);
+const STEAM_SYNC_INTERVAL_SEC = parseIntervalSec("STEAM_SYNC_INTERVAL_SEC", process.env.STEAM_SYNC_INTERVAL_SEC, 86400);
 
-// setInterval/setTimeout delays are a 32-bit signed int under the hood; anything larger
-// fires (near-)immediately instead of after the intended wait, so a hammered Steam sync
-// loop is a real risk if this is misconfigured — validated explicitly, unlike the sibling
-// interval env vars above, because it's new config being introduced by the Games feature.
-const MAX_TIMER_DELAY_SEC = 2_147_483_647 / 1000;
-
-function parseSteamSyncIntervalSec(raw: string | undefined): number {
-  if (raw === undefined) return 86400;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 0 || parsed > MAX_TIMER_DELAY_SEC) {
-    throw new Error(
-      `STEAM_SYNC_INTERVAL_SEC must be a number between 0 and ${Math.floor(MAX_TIMER_DELAY_SEC)} (got "${raw}"). Set it to 0 to disable the scheduled Steam sync.`
-    );
-  }
-  return parsed;
-}
-
-const STEAM_SYNC_INTERVAL_SEC = parseSteamSyncIntervalSec(process.env.STEAM_SYNC_INTERVAL_SEC);
+// The two jobs that would otherwise hammer a cold start wait this long before
+// their first run, then settle onto their interval.
+const DEFERRED_FIRST_RUN_MS = 2 * 60 * 1000;
 
 const PROXY_PATH_PREFIXES = parseProxyPathPrefixes(process.env.PROXY_PATH_PREFIXES, ["/api"] as const);
 
@@ -249,21 +247,14 @@ app.register(gamesSteamRoutes);
 
 // ─── Startup ───
 
-const reportBackgroundError = (error: unknown, message: string, job?: JobName) => {
+// Recording the failure against the job is the scheduler's business — it is the
+// half that knows how long the run took and what it was scheduled against.
+const reportBackgroundError = (error: unknown, message: string) => {
   app.log.error(error, message);
   Sentry.captureException(error);
-  if (job) {
-    void recordJobFailure(job, error).catch((kvError) => {
-      app.log.error(kvError, `Failed to persist job-status failure for ${job}`);
-    });
-  }
 };
 
-const reportJobSuccess = (job: JobName) => {
-  void recordJobSuccess(job).catch((error) => {
-    app.log.error(error, `Failed to clear job-status failure for ${job}`);
-  });
-};
+const scheduler = { log: app.log, onError: reportBackgroundError };
 
 const start = async () => {
   const port = Number(process.env.PORT ?? 7000);
@@ -292,30 +283,26 @@ const start = async () => {
   await ensureDefaultCollection();
 
   if (TRAKT_POLL_INTERVAL_SEC > 0) {
-    setInterval(() => {
-      void (async () => {
+    everyInterval({
+      ...scheduler,
+      label: "Trakt poll",
+      intervalMs: TRAKT_POLL_INTERVAL_SEC * 1000,
+      tick: async ({ runJob }) => {
         const profileId = await getDefaultProfileId();
-        await pollTraktHistory(app.log, profileId)
-          .then(() => reportJobSuccess("trakt-history-poll"))
-          .catch((error) => {
-            reportBackgroundError(error, "Scheduled Trakt history poll failed", "trakt-history-poll");
-          });
-        await syncTraktWatchlist(app.log, profileId)
-          .then(() => reportJobSuccess("trakt-watchlist-sync"))
-          .catch((error) => {
-            reportBackgroundError(error, "Scheduled Trakt watchlist sync failed", "trakt-watchlist-sync");
-          });
-      })().catch((error) => {
-        reportBackgroundError(error, "Scheduled Trakt poll failed");
-      });
-    }, TRAKT_POLL_INTERVAL_SEC * 1000);
+        await runJob("trakt-history-poll", () => pollTraktHistory(app.log, profileId));
+        await runJob("trakt-watchlist-sync", () => syncTraktWatchlist(app.log, profileId));
+      },
+    });
   } else {
     app.log.info("Scheduled Trakt poll disabled because TRAKT_POLL_INTERVAL_SEC is set to 0");
   }
 
   if (STREMIO_POLL_INTERVAL_SEC > 0) {
-    setInterval(() => {
-      void (async () => {
+    everyInterval({
+      ...scheduler,
+      label: "Stremio library sync",
+      intervalMs: STREMIO_POLL_INTERVAL_SEC * 1000,
+      tick: async ({ runJob }) => {
         // Checked every tick rather than at boot, so connecting an account from
         // Settings starts syncing without a restart.
         if (!(await isStremioConnected())) return;
@@ -323,15 +310,9 @@ const start = async () => {
         // where the connect and import routes put theirs. Rows predating that
         // column report null and keep the old default-profile behaviour.
         const profileId = (await getStremioProfileId()) ?? (await getDefaultProfileId());
-        await syncStremioLibrary(app.log, profileId, "incremental")
-          .then(() => reportJobSuccess("stremio-library-sync"))
-          .catch((error) => {
-            reportBackgroundError(error, "Scheduled Stremio library sync failed", "stremio-library-sync");
-          });
-      })().catch((error) => {
-        reportBackgroundError(error, "Scheduled Stremio library sync failed");
-      });
-    }, STREMIO_POLL_INTERVAL_SEC * 1000);
+        await runJob("stremio-library-sync", () => syncStremioLibrary(app.log, profileId, "incremental"));
+      },
+    });
   } else {
     app.log.info("Scheduled Stremio library sync disabled because STREMIO_POLL_INTERVAL_SEC is set to 0");
   }
@@ -339,31 +320,28 @@ const start = async () => {
   // A pending play signal becomes a watch once its title's runtime has elapsed,
   // so this only needs to run often enough to keep that promotion punctual.
   if (isPlayDetectionEnabled()) {
-    setInterval(() => {
-      void settleDuePlaySignals(app.log)
-        .then(() => reportJobSuccess("stremio-play-signals"))
-        .catch((error) => {
-          reportBackgroundError(error, "Settling Stremio play signals failed", "stremio-play-signals");
-        });
-    }, PLAY_SIGNAL_SETTLE_INTERVAL_MS);
+    everyInterval({
+      ...scheduler,
+      label: "Stremio play signal settling",
+      intervalMs: PLAY_SIGNAL_SETTLE_INTERVAL_MS,
+      tick: ({ runJob }) => runJob("stremio-play-signals", () => settleDuePlaySignals(app.log)),
+    });
   }
 
-  setInterval(() => {
-    void cleanupStaleSessions(app.log)
-      .then(() => reportJobSuccess("scrobble-cleanup"))
-      .catch((error) => {
-        reportBackgroundError(error, "Scrobble session cleanup failed", "scrobble-cleanup");
-      });
-  }, SCROBBLE_CLEANUP_INTERVAL_MS);
+  everyInterval({
+    ...scheduler,
+    label: "scrobble session cleanup",
+    intervalMs: SCROBBLE_CLEANUP_INTERVAL_MS,
+    tick: ({ runJob }) => runJob("scrobble-cleanup", () => cleanupStaleSessions(app.log)),
+  });
 
   if (NOTIFICATION_CHECK_INTERVAL_SEC > 0) {
-    setInterval(() => {
-      void checkUpcomingEpisodesAndNotify(app.log)
-        .then(() => reportJobSuccess("episode-notifications"))
-        .catch((error) => {
-          reportBackgroundError(error, "Scheduled upcoming-episode notification check failed", "episode-notifications");
-        });
-    }, NOTIFICATION_CHECK_INTERVAL_SEC * 1000);
+    everyInterval({
+      ...scheduler,
+      label: "upcoming-episode notification check",
+      intervalMs: NOTIFICATION_CHECK_INTERVAL_SEC * 1000,
+      tick: ({ runJob }) => runJob("episode-notifications", () => checkUpcomingEpisodesAndNotify(app.log)),
+    });
   } else {
     app.log.info(
       "Scheduled episode notification check disabled because NOTIFICATION_CHECK_INTERVAL_SEC is set to 0"
@@ -381,20 +359,13 @@ const start = async () => {
   };
 
   if (AI_REFRESH_INTERVAL_SEC > 0) {
-    setTimeout(() => {
-      void refreshAiRecommendations()
-        .then(() => reportJobSuccess("ai-recommendations"))
-        .catch((error) => {
-          reportBackgroundError(error, "Initial AI recommendations refresh failed", "ai-recommendations");
-        });
-      setInterval(() => {
-        void refreshAiRecommendations()
-          .then(() => reportJobSuccess("ai-recommendations"))
-          .catch((error) => {
-            reportBackgroundError(error, "Scheduled AI recommendations refresh failed", "ai-recommendations");
-          });
-      }, AI_REFRESH_INTERVAL_SEC * 1000);
-    }, 2 * 60 * 1000);
+    everyInterval({
+      ...scheduler,
+      label: "AI recommendations refresh",
+      intervalMs: AI_REFRESH_INTERVAL_SEC * 1000,
+      startAfterMs: DEFERRED_FIRST_RUN_MS,
+      tick: ({ runJob }) => runJob("ai-recommendations", refreshAiRecommendations),
+    });
   } else {
     app.log.info(
       "Scheduled AI recommendations refresh disabled because AI_REFRESH_INTERVAL_SEC is set to 0"
@@ -408,20 +379,13 @@ const start = async () => {
   };
 
   if (STEAM_SYNC_INTERVAL_SEC > 0) {
-    setTimeout(() => {
-      void refreshSteamLibrary()
-        .then(() => reportJobSuccess("steam-sync"))
-        .catch((error) => {
-          reportBackgroundError(error, "Initial Steam library sync failed", "steam-sync");
-        });
-      setInterval(() => {
-        void refreshSteamLibrary()
-          .then(() => reportJobSuccess("steam-sync"))
-          .catch((error) => {
-            reportBackgroundError(error, "Scheduled Steam library sync failed", "steam-sync");
-          });
-      }, STEAM_SYNC_INTERVAL_SEC * 1000);
-    }, 2 * 60 * 1000);
+    everyInterval({
+      ...scheduler,
+      label: "Steam library sync",
+      intervalMs: STEAM_SYNC_INTERVAL_SEC * 1000,
+      startAfterMs: DEFERRED_FIRST_RUN_MS,
+      tick: ({ runJob }) => runJob("steam-sync", refreshSteamLibrary),
+    });
   } else {
     app.log.info(
       "Scheduled Steam library sync disabled because STEAM_SYNC_INTERVAL_SEC is set to 0"

@@ -862,16 +862,27 @@ addonGet<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", 
   forwardPlaySignal("subtitles", type, id, scope.profileId, request.headers["user-agent"]);
 
   const addonBase = ADDON_PUBLIC_BASE ?? `http://localhost:${process.env.PORT ?? 7001}`;
-  const tokenQuery = MUTATION_TOKEN ? `?token=${MUTATION_TOKEN}` : "";
   // Pin the resolved profile into the mark-watched URL rather than leaving it
   // to be re-resolved later, so the write lands on the profile whose catalog
-  // the user is actually looking at.
+  // the user is actually looking at. A request that arrived without a profile
+  // prefix has already resolved to the default profile by this point, so the
+  // URL handed to Stremio names it explicitly either way.
   const profileSegment = scope.profileId ? `/p/${scope.profileId}` : "";
 
+  // Minted against the same profile the URL above names, which is the value
+  // /mark-watched reads back out of its own path and verifies against.
+  const capabilityFor = (target: MarkWatchedTarget): string | null =>
+    mintMarkWatchedToken(scope.profileId, target);
+
   if (type === "movie") {
+    const token = capabilityFor({ type: "movie", imdbId });
+    // Nothing to sign with means the mark-watched routes reject everything, so
+    // the row would be a button that always fails. Better to not offer it.
+    if (!token) return reply.send({ subtitles: [] });
+
     const subtitles: StremioSubtitle[] = [{
       id: `cataloggy-watch-${imdbId}`,
-      url: `${addonBase}${profileSegment}/mark-watched/${type}/${imdbId}.srt${tokenQuery}`,
+      url: `${addonBase}${profileSegment}/mark-watched/${type}/${imdbId}.srt?token=${token}`,
       lang: "Cataloggy: Mark Watched",
     }];
     return reply.send({ subtitles });
@@ -882,9 +893,12 @@ addonGet<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", 
     const season = parseInt(parts[1], 10);
     const episode = parseInt(parts[2], 10);
     if (!isNaN(season) && !isNaN(episode)) {
+      const token = capabilityFor({ type: "episode", imdbId, season, episode });
+      if (!token) return reply.send({ subtitles: [] });
+
       const subtitles: StremioSubtitle[] = [{
         id: `cataloggy-watch-${imdbId}-s${season}e${episode}`,
-        url: `${addonBase}${profileSegment}/mark-watched/episode/${imdbId}/${season}/${episode}.srt${tokenQuery}`,
+        url: `${addonBase}${profileSegment}/mark-watched/episode/${imdbId}/${season}/${episode}.srt?token=${token}`,
         lang: `Cataloggy: Mark S${season}E${episode} Watched`,
       }];
       return reply.send({ subtitles });
@@ -903,25 +917,97 @@ addonGet<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", 
 // CATALOGGY_API_TOKEN (never the raw token itself, to cap the blast radius
 // if a URL containing it leaks — e.g. via proxy/access logs).
 //
-// Stremio's subtitle mechanism can only fetch a plain URL (no custom
-// headers), so /mark-watched/*.srt carries the token as a query param,
-// embedded server-side when the /subtitles route builds the URL. Scrobble
-// callers (media-player integrations, capable of setting headers) send it
-// as a standard Bearer token instead.
+// Scrobble callers (media-player integrations, capable of setting headers) send
+// this as a standard Bearer token. It is never emitted from a route — see the
+// capability tokens below for why /subtitles cannot hand it out.
 const MUTATION_TOKEN = CATALOGGY_API_TOKEN
   ? createHmac("sha256", CATALOGGY_API_TOKEN).update("cataloggy-addon-mutation").digest("hex")
   : null;
 
-const isValidMutationToken = (candidate: unknown): boolean => {
-  // Fastify doesn't validate query/header types against the route's TS generics at
-  // runtime, so a repeated query param (e.g. "?token=a&token=b") can arrive here as
-  // a string[] despite the declared type — guard explicitly rather than let
-  // Buffer.from throw on a non-string value.
-  if (!MUTATION_TOKEN || typeof candidate !== "string" || !candidate) return false;
+// Fastify doesn't validate query/header types against the route's TS generics at
+// runtime, so a repeated query param (e.g. "?token=a&token=b") can arrive as a
+// string[] despite the declared type — hence the explicit typeof guard rather
+// than letting Buffer.from throw on a non-string value.
+const tokensMatch = (candidate: unknown, expected: string | null): boolean => {
+  if (!expected || typeof candidate !== "string" || !candidate) return false;
   const a = Buffer.from(candidate);
-  const b = Buffer.from(MUTATION_TOKEN);
+  const b = Buffer.from(expected);
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
+};
+
+const isValidMutationToken = (candidate: unknown): boolean => tokensMatch(candidate, MUTATION_TOKEN);
+
+// ─── Mark-watched capability tokens ───
+//
+// Stremio's subtitle mechanism can only fetch a plain URL (no custom headers),
+// so /mark-watched/*.srt has to carry its credential as a query param, embedded
+// server-side when /subtitles builds the URL. But /subtitles itself answers
+// anyone who asks — the protocol sends no credentials, so this service cannot
+// gate it — which made embedding MUTATION_TOKEN there a disclosure: one
+// unauthenticated GET handed over the single token authorising every write this
+// service accepts, and with it the ability to forge watch history and scrobbles
+// for any profile whose id the caller knew.
+//
+// What goes into that URL now is a capability for exactly one write. It is
+// signed over the profile segment and the specific title or episode, and it
+// expires, so a URL read out of a subtitles response (or out of a proxy log)
+// buys nothing beyond re-marking the one title it was minted for — which is a
+// title its holder just watched being requested anyway.
+type MarkWatchedTarget =
+  | { type: "movie"; imdbId: string }
+  | { type: "episode"; imdbId: string; season: number; episode: number };
+
+// Long enough to still work at the end of a feature-length film that was paused
+// for dinner — Stremio fetches the subtitle list once, when the player opens —
+// and short enough that a captured URL goes stale within the day.
+const MARK_WATCHED_TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
+
+// The URL's own profile segment, which is what the write will be resolved
+// against, rather than the id that segment resolves to: for the prefix-less URL
+// there is no segment, and the default profile it falls back to is free to
+// change between the mint and the write.
+const markWatchedScope = (profileSegmentId: string | null, target: MarkWatchedTarget): string =>
+  [
+    "mark-watched",
+    target.type,
+    profileSegmentId ?? "-",
+    target.imdbId,
+    ...(target.type === "episode" ? [String(target.season), String(target.episode)] : []),
+  ].join(":");
+
+const signMarkWatched = (scope: string, expiry: number): string | null =>
+  CATALOGGY_API_TOKEN
+    ? createHmac("sha256", CATALOGGY_API_TOKEN).update(`${scope}:${expiry}`).digest("hex")
+    : null;
+
+/** `<expiry>.<signature>`, or null when there is no API token to sign with. */
+const mintMarkWatchedToken = (profileSegmentId: string | null, target: MarkWatchedTarget): string | null => {
+  const expiry = Date.now() + MARK_WATCHED_TOKEN_TTL_MS;
+  const signature = signMarkWatched(markWatchedScope(profileSegmentId, target), expiry);
+  return signature ? `${expiry}.${signature}` : null;
+};
+
+type CapabilityCheck = "ok" | "expired" | "invalid";
+
+const checkMarkWatchedToken = (
+  candidate: unknown,
+  profileSegmentId: string | null,
+  target: MarkWatchedTarget
+): CapabilityCheck => {
+  if (typeof candidate !== "string") return "invalid";
+  const separator = candidate.indexOf(".");
+  if (separator < 1) return "invalid";
+
+  const expiry = Number(candidate.slice(0, separator));
+  if (!Number.isInteger(expiry)) return "invalid";
+
+  const expected = signMarkWatched(markWatchedScope(profileSegmentId, target), expiry);
+  if (!tokensMatch(candidate.slice(separator + 1), expected)) return "invalid";
+
+  // Only reached once the signature is known good, so "expired" never tells a
+  // forger anything they didn't already have.
+  return Date.now() < expiry ? "ok" : "expired";
 };
 
 const STREMIO_WEB_ORIGINS = ["https://web.strem.io", "https://app.strem.io"];
@@ -964,6 +1050,34 @@ const UNKNOWN_PROFILE_SRT = `1
 Cataloggy profile not recognised — reinstall the addon from Settings
 `;
 
+const EXPIRED_SRT = `1
+00:00:00,000 --> 00:00:05,000
+This Cataloggy link has expired — reopen the title to get a fresh one
+`;
+
+// Shared by both mark-watched routes: the profile has to be resolved before the
+// capability can be checked (it is signed over the URL's profile segment), and
+// the origin check stays alongside it as the browser-only barrier it always was.
+const rejectMarkWatched = (
+  request: FastifyRequest,
+  token: unknown,
+  target: MarkWatchedTarget
+): string | null => {
+  const check = checkMarkWatchedToken(token, profilePathParam(request) ?? null, target);
+  if (check === "expired") {
+    request.log.info(target, "Rejected mark-watched request: capability expired");
+    return EXPIRED_SRT;
+  }
+  if (check !== "ok" || !isAllowedMutationOrigin(request)) {
+    request.log.warn(
+      { origin: request.headers.origin, ...target },
+      "Rejected mark-watched request: missing/invalid capability or disallowed origin"
+    );
+    return REJECTED_SRT;
+  }
+  return null;
+};
+
 addonGet<{ Params: { type: string; imdbId: string }; Querystring: { token?: string } }>(
   "/mark-watched/:type/:imdbId.srt",
   async (request, reply) => {
@@ -971,11 +1085,6 @@ addonGet<{ Params: { type: string; imdbId: string }; Querystring: { token?: stri
     reply.header("Content-Type", "text/srt; charset=utf-8");
 
     const { type, imdbId } = request.params;
-
-    if (!isValidMutationToken(request.query.token) || !isAllowedMutationOrigin(request)) {
-      request.log.warn({ origin: request.headers.origin }, "Rejected mark-watched request: missing/invalid token or disallowed origin");
-      return reply.send(REJECTED_SRT);
-    }
 
     if (type !== "movie") {
       // For series without episode info, return honest feedback instead of a silent no-op
@@ -988,6 +1097,9 @@ addonGet<{ Params: { type: string; imdbId: string }; Querystring: { token?: stri
       request.log.warn({ imdbId }, "Rejected mark-watched request: malformed profile id in URL");
       return reply.send(UNKNOWN_PROFILE_SRT);
     }
+
+    const rejection = rejectMarkWatched(request, request.query.token, { type: "movie", imdbId });
+    if (rejection) return reply.send(rejection);
 
     try {
       await apiPost("/watch", { type: "movie", imdbId }, scope.profileId);
@@ -1011,16 +1123,19 @@ addonGet<{ Params: { type: string; imdbId: string; season: string; episode: stri
     const season = parseInt(seasonStr, 10);
     const episode = parseInt(episodeStr, 10);
 
-    if (!isValidMutationToken(request.query.token) || !isAllowedMutationOrigin(request)) {
-      request.log.warn({ origin: request.headers.origin }, "Rejected mark-watched request: missing/invalid token or disallowed origin");
-      return reply.send(REJECTED_SRT);
-    }
-
     const scope = await resolveProfileScope(request);
     if (!scope.ok) {
       request.log.warn({ imdbId, season, episode }, "Rejected mark-watched request: malformed profile id in URL");
       return reply.send(UNKNOWN_PROFILE_SRT);
     }
+
+    const rejection = rejectMarkWatched(request, request.query.token, {
+      type: "episode",
+      imdbId,
+      season,
+      episode,
+    });
+    if (rejection) return reply.send(rejection);
 
     try {
       await apiPost("/watch", {

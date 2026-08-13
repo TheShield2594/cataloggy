@@ -13,6 +13,37 @@ const OTHER_PROFILE_ID = "22222222-2222-4222-8222-222222222222";
 
 const MUTATION_TOKEN = createHmac("sha256", API_TOKEN).update("cataloggy-addon-mutation").digest("hex");
 
+type MarkWatchedTarget =
+  | { type: "movie"; imdbId: string }
+  | { type: "episode"; imdbId: string; season: number; episode: number };
+
+// Mirrors the capability the addon mints into a "Mark Watched" subtitle URL:
+// signed over the URL's profile segment and the one title it is for, so a token
+// only ever authorises the single write it was issued for.
+const capability = (
+  target: MarkWatchedTarget,
+  profileSegmentId: string | null,
+  expiry = Date.now() + 60 * 60 * 1000
+): string => {
+  const scope = [
+    "mark-watched",
+    target.type,
+    profileSegmentId ?? "-",
+    target.imdbId,
+    ...(target.type === "episode" ? [String(target.season), String(target.episode)] : []),
+  ].join(":");
+  return `${expiry}.${createHmac("sha256", API_TOKEN).update(`${scope}:${expiry}`).digest("hex")}`;
+};
+
+// The expiry the addon stamped is part of the token, so a URL it handed out can
+// be re-derived from itself and compared — which pinning the clock would only
+// obscure.
+const capabilityMatches = (url: string, target: MarkWatchedTarget, profileSegmentId: string | null): boolean => {
+  const token = new URL(url).searchParams.get("token") ?? "";
+  const expiry = Number(token.split(".")[0]);
+  return Number.isInteger(expiry) && expiry > Date.now() && token === capability(target, profileSegmentId, expiry);
+};
+
 process.env.CATALOGGY_API_TOKEN = API_TOKEN;
 process.env.CATALOGGY_API_BASE = API_BASE;
 process.env.ADDON_PUBLIC_BASE = ADDON_BASE;
@@ -296,7 +327,7 @@ describe("profile scoping", () => {
   it("sends the profile from the addon URL as x-profile-id when marking a movie watched", async () => {
     const response = await app.inject({
       method: "GET",
-      url: `/p/${OTHER_PROFILE_ID}/mark-watched/movie/tt0111161.srt?token=${MUTATION_TOKEN}`,
+      url: `/p/${OTHER_PROFILE_ID}/mark-watched/movie/tt0111161.srt?token=${capability({ type: "movie", imdbId: "tt0111161" }, OTHER_PROFILE_ID)}`,
     });
 
     expect(response.statusCode).toBe(200);
@@ -311,7 +342,10 @@ describe("profile scoping", () => {
   it("sends the profile when marking an episode watched", async () => {
     const response = await app.inject({
       method: "GET",
-      url: `/p/${OTHER_PROFILE_ID}/mark-watched/episode/tt0903747/2/5.srt?token=${MUTATION_TOKEN}`,
+      url: `/p/${OTHER_PROFILE_ID}/mark-watched/episode/tt0903747/2/5.srt?token=${capability(
+        { type: "episode", imdbId: "tt0903747", season: 2, episode: 5 },
+        OTHER_PROFILE_ID
+      )}`,
     });
 
     expect(response.body).toContain("Marked as watched");
@@ -322,7 +356,10 @@ describe("profile scoping", () => {
   });
 
   it("falls back to the oldest profile for an addon URL installed without a profile", async () => {
-    await app.inject({ method: "GET", url: `/mark-watched/movie/tt0111161.srt?token=${MUTATION_TOKEN}` });
+    await app.inject({
+      method: "GET",
+      url: `/mark-watched/movie/tt0111161.srt?token=${capability({ type: "movie", imdbId: "tt0111161" }, null)}`,
+    });
 
     const [watchCall] = callsTo("/watch");
     expect(watchCall.headers["x-profile-id"]).toBe(DEFAULT_PROFILE_ID);
@@ -370,24 +407,28 @@ describe("profile scoping", () => {
     });
 
     const { subtitles } = response.json() as { subtitles: { url: string }[] };
-    expect(subtitles[0].url).toBe(
-      `${ADDON_BASE}/p/${OTHER_PROFILE_ID}/mark-watched/episode/tt0903747/2/5.srt?token=${MUTATION_TOKEN}`
+    expect(subtitles[0].url).toContain(
+      `${ADDON_BASE}/p/${OTHER_PROFILE_ID}/mark-watched/episode/tt0903747/2/5.srt?token=`
     );
+    expect(
+      capabilityMatches(subtitles[0].url, { type: "episode", imdbId: "tt0903747", season: 2, episode: 5 }, OTHER_PROFILE_ID)
+    ).toBe(true);
   });
 
   it("pins the resolved default profile into the mark-watched URL for an unprefixed install", async () => {
     const response = await app.inject({ method: "GET", url: "/subtitles/movie/tt0111161.json" });
 
     const { subtitles } = response.json() as { subtitles: { url: string }[] };
-    expect(subtitles[0].url).toBe(
-      `${ADDON_BASE}/p/${DEFAULT_PROFILE_ID}/mark-watched/movie/tt0111161.srt?token=${MUTATION_TOKEN}`
+    expect(subtitles[0].url).toContain(
+      `${ADDON_BASE}/p/${DEFAULT_PROFILE_ID}/mark-watched/movie/tt0111161.srt?token=`
     );
+    expect(capabilityMatches(subtitles[0].url, { type: "movie", imdbId: "tt0111161" }, DEFAULT_PROFILE_ID)).toBe(true);
   });
 
   it("refuses a malformed profile id rather than writing to the default profile", async () => {
     const response = await app.inject({
       method: "GET",
-      url: `/p/not-a-uuid/mark-watched/movie/tt0111161.srt?token=${MUTATION_TOKEN}`,
+      url: `/p/not-a-uuid/mark-watched/movie/tt0111161.srt?token=${capability({ type: "movie", imdbId: "tt0111161" }, "not-a-uuid")}`,
     });
 
     expect(response.body).not.toContain("Marked as watched");
@@ -402,7 +443,7 @@ describe("mark-watched feedback", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: `/p/${OTHER_PROFILE_ID}/mark-watched/movie/tt0111161.srt?token=${MUTATION_TOKEN}`,
+      url: `/p/${OTHER_PROFILE_ID}/mark-watched/movie/tt0111161.srt?token=${capability({ type: "movie", imdbId: "tt0111161" }, OTHER_PROFILE_ID)}`,
     });
 
     expect(callsTo("/watch")).toHaveLength(1);
@@ -415,7 +456,10 @@ describe("mark-watched feedback", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: `/mark-watched/episode/tt0903747/2/5.srt?token=${MUTATION_TOKEN}`,
+      url: `/mark-watched/episode/tt0903747/2/5.srt?token=${capability(
+        { type: "episode", imdbId: "tt0903747", season: 2, episode: 5 },
+        null
+      )}`,
     });
 
     expect(response.body).not.toContain("Marked as watched");
@@ -431,12 +475,81 @@ describe("mark-watched feedback", () => {
   });
 
   it("still refuses to mark a whole series watched", async () => {
+    // No capability is ever minted for a bare series, so this route can only be
+    // reached by hand — it answers with the reason rather than a bare rejection.
     const response = await app.inject({
       method: "GET",
-      url: `/mark-watched/series/tt0903747.srt?token=${MUTATION_TOKEN}`,
+      url: `/mark-watched/series/tt0903747.srt?token=${capability({ type: "movie", imdbId: "tt0903747" }, null)}`,
     });
 
     expect(response.body).toContain("select a specific episode first");
+    expect(callsTo("/watch")).toHaveLength(0);
+  });
+});
+
+// An unauthenticated GET of /subtitles used to return the addon's one mutation
+// token — the credential behind every write it accepts — so anyone who could
+// reach the service could forge watch history and scrobbles for any profile.
+// What that route hands out now only authorises the single write it names.
+describe("mark-watched capabilities", () => {
+  const markWatched = (url: string) => app.inject({ method: "GET", url });
+
+  it("keeps the mutation token out of the unauthenticated subtitles response", async () => {
+    const response = await markWatched("/subtitles/movie/tt0111161.json");
+
+    expect(response.body).not.toContain(MUTATION_TOKEN);
+  });
+
+  it("refuses the mutation token itself as a mark-watched credential", async () => {
+    const response = await markWatched(`/p/${OTHER_PROFILE_ID}/mark-watched/movie/tt0111161.srt?token=${MUTATION_TOKEN}`);
+
+    expect(response.body).toContain("rejected this request");
+    expect(callsTo("/watch")).toHaveLength(0);
+  });
+
+  it("refuses a capability minted for a different title", async () => {
+    const stolen = capability({ type: "movie", imdbId: "tt0111161" }, OTHER_PROFILE_ID);
+
+    const response = await markWatched(`/p/${OTHER_PROFILE_ID}/mark-watched/movie/tt0068646.srt?token=${stolen}`);
+
+    expect(response.body).toContain("rejected this request");
+    expect(callsTo("/watch")).toHaveLength(0);
+  });
+
+  it("refuses a capability minted for a different episode of the same series", async () => {
+    const stolen = capability({ type: "episode", imdbId: "tt0903747", season: 2, episode: 5 }, OTHER_PROFILE_ID);
+
+    const response = await markWatched(`/p/${OTHER_PROFILE_ID}/mark-watched/episode/tt0903747/2/6.srt?token=${stolen}`);
+
+    expect(response.body).toContain("rejected this request");
+    expect(callsTo("/watch")).toHaveLength(0);
+  });
+
+  it("refuses a capability minted for a different profile", async () => {
+    const stolen = capability({ type: "movie", imdbId: "tt0111161" }, DEFAULT_PROFILE_ID);
+
+    const response = await markWatched(`/p/${OTHER_PROFILE_ID}/mark-watched/movie/tt0111161.srt?token=${stolen}`);
+
+    expect(response.body).toContain("rejected this request");
+    expect(callsTo("/watch")).toHaveLength(0);
+  });
+
+  it("refuses an expired capability, and says that rather than blaming the install", async () => {
+    const expired = capability({ type: "movie", imdbId: "tt0111161" }, OTHER_PROFILE_ID, Date.now() - 1000);
+
+    const response = await markWatched(`/p/${OTHER_PROFILE_ID}/mark-watched/movie/tt0111161.srt?token=${expired}`);
+
+    expect(response.body).toContain("expired");
+    expect(callsTo("/watch")).toHaveLength(0);
+  });
+
+  it("refuses a capability whose expiry was extended after signing", async () => {
+    const issued = capability({ type: "movie", imdbId: "tt0111161" }, OTHER_PROFILE_ID, Date.now() - 1000);
+    const extended = `${Date.now() + 60_000}.${issued.split(".")[1]}`;
+
+    const response = await markWatched(`/p/${OTHER_PROFILE_ID}/mark-watched/movie/tt0111161.srt?token=${extended}`);
+
+    expect(response.body).toContain("rejected this request");
     expect(callsTo("/watch")).toHaveLength(0);
   });
 });
