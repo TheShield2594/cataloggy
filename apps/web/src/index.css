@@ -363,6 +363,23 @@ html {
    */
   scroll-padding-top: 5.5rem;
   scroll-padding-bottom: 1rem;
+
+  /*
+   * No pull-to-refresh, in a browser tab as much as in the installed app.
+   *
+   * This used to live only under [data-display-mode="standalone"], alongside
+   * the pinch-zoom rules — but the reason those are scoped to the installed app
+   * is WCAG 1.4.4, and it has nothing to say about a refresh gesture. In a tab
+   * the cost was real: the dashboard opens with horizontal carousels at
+   * scrollTop 0, so a swipe along a poster row that drifts a few degrees
+   * vertical reloaded the whole app.
+   *
+   * `-y: contain` rather than `none`: it stops the gesture reaching the browser
+   * without also killing the rubber-band at the ends of the page, which is a
+   * scroll affordance in a tab. The standalone block below still overrides both
+   * axes to `none`, where the band drags the fixed chrome off position.
+   */
+  overscroll-behavior-y: contain;
 }
 
 @media (width < 40rem) {
@@ -378,9 +395,10 @@ html[data-display-mode="standalone"] {
      browser chrome. Pairs with `user-scalable=no` on the viewport meta — the
      part iOS honours for home-screen apps. */
   touch-action: pan-x pan-y;
-  /* No rubber-band past the ends of the page, and no pull-to-refresh: both
-     drag the whole app — fixed header and tab bar included — off its
-     position, and a refresh gesture in an installed app just blanks it. */
+  /* Pull-to-refresh is already off everywhere (see the base `html` rule); this
+     takes the rubber-band with it. Overscrolling past the ends of the page
+     drags the whole app — fixed header and tab bar included — off its position,
+     which reads as breakage in a window with no browser chrome around it. */
   overscroll-behavior: none;
 }
 
