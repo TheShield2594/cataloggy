@@ -569,7 +569,14 @@ const fetchListItems = async (
     profileId,
     parseListItemsResponse
   );
-  cacheSet(listItemsCache, cacheKey, { data: payload.items, expiry: now + LIST_ITEMS_CACHE_TTL_MS });
+  // Dated from when the answer arrived, not from when it was asked for. The API
+  // call is the slow part, and a 30s TTL measured from before it means a request
+  // that took longer than that is cached already expired — so a slow API gets
+  // hammered by the retry rather than shielded by the cache.
+  cacheSet(listItemsCache, cacheKey, {
+    data: payload.items,
+    expiry: Date.now() + LIST_ITEMS_CACHE_TTL_MS,
+  });
   return payload.items;
 };
 

@@ -10,7 +10,7 @@
     "dev": "pnpm -r --parallel dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm --filter @cataloggy/shared build && pnpm -r typecheck",
-    "lint": "eslint eslint.config.mjs scripts apps/web/scripts && pnpm -r lint",
+    "lint": "pnpm --filter @cataloggy/shared build && eslint eslint.config.mjs scripts apps/web/scripts && pnpm -r lint",
     "test": "pnpm -r --if-present test",
     "check:env": "node scripts/check-compose-env.mjs",
     "smoke": "tsx scripts/smoke.ts"

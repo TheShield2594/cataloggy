@@ -19,6 +19,14 @@ const ignores = [
 // two Node services rather than at everything. They are also where it pays:
 // both lean on `void somePromise` and fire-and-forget background work, which is
 // what no-floating-promises and no-misused-promises exist to police.
+//
+// It also gives `pnpm lint` the same prerequisite `pnpm typecheck` has: both
+// services import types from @cataloggy/shared, and until that package is built
+// those imports resolve to nothing. TypeScript calls the result an `error` type
+// that behaves like `any`, which rules such as no-redundant-type-constituents
+// then report against source that is perfectly fine — so the root lint script
+// builds shared first. Without that the failure only appears on a clean
+// checkout, since any earlier local build leaves dist/ lying around.
 const typeCheckedPackages = ["apps/api/**/*.ts", "apps/addon/**/*.ts"];
 
 export default [

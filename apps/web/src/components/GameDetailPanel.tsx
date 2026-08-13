@@ -85,12 +85,20 @@ export function GameDetailPanel({
     setNotes(game.notes ?? "");
   }, [game.id, game.notes]);
 
-  const persistNotes = (value: string, { notifyOnSuccess }: { notifyOnSuccess: boolean }) => {
+  // Takes the game to write to rather than reading `game.id` off the enclosing
+  // render. The flush below runs from a cleanup, and by the time a cleanup runs
+  // React has already rendered the next `game` — so a closure over `game.id`
+  // would address whichever game came *after* the draft was typed.
+  const persistNotes = (
+    gameId: string,
+    value: string,
+    { notifyOnSuccess }: { notifyOnSuccess: boolean }
+  ) => {
     const version = ++notesVersionRef.current;
     pendingNotesRef.current = null;
     void (async () => {
       try {
-        const { game: updated } = await api.updateGame(game.id, { notes: value.trim() ? value : null });
+        const { game: updated } = await api.updateGame(gameId, { notes: value.trim() ? value : null });
         if (notifyOnSuccess && notesVersionRef.current === version) {
           onUpdated(updated);
         }
@@ -104,28 +112,40 @@ export function GameDetailPanel({
     setNotes(value);
     pendingNotesRef.current = value;
     if (notesDebounceRef.current) clearTimeout(notesDebounceRef.current);
+    const gameId = game.id;
     notesDebounceRef.current = setTimeout(() => {
-      persistNotes(value, { notifyOnSuccess: true });
+      persistNotes(gameId, value, { notifyOnSuccess: true });
     }, 600);
   };
 
-  // `persistNotes` closes over `game.id` and the callbacks, so it is a new
-  // function on every render. The flush below has to stay mount-scoped — an
-  // effect that depended on it would tear down and re-run, flushing the draft,
-  // on every keystroke — so the ref is what carries the current closure into a
-  // cleanup that only ever runs once.
+  // `persistNotes` is rebuilt every render, so the flush below reaches it
+  // through a ref: an effect that depended on the function itself would tear
+  // down and re-run — flushing the draft — on every keystroke.
   const persistNotesRef = useRef(persistNotes);
   persistNotesRef.current = persistNotes;
 
-  useEffect(() => () => {
-    if (notesDebounceRef.current) clearTimeout(notesDebounceRef.current);
-    // Flush a still-pending edit so closing the panel right after typing
-    // doesn't silently drop it. Skips onUpdated (the panel is already gone by
-    // the time this resolves — calling it would just reopen it).
-    if (pendingNotesRef.current !== null) {
-      persistNotesRef.current(pendingNotesRef.current, { notifyOnSuccess: false });
-    }
-  }, []);
+  // Keyed on `game.id` rather than mount-scoped, because GamesPage renders this
+  // panel without a `key` and so reuses one instance across games. Today the
+  // modal overlay covers the grid that would switch them, but nothing enforces
+  // that; if it ever changes, a draft typed against one game is still pending
+  // when `game` becomes the next one, and a mount-scoped flush would save it
+  // under the new game's id. Running on the way out of the game the draft
+  // belongs to writes it where it was typed, and still covers the close case —
+  // unmount is a cleanup too.
+  useEffect(() => {
+    const gameId = game.id;
+    return () => {
+      if (notesDebounceRef.current) clearTimeout(notesDebounceRef.current);
+      // Flush a still-pending edit so closing the panel right after typing
+      // doesn't silently drop it. Skips onUpdated (the panel is already gone by
+      // the time this resolves — calling it would just reopen it).
+      const pending = pendingNotesRef.current;
+      if (pending !== null) {
+        pendingNotesRef.current = null;
+        persistNotesRef.current(gameId, pending, { notifyOnSuccess: false });
+      }
+    };
+  }, [game.id]);
 
   const toggleFinished = async () => {
     try {

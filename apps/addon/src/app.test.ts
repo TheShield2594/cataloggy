@@ -341,6 +341,41 @@ describe("catalog routes serve only what the manifest advertised", () => {
     }
   });
 
+  it("dates the list-items cache from when the answer arrived, not from when it was asked for", async () => {
+    lists = [{ id: CUSTOM_LIST_ID, name: "Weekend", kind: "custom" }];
+    addonConfig = { enabledCatalogs: [`list:${CUSTOM_LIST_ID}`], aiConfigured: false };
+    const fresh = await buildApp();
+    const stubbedFetch = fetchMock.getMockImplementation()!;
+
+    try {
+      // Only Date is faked; the real timers still run, so `app.inject` and the
+      // awaits inside it behave normally.
+      vi.useFakeTimers({ toFake: ["Date"] });
+
+      // An API call slower than the cache's own TTL. Stamping the entry from
+      // before the call would file it already expired — so the catalog request
+      // that follows refetches immediately, and a struggling API gets hammered
+      // by the cache that exists to shield it.
+      fetchMock.mockImplementation(async (input: string | URL, init?: RequestInit) => {
+        const response = await stubbedFetch(input, init);
+        if (new URL(String(input)).pathname.endsWith("/items")) {
+          vi.setSystemTime(Date.now() + 45_000);
+        }
+        return response;
+      });
+
+      const url = `/catalog/movie/cataloggy-${CUSTOM_LIST_ID}-movie.json`;
+      await fresh.inject({ method: "GET", url });
+      await fresh.inject({ method: "GET", url });
+
+      expect(callsTo(`/lists/${CUSTOM_LIST_ID}/items`)).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+      fetchMock.mockImplementation(stubbedFetch);
+      await fresh.close();
+    }
+  });
+
   it("caches the two types of one list apart from each other", async () => {
     // One cache entry per list would serve the movie payload to the series
     // catalog, emptying it.
