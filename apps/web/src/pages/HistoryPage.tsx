@@ -80,10 +80,12 @@ export function HistoryPage() {
   // The filter goes to the server, not to the loaded page: filtering in memory
   // only ever saw the rows already fetched, so picking "Movies" on a history
   // whose most recent 25 events are all episodes showed an empty list.
-  const loadPage = useCallback(async (nextOffset: number) => {
+  const loadPage = useCallback(async (nextOffset: number, signal?: AbortSignal) => {
     const page = await api.getWatchHistory(PAGE_SIZE, nextOffset, {
       type: typeFilter === "all" ? undefined : typeFilter,
+      signal,
     });
+    if (signal?.aborted) return [];
     setHasMore(page.length === PAGE_SIZE);
     return page;
   }, [typeFilter]);
@@ -91,24 +93,27 @@ export function HistoryPage() {
   // Re-runs when loadPage changes identity, i.e. whenever the filter changes —
   // pagination has to restart from 0 against the new result set.
   useEffect(() => {
-    let cancelled = false;
+    // Aborted rather than only flagged: `setFirstPage` writes through to the
+    // shared cache, so a response that arrives after a profile switch has to be
+    // dropped at the request, not just ignored at the setter.
+    const controller = new AbortController();
     setLoading(true);
     (async () => {
       try {
-        const page = await loadPage(0);
-        if (!cancelled) {
+        const page = await loadPage(0, controller.signal);
+        if (!controller.signal.aborted) {
           setFirstPage(page);
           setExtraPages([]);
           setOffset(page.length);
           setError(null);
         }
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load watch history");
+        if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Failed to load watch history");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => controller.abort();
   }, [loadPage]);
 
   const loadMore = useCallback(async () => {

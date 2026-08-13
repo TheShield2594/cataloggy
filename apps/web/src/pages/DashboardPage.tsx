@@ -836,24 +836,30 @@ export function DashboardPage() {
     background: opts?.background ?? null,
   }), []);
 
-  const load = useCallback(async () => {
+  // Takes the signal the mount effect cancels on unmount. Five requests that
+  // outlive the page are five answers arriving for a profile that may no longer
+  // be the one on screen — a switch mid-flight used to land the previous
+  // profile's Continue Watching in the new one's cache.
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
       const [progressRes, historyRes, statsRes, checkinRes, nowPlayingRes] = await Promise.all([
-        api.getSeriesProgress(),
-        api.getWatchHistory(20),
-        api.getWatchStats(),
-        api.getCheckin().catch(() => ({ checkin: null })),
-        api.getNowPlaying().catch(() => ({ sessions: [] })),
+        api.getSeriesProgress(signal),
+        api.getWatchHistory(20, 0, { signal }),
+        api.getWatchStats(signal),
+        api.getCheckin(signal).catch(() => ({ checkin: null })),
+        api.getNowPlaying(signal).catch(() => ({ sessions: [] })),
       ]);
+      if (signal?.aborted) return;
       setProgress(progressRes ?? []);
       setHistory(historyRes ?? []);
       setStats(statsRes);
       setActiveCheckin(checkinRes.checkin);
       setNowPlaying(nowPlayingRes.sessions ?? []);
     } catch (err) {
+      if (signal?.aborted) return;
       setError(err instanceof Error ? err.message : "Failed to load dashboard");
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, []);
 
@@ -985,7 +991,11 @@ export function DashboardPage() {
     void loadCalendar();
   }, [profileId, loadDetailedStats, loadTrending, loadAiSection, loadCalendar]);
 
-  useEffect(() => { void load(); }, [load, profileId]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load, profileId]);
 
   useEffect(() => {
     if (loading) return;

@@ -10,7 +10,7 @@ Self-host it on your home server, open it on your phone or computer, and keep tr
 - **Works with the tools you already use** — pairs with Stremio, Plex, Jellyfin, Trakt, and Stremio/Omni add-ons
 - **No account you can't walk away from** — watch history comes straight from Stremio, Plex or Jellyfin, and every third-party service is optional and replaceable
 - **Yours, not the cloud's** — runs on your own hardware, your data stays on your network
-- **Phone friendly** — installs as an app on your phone (PWA)
+- **Phone friendly** — installs as an app on your phone (PWA; needs an HTTPS address, see [Install as a PWA](#install-as-a-pwa))
 - **Works with your TV** — a Stremio add-on puts your catalogs on Apple TV (via Omni) and Android TV
 
 ## Getting Started
@@ -146,6 +146,23 @@ http://192.168.1.25:7002
 ```
 
 ### Install as a PWA
+
+> **Needs HTTPS.** Browsers only give a site the app-like abilities — installing,
+> the offline cache, push notifications — over `https://` or on `localhost`. A
+> plain `http://192.168.x.x:7002` address is neither, so on the LAN URL above:
+> Chrome shows no install prompt and Cataloggy's own Install button stays
+> hidden, nothing is cached for offline use, and push notifications report as
+> unsupported. iOS Safari is a partial exception — **Add to Home Screen** still
+> gives you a full-screen icon, but with no offline and no push behind it.
+>
+> Everything else works fine over the LAN URL; it's only these that need a
+> secure origin. To get them, put Cataloggy behind a proxy with a certificate —
+> see [Nginx Proxy Manager Setup](#nginx-proxy-manager-setup) — and install from
+> the `https://` address instead. If you'd rather not, **Settings →
+> Notifications** has channels (ntfy, Gotify, Discord, or any webhook) that
+> deliver the same alerts over plain http.
+
+Once you're on an `https://` address:
 
 - **iOS Safari:** **Share** → **Add to Home Screen**
 - **Android Chrome:** **⋮ menu** → **Add to Home screen** (Chrome may also show an automatic "Install app" banner)

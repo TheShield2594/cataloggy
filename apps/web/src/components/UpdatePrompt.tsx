@@ -20,7 +20,25 @@ export function UpdatePrompt() {
       // The worker can only cache API responses it can recognise, and the API
       // base it compares against is a runtime value this page resolves — the
       // container's config.js, or a per-device override the worker cannot read.
-      onRegisteredSW: () => void tellServiceWorkerWhereTheApiIs()
+      onRegisteredSW: () => void tellServiceWorkerWhereTheApiIs(),
+      // Registration fails outright on an insecure origin, which is exactly
+      // what the README's `http://192.168.x.x:7002` quickstart is — and with no
+      // handler here it failed silently, taking offline caching, install and
+      // push with it and leaving nothing in the console to explain why. The
+      // secure-context case gets its own line because "SecurityError" alone
+      // sends people looking for a bug in Cataloggy.
+      onRegisterError: (error) => {
+        if (!window.isSecureContext) {
+          console.warn(
+            "Cataloggy: service worker not registered — this page isn't a secure context. " +
+              "Offline caching, install and push notifications need https:// or localhost. " +
+              "See the README's \"Install as a PWA\" section.",
+            error
+          );
+          return;
+        }
+        console.error("Cataloggy: service worker registration failed.", error);
+      }
     });
     setUpdateSW(() => update);
   }, []);

@@ -243,6 +243,61 @@ describe("SearchPage query handling", () => {
   });
 });
 
+describe("SearchPage loading state", () => {
+  // One deferred per media type: the "All" filter fires both, and `Promise.all`
+  // only settles when the slower of the two does.
+  function deferSearch() {
+    const resolvers: Record<string, (hits: SearchResult[]) => void> = {};
+    search.mockImplementation(
+      (type) => new Promise<SearchResult[]>((resolve) => { resolvers[type] = resolve; })
+    );
+    return (movies: SearchResult[], series: SearchResult[]) => {
+      resolvers.movie?.(movies);
+      resolvers.series?.(series);
+    };
+  }
+
+  it("fills the results region with a skeleton while the first search runs", async () => {
+    const user = userEvent.setup();
+    const release = deferSearch();
+    renderPage();
+
+    await user.type(queryField(), "solaris");
+
+    // The frame this covers used to be blank: the intro state is gone the
+    // moment a query is typed, the grid can't render until the response lands,
+    // and the only thing left was a 16px spinner up in the filter row.
+    expect(await screen.findByTestId("search-skeleton")).toBeInTheDocument();
+    expect(screen.queryByText(/discover your next favorite/i)).not.toBeInTheDocument();
+
+    release([result("Solaris")], []);
+
+    expect(await screen.findByText("Solaris")).toBeInTheDocument();
+    expect(screen.queryByTestId("search-skeleton")).not.toBeInTheDocument();
+  });
+
+  it("marks the previous results stale during a re-search instead of passing them off as current", async () => {
+    const user = userEvent.setup();
+    search.mockResolvedValueOnce([result("Solaris")]).mockResolvedValueOnce([]);
+    renderPage();
+
+    await user.type(queryField(), "solaris");
+    await screen.findByText("Solaris");
+
+    deferSearch();
+    await user.click(screen.getByRole("button", { name: "Movies" }));
+
+    const region = await screen.findByTestId("search-results");
+    await waitFor(() => expect(region).toHaveAttribute("aria-busy", "true"));
+    // Still on screen — blanking the page mid-search is what the skeleton is
+    // for, and there is nothing to blank on the first search only.
+    expect(within(region).getByText("Solaris")).toBeInTheDocument();
+    expect(region.className).toContain("opacity-40");
+    // No second skeleton stacked under a grid that is already the right shape.
+    expect(screen.queryByTestId("search-skeleton")).not.toBeInTheDocument();
+  });
+});
+
 describe("SearchPage filters", () => {
   const HITS = [
     result("Solaris", { genres: ["Sci-Fi"], year: 1972, rating: 8.1 }),

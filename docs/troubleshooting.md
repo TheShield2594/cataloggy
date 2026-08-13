@@ -14,6 +14,7 @@ pnpm smoke                 # end-to-end check of the health and catalog endpoint
 
 - [Startup](#startup)
 - [Nothing loads in the browser](#nothing-loads-in-the-browser)
+- [Installing as an app, offline and push](#installing-as-an-app-offline-and-push)
 - [Posters and metadata are missing](#posters-and-metadata-are-missing)
 - [Watch history isn't appearing](#watch-history-isnt-appearing)
 - [The Stremio add-on](#the-stremio-add-on)
@@ -122,6 +123,40 @@ profile PIN.
 correctly, every client looks like the proxy and shares one budget — that's the
 usual cause of this appearing out of nowhere.
 
+## Installing as an app, offline and push
+
+Almost always one cause: **the page isn't a secure context**. Browsers only hand
+out service workers, `Notification` and `PushManager` to `https://` origins and
+to `localhost`/`127.0.0.1`. A LAN IP is neither, so on the
+`http://192.168.x.x:7002` address the README quickstart hands out, the whole PWA
+layer is switched off — not just notifications. Open the console: Cataloggy logs
+a warning naming this when service-worker registration fails.
+
+What that looks like:
+
+- **No install prompt, and Cataloggy's own Install button never appears** —
+  Chrome fires `beforeinstallprompt` only on an installable (secure) origin, and
+  the button is bound to that event.
+- **Nothing works offline, and posters aren't cached** — there is no service
+  worker, so there is no cache. The offline banner says as much on these
+  addresses rather than promising saved data.
+- **Push reports as unsupported** — see the entry under
+  [Notifications](#notifications).
+- **iOS is the confusing exception** — Safari's **Add to Home Screen** honours
+  `display: standalone` over plain http, so you get a full-screen icon with no
+  offline and no push behind it. The install worked; the capabilities it implies
+  never arrived.
+
+The fix is an `https://` address: put Cataloggy behind a reverse proxy with a
+certificate — see [Nginx Proxy Manager
+Setup](../README.md#nginx-proxy-manager-setup) — and install from there. Testing
+on the machine running Docker, `http://localhost:7002` is exempt and everything
+works, which is why this only shows up once you open it on a phone.
+
+If HTTPS isn't worth it for your setup, nothing else in Cataloggy is affected:
+the LAN URL is fully functional, and **Settings → Notifications** channels
+deliver episode alerts over plain http.
+
 ## Posters and metadata are missing
 
 Cataloggy needs a TMDB API key for essentially all metadata. Without one, search
@@ -136,8 +171,11 @@ saves, so a typo can't overwrite a working one.
   key gives rating-badge posters instead.
 - **Metadata is stale** — `POST /metadata/refresh-all` re-fetches in batches. It
   is rate-limit friendly by design and caps at 500 titles per call.
-- **Posters don't load offline** — the service worker caches them as they're
-  first fetched, so a title you've never opened online won't be there.
+- **Posters don't load offline** — on an `https://` (or `localhost`) address the
+  service worker caches them as they're first fetched, so a title you've never
+  opened online won't be there. On a plain `http://LAN-IP` address none of them
+  are cached at all — see [Installing as an app, offline and
+  push](#installing-as-an-app-offline-and-push).
 
 ## Watch history isn't appearing
 
@@ -236,7 +274,9 @@ hides it without deleting history, and `DELETE` on the same path undoes it.
 
 - **Nothing arrives over push** — push needs VAPID keys and https (or
   localhost); browsers refuse service-worker push over plain http on a LAN IP.
-  This is a browser rule, not something Cataloggy can work around. On a plain
+  This is a browser rule, not something Cataloggy can work around, and it takes
+  installing and offline down with it — see [Installing as an app, offline and
+  push](#installing-as-an-app-offline-and-push) for the full picture. On a plain
   `http://192.168.x.x` deployment, add a notification channel instead
   (**Settings → Notifications**): ntfy, Gotify, a Discord webhook, or any URL
   that takes a JSON POST.

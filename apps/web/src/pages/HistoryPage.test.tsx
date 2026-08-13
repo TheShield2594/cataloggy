@@ -89,7 +89,10 @@ describe("HistoryPage", () => {
     await user.click(screen.getByRole("button", { name: "Episodes" }));
 
     await waitFor(() =>
-      expect(getWatchHistory).toHaveBeenLastCalledWith(25, 0, { type: "episode" })
+      expect(getWatchHistory).toHaveBeenLastCalledWith(25, 0, {
+        type: "episode",
+        signal: expect.any(AbortSignal),
+      })
     );
   });
 
