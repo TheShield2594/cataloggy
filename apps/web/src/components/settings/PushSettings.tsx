@@ -61,7 +61,23 @@ export function PushSettings() {
   };
 
   if (!supported) {
-    return <p className="text-sm" style={{ color: "var(--text-dim)" }}>Push notifications aren't supported in this browser.</p>;
+    // `isPushSupported()` fails for two very different reasons, and blaming the
+    // browser for both sends people to try another one. On a plain
+    // `http://192.168.x.x` install — the address the README's LAN quickstart
+    // hands out — `navigator.serviceWorker` is absent no matter how modern the
+    // browser is, because the origin isn't secure. Say which it is.
+    if (!window.isSecureContext) {
+      return (
+        <p className="text-sm leading-relaxed" style={{ color: "var(--text-dim)" }}>
+          Push needs Cataloggy on an <strong>https://</strong> address (or localhost) — browsers
+          switch off service workers and notifications on a plain http one, so this has nothing to
+          do with your browser. Put Cataloggy behind a reverse proxy with a certificate to enable
+          it, or add a notification channel below — ntfy, Gotify, Discord or a webhook all deliver
+          the same alerts over plain http.
+        </p>
+      );
+    }
+    return <p className="text-sm" style={{ color: "var(--text-dim)" }}>Push notifications aren&apos;t supported in this browser.</p>;
   }
 
   if (loading) {

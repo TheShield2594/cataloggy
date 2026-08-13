@@ -11,10 +11,17 @@ import { useOnline } from "../hooks/useOnline";
  * Sticky rather than fixed: it sits under the app header and above the page's
  * own content, so it stays in view while scrolling without the surrounding
  * layout having to reserve space for a banner that is usually absent.
+ *
+ * None of that holds without a service worker, and there is no service worker
+ * on an insecure origin — which is what the README's `http://192.168.x.x:7002`
+ * quickstart is. Promising "saved data" there points at a cache that was never
+ * allowed to exist, so the copy switches to what is actually true.
  */
 export function OfflineBanner() {
   const online = useOnline();
   if (online) return null;
+
+  const cached = window.isSecureContext;
 
   return (
     <div
@@ -32,7 +39,9 @@ export function OfflineBanner() {
         <span className="font-semibold">Offline</span>
         <span style={{ color: "var(--text-dim)" }}>
           {" "}
-          — showing saved data. Anything you change now won&rsquo;t be saved.
+          {cached
+            ? "— showing saved data. Anything you change now won’t be saved."
+            : "— nothing is saved for offline use on this address, so pages will be empty until you’re back."}
         </span>
       </p>
     </div>

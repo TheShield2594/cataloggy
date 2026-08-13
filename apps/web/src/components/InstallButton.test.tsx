@@ -1,4 +1,5 @@
 import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { InstallButton } from "./InstallButton";
 
@@ -34,9 +35,18 @@ function offerInstall() {
 }
 
 const installButton = () => screen.queryByRole("button", { name: /install cataloggy/i });
+const originNotice = () =>
+  screen.queryByRole("button", { name: /why can't cataloggy be installed/i });
+
+// jsdom reports an insecure context, which is the LAN-IP case. Cases about the
+// install offer itself need the secure one.
+const setSecureContext = (value: boolean) =>
+  Object.defineProperty(window, "isSecureContext", { value, configurable: true });
 
 afterEach(() => {
   listeners.length = 0;
+  setSecureContext(false);
+  localStorage.clear();
 });
 
 describe("InstallButton", () => {
@@ -69,6 +79,48 @@ describe("InstallButton", () => {
     render(<InstallButton />);
     offerInstall();
 
+    expect(installButton()).not.toBeInTheDocument();
+  });
+});
+
+describe("InstallButton on an insecure origin", () => {
+  it("says why there is no install offer instead of rendering nothing", async () => {
+    // `http://192.168.x.x:7002`: Chrome won't fire `beforeinstallprompt`, so the
+    // header used to be empty here and a headline feature was simply missing
+    // with nothing to explain it.
+    const user = userEvent.setup();
+    mockDisplayModes("browser");
+    setSecureContext(false);
+    render(<InstallButton />);
+
+    expect(installButton()).not.toBeInTheDocument();
+    const notice = originNotice();
+    expect(notice).toBeInTheDocument();
+
+    await user.click(notice!);
+    expect(screen.getByText(/https:\/\//)).toBeInTheDocument();
+  });
+
+  it("stays out of the way once dismissed", async () => {
+    const user = userEvent.setup();
+    mockDisplayModes("browser");
+    setSecureContext(false);
+    const first = render(<InstallButton />);
+
+    await user.click(screen.getByRole("button", { name: /dismiss install notice/i }));
+    expect(originNotice()).not.toBeInTheDocument();
+
+    first.unmount();
+    render(<InstallButton />);
+    expect(originNotice()).not.toBeInTheDocument();
+  });
+
+  it("keeps quiet when the origin is secure and the browser simply hasn't offered yet", () => {
+    mockDisplayModes("browser");
+    setSecureContext(true);
+    render(<InstallButton />);
+
+    expect(originNotice()).not.toBeInTheDocument();
     expect(installButton()).not.toBeInTheDocument();
   });
 });
