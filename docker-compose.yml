@@ -88,6 +88,39 @@ services:
       # the link notification channels point at. Without it, notifications are
       # still sent, just with nothing to tap.
       CATALOGGY_WEB_PUBLIC: ${CATALOGGY_WEB_PUBLIC:-http://192.168.1.25:7002}
+      # Which reverse proxies may set X-Forwarded-For. Unset trusts none of
+      # them, so behind a proxy every client arrives as the proxy's own address
+      # and the whole household shares one rate-limit budget. Set it to the
+      # proxy's IP/CIDR as this container sees it — not to "true", which trusts
+      # the whole forwarded chain and lets any client pick its own request.ip.
+      # See .env.example for the long version.
+      TRUST_PROXY: ${TRUST_PROXY}
+      # Path prefixes a reverse proxy may mount this service under; each is
+      # stripped before routing. Defaults to /api. It has a service-specific
+      # name in .env because the addon needs a different value — and because
+      # /addon must not appear here: the api serves its own built-in Stremio
+      # manifest under that path, and stripping the prefix would break it.
+      PROXY_PATH_PREFIXES: ${API_PROXY_PATH_PREFIXES:-/api}
+      # Largest request body the API accepts, in MB (1–1024, default 32).
+      # Raise it if restoring a large export is rejected with a 413.
+      MAX_BODY_SIZE_MB: ${MAX_BODY_SIZE_MB}
+      # How often to check tracked shows for new episodes, in seconds.
+      # 0 disables the check entirely (the API says so at startup).
+      NOTIFICATION_CHECK_INTERVAL_SEC: ${NOTIFICATION_CHECK_INTERVAL_SEC:-3600}
+      # Contact address sent to push services (Chrome FCM, Mozilla Push) to
+      # identify this server. The default is materialized here rather than left
+      # empty, because an empty VAPID subject is rejected by the push library
+      # where an absent one falls back to this same value.
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@cataloggy.local}
+      # Shared secret for the Plex/Jellyfin webhook endpoints. Unset leaves
+      # them rejecting every request; the API warns about it at startup. See
+      # README.md "Webhook secret placement" before choosing how to send it.
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      # Optional second layer for internet-reachable webhooks: a comma-separated
+      # allowlist of source IPs (your Plex/Jellyfin servers). Behind a proxy this
+      # only works if TRUST_PROXY above is set, or every request looks like the
+      # proxy. Unset allows any IP.
+      WEBHOOK_ALLOWED_IPS: ${WEBHOOK_ALLOWED_IPS}
       # Optional integrations — set these in a .env file or export them.
       # Leaving them unset is safe; the API validates at startup/request time
       # and returns clear error messages if they are missing when needed.
@@ -149,6 +182,16 @@ services:
       # the api decides what to do with them, so enabling it on only one side
       # does nothing.
       STREMIO_PLAY_DETECTION: ${STREMIO_PLAY_DETECTION:-false}
+      # Shared with the api service: same meaning, same .env variable, because
+      # a proxy that forwards to one of them forwards to both.
+      TRUST_PROXY: ${TRUST_PROXY}
+      # Path prefixes a reverse proxy may mount this service under. Defaults to
+      # /addon, and is a separate .env variable from the api's for that reason.
+      PROXY_PATH_PREFIXES: ${ADDON_PROXY_PATH_PREFIXES:-/addon}
+      # Fastify log level: fatal, error, warn, info, debug, trace or silent.
+      # The default is materialized here because an empty value is not a level
+      # the logger accepts.
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       SENTRY_DSN: ${SENTRY_DSN}
     ports:
       - "7001:7001"

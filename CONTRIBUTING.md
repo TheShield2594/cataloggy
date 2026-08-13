@@ -31,6 +31,7 @@ Each app is its own pnpm workspace package with its own `package.json` scripts (
 Run the same checks CI runs:
 
 ```bash
+pnpm check:env
 pnpm lint
 pnpm typecheck
 pnpm test
@@ -42,6 +43,8 @@ pnpm build
 Tests live next to the code they cover as `*.test.ts`/`*.test.tsx`. `apps/api` and `apps/addon` run in a Node environment; `apps/web` runs in jsdom with Testing Library, with shared setup (jest-dom matchers, cleanup, and stubs for the browser APIs jsdom lacks) in `apps/web/src/test/setup.ts`.
 
 For changes that touch a running feature (not just types/tests), actually exercise it — start the stack with `pnpm dev` (or `docker compose up`) and click through the affected flow. Type checks and unit tests catch a lot, but not everything.
+
+If your change reads a new environment variable, add it to the `environment:` block of every `docker-compose.yml` service that runs the code — compose substitutes `.env` into the compose file, it does not forward the file into containers, so a variable that is only in `.env.example` reaches nothing. `pnpm check:env` compares the two sides and is what CI runs.
 
 If your change adds a Prisma migration, make sure it applies cleanly against a fresh database (`pnpm --filter @cataloggy/api exec prisma migrate deploy`) — CI runs every migration against a real Postgres instance and will fail if it doesn't.
 

@@ -12,6 +12,7 @@
     "typecheck": "pnpm --filter @cataloggy/shared build && pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "test": "pnpm -r --if-present test",
+    "check:env": "node scripts/check-compose-env.mjs",
     "smoke": "tsx scripts/smoke.ts"
   },
   "devDependencies": {
