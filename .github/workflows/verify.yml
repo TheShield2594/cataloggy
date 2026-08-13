@@ -1,0 +1,89 @@
+name: Verify
+
+# The single definition of "this commit is good": lint, typecheck, tests, build,
+# every migration applied against a real Postgres, and the compose/env check.
+# Called by ci.yml (pushes to main, and every PR) and by dockerpublish.yml
+# (which gates its image push on it), so an image can never be published off a
+# commit that a weaker set of checks happened to pass. dockerpublish.yml used to
+# carry its own copy of this job; the copy drifted — it never grew the Postgres
+# service or the migration step — so a broken migration failed CI while `:latest`
+# shipped anyway, leaving self-hosters with an `api` container that waits forever
+# on a `migrate` container that can't succeed.
+on:
+  workflow_call:
+
+jobs:
+  lint-typecheck-test-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: cataloggy
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d cataloggy"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cataloggy
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      # Matches the `node:26-alpine` base image every app's Dockerfile ships on,
+      # so CI exercises the same runtime as production. Node 20 is also past
+      # end-of-life and too old for jsdom, which apps/web's tests run in.
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26
+          cache: pnpm
+
+      # Compose substitutes .env into docker-compose.yml, it does not forward
+      # the file into containers — so a variable the code reads but the service
+      # never receives fails silently at runtime, on the documented install
+      # path, with nothing in the logs to point at it. Runs before the install
+      # because it reads files rather than dependencies, and a mismatch is worth
+      # hearing about in seconds rather than after a full build.
+      - name: Check every env var reaches its container
+        run: pnpm check:env
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @cataloggy/api prisma:generate
+
+      # Applies every migration against a real Postgres so a broken migration
+      # fails CI instead of stopping a self-hoster's update (the same
+      # `prisma migrate deploy` command runs in the migrate container, which
+      # the api container waits on).
+      - name: Run database migrations
+        run: pnpm --filter @cataloggy/api exec prisma migrate deploy
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
