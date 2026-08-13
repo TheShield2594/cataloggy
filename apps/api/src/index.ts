@@ -29,9 +29,11 @@ import { cleanupStaleSessions, SCROBBLE_CLEANUP_INTERVAL_MS } from "./routes/scr
 import { everyInterval, parseIntervalSec } from "./lib/scheduler.js";
 import { bodyTooLargeMessage, isBodyTooLargeError, mbToBytes, parseMaxBodySizeMb } from "./lib/body-limit.js";
 import { isServiceRequest } from "./lib/service-request.js";
+import { instrumentUpstreamFetch, recordRequest } from "./lib/metrics.js";
 
 // Route modules
 import healthRoutes from "./routes/health.js";
+import metricsRoutes from "./routes/metrics.js";
 import profilesRoutes from "./routes/profiles.js";
 import searchRoutes from "./routes/search.js";
 import metadataRoutes from "./routes/metadata.js";
@@ -170,7 +172,20 @@ app.addHook("onRequest", async (request, reply) => {
   if (request.method === "OPTIONS") return reply.code(204).send();
 });
 
-// Routes that cannot carry a bearer token by construction: the health probe,
+// Counts every response for `/metrics`. `onResponse` fires after the reply is
+// sent, so the timing includes what the client actually waited for, and the
+// route *template* (`/meta/:type/:id`) is what gets counted rather than the
+// URL — one key per route, not one per title anybody looked up.
+app.addHook("onResponse", async (request, reply) => {
+  recordRequest({
+    method: request.method,
+    route: request.routeOptions.url,
+    statusCode: reply.statusCode,
+    durationMs: reply.elapsedTime,
+  });
+});
+
+// Routes that cannot carry a bearer token by construction: the health probes,
 // Stremio's addon URLs (the protocol sends no credentials — an unguessable
 // per-profile secret in the path stands in, verified by the route handler), the
 // Trakt OAuth callback (a browser redirect from trakt.tv, bound to the flow that
@@ -180,6 +195,7 @@ app.addHook("onRequest", async (request, reply) => {
   const url = request.url;
   if (
     url === "/health" ||
+    url === "/health/ready" ||
     isStremioSecretPath(url) ||
     url === "/addon" ||
     url.startsWith("/trakt/oauth/callback") ||
@@ -216,6 +232,7 @@ Sentry.setupFastifyErrorHandler(app);
 // ─── Route registration ───
 
 app.register(healthRoutes);
+app.register(metricsRoutes);
 app.register(profilesRoutes);
 app.register(searchRoutes);
 app.register(metadataRoutes);
@@ -254,6 +271,10 @@ const scheduler = { log: app.log, onError: reportBackgroundError };
 
 const start = async () => {
   const port = Number(process.env.PORT ?? 7000);
+
+  // Before the first scheduled job or request can make an upstream call, so
+  // `/metrics` has timings for all of them.
+  instrumentUpstreamFetch();
 
   if (process.env.NODE_ENV === "production") {
     const startupConfigIssues = [

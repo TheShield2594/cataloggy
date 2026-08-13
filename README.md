@@ -120,6 +120,45 @@ cataloggy/
 - Web: http://localhost:7002
 - Postgres: `localhost:5432` (user `postgres` by default, db `cataloggy`, password from `POSTGRES_PASSWORD` in your `.env`)
 
+## Health checks and metrics
+
+The API answers two probes, neither of which needs the API token — probes carry
+no credentials:
+
+- **`/health`** — liveness. Answers from the process alone and depends on
+  nothing, so it keeps returning 200 during a database outage. Restarting the
+  container is the wrong response to Postgres being down, and this is the probe
+  that says so.
+- **`/health/ready`** — readiness. Runs a `SELECT 1` with a two-second deadline
+  and answers `503` if the database does not come back, which also catches a
+  connection pool that has been drained by a stuck query. This is what the
+  `api` container's Docker healthcheck uses, so an API that cannot reach its
+  database is marked unhealthy rather than kept in the rotation, and it is what
+  a reverse proxy should drain on. The failing body says only that the database
+  did not answer; the error itself goes to the logs and to `/metrics`.
+
+`GET /metrics` (this one **does** need the API token) reports, as JSON:
+
+```bash
+curl -H "Authorization: Bearer $API_TOKEN" http://localhost:7000/metrics
+```
+
+- `uptimeSeconds` and `memory` — the counters below are per-process and reset
+  when the container restarts, so they only mean something read next to these.
+- `requests` — total, a breakdown by status class, and per-route counts with
+  total/max/average duration and how many answered 5xx. Routes are counted by
+  their template (`GET /meta/:type/:id`), not by URL.
+- `upstream` — the same counts and timings per outbound host (TMDB, Trakt,
+  Stremio, IGDB, Steam, AniList, your AI provider, your notification channels),
+  which is what makes "which integration is slow or failing today" answerable.
+  Hostnames only — several of these APIs take their key in the query string.
+- `database` — the same probe `/health/ready` runs, with its error when it fails.
+- `jobs` — the last run of every scheduled background job: status, error,
+  duration, and whether it overran its own interval. These are the rows behind
+  **Settings → Sync Status**, and they are read from the database, so they come
+  back `null` (with `jobsError` set) when it is down while the counters still
+  answer.
+
 
 ## Use on Your Local Network (Phone + Apple TV)
 
