@@ -106,6 +106,28 @@ describe("notification channel routes", () => {
       expect(res.statusCode).toBe(201);
     });
 
+    it("stores the token encrypted when API_TOKEN is set", async () => {
+      const originalToken = process.env.API_TOKEN;
+      process.env.API_TOKEN = "notifications-route-token";
+      try {
+        const { SECRET_CONTEXT, decryptSecret } = await import("../lib/secret-box.js");
+        const app = await buildApp();
+
+        const res = await create(app, { kind: "gotify", url: "http://192.168.1.25:8080", token: "app-token" });
+
+        expect(res.statusCode).toBe(201);
+        const { token } = prismaMock.notificationChannel.create.mock.calls[0][0].data;
+        expect(token).not.toBe("app-token");
+        expect(decryptSecret(SECRET_CONTEXT.notificationChannelToken, token)).toBe("app-token");
+        // A channel with a token still reports one, since that is all the UI
+        // is ever told about it.
+        expect(res.json().channel.hasToken).toBe(true);
+      } finally {
+        if (originalToken === undefined) delete process.env.API_TOKEN;
+        else process.env.API_TOKEN = originalToken;
+      }
+    });
+
     it("rejects an unknown kind", async () => {
       const app = await buildApp();
 
@@ -210,6 +232,51 @@ describe("notification channel routes", () => {
       expect(prismaMock.notificationChannel.update).toHaveBeenLastCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ token: null }) })
       );
+    });
+
+    it("writes a kept token back exactly as stored, rather than encrypting the ciphertext again", async () => {
+      const originalToken = process.env.API_TOKEN;
+      process.env.API_TOKEN = "notifications-route-token";
+      try {
+        const { SECRET_CONTEXT, encryptSecret, decryptSecret } = await import("../lib/secret-box.js");
+        const stored = encryptSecret(SECRET_CONTEXT.notificationChannelToken, "gotify-app-token");
+        prismaMock.notificationChannel.findFirst.mockResolvedValue(storedChannel({ kind: "gotify", token: stored }));
+        const app = await buildApp();
+
+        await patch(app, { name: "Renamed" });
+
+        const { token } = prismaMock.notificationChannel.update.mock.calls[0][0].data;
+        expect(token).toBe(stored);
+        expect(decryptSecret(SECRET_CONTEXT.notificationChannelToken, token)).toBe("gotify-app-token");
+      } finally {
+        if (originalToken === undefined) delete process.env.API_TOKEN;
+        else process.env.API_TOKEN = originalToken;
+      }
+    });
+
+    // Gotify's "a token is required" rule has to keep firing against a stored
+    // token it cannot read, which is why the check takes a boolean now.
+    it("accepts a Gotify edit that leaves the encrypted token alone", async () => {
+      const originalToken = process.env.API_TOKEN;
+      process.env.API_TOKEN = "notifications-route-token";
+      try {
+        const { SECRET_CONTEXT, encryptSecret } = await import("../lib/secret-box.js");
+        prismaMock.notificationChannel.findFirst.mockResolvedValue(
+          storedChannel({
+            kind: "gotify",
+            url: "http://192.168.1.25:8080",
+            token: encryptSecret(SECRET_CONTEXT.notificationChannelToken, "app-token"),
+          })
+        );
+        const app = await buildApp();
+
+        const res = await patch(app, { name: "Renamed" });
+
+        expect(res.statusCode).toBe(200);
+      } finally {
+        if (originalToken === undefined) delete process.env.API_TOKEN;
+        else process.env.API_TOKEN = originalToken;
+      }
     });
 
     it("re-validates a changed URL against the same rules as a new one", async () => {

@@ -13,6 +13,7 @@ import { OMDB_API_KEY_KV, getOmdbApiKey } from "../lib/omdb.js";
 import { TMDB_API_KEY_KV, getTmdbApiKey } from "../lib/tmdb-client.js";
 import { RPDB_API_KEY_KV, getRpdbApiKey } from "../lib/rpdb.js";
 import { trendingCache } from "../lib/cache.js";
+import { writeSecretKv } from "../lib/secret-store.js";
 import { failuresFrom, getJobRuns } from "../lib/job-status.js";
 
 const settingsRoutes: FastifyPluginAsync = async (app) => {
@@ -132,11 +133,7 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "Could not reach TMDB to validate key" });
     }
 
-    await prisma.kV.upsert({
-      where: { key: TMDB_API_KEY_KV },
-      create: { key: TMDB_API_KEY_KV, value: apiKey, updatedAt: new Date() },
-      update: { value: apiKey, updatedAt: new Date() },
-    });
+    await writeSecretKv(TMDB_API_KEY_KV, apiKey);
     return { configured: true, source: "db" as const };
   });
 
@@ -174,11 +171,7 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "Could not reach OMDB API to validate key" });
     }
 
-    await prisma.kV.upsert({
-      where: { key: OMDB_API_KEY_KV },
-      create: { key: OMDB_API_KEY_KV, value: apiKey, updatedAt: new Date() },
-      update: { value: apiKey, updatedAt: new Date() },
-    });
+    await writeSecretKv(OMDB_API_KEY_KV, apiKey);
     return { configured: true };
   });
 
@@ -206,11 +199,7 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
       return { configured: false };
     }
 
-    await prisma.kV.upsert({
-      where: { key: RPDB_API_KEY_KV },
-      create: { key: RPDB_API_KEY_KV, value: apiKey, updatedAt: new Date() },
-      update: { value: apiKey, updatedAt: new Date() },
-    });
+    await writeSecretKv(RPDB_API_KEY_KV, apiKey);
     return { configured: true };
   });
 

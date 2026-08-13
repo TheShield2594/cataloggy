@@ -18,6 +18,7 @@ import {
   importTraktRatings,
 } from "../lib/trakt-import.js";
 import { renderOAuthHtml } from "../lib/html.js";
+import { SECRET_CONTEXT, encryptSecret } from "../lib/secret-box.js";
 import { consumeOAuthState, createOAuthState } from "../lib/trakt-oauth-state.js";
 import { getDefaultProfileId, resolveProfile } from "../lib/profile.js";
 import type { SeriesProgressCandidate } from "../lib/types.js";
@@ -177,19 +178,13 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
     };
     const expiresAt = computeTokenExpiresAt(tokens.expires_in);
 
+    const accessToken = encryptSecret(SECRET_CONTEXT.traktAccessToken, tokens.access_token);
+    const refreshToken = encryptSecret(SECRET_CONTEXT.traktRefreshToken, tokens.refresh_token);
+
     await prisma.traktToken.upsert({
       where: { id: "default" },
-      update: {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        expiresAt,
-      },
-      create: {
-        id: "default",
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        expiresAt,
-      },
+      update: { accessToken, refreshToken, expiresAt },
+      create: { id: "default", accessToken, refreshToken, expiresAt },
     });
 
     resetTraktClient();

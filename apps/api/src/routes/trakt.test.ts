@@ -106,6 +106,29 @@ describe("trakt OAuth — the callback is bound to the flow that started it", ()
     );
   });
 
+  it("stores both tokens encrypted when API_TOKEN is set", async () => {
+    process.env.API_TOKEN = "trakt-route-token";
+    prismaMock.kV.deleteMany.mockResolvedValue({ count: 1 });
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify({ access_token: "access", refresh_token: "refresh", expires_in: 7200 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+    const { SECRET_CONTEXT, decryptSecret } = await import("../lib/secret-box.js");
+    const app = await buildApp();
+
+    await app.inject({ method: "GET", url: `/trakt/oauth/callback?code=real-code&state=${STATE}` });
+
+    const { accessToken, refreshToken } = prismaMock.traktToken.upsert.mock.calls[0][0].update;
+    expect(accessToken).not.toBe("access");
+    expect(refreshToken).not.toBe("refresh");
+    // Each half is bound to its own column, so the pair can't be swapped.
+    expect(decryptSecret(SECRET_CONTEXT.traktAccessToken, accessToken)).toBe("access");
+    expect(decryptSecret(SECRET_CONTEXT.traktRefreshToken, refreshToken)).toBe("refresh");
+    expect(decryptSecret(SECRET_CONTEXT.traktAccessToken, refreshToken)).toBeNull();
+  });
+
   it("still reports a denial from Trakt rather than a state failure", async () => {
     const app = await buildApp();
 

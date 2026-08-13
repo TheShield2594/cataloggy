@@ -15,6 +15,7 @@ import {
   getAiRecommendations,
 } from "../lib/ai.js";
 import { resolveProfile } from "../lib/profile.js";
+import { writeSecretKv } from "../lib/secret-store.js";
 import { loadRecommendations } from "../lib/recommendations.js";
 import { resolveAiProviderUrl, validateAiProviderUrl } from "../lib/ssrf.js";
 import { getMetadataType } from "../lib/types.js";
@@ -389,11 +390,7 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       payload,
     };
 
-    await prisma.kV.upsert({
-      where: { key: AI_CONFIG_KEY },
-      create: { key: AI_CONFIG_KEY, value: JSON.stringify(validConfig), updatedAt: new Date() },
-      update: { value: JSON.stringify(validConfig), updatedAt: new Date() },
-    });
+    await writeSecretKv(AI_CONFIG_KEY, JSON.stringify(validConfig));
 
     trendingCacheDeletePrefix("ai-recs:");
 

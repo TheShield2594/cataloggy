@@ -1,5 +1,6 @@
 import { prisma } from "./prisma.js";
 import { recordWatchEvent } from "./watch-event.js";
+import { SECRET_CONTEXT, decryptSecret, encryptSecret } from "./secret-box.js";
 import { StremioClient, StremioApiError, isAuthError, getStremioApiBase } from "../stremio-api.js";
 import type { StremioLibraryItem } from "../stremio-api.js";
 import type { FastifyBaseLogger } from "fastify";
@@ -94,7 +95,10 @@ export const connectStremio = async (
   profileId: string,
   logger: FastifyBaseLogger
 ): Promise<void> => {
-  const authKey = await getStremioClient().login(email, password, logger);
+  const authKey = encryptSecret(
+    SECRET_CONTEXT.stremioAuthKey,
+    await getStremioClient().login(email, password, logger)
+  );
   await prisma.stremioAuth.upsert({
     where: { id: AUTH_ROW_ID },
     create: { id: AUTH_ROW_ID, authKey, email, profileId },
@@ -297,6 +301,16 @@ const runSync = async (
   const auth = await prisma.stremioAuth.findUnique({ where: { id: AUTH_ROW_ID } });
   if (!auth) return summary;
 
+  const authKey = decryptSecret(SECRET_CONTEXT.stremioAuthKey, auth.authKey);
+  if (authKey === null) {
+    // Not "nothing connected" — the row is there and Settings will keep saying
+    // connected, so this has to be loud enough to reach Sync Status rather than
+    // returning an empty summary that reads like a quiet, successful poll.
+    throw new Error(
+      "Stored Stremio access key could not be decrypted — API_TOKEN has changed since it was saved. Reconnect the Stremio account from Settings."
+    );
+  }
+
   const stremio = getStremioClient();
   const previous = (await readWatermark()) ?? {};
   const isFullPass = mode === "import" || mode === "baseline";
@@ -314,11 +328,11 @@ const runSync = async (
 
   try {
     if (isFullPass) {
-      items = await stremio.datastoreGet(auth.authKey, LIBRARY_COLLECTION, null, logger);
+      items = await stremio.datastoreGet(authKey, LIBRARY_COLLECTION, null, logger);
       summary.scanned = items.length;
       summary.fetched = items.length;
     } else {
-      const meta = await stremio.datastoreMeta(auth.authKey, LIBRARY_COLLECTION, logger);
+      const meta = await stremio.datastoreMeta(authKey, LIBRARY_COLLECTION, logger);
       summary.scanned = meta.length;
 
       const changedIds: string[] = [];
@@ -342,7 +356,7 @@ const runSync = async (
 
       items = [];
       for (const ids of chunk(changedIds, DATASTORE_GET_CHUNK)) {
-        items.push(...(await stremio.datastoreGet(auth.authKey, LIBRARY_COLLECTION, ids, logger)));
+        items.push(...(await stremio.datastoreGet(authKey, LIBRARY_COLLECTION, ids, logger)));
       }
       summary.fetched = items.length;
     }

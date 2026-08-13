@@ -196,6 +196,69 @@ describe("trakt-client", () => {
     });
   });
 
+  describe("encrypted tokens", () => {
+    const encrypted = async () => {
+      process.env.API_TOKEN = "trakt-client-token";
+      const { SECRET_CONTEXT, encryptSecret, decryptSecret } = await import("./secret-box.js");
+      return {
+        SECRET_CONTEXT,
+        decryptSecret,
+        accessToken: encryptSecret(SECRET_CONTEXT.traktAccessToken, "at"),
+        refreshToken: encryptSecret(SECRET_CONTEXT.traktRefreshToken, "rt"),
+      };
+    };
+
+    it("sends Trakt the decrypted access token, and re-encrypts a refreshed pair", async () => {
+      const { SECRET_CONTEXT, decryptSecret, accessToken, refreshToken } = await encrypted();
+      prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken, refreshToken });
+      prismaMock.traktToken.upsert.mockResolvedValue({});
+
+      let seenAuth: string | undefined;
+      let scrobbled = false;
+      const fetchMock = vi.fn().mockImplementation(async (url: URL | string, init: RequestInit) => {
+        if (url.toString().includes("/oauth/token")) {
+          // The refresh is what proves the *refresh* token was decrypted too.
+          expect(JSON.parse(init.body as string).refresh_token).toBe("rt");
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ access_token: "fresh-at", refresh_token: "fresh-rt", expires_in: 3600 }),
+          };
+        }
+        seenAuth = (init.headers as Record<string, string>).Authorization;
+        if (!scrobbled) {
+          scrobbled = true;
+          return { ok: false, status: 401, headers: new Headers(), text: async () => "unauthorized" };
+        }
+        return { ok: true, status: 200, headers: new Headers(), json: async () => ({ id: 7 }) };
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { pushTraktScrobble } = await import("./trakt-client.js");
+      await pushTraktScrobble("stop", { type: "movie", imdbId: "tt1", progress: 100 }, makeLogger());
+
+      expect(seenAuth).toBe("Bearer fresh-at");
+      const stored = prismaMock.traktToken.upsert.mock.calls[0][0].update;
+      expect(stored.accessToken).not.toBe("fresh-at");
+      expect(decryptSecret(SECRET_CONTEXT.traktAccessToken, stored.accessToken)).toBe("fresh-at");
+      expect(decryptSecret(SECRET_CONTEXT.traktRefreshToken, stored.refreshToken)).toBe("fresh-rt");
+    });
+
+    it("refuses to build a client from tokens a rotated API_TOKEN can't open", async () => {
+      const { accessToken, refreshToken } = await encrypted();
+      prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken, refreshToken });
+      process.env.API_TOKEN = "rotated-token";
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { getTraktClient } = await import("./trakt-client.js");
+
+      await expect(getTraktClient()).rejects.toThrow(/could not be decrypted/);
+      // Never sends the ciphertext to Trakt as if it were a bearer token.
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe("pagination limits", () => {
     it("stops fetching once the page-count header is reached", async () => {
       prismaMock.traktToken.findUnique.mockResolvedValue({ accessToken: "at", refreshToken: "rt" });

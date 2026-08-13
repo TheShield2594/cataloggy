@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from "fastify";
 import type { PrismaClient } from "@prisma/client";
+import { SECRET_CONTEXT, decryptSecret, encryptSecret } from "./lib/secret-box.js";
 
 const TRAKT_API_BASE = "https://api.trakt.tv";
 const MAX_PAGES = 100;
@@ -242,11 +243,19 @@ export class TraktClient {
       );
     }
 
+    const accessToken = decryptSecret(SECRET_CONTEXT.traktAccessToken, persistedToken.accessToken);
+    const refreshToken = decryptSecret(SECRET_CONTEXT.traktRefreshToken, persistedToken.refreshToken);
+    if (accessToken === null || refreshToken === null) {
+      throw new Error(
+        "Stored Trakt tokens could not be decrypted — API_TOKEN has changed since they were saved. Reconnect Trakt from Settings."
+      );
+    }
+
     return new TraktClient({
       clientId,
       clientSecret,
-      accessToken: persistedToken.accessToken,
-      refreshToken: persistedToken.refreshToken,
+      accessToken,
+      refreshToken,
       prisma
     });
   }
@@ -549,19 +558,13 @@ export class TraktClient {
 
     const expiresAt = computeTokenExpiresAt(tokenResponse.expires_in);
 
+    const accessToken = encryptSecret(SECRET_CONTEXT.traktAccessToken, this.accessToken);
+    const refreshToken = encryptSecret(SECRET_CONTEXT.traktRefreshToken, this.refreshToken);
+
     await this.prisma.traktToken.upsert({
       where: { id: DEFAULT_TOKEN_ROW_ID },
-      update: {
-        accessToken: this.accessToken,
-        refreshToken: this.refreshToken,
-        expiresAt
-      },
-      create: {
-        id: DEFAULT_TOKEN_ROW_ID,
-        accessToken: this.accessToken,
-        refreshToken: this.refreshToken,
-        expiresAt
-      }
+      update: { accessToken, refreshToken, expiresAt },
+      create: { id: DEFAULT_TOKEN_ROW_ID, accessToken, refreshToken, expiresAt }
     });
 
     logger.info("Trakt tokens refreshed and persisted");

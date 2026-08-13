@@ -418,4 +418,52 @@ describe("stremio-library", () => {
     });
     expect(JSON.stringify(upsert)).not.toContain("hunter2");
   });
+
+  describe("with API_TOKEN set", () => {
+    it("stores the authKey encrypted, and sends the decrypted one to Stremio", async () => {
+      process.env.API_TOKEN = "stremio-secret-key";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({ result: { authKey: "secret-key" } }),
+        })
+      );
+      const { connectStremio } = await import("./stremio-library.js");
+      const { SECRET_CONTEXT, decryptSecret } = await import("./secret-box.js");
+
+      await connectStremio("me@example.com", "hunter2", PROFILE, makeLogger());
+
+      const stored = prismaMock.stremioAuth.upsert.mock.calls[0][0].create.authKey;
+      expect(stored).not.toContain("secret-key");
+      expect(decryptSecret(SECRET_CONTEXT.stremioAuthKey, stored)).toBe("secret-key");
+
+      // And the sync sends Stremio the key itself, not the ciphertext.
+      prismaMock.stremioAuth.findUnique.mockResolvedValue({ id: "default", authKey: stored });
+      const fetchMock = stubStremio({ meta: [] });
+      const { syncStremioLibrary } = await import("./stremio-library.js");
+
+      await syncStremioLibrary(makeLogger(), PROFILE, "incremental");
+
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body).authKey).toBe("secret-key");
+    });
+
+    it("fails the sync loudly when a rotated API_TOKEN has locked the authKey away", async () => {
+      process.env.API_TOKEN = "stremio-secret-key";
+      const { SECRET_CONTEXT, encryptSecret } = await import("./secret-box.js");
+      const stored = encryptSecret(SECRET_CONTEXT.stremioAuthKey, "secret-key");
+      process.env.API_TOKEN = "rotated-key";
+      prismaMock.stremioAuth.findUnique.mockResolvedValue({ id: "default", authKey: stored });
+      const fetchMock = stubStremio({ meta: [] });
+      const { syncStremioLibrary } = await import("./stremio-library.js");
+
+      // An empty summary would read as a healthy poll over an account that has
+      // silently stopped syncing — this has to reach Sync Status instead.
+      await expect(syncStremioLibrary(makeLogger(), PROFILE, "incremental")).rejects.toThrow(
+        /could not be decrypted/
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
 });
