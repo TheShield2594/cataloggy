@@ -17,17 +17,21 @@ const PUBLIC_DIR = join(repoRoot, "apps/web/public");
 
 // Height of the mark as a fraction of the icon it sits on.
 //
-// 512 is declared `any maskable`, so Android may crop it to anything inside a
+// icon-512 is the `maskable` entry, so Android may crop it to anything inside a
 // circle 80% of its width: at 0.62 the mark's corners stay inside that circle
-// with room to spare. 192 is only ever shown whole (browser tab strips, the
-// iOS home screen, notifications), so it can breathe closer to the edge, and
-// the favicon is small enough that padding is mostly wasted pixels.
+// with room to spare. That padding is dead weight anywhere the icon is drawn
+// whole, though, which is why the manifest declares `any` and `maskable`
+// separately and icon-512-full carries the mark at the same 0.86 the favicon
+// uses. 192 is only ever shown whole (browser tab strips, the iOS home screen,
+// notifications), so it can breathe closer to the edge, and the favicon is
+// small enough that padding is mostly wasted pixels.
+const ICO_FILL = 0.86;
 const TARGETS = [
   { file: "icons/icon-512.png", size: 512, fill: 0.62 },
+  { file: "icons/icon-512-full.png", size: 512, fill: ICO_FILL },
   { file: "icons/icon-192.png", size: 192, fill: 0.76 },
 ];
 const ICO_SIZES = [16, 32, 48];
-const ICO_FILL = 0.86;
 
 const sharp = await loadSharp("generate-icons.mjs");
 const svg = await logoSvg();

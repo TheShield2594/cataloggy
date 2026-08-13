@@ -98,7 +98,14 @@ const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
   if (pathname === "/settings/preferences") return jsonResponse({ spoilerProtection: false });
   if (pathname === "/stremio/play-signal") return jsonResponse({ status: "opened" }, 202);
   if (pathname.startsWith("/lists/") && pathname.endsWith("/items")) {
-    return jsonResponse({ items: [{ imdbId: "tt0111161", type: "movie", title: "Shawshank", metadata: null }] });
+    // Mirrors the real route: the list holds one of each type, and ?type=
+    // narrows it server-side rather than shipping both and discarding half.
+    const items = [
+      { imdbId: "tt0111161", type: "movie", title: "Shawshank", metadata: null },
+      { imdbId: "tt0903747", type: "series", title: "Breaking Bad", metadata: null },
+    ];
+    const type = searchParams.get("type");
+    return jsonResponse({ items: type ? items.filter((item) => item.type === type) : items });
   }
   if (
     pathname === "/trending" ||
@@ -295,6 +302,100 @@ describe("catalog routes serve only what the manifest advertised", () => {
       expect(response.json().metas).toEqual([
         expect.objectContaining({ id: "tt0111161", name: "Shawshank" }),
       ]);
+    } finally {
+      await fresh.close();
+    }
+  });
+
+  it("asks the API for only the type the catalog is for", async () => {
+    // Stremio requests one catalog per (list, type) pair, so an untyped fetch
+    // ships both types and throws half of each response away.
+    lists = [{ id: CUSTOM_LIST_ID, name: "Weekend", kind: "custom" }];
+    addonConfig = { enabledCatalogs: [`list:${CUSTOM_LIST_ID}`], aiConfigured: false };
+    const fresh = await buildApp();
+
+    try {
+      await fresh.inject({ method: "GET", url: `/catalog/series/cataloggy-${CUSTOM_LIST_ID}-series.json` });
+
+      const [call] = callsTo(`/lists/${CUSTOM_LIST_ID}/items`);
+      expect(new URL(call.url).searchParams.get("type")).toBe("series");
+    } finally {
+      await fresh.close();
+    }
+  });
+
+  it("serves a repeat catalog request from cache instead of refetching the list", async () => {
+    lists = [{ id: CUSTOM_LIST_ID, name: "Weekend", kind: "custom" }];
+    addonConfig = { enabledCatalogs: [`list:${CUSTOM_LIST_ID}`], aiConfigured: false };
+    const fresh = await buildApp();
+
+    try {
+      const url = `/catalog/movie/cataloggy-${CUSTOM_LIST_ID}-movie.json`;
+      const first = await fresh.inject({ method: "GET", url });
+      const second = await fresh.inject({ method: "GET", url });
+
+      expect(second.json()).toEqual(first.json());
+      expect(callsTo(`/lists/${CUSTOM_LIST_ID}/items`)).toHaveLength(1);
+    } finally {
+      await fresh.close();
+    }
+  });
+
+  it("dates the list-items cache from when the answer arrived, not from when it was asked for", async () => {
+    lists = [{ id: CUSTOM_LIST_ID, name: "Weekend", kind: "custom" }];
+    addonConfig = { enabledCatalogs: [`list:${CUSTOM_LIST_ID}`], aiConfigured: false };
+    const fresh = await buildApp();
+    const stubbedFetch = fetchMock.getMockImplementation()!;
+
+    try {
+      // Only Date is faked; the real timers still run, so `app.inject` and the
+      // awaits inside it behave normally.
+      vi.useFakeTimers({ toFake: ["Date"] });
+
+      // An API call slower than the cache's own TTL. Stamping the entry from
+      // before the call would file it already expired — so the catalog request
+      // that follows refetches immediately, and a struggling API gets hammered
+      // by the cache that exists to shield it.
+      fetchMock.mockImplementation(async (input: string | URL, init?: RequestInit) => {
+        const response = await stubbedFetch(input, init);
+        if (new URL(String(input)).pathname.endsWith("/items")) {
+          vi.setSystemTime(Date.now() + 45_000);
+        }
+        return response;
+      });
+
+      const url = `/catalog/movie/cataloggy-${CUSTOM_LIST_ID}-movie.json`;
+      await fresh.inject({ method: "GET", url });
+      await fresh.inject({ method: "GET", url });
+
+      expect(callsTo(`/lists/${CUSTOM_LIST_ID}/items`)).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+      fetchMock.mockImplementation(stubbedFetch);
+      await fresh.close();
+    }
+  });
+
+  it("caches the two types of one list apart from each other", async () => {
+    // One cache entry per list would serve the movie payload to the series
+    // catalog, emptying it.
+    lists = [{ id: CUSTOM_LIST_ID, name: "Weekend", kind: "custom" }];
+    addonConfig = { enabledCatalogs: [`list:${CUSTOM_LIST_ID}`], aiConfigured: false };
+    const fresh = await buildApp();
+
+    try {
+      const movies = await fresh.inject({
+        method: "GET",
+        url: `/catalog/movie/cataloggy-${CUSTOM_LIST_ID}-movie.json`,
+      });
+      const series = await fresh.inject({
+        method: "GET",
+        url: `/catalog/series/cataloggy-${CUSTOM_LIST_ID}-series.json`,
+      });
+
+      expect(movies.json().metas).toEqual([expect.objectContaining({ id: "tt0111161", type: "movie" })]);
+      expect(series.json().metas).toEqual([expect.objectContaining({ id: "tt0903747", type: "series" })]);
+      expect(callsTo(`/lists/${CUSTOM_LIST_ID}/items`)).toHaveLength(2);
     } finally {
       await fresh.close();
     }

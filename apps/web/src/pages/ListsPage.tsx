@@ -339,17 +339,24 @@ export function ListsPage() {
 
   // Pushing (rather than replacing) is what makes Back undo a list switch. The
   // one exception is the initial default, which the user never chose.
-  const selectList = (listId: string | null, options?: { replace?: boolean }) => {
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (listId) next.set("list", listId);
-        else next.delete("list");
-        return next;
-      },
-      { replace: options?.replace ?? false }
-    );
-  };
+  //
+  // Memoised because the default-selection effect below depends on it: as a
+  // plain function it was a new value every render, which is only harmless as
+  // long as nothing lists it as a dependency.
+  const selectList = useCallback(
+    (listId: string | null, options?: { replace?: boolean }) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (listId) next.set("list", listId);
+          else next.delete("list");
+          return next;
+        },
+        { replace: options?.replace ?? false }
+      );
+    },
+    [setSearchParams]
+  );
 
   // Every handler that can set `error` clears it first, so a transient failure
   // doesn't pin the banner for the rest of the session once the retry succeeds.
@@ -372,7 +379,10 @@ export function ListsPage() {
       setError(err instanceof Error ? err.message : "Failed to load lists");
       return [];
     }
-  }, []);
+    // `setLists` comes from useCachedState, whose setter is memoised on its key
+    // — a constant here — so naming it costs nothing and stops the dependency
+    // list from lying about what this closure reads.
+  }, [setLists]);
 
   // Both paths that load items — the effect that follows the selected list, and
   // the add modal's refetch — go through here, and each cancels the one before
@@ -421,7 +431,7 @@ export function ListsPage() {
     if (listsLoaded && !selectedListId && lists.length > 0) {
       selectList(lists[0].id, { replace: true });
     }
-  }, [listsLoaded, selectedListId, lists]);
+  }, [listsLoaded, selectedListId, lists, selectList]);
 
   useEffect(() => {
     if (!activeListId) {

@@ -151,7 +151,8 @@ export function HistoryPage() {
       }
     })();
     return () => controller.abort();
-  }, [loadPage]);
+    // `setFirstPage` is useCachedState's setter, memoised on a constant key.
+  }, [loadPage, setFirstPage]);
 
   const loadMore = useCallback(async () => {
     const token = generation.current;

@@ -71,7 +71,10 @@ export function StatsPage() {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, []);
+    // Both come from useCachedState, which memoises its setter on the cache key
+    // — constant here — so this is a truthful dependency list rather than a new
+    // callback on every render.
+  }, [setStats, setDetailed]);
 
   // Cancelled on unmount so a response can't land under whoever is signed in by
   // the time it arrives — leaving a page is as much a reason to drop the answer

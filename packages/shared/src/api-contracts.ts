@@ -150,7 +150,11 @@ export type CataloggyListItem = {
   } | null;
 };
 
-export type ListItemsResponse = { items: CataloggyListItem[] };
+export type ListItemsResponse = {
+  items: CataloggyListItem[];
+  /** Opaque cursor for the next page; absent once the list is exhausted, and always absent when the caller asked for no `limit`. */
+  nextCursor: string | null;
+};
 
 export const parseListItemsResponse = (value: unknown): ListItemsResponse => {
   const body = asObject(value, "response");
@@ -177,7 +181,7 @@ export const parseListItemsResponse = (value: unknown): ListItemsResponse => {
       metadata,
     };
   });
-  return { items };
+  return { items, nextCursor: nullableString(body.nextCursor, "nextCursor") };
 };
 
 // ─── Genres ───

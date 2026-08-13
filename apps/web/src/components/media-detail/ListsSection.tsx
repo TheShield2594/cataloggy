@@ -22,8 +22,16 @@ export function ListsSection({
   const [savingNewList, setSavingNewList] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Membership resets when the panel moves to a different title, and only then.
+  // `initialListIds` is a fresh array on each parent render, so depending on it
+  // would discard the optimistic add/remove this component applies locally
+  // every time the parent re-rendered for an unrelated reason. The ref lets the
+  // reset read the current value without becoming a trigger for it.
+  const initialListIdsRef = useRef(initialListIds);
+  initialListIdsRef.current = initialListIds;
+
   useEffect(() => {
-    setMemberIds(initialListIds);
+    setMemberIds(initialListIdsRef.current);
   }, [imdbId, type]);
 
   useEffect(() => {
