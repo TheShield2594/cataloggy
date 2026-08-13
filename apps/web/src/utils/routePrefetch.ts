@@ -59,9 +59,23 @@ const ROUTE_DATA_WARMERS: Record<string, (scope: string) => Promise<void>> = {
     const { calendar } = await api.getCalendar(30);
     writeCacheForScope(scope, "calendar:entries:30", calendar ?? []);
   },
+  // Unfiltered, which is the filter the page opens with — hence the `:all`. Any
+  // other filter is a different question with a key of its own, so warming this
+  // one can't seed a movies-only list into a view showing everything.
+  //
+  // One page exactly, taken from the page's own constant rather than a number
+  // that happens to be near it: the page counts its next offset from the rows
+  // it is holding, so warming it with more than a page seeded a first page no
+  // request would ever have returned — and one that visibly shrank to 25 rows
+  // the moment the page's own load landed. Reaching into the route's module for
+  // it costs nothing here, because `prefetchRoute` has already started that
+  // very chunk by the time this runs; the import resolves off the same promise.
   "/history": async (scope) => {
-    const { api } = await import("../api");
-    writeCacheForScope(scope, "history:events", await api.getWatchHistory(30));
+    const [{ api }, { PAGE_SIZE }] = await Promise.all([
+      import("../api"),
+      import("../pages/HistoryPage"),
+    ]);
+    writeCacheForScope(scope, "history:events:all", await api.getWatchHistory(PAGE_SIZE));
   },
   "/stats": async (scope) => {
     const { api } = await import("../api");
@@ -115,7 +129,7 @@ export function prefetchRoute(path: string): void {
 const PRIMARY_DATA_KEY: Record<string, string> = {
   "/lists": "lists:all",
   "/calendar": "calendar:entries:30",
-  "/history": "history:events",
+  "/history": "history:events:all",
   "/stats": "stats:summary",
 };
 

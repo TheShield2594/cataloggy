@@ -18,9 +18,11 @@ registerRoute(({ url }) => url.pathname === "/config.js", new NetworkOnly());
 // and never resolved at all offline, leaving the initials-on-a-gradient
 // placeholder in place of a library the user has already looked at.
 //
-// Handling these here takes the request out of `img-src` and puts it under
-// `connect-src` — see the note in image-cdn-hosts.mjs, which is why that list
-// is shared with the CSP builder rather than written out again here.
+// Handling these here moves the request from `img-src` to `connect-src` — see
+// the note in image-cdn-hosts.mjs, which is why that list is shared with the
+// CSP builder rather than written out again here. Both directives name these
+// hosts, since a poster loads by either path depending on whether this worker
+// is running.
 registerRoute(
   ({ url, request }) => request.destination === "image" && IMAGE_CDN_HOSTS.has(url.hostname),
   new CacheFirst({

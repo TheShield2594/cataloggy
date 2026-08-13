@@ -23,6 +23,13 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // The debounce cancels the timer, which does nothing for a request already on
+  // its way. `SearchPage` and `ListsPage` both pair the abort with a request id,
+  // and this needs the same two: the abort stops the wasted round trip, and the
+  // id decides which answer is allowed to reach the screen — a request already
+  // resolved when the next keystroke lands can't be aborted, only ignored.
+  const abortRef = useRef<AbortController>(undefined);
+  const requestIdRef = useRef(0);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -78,12 +85,16 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     setSearchError(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const requestId = ++requestIdRef.current;
       void (async () => {
         try {
           const [movies, series] = await Promise.all([
-            api.search("movie", query),
-            api.search("series", query),
+            api.search("movie", query, controller.signal),
+            api.search("series", query, controller.signal),
           ]);
+          if (requestIdRef.current !== requestId) return;
           const merged: SearchResult[] = [];
           const maxLen = Math.max(movies.length, series.length);
           for (let i = 0; i < maxLen && merged.length < 8; i++) {
@@ -91,16 +102,43 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             if (i < series.length) merged.push(series[i]);
           }
           setResults(merged.slice(0, 8));
-        } catch {
+        } catch (err) {
+          if (requestIdRef.current !== requestId) return;
+          // An abort is this component cancelling its own request; the palette
+          // is mid-search, not broken, so it must not say search is unavailable.
+          if (err instanceof DOMException && err.name === "AbortError") return;
           setResults([]);
           setSearchError(true);
         } finally {
-          setSearching(false);
+          // Clearing the spinner is a staleness decision like the rest: the
+          // superseded request finishing says nothing about the live one.
+          if (requestIdRef.current === requestId) setSearching(false);
         }
       })();
     }, 250);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    // Every way this effect can be superseded ends here, which is why the abort
+    // lives in the cleanup rather than beside the request. Clearing the timer
+    // alone only covers a query replaced *during* the debounce; emptying the
+    // input takes the early return above and never schedules the timer that
+    // would have cancelled the request already in flight, so the results for a
+    // query no longer in the box arrived and rendered under an empty one.
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      abortRef.current?.abort();
+      requestIdRef.current++;
+    };
   }, [query]);
+
+  // The palette stays mounted across open/close cycles by design (App.tsx), so
+  // a search left running when it closes would otherwise keep going and land in
+  // state nobody is looking at. Closing is where it gets dropped; the effect
+  // above owns the abort while the palette is open.
+  useEffect(() => {
+    if (open) return;
+    abortRef.current?.abort();
+    abortRef.current = undefined;
+    requestIdRef.current++;
+  }, [open]);
 
   const goToSearch = useCallback((q: string) => {
     // Navigate immediately; the palette animates out over the new page.
