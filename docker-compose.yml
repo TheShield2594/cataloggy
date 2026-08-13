@@ -90,8 +90,10 @@ services:
       CATALOGGY_WEB_PUBLIC: ${CATALOGGY_WEB_PUBLIC:-http://192.168.1.25:7002}
       # Which reverse proxies may set X-Forwarded-For. Unset trusts none of
       # them, so behind a proxy every client arrives as the proxy's own address
-      # and the whole household shares one rate-limit budget. Accepts "true",
-      # "false", or a comma-separated list of proxy IPs/CIDRs.
+      # and the whole household shares one rate-limit budget. Set it to the
+      # proxy's IP/CIDR as this container sees it — not to "true", which trusts
+      # the whole forwarded chain and lets any client pick its own request.ip.
+      # See .env.example for the long version.
       TRUST_PROXY: ${TRUST_PROXY}
       # Path prefixes a reverse proxy may mount this service under; each is
       # stripped before routing. Defaults to /api. It has a service-specific

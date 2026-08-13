@@ -53,7 +53,20 @@ const SKIPPED_DIRS = new Set(["node_modules", "dist", "build", "coverage", ".tur
 const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
 const TEST_DIR = /(^|\/)(__tests__|test)(\/|$)/;
 
-const ENV_READ = /process\.env(?:\.([A-Za-z_][A-Za-z0-9_]*)|\[\s*["'`]([A-Za-z_][A-Za-z0-9_]*)["'`]\s*\])/g;
+// The read forms this recognises: process.env.NAME, process.env?.NAME,
+// process.env["NAME"] and process.env?.["NAME"]. A form that isn't matched is
+// a variable this script silently blesses, which is the failure it exists to
+// prevent — so the destructuring form gets its own pattern below rather than
+// being left out.
+const ENV_READ =
+  /process\.env(?:\?\.|\.)([A-Za-z_][A-Za-z0-9_]*)|process\.env(?:\?\.)?\[\s*["'`]([A-Za-z_][A-Za-z0-9_]*)["'`]\s*\]/g;
+
+// `const { WEBHOOK_SECRET, PORT: port, LOG_LEVEL = "info" } = process.env`,
+// across lines as well as on one. The names are pulled out of the capture in
+// a second pass, since a renamed or defaulted binding still reads the name on
+// the left of the `:` or `=`.
+const ENV_DESTRUCTURE = /(?:const|let|var)\s*\{([^}]*)\}\s*=\s*process\.env\b/g;
+const DESTRUCTURED_NAME = /^\s*([A-Za-z_][A-Za-z0-9_]*)/;
 
 // A focused reader for the one shape this file uses, rather than a YAML
 // dependency: two-space-indented service names under `services:`, and either a
@@ -118,22 +131,40 @@ const walk = (dir, files = []) => {
   return files;
 };
 
+// Counted off the match offset rather than by scanning line by line, because a
+// destructured read is routinely spread over several lines.
+const lineAt = (source, index) => {
+  let line = 1;
+  for (let i = 0; i < index; i += 1) if (source[i] === "\n") line += 1;
+  return line;
+};
+
 // name -> [{ file, line }]
 const collectEnvReads = (dir) => {
   const reads = new Map();
+
+  const record = (name, file, line) => {
+    if (!reads.has(name)) reads.set(name, []);
+    reads.get(name).push({ file, line });
+  };
 
   for (const file of walk(dir)) {
     const rel = relative(ROOT, file).split(sep).join("/");
     if (TEST_FILE.test(rel) || TEST_DIR.test(rel)) continue;
 
-    const lines = readFileSync(file, "utf8").split("\n");
-    lines.forEach((text, index) => {
-      for (const match of text.matchAll(ENV_READ)) {
-        const name = match[1] ?? match[2];
-        if (!reads.has(name)) reads.set(name, []);
-        reads.get(name).push({ file: rel, line: index + 1 });
+    const source = readFileSync(file, "utf8");
+
+    for (const match of source.matchAll(ENV_READ)) {
+      record(match[1] ?? match[2], rel, lineAt(source, match.index));
+    }
+
+    for (const match of source.matchAll(ENV_DESTRUCTURE)) {
+      const line = lineAt(source, match.index);
+      for (const binding of match[1].split(",")) {
+        const name = DESTRUCTURED_NAME.exec(binding)?.[1];
+        if (name) record(name, rel, line);
       }
-    });
+    }
   }
 
   return reads;
@@ -177,7 +208,7 @@ const problems = [];
 
 for (const { dir, services } of sourceTrees) {
   const absolute = join(ROOT, dir);
-  let exists = true;
+  let exists;
   try {
     exists = statSync(absolute).isDirectory();
   } catch {
