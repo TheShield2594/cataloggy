@@ -85,7 +85,6 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     setSearchError(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
       const requestId = ++requestIdRef.current;
@@ -117,7 +116,17 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         }
       })();
     }, 250);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    // Every way this effect can be superseded ends here, which is why the abort
+    // lives in the cleanup rather than beside the request. Clearing the timer
+    // alone only covers a query replaced *during* the debounce; emptying the
+    // input takes the early return above and never schedules the timer that
+    // would have cancelled the request already in flight, so the results for a
+    // query no longer in the box arrived and rendered under an empty one.
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      abortRef.current?.abort();
+      requestIdRef.current++;
+    };
   }, [query]);
 
   // The palette stays mounted across open/close cycles by design (App.tsx), so

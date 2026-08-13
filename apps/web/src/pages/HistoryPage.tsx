@@ -8,9 +8,17 @@ import { useCachedState } from "../hooks/useCachedState";
 import { relogWatchEvent } from "../utils/watchEvents";
 import { PAGE_TITLE, SECTION_TITLE, KICKER } from "../components/typography";
 
-const PAGE_SIZE = 25;
+/** Rows per request. Exported so the route prefetcher's warm-up can match it. */
+export const PAGE_SIZE = 25;
 
 type TypeFilter = "all" | "movie" | "episode";
+
+// A short page is the end of the list — but only of the list the request was
+// asking about, so each caller decides this after its own staleness check
+// rather than having the fetch decide for whichever list is on screen now.
+// Module scope because it depends on nothing else: a copy per render would be
+// one more identity for the effect that reads it to have to track.
+const isLastPage = (page: WatchEvent[]) => page.length < PAGE_SIZE;
 
 function groupLabel(date: Date, now: Date): string {
   const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
@@ -96,11 +104,6 @@ export function HistoryPage() {
     });
     return signal?.aborted ? [] : page;
   }, [typeFilter]);
-
-  // A short page is the end of the list — but only of the list the request was
-  // asking about, so each caller decides this after its own staleness check
-  // rather than having the fetch decide for whichever list is on screen now.
-  const isLastPage = (page: WatchEvent[]) => page.length < PAGE_SIZE;
 
   /*
    * Which set of rows the loaded pages describe.

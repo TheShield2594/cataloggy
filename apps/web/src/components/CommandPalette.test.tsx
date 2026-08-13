@@ -325,6 +325,31 @@ describe("CommandPalette", () => {
     expect(screen.getByText("Searching...")).toBeInTheDocument();
   });
 
+  // Emptying the box takes the effect's early return, which schedules no timer
+  // — so the cleanup is the only thing standing between a request already in
+  // flight and a set of results rendered under a query that is no longer there.
+  it("shows nothing when the query is cleared out from under a running search", async () => {
+    const user = userEvent.setup();
+    let releaseAbandoned: () => void = () => {};
+    const abandoned = new Promise<SearchResult[]>((r) => {
+      releaseAbandoned = () => r([result("Solaris")]);
+    });
+    search.mockImplementation((type) => (type === "movie" ? abandoned : Promise.resolve([])));
+    renderPalette();
+
+    const input = screen.getByLabelText("Search everything");
+    await user.type(input, "sol");
+    await waitFor(() => expect(search).toHaveBeenCalledWith("movie", "sol", expect.any(AbortSignal)));
+    await user.clear(input);
+
+    await act(async () => {
+      releaseAbandoned();
+    });
+
+    expect(screen.queryByRole("option", { name: /Solaris/ })).not.toBeInTheDocument();
+    expect(input).toHaveValue("");
+  });
+
   it("gives up the request when the palette closes", async () => {
     const user = userEvent.setup();
     const signals: AbortSignal[] = [];

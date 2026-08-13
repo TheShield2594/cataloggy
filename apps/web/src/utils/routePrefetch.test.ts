@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EAGER_ROUTES, ROUTE_LOADERS, prefetchRoute, resetPrefetchStateForTests } from "./routePrefetch";
 import { readCache, resetDataCacheForTests } from "./dataCache";
+import { PAGE_SIZE } from "../pages/HistoryPage";
 import { MORE_NAV_ITEMS, PRIMARY_NAV_ITEMS } from "../components/MobileTabBar";
 import { SIDEBAR_NAV_ITEMS } from "../components/Sidebar";
 
@@ -49,6 +50,20 @@ describe("route prefetch coverage", () => {
 
     prefetchRoute("/history");
     await vi.waitFor(() => expect(readCache("history:events:all")).toEqual(events));
+  });
+
+  // The page counts the offset of its next request from the rows it is holding,
+  // so a warm-up of any other size seeds a first page no request would have
+  // returned — and one that visibly resizes when the page's own load lands.
+  it("warms exactly the page of history the page itself would ask for", async () => {
+    resetDataCacheForTests();
+    resetPrefetchStateForTests();
+    const getWatchHistory = vi.fn(async () => []);
+    vi.doMock("../api", () => ({ api: { getWatchHistory } }));
+
+    prefetchRoute("/history");
+
+    await vi.waitFor(() => expect(getWatchHistory).toHaveBeenCalledWith(PAGE_SIZE));
   });
 
   it("ignores paths it doesn't know rather than throwing at them", () => {
