@@ -50,10 +50,13 @@ export const runtimeConfig = {
     const trimmed = value.trim();
     if (!trimmed) {
       window.localStorage.removeItem(API_BASE_OVERRIDE_KEY);
-      return;
+    } else {
+      window.localStorage.setItem(API_BASE_OVERRIDE_KEY, trimmed);
     }
-
-    window.localStorage.setItem(API_BASE_OVERRIDE_KEY, trimmed);
+    // The service worker decides what to cache by comparing against the API
+    // base, and this override lives only here — a worker never told about it
+    // would go on matching the base the container was built with.
+    void tellServiceWorkerWhereTheApiIs();
   },
   getApiBase() {
     return runtimeConfig.getApiBaseOverride() || API_BASE_DEFAULT;
@@ -597,6 +600,26 @@ export async function purgeApiCache(): Promise<void> {
   } catch {
     // Cache Storage is unavailable (private mode in some browsers, non-secure
     // origin) — there is nothing cached to purge in that case either.
+  }
+}
+
+/**
+ * Tells the service worker which origin and path prefix the API answers on, so
+ * its runtime cache matches the requests this browser actually makes. Resolves
+ * once the message is sent, or immediately when no worker is registered.
+ *
+ * The worker reads the same value out of `config.js` at install, which covers
+ * the first load; this covers the part `config.js` can't know about — the
+ * per-device override — and any later change to it.
+ */
+export async function tellServiceWorkerWhereTheApiIs(): Promise<void> {
+  if (!navigator.serviceWorker) return;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const worker = navigator.serviceWorker.controller ?? registration.active;
+    worker?.postMessage({ type: "SET_API_BASE", apiBase: runtimeConfig.getApiBase() });
+  } catch {
+    // No worker to tell (unsupported, unregistered, or a non-secure origin).
   }
 }
 

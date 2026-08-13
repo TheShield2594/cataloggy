@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { registerSW } from "virtual:pwa-register";
 import { RefreshCw, X } from "lucide-react";
+import { tellServiceWorkerWhereTheApiIs } from "../api";
 import { useExitAnimation } from "../hooks/useExitAnimation";
 
 // registerType is "prompt" (see vite.config.ts) rather than "autoUpdate" —
@@ -15,7 +16,11 @@ export function UpdatePrompt() {
   useEffect(() => {
     const update = registerSW({
       immediate: true,
-      onNeedRefresh: () => setNeedRefresh(true)
+      onNeedRefresh: () => setNeedRefresh(true),
+      // The worker can only cache API responses it can recognise, and the API
+      // base it compares against is a runtime value this page resolves — the
+      // container's config.js, or a per-device override the worker cannot read.
+      onRegisteredSW: () => void tellServiceWorkerWhereTheApiIs()
     });
     setUpdateSW(() => update);
   }, []);
