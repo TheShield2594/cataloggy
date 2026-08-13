@@ -19,6 +19,7 @@
 
 import type { NotificationChannelKind } from "@prisma/client";
 import { prisma } from "./prisma.js";
+import { SECRET_CONTEXT, decryptSecret } from "./secret-box.js";
 import { resolveNotificationUrl } from "./ssrf.js";
 
 export const NOTIFICATION_CHANNEL_KINDS = ["ntfy", "gotify", "discord", "webhook"] as const;
@@ -26,7 +27,11 @@ export const NOTIFICATION_CHANNEL_KINDS = ["ntfy", "gotify", "discord", "webhook
 export const isNotificationChannelKind = (value: unknown): value is NotificationChannelKind =>
   typeof value === "string" && (NOTIFICATION_CHANNEL_KINDS as readonly string[]).includes(value);
 
-/** The persisted fields a send needs. */
+/**
+ * The persisted fields a send needs. `token` is whatever the column holds, so
+ * it arrives encrypted — `sendToChannel` opens it, and `buildChannelRequest`
+ * only ever sees the plaintext it is about to put in a header.
+ */
 export type ChannelTarget = {
   id: string;
   kind: NotificationChannelKind;
@@ -175,7 +180,17 @@ export const buildChannelRequest = (channel: ChannelTarget, event: NotificationE
  * URL that no longer resolves to an allowed target, and on a timeout.
  */
 export const sendToChannel = async (channel: ChannelTarget, event: NotificationEvent): Promise<void> => {
-  const request = buildChannelRequest(channel, event);
+  // Sending without the token would reach the server and be rejected there,
+  // hours later and reported as a plain 401 — naming the actual cause is worth
+  // more than an attempt that cannot succeed.
+  const token = channel.token === null ? null : decryptSecret(SECRET_CONTEXT.notificationChannelToken, channel.token);
+  if (channel.token !== null && token === null) {
+    throw new Error(
+      `${channel.name}: stored token could not be decrypted — API_TOKEN has changed since it was saved. Re-enter the token in Settings.`
+    );
+  }
+
+  const request = buildChannelRequest({ ...channel, token }, event);
 
   // Resolved here rather than trusting the save-time check: the channel may
   // have been stored months ago, and the name could point somewhere else now.

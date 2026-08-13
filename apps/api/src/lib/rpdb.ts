@@ -1,12 +1,12 @@
-import { prisma } from "./prisma.js";
+import { readSecretKv } from "./secret-store.js";
 import type { StremioMetaPreview } from "./types.js";
 
 const RPDB_API_KEY_KV = "rpdb:apiKey";
 export const RPDB_BASE_URL = "https://api.ratingposterdb.com";
 
 export const getRpdbApiKey = async (): Promise<string | null> => {
-  const row = await prisma.kV.findUnique({ where: { key: RPDB_API_KEY_KV } });
-  return row?.value?.trim() || null;
+  const stored = await readSecretKv(RPDB_API_KEY_KV);
+  return stored?.trim() || null;
 };
 
 export const buildRpdbPosterUrl = (rpdbKey: string, imdbId: string): string =>

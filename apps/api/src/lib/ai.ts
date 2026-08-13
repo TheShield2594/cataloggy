@@ -6,6 +6,7 @@ import { getTmdb } from "./tmdb-client.js";
 import { getRpdbApiKey, withRpdbPoster } from "./rpdb.js";
 import { upsertMetadata } from "./metadata.js";
 import { resolveAiProviderUrl } from "./ssrf.js";
+import { readSecretKv } from "./secret-store.js";
 import type { AiProviderConfig, StremioMetaPreview } from "./types.js";
 
 export const AI_CONFIG_KEY = "ai:config";
@@ -21,11 +22,15 @@ export const MIN_AI_CONFIG_MAX_TOKENS = 2048;
 const BASE_TOKENS = 400;
 const TOKENS_PER_RECOMMENDATION = 150;
 
+// The whole config is stored as one encrypted blob rather than just its
+// Authorization header: the header is the credential, but the URL of a private
+// LLM endpoint is worth no more exposure than it needs either, and one blob
+// means there is no half-encrypted row to reason about.
 export const getAiConfig = async (): Promise<AiProviderConfig | null> => {
-  const row = await prisma.kV.findUnique({ where: { key: AI_CONFIG_KEY } });
-  if (!row) return null;
+  const stored = await readSecretKv(AI_CONFIG_KEY);
+  if (!stored) return null;
   try {
-    return JSON.parse(row.value) as AiProviderConfig;
+    return JSON.parse(stored) as AiProviderConfig;
   } catch {
     return null;
   }

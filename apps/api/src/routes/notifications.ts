@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { NotificationChannelKind } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { resolveProfile } from "../lib/profile.js";
+import { SECRET_CONTEXT, encryptSecret } from "../lib/secret-box.js";
 import { validateNotificationUrl } from "../lib/ssrf.js";
 import {
   NOTIFICATION_CHANNEL_KINDS,
@@ -49,8 +50,12 @@ const publicChannel = (channel: {
 /**
  * Rules a channel's URL/token have to satisfy beyond being a safe outbound
  * target. Returns an error message, or null when the pair is usable.
+ *
+ * Takes `hasToken` rather than the token itself: nothing here depends on the
+ * value, and on a PATCH that leaves the token alone the only thing in hand is
+ * the stored ciphertext.
  */
-const validateForKind = (kind: NotificationChannelKind, url: string, token: string | null): string | null => {
+const validateForKind = (kind: NotificationChannelKind, url: string, hasToken: boolean): string | null => {
   const parsed = validateNotificationUrl(url);
   if (!parsed) return URL_ERROR;
 
@@ -61,7 +66,7 @@ const validateForKind = (kind: NotificationChannelKind, url: string, token: stri
   }
   // Gotify rejects an unauthenticated /message outright, so a missing token is
   // a guaranteed failure worth catching at save time.
-  if (kind === "gotify" && !token) {
+  if (kind === "gotify" && !hasToken) {
     return "token is required for Gotify (an application token)";
   }
   return null;
@@ -94,7 +99,7 @@ const notificationRoutes: FastifyPluginAsync = async (app) => {
     const url = typeof body.url === "string" ? body.url.trim() : "";
     const token = typeof body.token === "string" && body.token.trim() ? body.token.trim() : null;
 
-    const problem = validateForKind(kind, url, token);
+    const problem = validateForKind(kind, url, !!token);
     if (problem) return reply.code(400).send({ error: problem });
     if (token && token.length > MAX_TOKEN_LENGTH) {
       return reply.code(400).send({ error: `token must be at most ${MAX_TOKEN_LENGTH} characters` });
@@ -117,7 +122,7 @@ const notificationRoutes: FastifyPluginAsync = async (app) => {
         kind,
         name,
         url,
-        token,
+        token: token && encryptSecret(SECRET_CONTEXT.notificationChannelToken, token),
         enabled: body.enabled === undefined ? true : body.enabled !== false,
         profileId: request.profileId!,
       },
@@ -139,16 +144,22 @@ const notificationRoutes: FastifyPluginAsync = async (app) => {
       const url = typeof body?.url === "string" ? body.url.trim() : existing.url;
       // An empty string clears a stored token; omitting the field keeps it,
       // which is what the UI sends back when it never saw the token to begin with.
-      const token =
+      const newToken =
         body?.token === undefined
-          ? existing.token
+          ? undefined
           : typeof body.token === "string" && body.token.trim()
             ? body.token.trim()
             : null;
+      // Kept tokens stay as they are on disk — already encrypted, and nothing
+      // here needs to read one back to decide whether the channel is valid.
+      const token =
+        newToken === undefined
+          ? existing.token
+          : newToken && encryptSecret(SECRET_CONTEXT.notificationChannelToken, newToken);
 
-      const problem = validateForKind(existing.kind, url, token);
+      const problem = validateForKind(existing.kind, url, !!token);
       if (problem) return reply.code(400).send({ error: problem });
-      if (token && token.length > MAX_TOKEN_LENGTH) {
+      if (newToken && newToken.length > MAX_TOKEN_LENGTH) {
         return reply.code(400).send({ error: `token must be at most ${MAX_TOKEN_LENGTH} characters` });
       }
 

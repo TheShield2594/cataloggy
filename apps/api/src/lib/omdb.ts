@@ -1,11 +1,12 @@
 import { prisma } from "./prisma.js";
+import { readSecretKv } from "./secret-store.js";
 import type { MetadataType } from "@prisma/client";
 
 export const OMDB_API_KEY_KV = "omdb:apiKey";
 
 export const getOmdbApiKey = async (): Promise<string | null> => {
-  const row = await prisma.kV.findUnique({ where: { key: OMDB_API_KEY_KV } });
-  return row?.value?.trim() || null;
+  const stored = await readSecretKv(OMDB_API_KEY_KV);
+  return stored?.trim() || null;
 };
 
 export type OmdbRatings = {

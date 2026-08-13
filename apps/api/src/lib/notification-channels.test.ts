@@ -206,4 +206,38 @@ describe("sendToChannel", () => {
     // SSRF probe.
     await expect(sendToChannel(channel({ name: "Phone" }), EVENT)).rejects.toThrow("Phone: HTTP 403");
   });
+
+  describe("with an encrypted token", () => {
+    const originalToken = process.env.API_TOKEN;
+
+    afterEach(() => {
+      if (originalToken === undefined) delete process.env.API_TOKEN;
+      else process.env.API_TOKEN = originalToken;
+    });
+
+    it("sends the decrypted token, not what the column holds", async () => {
+      process.env.API_TOKEN = "channel-token-key";
+      const { sendToChannel } = await loadModule();
+      const { SECRET_CONTEXT, encryptSecret } = await import("./secret-box.js");
+      const stored = encryptSecret(SECRET_CONTEXT.notificationChannelToken, "gotify-app-token");
+      resolveNotificationUrl.mockResolvedValue(new URL("http://gotify.lan/message"));
+
+      await sendToChannel(channel({ kind: "gotify", url: "http://gotify.lan", token: stored }), EVENT);
+
+      expect(headersOf(fetchMock.mock.calls[0][1])["X-Gotify-Key"]).toBe("gotify-app-token");
+    });
+
+    it("says why rather than sending unauthenticated when the token won't decrypt", async () => {
+      process.env.API_TOKEN = "channel-token-key";
+      const { sendToChannel } = await loadModule();
+      const { SECRET_CONTEXT, encryptSecret } = await import("./secret-box.js");
+      const stored = encryptSecret(SECRET_CONTEXT.notificationChannelToken, "gotify-app-token");
+      process.env.API_TOKEN = "rotated-key";
+
+      await expect(
+        sendToChannel(channel({ kind: "gotify", name: "Gotify", url: "http://gotify.lan", token: stored }), EVENT)
+      ).rejects.toThrow(/Gotify: stored token could not be decrypted/);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
 });

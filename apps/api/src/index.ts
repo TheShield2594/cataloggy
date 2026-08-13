@@ -23,6 +23,7 @@ import { isPlayDetectionEnabled, settleDuePlaySignals } from "./lib/play-signal.
 import { ensureDefaultWatchlist } from "./lib/watchlist.js";
 import { ensureDefaultCollection } from "./lib/collection.js";
 import { getDefaultProfileId } from "./lib/profile.js";
+import { encryptStoredSecrets } from "./lib/secret-migration.js";
 import { checkUpcomingEpisodesAndNotify } from "./lib/notify-episodes.js";
 import { isSteamSyncConfigured, syncSteamLibrary } from "./lib/steam-sync.js";
 import { cleanupStaleSessions, SCROBBLE_CLEANUP_INTERVAL_MS } from "./routes/scrobble.js";
@@ -281,6 +282,10 @@ const start = async () => {
 
   await ensureDefaultWatchlist();
   await ensureDefaultCollection();
+  // Before anything reads a credential, so an API_TOKEN that no longer matches
+  // what the database was written under is one startup error rather than a
+  // week of integrations failing separately.
+  await encryptStoredSecrets(app.log);
 
   if (TRAKT_POLL_INTERVAL_SEC > 0) {
     everyInterval({

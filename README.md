@@ -372,7 +372,7 @@ To schedule automatic backups, add a cron entry that runs `backup.sh` on a sched
 0 3 * * * cd /path/to/cataloggy && ./scripts/backup.sh >> backups/backup.log 2>&1
 ```
 
-A dump is a complete copy of your database — every profile's watch history and lists, plus the OAuth access/refresh tokens stored for Trakt, Twitch and Steam and the access key for a connected Stremio account. Treat the file like a password:
+A dump is a complete copy of your database — every profile's watch history and lists, plus the credentials Cataloggy holds for the services you connected. Those credentials are [encrypted at rest](#secrets-at-rest) with a key derived from `API_TOKEN`, so a dump on its own doesn't hand them over; everything else in it is your viewing history in the clear. Treat the file like a password:
 
 - `backup.sh` runs under `umask 077` and `chmod`s `$BACKUP_DIR` to `700` and each dump to `600`, so other local users on the host can't read them. Point `BACKUP_DIR` at a directory that only you own.
 - `backups/` and `*.sql.gz` are git-ignored, so a `git add -A` from the repo root can't sweep a dump into git history. If you move backups elsewhere within the repo, keep them ignored.
@@ -405,12 +405,41 @@ Cataloggy is designed for self-hosting on a trusted local network (LAN), not for
 - That CSP's `connect-src` names only the origins this deployment actually talks to — `'self'`, plus `VITE_API_BASE`, `VITE_ADDON_BASE`, (if set) the `SENTRY_DSN` host, and the artwork CDNs the service worker caches posters from — rather than allowing every host, so script injected into the page cannot post your token to an arbitrary server. The header is rendered from `apps/web/serve.template.json` when the `web` container starts, since those origins are only known then. If some browser needs to reach an origin the container doesn't know about (most likely a per-browser API base set in Settings), add it to `CSP_CONNECT_SRC_EXTRA` — otherwise the browser will block the request. `style-src` still allows `'unsafe-inline'`, which the app's inline React styles require; style injection is far lower-risk than script injection, so that one is an accepted weakening.
 - The Stremio add-on protocol sends no credentials, so the API's built-in catalog manifest (`/addon/stremio/...`) cannot sit behind `API_TOKEN`. It is instead gated by an unguessable per-profile secret in the URL path (`/addon/stremio/<secret>/manifest.json`), derived from `API_TOKEN` and served to that profile from `GET /addon/config`; requests without a valid secret get the token check like any other route, and the secret decides which profile's lists are served, so one add-on URL cannot read another profile's library. Rotating `API_TOKEN` invalidates every add-on URL — reinstall from Settings afterwards.
 - The separate add-on service (port `7001`, the full-featured one Settings links to) is still unauthenticated: anyone who can reach it can read the lists of the profile named in its URL (or the oldest profile, for the prefix-less URL). That is inherent to the protocol — Stremio cannot send a token — so keep that port on your LAN, and do not proxy it to the internet unless you are comfortable with your watchlist being public. Its write endpoints are separately protected. The scrobble endpoint takes a bearer token derived from `API_TOKEN`, which the service never emits. "Mark Watched" cannot use that token — Stremio can only fetch a plain URL, so the credential has to be in the URL, and the subtitles response carrying it is served to anyone who asks — so each of those URLs carries a capability signed for the one profile and the one title or episode it was built for, expiring after twelve hours. Reading one out of a subtitles response (or a proxy log) therefore allows re-marking that single title, not writing arbitrary history.
-- Connecting a Stremio account stores only the access key Stremio issues, never your password — the password is sent once to Stremio's login endpoint, exchanged for the key, and discarded. The key is not scoped: it grants the same library access a signed-in Stremio client has, so it belongs to the same "treat your database dump like a password" bracket as the Trakt and Steam tokens. Disconnecting from Settings deletes it. `POST /stremio/library/connect` is rate-limited to 10/min/IP like the other credential-accepting routes.
+- Connecting a Stremio account stores only the access key Stremio issues, never your password — the password is sent once to Stremio's login endpoint, exchanged for the key, and discarded. The key is not scoped: it grants the same library access a signed-in Stremio client has. It is encrypted at rest along with the other stored credentials (see below). Disconnecting from Settings deletes it. `POST /stremio/library/connect` is rate-limited to 10/min/IP like the other credential-accepting routes.
 - Linking a Trakt account is CSRF-protected: `GET /trakt/oauth/authorize` (which requires the API token) mints a single-use `state` that expires in 10 minutes, and the callback rejects anything else — so a link someone else sends you cannot silently bind your install to their Trakt account.
 - If you do expose Cataloggy beyond your LAN, put it behind a reverse proxy with TLS (e.g. Nginx Proxy Manager) and consider implementing a proper session-based auth flow.
 - All API routes are rate-limited globally (200 req/min/IP), with tighter per-route limits on sensitive endpoints: PIN verification (`POST /profiles/:id/verify`, 10/min/IP), the Trakt OAuth authorize/callback routes (10/min/IP), the Plex/Jellyfin webhooks (60/min/IP) and the built-in Stremio manifest/catalog routes (240/min/IP — they answer unauthenticated callers, but a Stremio home screen fetches one request per catalog, so the budget covers several refreshes a minute rather than a single request). Calls from the Stremio addon service get their own 1000 req/min bucket rather than sharing the browser's — every Stremio client reaches the API from that one container's IP. The addon identifies itself with a token derived from `API_TOKEN` (never the raw token, which the browser also holds), so nothing extra needs configuring and a leaked browser token cannot drain the addon's budget. The limiter's counters are in-memory and per-process, so they assume the documented single-`api`-container deployment; running multiple API replicas would give each its own independent budget.
 - The Plex/Jellyfin webhook endpoints (`/webhooks/plex`, `/webhooks/jellyfin`) authenticate with a single shared secret (`WEBHOOK_SECRET`) sent as a query param or header — neither Plex nor Jellyfin support signing outgoing webhooks, so this is the strongest verification available. Treat `WEBHOOK_SECRET` like a password and **do not expose these endpoints to the public internet**; keep them reachable only from your LAN/reverse-proxy-internal network, where Plex/Jellyfin themselves run. If you must route them through a reverse proxy, set `WEBHOOK_ALLOWED_IPS` to a comma-separated allowlist of your Plex/Jellyfin server IPs (requires `TRUST_PROXY` to be configured correctly) as a second layer of defense. Where you put the secret matters — see [Webhook secret placement](#webhook-secret-placement).
 - Container logs are capped at 10MB × 3 files per service (`docker-compose.yml`'s `x-logging` block) so they can't grow unbounded on the host over a long-running, unattended deployment.
+
+### Secrets at rest
+
+Every credential Cataloggy stores on your behalf is encrypted in the database with AES-256-GCM:
+
+| What | Where it lives |
+| --- | --- |
+| Trakt access + refresh tokens | `TraktToken` |
+| Stremio account access key | `StremioAuth.authKey` |
+| ntfy / Gotify / webhook tokens | `NotificationChannel.token` |
+| TMDB, OMDB and RPDB API keys | `KV` |
+| AI provider config, including its `Authorization` header | `KV` |
+| VAPID private key (web push) | `KV` |
+
+The key is derived from `API_TOKEN` with HKDF-SHA256 — the same "derive from the one secret you already have" approach as the add-on URL secret and profile access tokens — so there is no extra variable to set and no key file to lose. Each value is also bound to the column it lives in, so a ciphertext lifted out of one row and pasted into another fails to decrypt rather than being accepted somewhere it doesn't belong.
+
+**What this protects against:** a copy of the database — a `pg_dump` on a NAS, the `pgdata` volume, an old backup. Without `API_TOKEN`, none of the credentials in it can be read.
+
+**What it does not protect against:** anyone who can already run code as the API container or read its environment. The process needs `API_TOKEN` to serve a single request, so it necessarily holds the key. Encryption at rest raises the cost of a stolen file, not of a compromised host.
+
+**Rotating `API_TOKEN` invalidates every stored credential.** This is the real cost of deriving the key from it. Nothing is lost that can't be re-entered, but it is re-entry, not a restart:
+
+1. On the next start the API logs an error naming each credential it can no longer decrypt.
+2. Reconnect Trakt and Stremio, and re-enter the API keys and notification tokens, from Settings.
+3. Web push is the exception worth planning around: the VAPID keypair identifies this server to every browser that ever subscribed, so it cannot be regenerated without silently unsubscribing all of them. Rather than do that quietly, the API refuses to send push at all and says why. Restore the old `API_TOKEN` if you have it; otherwise delete the `push:vapidKeys` row and have each browser re-subscribe.
+
+Rotating also invalidates every add-on URL and every profile access token, as it did before this — so plan a rotation as a maintenance task, not a config edit.
+
+Rows written before this shipped are read back unchanged and encrypted in place on the next start, so upgrading needs nothing from you. A deployment running without `API_TOKEN` at all (development only — production refuses to start without one) keeps writing plaintext, and logs a warning saying so.
 
 ### Webhook secret placement
 

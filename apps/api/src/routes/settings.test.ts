@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
+import { decryptSecret, kvSecretContext } from "../lib/secret-box.js";
 
 const prismaMock = {
   kV: { upsert: vi.fn(), deleteMany: vi.fn() },
@@ -198,6 +199,28 @@ describe("settings routes", () => {
       expect(prismaMock.kV.upsert).toHaveBeenCalledWith(
         expect.objectContaining({ update: expect.objectContaining({ value: "abc123" }) })
       );
+    });
+
+    // The route hands the key to the secret store rather than writing it, so
+    // this is the check that it actually went that way: with a token to derive
+    // from, what lands in the row is ciphertext the key can be read back out of
+    // — not the key itself.
+    it("stores the key encrypted when API_TOKEN is set", async () => {
+      const originalToken = process.env.API_TOKEN;
+      process.env.API_TOKEN = "settings-route-token";
+      try {
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200 }));
+        const app = await buildApp();
+
+        await app.inject({ method: "POST", url: "/tmdb/key", payload: { apiKey: "abc123" } });
+
+        const stored = prismaMock.kV.upsert.mock.calls[0][0].update.value as string;
+        expect(stored).not.toContain("abc123");
+        expect(decryptSecret(kvSecretContext("tmdb:apiKey"), stored)).toBe("abc123");
+      } finally {
+        if (originalToken === undefined) delete process.env.API_TOKEN;
+        else process.env.API_TOKEN = originalToken;
+      }
     });
 
     it("refuses to overwrite a working key with one TMDB rejects", async () => {
