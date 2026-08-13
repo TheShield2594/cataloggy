@@ -282,7 +282,13 @@ must also be public for the API to return anything.
 
 If `STEAM_SYNC_INTERVAL_SEC` is out of range the API refuses to start and says
 so — timer delays are a 32-bit value underneath, and a too-large one fires
-immediately instead of waiting, hammering the sync in a loop.
+immediately instead of waiting, hammering the sync in a loop. The same applies
+to `TRAKT_POLL_INTERVAL_SEC`, `STREMIO_POLL_INTERVAL_SEC`,
+`AI_REFRESH_INTERVAL_SEC` and `NOTIFICATION_CHECK_INTERVAL_SEC`: a value that
+isn't a number (`5min`, say) is a startup error naming the variable, where it
+used to disable that job silently while the log claimed it had been "set to 0".
+Blank counts as unset, so the default applies; `0` is still the way to turn a
+job off.
 
 ## AI recommendations
 

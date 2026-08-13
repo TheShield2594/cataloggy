@@ -556,6 +556,17 @@ export type JobFailure = {
   failedAt: string;
 };
 
+/** The last run of a scheduled job, whether or not it failed. */
+export type JobRun = {
+  job: string;
+  status: "ok" | "failed";
+  message: string | null;
+  durationMs: number | null;
+  /** Ran past its own interval, so the tick that followed was dropped. */
+  overran: boolean;
+  at: string;
+};
+
 /** `source` says which key is in use: one saved here, or `TMDB_API_KEY`. */
 export type TmdbStatus = {
   configured: boolean;
@@ -944,7 +955,7 @@ export const api = {
     return request<{ configured: boolean }>("/omdb/key", { method: "DELETE" });
   },
   getJobStatus() {
-    return request<{ failures: JobFailure[] }>("/settings/job-status");
+    return request<{ failures: JobFailure[]; runs?: JobRun[] }>("/settings/job-status");
   },
   getDetailedStats() {
     return request<DetailedWatchStats>("/watch/stats/detailed");

@@ -12,7 +12,7 @@ const getSpoilerProtection = vi.fn();
 const getOmdbApiKey = vi.fn();
 const getTmdbApiKey = vi.fn();
 const getRpdbApiKey = vi.fn();
-const getFailedJobStatuses = vi.fn();
+const getJobRuns = vi.fn();
 const trendingCacheClear = vi.fn();
 
 vi.mock("../lib/prisma.js", () => ({ prisma: prismaMock }));
@@ -37,7 +37,7 @@ vi.mock("../lib/rpdb.js", () => ({
   getRpdbApiKey: () => getRpdbApiKey(),
 }));
 vi.mock("../lib/cache.js", () => ({ trendingCache: { clear: () => trendingCacheClear() } }));
-vi.mock("../lib/job-status.js", () => ({ getFailedJobStatuses: () => getFailedJobStatuses() }));
+vi.mock("../lib/job-status.js", () => ({ getJobRuns: () => getJobRuns() }));
 
 const buildApp = (): Promise<FastifyInstance> =>
   buildRouteApp(() => import("./settings.js"));
@@ -51,7 +51,7 @@ describe("settings routes", () => {
     getTmdbApiKey.mockResolvedValue({ apiKey: null, source: "none" });
     getOmdbApiKey.mockResolvedValue(null);
     getRpdbApiKey.mockResolvedValue(null);
-    getFailedJobStatuses.mockResolvedValue([]);
+    getJobRuns.mockResolvedValue([]);
     prismaMock.kV.upsert.mockResolvedValue({});
     prismaMock.kV.deleteMany.mockResolvedValue({ count: 1 });
   });
@@ -314,15 +314,46 @@ describe("settings routes", () => {
 
   describe("GET /settings/job-status", () => {
     it("reports failing background jobs", async () => {
-      getFailedJobStatuses.mockResolvedValue([
-        { job: "steam-sync", message: "Steam API returned 503", failedAt: "2026-01-01T00:00:00.000Z" },
+      getJobRuns.mockResolvedValue([
+        {
+          job: "steam-sync",
+          status: "failed",
+          message: "Steam API returned 503",
+          durationMs: 120,
+          overran: false,
+          at: "2026-01-01T00:00:00.000Z",
+        },
       ]);
       const app = await buildApp();
 
       const res = await app.inject({ method: "GET", url: "/settings/job-status" });
 
       expect(res.statusCode).toBe(200);
-      expect(res.json().failures).toHaveLength(1);
+      expect(res.json().failures).toEqual([
+        { job: "steam-sync", message: "Steam API returned 503", failedAt: "2026-01-01T00:00:00.000Z" },
+      ]);
+    });
+
+    it("reports a job that outran its interval, which is no failure at all", async () => {
+      // The scheduler drops the tick such a run collided with, so the job is
+      // quietly running less often than it was configured to — invisible from
+      // the failure list, since nothing failed.
+      getJobRuns.mockResolvedValue([
+        {
+          job: "trakt-history-poll",
+          status: "ok",
+          message: null,
+          durationMs: 900_000,
+          overran: true,
+          at: "2026-01-01T00:00:00.000Z",
+        },
+      ]);
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "GET", url: "/settings/job-status" });
+
+      expect(res.json().failures).toEqual([]);
+      expect(res.json().runs).toEqual([expect.objectContaining({ job: "trakt-history-poll", overran: true })]);
     });
 
     it("reports an empty list when every job is healthy", async () => {
@@ -330,7 +361,7 @@ describe("settings routes", () => {
 
       const res = await app.inject({ method: "GET", url: "/settings/job-status" });
 
-      expect(res.json()).toEqual({ failures: [] });
+      expect(res.json()).toEqual({ failures: [], runs: [] });
     });
   });
 });
