@@ -56,22 +56,31 @@ export function StatsPage() {
   const [yearReview, setYearReview] = useState<YearInReviewStats | null>(null);
   const [yearError, setYearError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
       const [s, d] = await Promise.all([
-        api.getWatchStats(),
-        api.getDetailedStats(),
+        api.getWatchStats(signal),
+        api.getDetailedStats(signal),
       ]);
+      if (signal?.aborted) return;
       setStats(s);
       setDetailed(d);
     } catch (err) {
+      if (signal?.aborted) return;
       setError(err instanceof Error ? err.message : "Failed to load stats");
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  // Cancelled on unmount so a response can't land under whoever is signed in by
+  // the time it arrives — leaving a page is as much a reason to drop the answer
+  // as switching profile is.
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   useEffect(() => {
     let cancelled = false;

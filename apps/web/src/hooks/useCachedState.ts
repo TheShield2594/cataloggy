@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DEFAULT_MAX_AGE_MS, isFresh, readCache, subscribe, writeCache } from "../utils/dataCache";
+import {
+  DEFAULT_MAX_AGE_MS,
+  getCacheScope,
+  isFresh,
+  readCache,
+  subscribe,
+  subscribeScope,
+  writeCacheForScope,
+} from "../utils/dataCache";
 
 export type CachedStateOptions = {
   /** Older than this and the cached value isn't shown at all. */
@@ -67,24 +75,58 @@ export function useCachedState<T>(
   const valueRef = useRef(value);
   valueRef.current = value;
 
+  // The identity this mount belongs to, captured once and deliberately never
+  // updated. Pages issue requests and set the answer when it lands; a profile
+  // switch in between means the answer describes whoever asked for it, not
+  // whoever is looking now. Writing it under the live scope is how one profile
+  // ends up painting another's Continue Watching.
+  //
+  // Not refreshed when the scope moves, even though this component may still be
+  // mounted at that instant: the unmount that a profile switch triggers is a
+  // render behind the switch itself, so a ref updated on the change would be
+  // pointing at the new identity by the time the old request resolves — which
+  // is the exact leak. Pinning it means a stale write is dropped instead. Every
+  // consumer of this hook is a route page, and those remount on a switch with a
+  // fresh scope of their own.
+  const scopeRef = useRef(getCacheScope());
+
   const setAndCache = useCallback(
     (next: CachedStateUpdater<T>) => {
       const resolved =
         typeof next === "function" ? (next as (previous: T) => T)(valueRef.current) : next;
       valueRef.current = resolved;
       setValue(resolved);
-      writeCache(key, resolved);
+      writeCacheForScope(scopeRef.current, key, resolved);
     },
     [key]
   );
 
   // A mutation elsewhere in the app invalidates the cache; anything on screen
   // reading this key needs to hear about it rather than sit on a stale value.
+  // An empty read is ignored on purpose: an invalidation is followed by a
+  // refetch, and blanking the page in between is worse than showing the row
+  // that is about to be replaced.
   useEffect(
     () =>
       subscribe(key, () => {
         const next = readCache<T>(key, maxAgeMs);
         if (next !== undefined) setValue(next);
+      }),
+    [key, maxAgeMs]
+  );
+
+  // A scope change is the opposite case: an empty read there means the value on
+  // screen belongs to an identity that is no longer signed in, so it goes.
+  // `fallback` is read through a ref because callers pass literals (`[]`,
+  // `null`), which would otherwise re-run this effect on every render.
+  const fallbackRef = useRef(fallback);
+  fallbackRef.current = fallback;
+  useEffect(
+    () =>
+      subscribeScope(() => {
+        const next = readCache<T>(key, maxAgeMs) ?? fallbackRef.current;
+        valueRef.current = next;
+        setValue(next);
       }),
     [key, maxAgeMs]
   );

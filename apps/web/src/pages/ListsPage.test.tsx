@@ -158,7 +158,7 @@ describe("ListsPage selection in the URL", () => {
     // still held.
     await waitFor(() => expect(currentSearch()).toBe(`?list=${WATCHLIST.id}`));
     expect(screen.queryByText(/no longer exists/i)).not.toBeInTheDocument();
-    expect(getListItems).not.toHaveBeenCalledWith(SCIFI.id);
+    expect(getListItems).not.toHaveBeenCalledWith(SCIFI.id, expect.anything());
   });
 
   it("doesn't call a list missing when it was the request that failed", async () => {

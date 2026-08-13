@@ -7,6 +7,7 @@ import {
   resetDataCacheForTests,
   setCacheScope,
   subscribe,
+  subscribeScope,
   writeCache,
   writeCacheForScope,
 } from "./dataCache";
@@ -82,5 +83,34 @@ describe("dataCache", () => {
       expect(readCache<string[]>("lists:all")).toEqual(["a's lists"]);
     });
 
+    it("tells subscribers the identity moved, not just that a key did", () => {
+      const onScope = vi.fn();
+      const unsubscribe = subscribeScope(onScope);
+
+      setCacheScope("profile-a#0");
+      expect(onScope).toHaveBeenCalledTimes(1);
+
+      // Setting the same scope again isn't a change, so it isn't an event.
+      setCacheScope("profile-a#0");
+      expect(onScope).toHaveBeenCalledTimes(1);
+
+      unsubscribe();
+      setCacheScope("profile-b#0");
+      expect(onScope).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps a subscription reachable across a scope change", () => {
+      // Registering under the scoped key stranded every listener that outlived a
+      // profile switch: nothing writes to the old scope again, so the refresh
+      // after a mutation never arrived and the view sat stale forever.
+      const listener = vi.fn();
+      setCacheScope("profile-a#0");
+      subscribe("lists:all", listener);
+
+      setCacheScope("profile-b#0");
+      writeCache("lists:all", ["b's lists"]);
+
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
   });
 });

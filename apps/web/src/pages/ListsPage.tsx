@@ -351,10 +351,14 @@ export function ListsPage() {
 
   // Every handler that can set `error` clears it first, so a transient failure
   // doesn't pin the banner for the rest of the session once the retry succeeds.
-  const loadLists = useCallback(async () => {
+  const loadLists = useCallback(async (signal?: AbortSignal) => {
     setError(null);
     try {
-      const { lists: loaded } = await api.getLists();
+      const { lists: loaded } = await api.getLists(signal);
+      // `setLists` writes through to the shared cache, so a response that
+      // outlives the page has to be dropped here rather than filed under
+      // whichever profile is active when it lands.
+      if (signal?.aborted) return [];
       setLists(loaded);
       // Only a *successful* load can be used to judge an unknown ID: marking
       // this on failure too would report a list missing when what failed was
@@ -362,26 +366,31 @@ export function ListsPage() {
       setListsLoaded(true);
       return loaded;
     } catch (err) {
+      if (signal?.aborted) return [];
       setError(err instanceof Error ? err.message : "Failed to load lists");
       return [];
     }
   }, []);
 
-  const loadItems = useCallback(async (listId: string) => {
+  const loadItems = useCallback(async (listId: string, signal?: AbortSignal) => {
     setLoadingItems(true);
     setError(null);
     try {
-      const { items: loaded } = await api.getListItems(listId);
+      const { items: loaded } = await api.getListItems(listId, signal);
+      if (signal?.aborted) return;
       setItems(loaded);
     } catch (err) {
+      if (signal?.aborted) return;
       setError(err instanceof Error ? err.message : "Failed to load items");
     } finally {
-      setLoadingItems(false);
+      if (!signal?.aborted) setLoadingItems(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadLists();
+    const controller = new AbortController();
+    void loadLists(controller.signal);
+    return () => controller.abort();
   }, [loadLists]);
 
   const selectedList = lists.find((l) => l.id === selectedListId);
@@ -399,11 +408,13 @@ export function ListsPage() {
   }, [listsLoaded, selectedListId, lists]);
 
   useEffect(() => {
-    if (activeListId) {
-      void loadItems(activeListId);
-    } else {
+    if (!activeListId) {
       setItems([]);
+      return;
     }
+    const controller = new AbortController();
+    void loadItems(activeListId, controller.signal);
+    return () => controller.abort();
   }, [activeListId, loadItems]);
 
   const handleCreateList = async (e: FormEvent) => {

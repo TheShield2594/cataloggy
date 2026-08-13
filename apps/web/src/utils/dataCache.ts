@@ -12,7 +12,18 @@
 type Entry = { value: unknown; at: number };
 
 const entries = new Map<string, Entry>();
+// Keyed on the *bare* key, not the scoped one. A subscription registered under
+// `oldScope|key` becomes unreachable the moment the scope moves, so a component
+// that outlives a profile switch would stop hearing about its own key forever —
+// silently, and for the rest of the tab's life. The scope is applied in `notify`
+// instead, where it can be re-read on every write.
 const subscribers = new Map<string, Set<() => void>>();
+// A scope change is a different event from a write or an invalidation: those
+// mean "this key moved", it means "the identity behind every key moved". Key
+// subscribers deliberately ignore a read that comes back empty (holding the last
+// value through a mutation's invalidate-then-refetch is the point), which is
+// exactly the wrong response to a cleared scope — hence its own channel.
+const scopeListeners = new Set<() => void>();
 
 /** How long a cached value is served without a background refetch. */
 export const DEFAULT_FRESH_MS = 30_000;
@@ -35,9 +46,20 @@ export function setCacheScope(next: string): void {
   // Entries under the old scope can never be read again — their keys are
   // unreachable — so drop them rather than leak them for the tab's lifetime.
   entries.clear();
-  for (const listeners of subscribers.values()) {
-    for (const notify of listeners) notify();
-  }
+  for (const listener of scopeListeners) listener();
+}
+
+/**
+ * Fires when the active identity changes, after the entries are cleared.
+ *
+ * Anything holding a rendered copy of a cached value needs to hear this: the
+ * copy belongs to the previous identity, and the cache it came from is gone.
+ */
+export function subscribeScope(listener: () => void): () => void {
+  scopeListeners.add(listener);
+  return () => {
+    scopeListeners.delete(listener);
+  };
 }
 
 const scopedKey = (key: string) => `${scope}|${key}`;
@@ -78,22 +100,21 @@ export function writeCache(key: string, value: unknown): void {
 }
 
 function notify(key: string): void {
-  const listeners = subscribers.get(scopedKey(key));
+  const listeners = subscribers.get(key);
   if (!listeners) return;
   for (const listener of listeners) listener();
 }
 
 export function subscribe(key: string, listener: () => void): () => void {
-  const full = scopedKey(key);
-  let listeners = subscribers.get(full);
+  let listeners = subscribers.get(key);
   if (!listeners) {
     listeners = new Set();
-    subscribers.set(full, listeners);
+    subscribers.set(key, listeners);
   }
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
-    if (listeners.size === 0) subscribers.delete(full);
+    if (listeners.size === 0) subscribers.delete(key);
   };
 }
 
@@ -107,8 +128,9 @@ export function invalidate(prefix: string): void {
   for (const key of [...entries.keys()]) {
     if (key.startsWith(scopedPrefix)) {
       entries.delete(key);
-      const listeners = subscribers.get(key);
-      if (listeners) for (const listener of listeners) listener();
+      // Back to the bare key the subscriber registered under — everything in
+      // `entries` is stored scoped, and the prefix that matched carries it.
+      notify(key.slice(scopedPrefix.length - prefix.length));
     }
   }
 }
@@ -116,7 +138,7 @@ export function invalidate(prefix: string): void {
 export function invalidateAll(): void {
   entries.clear();
   for (const listeners of subscribers.values()) {
-    for (const notify of listeners) notify();
+    for (const listener of listeners) listener();
   }
 }
 
@@ -124,5 +146,6 @@ export function invalidateAll(): void {
 export function resetDataCacheForTests(): void {
   entries.clear();
   subscribers.clear();
+  scopeListeners.clear();
   scope = "";
 }

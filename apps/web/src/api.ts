@@ -819,8 +819,8 @@ export const api = {
   search(type: MediaType, query: string, signal?: AbortSignal) {
     return request<SearchResult[]>(`/search?type=${type}&query=${encodeURIComponent(query)}`, { signal, timeoutMs: 15000 });
   },
-  getLists() {
-    return request<{ lists: CatalogList[] }>("/lists");
+  getLists(signal?: AbortSignal) {
+    return request<{ lists: CatalogList[] }>("/lists", { signal });
   },
   createList(name: string) {
     return request<{ list: CatalogList }>("/lists", {
@@ -845,8 +845,11 @@ export const api = {
       body: JSON.stringify(payload)
     });
   },
-  getListItems(listId: string) {
-    return request<{ items: ListItemWithMeta[] }>(`/lists/${encodeURIComponent(listId)}/items`);
+  getListItems(listId: string, signal?: AbortSignal) {
+    return request<{ items: ListItemWithMeta[] }>(
+      `/lists/${encodeURIComponent(listId)}/items`,
+      { signal }
+    );
   },
   removeFromList(listId: string, item: { type: MediaType; imdbId: string }) {
     const encodedListId = encodeURIComponent(listId);
@@ -863,8 +866,8 @@ export const api = {
       request<{ metas: CatalogMeta[] }>("/recent?type=movie&limit=10")
     ]);
   },
-  async getSeriesProgress() {
-    const res = await request<{ progress: SeriesProgress[] }>("/series/progress");
+  async getSeriesProgress(signal?: AbortSignal) {
+    const res = await request<{ progress: SeriesProgress[] }>("/series/progress", { signal });
     return res.progress;
   },
   async getWatchHistory(
@@ -878,8 +881,8 @@ export const api = {
     const res = await request<{ history: WatchEvent[] }>(`/watch/history?${params}`, { signal: opts?.signal });
     return res.history;
   },
-  getWatchStats() {
-    return request<WatchStats>("/watch/stats");
+  getWatchStats(signal?: AbortSignal) {
+    return request<WatchStats>("/watch/stats", { signal });
   },
   markNextEpisodeWatched(imdbId: string) {
     return request<void>(`/series/${encodeURIComponent(imdbId)}/watch-next`, {
@@ -963,8 +966,8 @@ export const api = {
   getJobStatus() {
     return request<{ failures: JobFailure[]; runs?: JobRun[] }>("/settings/job-status");
   },
-  getDetailedStats() {
-    return request<DetailedWatchStats>("/watch/stats/detailed");
+  getDetailedStats(signal?: AbortSignal) {
+    return request<DetailedWatchStats>("/watch/stats/detailed", { signal });
   },
   getYearInReview(year: number) {
     return request<YearInReviewStats>(`/watch/stats/year/${year}`);
@@ -1251,8 +1254,8 @@ export const api = {
     });
   },
   // Now playing (live Plex/Jellyfin scrobble sessions)
-  getNowPlaying() {
-    return request<{ sessions: ScrobbleSession[] }>("/scrobble/now-playing");
+  getNowPlaying(signal?: AbortSignal) {
+    return request<{ sessions: ScrobbleSession[] }>("/scrobble/now-playing", { signal });
   },
   // Data export / import
   exportData() {
