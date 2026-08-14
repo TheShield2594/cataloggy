@@ -14,6 +14,9 @@ import {
 } from "lucide-react";
 import { prefetchRoute } from "../utils/routePrefetch";
 import { useExitAnimation } from "../hooks/useExitAnimation";
+import { useEscapeKey } from "../hooks/useEscapeKey";
+import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useScrollLock } from "../hooks/useScrollLock";
 
 type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean };
 
@@ -140,17 +143,21 @@ function MoreSheet({ pathname, onClose }: { pathname: string; onClose: () => voi
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const { exiting, requestClose, onExitAnimationEnd } = useExitAnimation(onClose);
 
+  // This sheet declared `aria-modal="true"` while trapping nothing — alone among
+  // the app's overlays, all of which share these three hooks. Tab walked straight
+  // out into the page the attribute had just declared inert, and on touch the page
+  // scrolled behind it. It is the nav surface for four of the eight mobile
+  // destinations, so it is also the overlay that got out of a keyboard user's way
+  // least willingly.
+  const sheetRef = useFocusTrap<HTMLDivElement>();
+  useScrollLock();
+  // Was a bare `window` keydown listener, which fires for every open overlay at
+  // once. useEscapeKey is the modal stack: only the topmost handler runs.
+  useEscapeKey(requestClose);
+
   useEffect(() => {
     firstLinkRef.current?.focus();
   }, []);
-
-  useEffect(() => {
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") requestClose();
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [requestClose]);
 
   return (
     <div className="fixed inset-0 z-50 sm:hidden" role="dialog" aria-modal="true" aria-label="More destinations">
@@ -161,6 +168,7 @@ function MoreSheet({ pathname, onClose }: { pathname: string; onClose: () => voi
         className={`overlay-scrim overlay-fade absolute inset-0 h-full w-full ${exiting ? "overlay-exit" : ""}`}
       />
       <div
+        ref={sheetRef}
         className={`glass-surface overlay-sheet absolute bottom-0 left-0 right-0 rounded-t-3xl p-2 shadow-e3 ${exiting ? "overlay-exit" : ""}`}
         onAnimationEnd={onExitAnimationEnd}
         style={{

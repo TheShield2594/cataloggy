@@ -85,14 +85,73 @@ const renderPage = () =>
 // panels are what "is this section on screen?" comes down to.
 const onScreen = () => SETTINGS_SECTIONS.filter((s) => screen.queryByRole("region", { name: s.title })).map((s) => s.title);
 const searchBox = () => screen.getByLabelText("Search settings");
-const tabBar = () => screen.queryByRole("button", { name: SETTINGS_TABS[1].label });
+// role="tab", not "button": the tab strip is a real tablist, so a query that
+// still found a plain button would mean the roles had been dropped again.
+const tabBar = () => screen.queryByRole("tab", { name: SETTINGS_TABS[1].label });
 
 describe("SettingsPage", () => {
+  // The tab strip is a real tablist, which is a promise of arrow-key navigation
+  // and a roving tabindex — announcing the role without implementing them is the
+  // mistake the list panel's `role="menu"` made.
+  describe("the tab strip's keyboard contract", () => {
+    it("moves between tabs with the arrow keys, selecting as it goes", async () => {
+      renderPage();
+      const [first, second] = SETTINGS_TABS.map((t) => screen.getByRole("tab", { name: t.label }));
+      expect(first).toHaveAttribute("aria-selected", "true");
+
+      first.focus();
+      await userEvent.keyboard("{ArrowRight}");
+
+      expect(second).toHaveFocus();
+      expect(second).toHaveAttribute("aria-selected", "true");
+      expect(onScreen()).toEqual(byTab("integrations").map((s) => s.title));
+    });
+
+    it("wraps around, and Home/End go straight to the ends", async () => {
+      renderPage();
+      const [first, last] = SETTINGS_TABS.map((t) => screen.getByRole("tab", { name: t.label }));
+
+      first.focus();
+      await userEvent.keyboard("{ArrowLeft}");
+      expect(last).toHaveFocus();
+
+      await userEvent.keyboard("{Home}");
+      expect(first).toHaveFocus();
+
+      await userEvent.keyboard("{End}");
+      expect(last).toHaveFocus();
+    });
+
+    it("is one Tab stop, not one per tab", () => {
+      renderPage();
+      const [first, second] = SETTINGS_TABS.map((t) => screen.getByRole("tab", { name: t.label }));
+
+      expect(first).toHaveAttribute("tabindex", "0");
+      expect(second).toHaveAttribute("tabindex", "-1");
+    });
+
+    it("names the panel after the tab that selected it", () => {
+      renderPage();
+
+      const panel = screen.getByRole("tabpanel");
+      expect(panel).toHaveAccessibleName(SETTINGS_TABS[0].label);
+    });
+
+    // A search spans both tabs and hides the strip, so labelling the results as
+    // one tab's panel would name them after a control that isn't on screen.
+    it("stops being a tabpanel while a search is spanning both tabs", async () => {
+      renderPage();
+      await userEvent.type(searchBox(), "trakt");
+
+      expect(screen.queryByRole("tabpanel")).not.toBeInTheDocument();
+    });
+  });
+
   it("shows one tab's sections at a time, and the other tab's on request", async () => {
     renderPage();
     expect(onScreen()).toEqual(byTab("preferences").map((s) => s.title));
 
-    await userEvent.click(screen.getByRole("button", { name: SETTINGS_TABS[1].label }));
+    await userEvent.click(screen.getByRole("tab", { name: SETTINGS_TABS[1].label }));
     expect(onScreen()).toEqual(byTab("integrations").map((s) => s.title));
   });
 

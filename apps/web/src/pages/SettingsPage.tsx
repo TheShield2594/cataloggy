@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Key, Link, Database, Info, Clapperboard, Film, Image, Globe, Star, Sparkles, Bell, Users, Activity, Search, X } from "lucide-react";
 import { Section } from "../components/settings/Section";
@@ -214,6 +214,28 @@ export function SettingsPage() {
     });
   };
 
+  const tabsId = useId();
+  const tablistRef = useRef<HTMLDivElement>(null);
+
+  // Automatic activation — arrow moves focus and selects in one step, which the
+  // pattern recommends when switching panels is cheap, and these two are just a
+  // filter over a list already in memory. Focus is moved by hand because the
+  // roving tabindex means the newly selected tab is the only one that can hold
+  // it, and it does not get it merely by being re-rendered.
+  const onTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    const deltas: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+    const current = SETTINGS_TABS.findIndex((t) => t.id === tab);
+    let nextIndex: number;
+    if (event.key in deltas) nextIndex = (current + deltas[event.key] + SETTINGS_TABS.length) % SETTINGS_TABS.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = SETTINGS_TABS.length - 1;
+    else return;
+
+    event.preventDefault();
+    setTab(SETTINGS_TABS[nextIndex].id);
+    tablistRef.current?.querySelectorAll<HTMLElement>('[role="tab"]')[nextIndex]?.focus();
+  };
+
   const visible = useMemo(
     () => (searching ? SETTINGS_SECTIONS.filter((s) => matchesSearch(s, query)) : SETTINGS_SECTIONS.filter((s) => s.tab === tab)),
     [query, searching, tab]
@@ -257,7 +279,15 @@ export function SettingsPage() {
             : `${visible.length} ${visible.length === 1 ? "section" : "sections"} across both tabs.`}
         </p>
       ) : (
+        // A real tablist rather than two buttons whose selected state is a
+        // background colour. The ARIA tabs pattern is a promise of arrow-key
+        // navigation and a roving tabindex, so both are implemented below —
+        // announcing the role without them is the mistake ListsSection's
+        // `role="menu"` made.
         <div
+          ref={tablistRef}
+          role="tablist"
+          aria-label="Settings sections"
           className="flex rounded-full p-1"
           style={{ border: "1px solid var(--border)", backgroundColor: "var(--surface)" }}
         >
@@ -265,8 +295,20 @@ export function SettingsPage() {
             <button
               key={t.id}
               type="button"
+              role="tab"
+              id={`${tabsId}-tab-${t.id}`}
+              aria-selected={tab === t.id}
+              aria-controls={`${tabsId}-panel`}
+              // Roving tabindex: the tablist is one Tab stop, and the arrow keys
+              // move within it.
+              tabIndex={tab === t.id ? 0 : -1}
+              // On the tabs rather than on the tablist. Key events bubble, so
+              // either works; only the focusable element carrying its own
+              // handler is a shape jsx-a11y can recognise as a keyboard-operable
+              // control, and only one tab is focusable at a time anyway.
+              onKeyDown={onTabKeyDown}
               onClick={() => setTab(t.id)}
-              className={`flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-base ${
+              className={`flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-base focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset ${
                 tab === t.id
                   ? "bg-claw-500 text-claw-on shadow-glow"
                   : "text-[var(--text-dim)] hover:text-[var(--text)]"
@@ -278,7 +320,15 @@ export function SettingsPage() {
         </div>
       )}
 
-      <div className="space-y-4">
+      {/* Only a tabpanel while the tablist above is the thing selecting it. A
+          search spans both tabs, so labelling the results as one tab's panel
+          would name them after a control that isn't on screen. */}
+      <div
+        className="space-y-4"
+        {...(searching
+          ? {}
+          : { role: "tabpanel", id: `${tabsId}-panel`, "aria-labelledby": `${tabsId}-tab-${tab}` })}
+      >
         {visible.map((section) => (
           <Section
             key={section.id}

@@ -1,6 +1,25 @@
 import { api, WatchEvent } from "../api";
 
 /**
+ * What a row's controls call the thing they act on.
+ *
+ * The visible row says the title once and the episode number beside it, in two
+ * separate elements; a label built from `event.name` alone would give three
+ * buttons in a row the same name on a series the user watched twice in a day.
+ * The episode number is what tells those rows apart, so it belongs in the name.
+ *
+ * Shared rather than page-local because the detail panel lists the same events
+ * with the same controls, and had labelled every one of its delete buttons
+ * "Remove watch event" — one name for every row in the list.
+ */
+export function watchEventLabel(event: WatchEvent): string {
+  const name = event.name || "this watch";
+  return event.type === "episode" && event.season != null && event.episode != null
+    ? `${name} S${event.season}E${event.episode}`
+    : name;
+}
+
+/**
  * Re-creates a watch event that was just deleted, for the Undo on the removal
  * toast. The server mints a fresh row rather than resurrecting the old one, so
  * the restored event carries a new id — callers swapping it back into local

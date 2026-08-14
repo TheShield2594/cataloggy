@@ -24,7 +24,20 @@ describe("OfflineBanner", () => {
     setOnLine(true);
     render(<OfflineBanner />);
 
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+
+  // The region outlives the message deliberately. A live region announces what
+  // is inserted *into* it, so one that arrives already holding its text — which
+  // is what returning null while online produced — announces nothing at all, and
+  // the banner explaining that the screen may be stale was silent for exactly
+  // the people who cannot see that it appeared.
+  it("keeps its live region mounted while online, so the message is an insertion into it", () => {
+    setOnLine(true);
+    render(<OfflineBanner />);
+
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.queryByText(/Offline/)).not.toBeInTheDocument();
   });
 
   it("explains that the data on screen is cached once the connection drops", () => {
@@ -54,18 +67,20 @@ describe("OfflineBanner", () => {
   it("clears itself when the connection comes back", () => {
     setOnLine(false);
     render(<OfflineBanner />);
-    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/Offline/);
 
     setOnLine(true);
     fire("online");
 
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    // The message goes; the region it was announced from stays, ready for the
+    // next drop.
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
   it("renders offline straight away when the app loads without a connection", () => {
     setOnLine(false);
     render(<OfflineBanner />);
 
-    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/Offline/);
   });
 });

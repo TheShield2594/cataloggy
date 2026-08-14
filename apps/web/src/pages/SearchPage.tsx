@@ -376,6 +376,9 @@ export function SearchPage() {
                   key={opt.value}
                   type="button"
                   onClick={() => setFilters({ filter: opt.value })}
+                  // Which filter is on is otherwise carried by a background
+                  // colour and nothing else — SC 1.4.1 and 4.1.2.
+                  aria-pressed={active}
                   className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-base ${
                     active
                       ? "bg-claw-500 text-claw-on shadow-e1"
@@ -611,12 +614,21 @@ export function SearchPage() {
                     key={s}
                     type="button"
                     onClick={() => setFilters({ sort: s })}
-                    className={`rounded-full px-2.5 py-1 text-2xs font-medium transition-all duration-base ${
-                      filters.sort === s
-                        ? "text-white"
-                        : "hover:text-[var(--text)]"
+                    // The active pairing is --accent / --on-accent, the one every
+                    // other active pill in the app uses. It was `text-white` over
+                    // --text-dim, which is a *light* grey on the four dark themes:
+                    // 1.91:1 on glass, 2.27 on dark, 2.38 on letterboxd, 2.41 on
+                    // midnight. The one control saying which sort is in force was
+                    // the least legible thing on the page on the default theme.
+                    aria-pressed={filters.sort === s}
+                    className={`rounded-full px-2.5 py-1 text-2xs font-medium transition-all duration-base focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset ${
+                      filters.sort === s ? "" : "hover:text-[var(--text)]"
                     }`}
-                    style={filters.sort === s ? { backgroundColor: "var(--text-dim)" } : { color: "var(--text-mute)" }}
+                    style={
+                      filters.sort === s
+                        ? { background: "var(--accent)", color: "var(--on-accent)" }
+                        : { color: "var(--text-mute)" }
+                    }
                   >
                     {SORT_LABELS[s]}
                   </button>
@@ -834,59 +846,69 @@ function ResultCard({
     <div className="group flex flex-col">
       {/* Poster */}
       <div
-        role="button"
-        tabIndex={0}
         // `ring-black/5` was invisible on the four dark themes, so cards of the
         // same rank carried two different edge treatments — this one and the
         // Dashboard's themed hairline. --border matches the Dashboard. It stays
         // a ring rather than an inline inset shadow so .card-lift's hover
         // shadow can still replace it; an inline style would outrank that.
-        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-[var(--border)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
+        className="card-lift relative rounded-xl ring-1 ring-[var(--border)]"
         style={{ aspectRatio: "var(--poster-ratio)" }}
-        onClick={() => onSelect(result)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onSelect(result);
-          }
-        }}
-        aria-label={`View details for ${result.name}`}
       >
-        {result.poster ? (
-          <img
-            src={result.poster}
-            srcSet={buildTmdbSrcSet(result.poster)}
-            sizes={POSTER_GRID_SIZES}
-            alt={result.name}
-            className="h-full w-full object-cover transition-transform duration-slow group-hover:scale-105"
-            loading={eager ? "eager" : "lazy"}
-            fetchPriority={eager ? "high" : "low"}
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br" style={{ "--tw-gradient-from": "var(--surface)", "--tw-gradient-to": "var(--surface-strong)" } as React.CSSProperties}>
-            <Film className="h-12 w-12" style={{ color: "var(--text-mute)" }} />
-          </div>
-        )}
+        {/* A real button rather than a `role="button"` div — and, more to the
+            point, a *sibling* of the quick-add button below rather than its
+            parent. The card used to be an interactive div with a real button
+            nested inside it, a shape assistive technology has no defined mapping
+            for. Same structure and the same reasoning as the Dashboard's card
+            and the History row, both of which were moved off this pattern
+            already; the sweep just didn't reach here.
 
-        {/* Type badge */}
-        <span
-          className={`absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-e1 ring-1 ring-black/15 ${
-            result.type === "movie"
-              ? "bg-claw-500 text-claw-on"
-              : "bg-plum-500/90 text-white"
-          }`}
-          // The movie badge takes its foreground from --on-accent, which is already
-          // contrast-checked against the accent in every theme — a dark halo behind it
-          // would fight the near-black label. The plum series badge is white-on-fixed-
-          // colour, so it keeps the halo that holds it up over bright posters.
-          style={result.type === "movie" ? undefined : { textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
-        >
-          {result.type === "movie" ? <Film className="h-3 w-3" /> : <Tv className="h-3 w-3" />}
-          {result.type === "movie" ? "Movie" : "Series"}
-        </span>
+            `overflow-hidden` moved to the frame below so it clips the poster's
+            hover scale without also clipping this button's focus ring, which is
+            drawn with an offset outside the card's edge. */}
+        <button
+          type="button"
+          onClick={() => onSelect(result)}
+          aria-label={`View details for ${result.name}`}
+          className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
+        />
 
-        {/* Gradient overlay: low resting opacity on desktop so it stays discoverable without a hover, full on hover/focus */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 transition-opacity duration-slow sm:opacity-30 sm:group-hover:opacity-100" />
+        <div className="absolute inset-0 overflow-hidden rounded-xl">
+          {result.poster ? (
+            <img
+              src={result.poster}
+              srcSet={buildTmdbSrcSet(result.poster)}
+              sizes={POSTER_GRID_SIZES}
+              alt={result.name}
+              className="h-full w-full object-cover transition-transform duration-slow group-hover:scale-105"
+              loading={eager ? "eager" : "lazy"}
+              fetchPriority={eager ? "high" : "low"}
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br" style={{ "--tw-gradient-from": "var(--surface)", "--tw-gradient-to": "var(--surface-strong)" } as React.CSSProperties}>
+              <Film className="h-12 w-12" style={{ color: "var(--text-mute)" }} />
+            </div>
+          )}
+
+          {/* Type badge */}
+          <span
+            className={`absolute left-2.5 top-2.5 flex items-center gap-1 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-e1 ring-1 ring-black/15 ${
+              result.type === "movie"
+                ? "bg-claw-500 text-claw-on"
+                : "bg-plum-500/90 text-white"
+            }`}
+            // The movie badge takes its foreground from --on-accent, which is already
+            // contrast-checked against the accent in every theme — a dark halo behind it
+            // would fight the near-black label. The plum series badge is white-on-fixed-
+            // colour, so it keeps the halo that holds it up over bright posters.
+            style={result.type === "movie" ? undefined : { textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
+          >
+            {result.type === "movie" ? <Film className="h-3 w-3" /> : <Tv className="h-3 w-3" />}
+            {result.type === "movie" ? "Movie" : "Series"}
+          </span>
+
+          {/* Gradient overlay: low resting opacity on desktop so it stays discoverable without a hover, full on hover/focus */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 transition-opacity duration-slow sm:opacity-30 sm:group-hover:opacity-100" />
+        </div>
 
         {/* Quick-add button: same low-resting-opacity treatment so trackpad/keyboard users see it exists before hovering/focusing */}
         <button
@@ -909,9 +931,10 @@ function ResultCard({
           <Plus className="h-4 w-4" strokeWidth={3} />
         </button>
 
-        {/* Watchlist indicator */}
+        {/* Watchlist indicator. z-20 so it paints over the full-card button
+            above rather than under it — decorative, so it takes no clicks. */}
         {listNames.length > 0 && (
-          <div className="absolute top-2.5 right-2.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-claw-500 shadow-e1">
+          <div className="pointer-events-none absolute top-2.5 right-2.5 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-claw-500 shadow-e1">
             <Heart className="h-4 w-4 fill-claw-on text-claw-on" />
           </div>
         )}

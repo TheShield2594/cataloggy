@@ -5,7 +5,7 @@ import { api, SearchResult, WatchEvent } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useToast } from "../hooks/useToast";
 import { useCachedState } from "../hooks/useCachedState";
-import { relogWatchEvent } from "../utils/watchEvents";
+import { relogWatchEvent, watchEventLabel } from "../utils/watchEvents";
 import { PAGE_TITLE, SECTION_TITLE, KICKER } from "../components/typography";
 
 /** Rows per request. Exported so the route prefetcher's warm-up can match it. */
@@ -45,21 +45,6 @@ function toSearchResult(event: WatchEvent): SearchResult {
     inCollection: false,
     lists: [],
   };
-}
-
-/**
- * What a row's controls call the thing they act on.
- *
- * The visible row says the title once and the episode number beside it, in two
- * separate elements; a label built from `event.name` alone would give three
- * buttons in a row the same name on a series the user watched twice in a day.
- * The episode number is what tells those rows apart, so it belongs in the name.
- */
-function eventLabel(event: WatchEvent): string {
-  const name = event.name || "this watch";
-  return event.type === "episode" && event.season != null && event.episode != null
-    ? `${name} S${event.season}E${event.episode}`
-    : name;
 }
 
 export function HistoryPage() {
@@ -302,6 +287,9 @@ export function HistoryPage() {
               key={opt}
               type="button"
               onClick={() => setTypeFilter(opt)}
+              // Without this the active filter is a background colour and nothing
+              // else — SC 1.4.1 and 4.1.2.
+              aria-pressed={typeFilter === opt}
               className="relative rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
               style={
                 typeFilter === opt
@@ -400,7 +388,7 @@ export function HistoryPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedItem(toSearchResult(event))}
-                    aria-label={`View details for ${eventLabel(event)}`}
+                    aria-label={`View details for ${watchEventLabel(event)}`}
                     className="absolute inset-0 z-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
                   />
 
@@ -452,7 +440,7 @@ export function HistoryPage() {
                     type="button"
                     onClick={() => openNoteEditor(event)}
                     className="relative z-10 flex h-9 w-9 flex-none items-center justify-center rounded-lg opacity-100 transition-all duration-fast sm:opacity-0 sm:group-hover:opacity-100 hover:bg-[var(--surface-strong)] focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
-                    aria-label={event.note ? `Edit note on ${eventLabel(event)}` : `Add note to ${eventLabel(event)}`}
+                    aria-label={event.note ? `Edit note on ${watchEventLabel(event)}` : `Add note to ${watchEventLabel(event)}`}
                     title={event.note ? "Edit note" : "Add note"}
                   >
                     <NotebookPen aria-hidden="true" className="h-4 w-4" style={{ color: event.note ? "var(--accent-text)" : "var(--text-mute)" }} />
@@ -463,7 +451,7 @@ export function HistoryPage() {
                     onClick={() => void handleDelete(event)}
                     disabled={deletingId === event.id}
                     className="relative z-10 flex h-9 w-9 flex-none items-center justify-center rounded-lg opacity-100 transition-all duration-fast sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/10 disabled:opacity-50 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-ring-offset"
-                    aria-label={`Delete watch of ${eventLabel(event)}`}
+                    aria-label={`Delete watch of ${watchEventLabel(event)}`}
                     title="Remove from history"
                   >
                     <Trash2 aria-hidden="true" className="h-4 w-4 text-danger dark:text-danger" />

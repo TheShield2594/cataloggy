@@ -36,6 +36,9 @@ const advance = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
 const EXIT_MS = 500;
 const finishExit = () => advance(EXIT_MS);
 
+// The polite region. Since errors moved to their own assertive sibling, the
+// hover/focus pause handlers live on the wrapper around both — which is what
+// these fireEvents need to reach, and events fired here bubble to it.
 const stack = () => screen.getByRole("status");
 
 describe("ToastProvider", () => {
@@ -237,5 +240,50 @@ describe("ToastProvider", () => {
     advance(3000);
     finishExit();
     expect(screen.queryByText("Next one")).not.toBeInTheDocument();
+  });
+
+  // One polite region covering the whole stack announced a failure in the same
+  // breath as "Saved", and re-read every toast in it — plus the "+N more"
+  // counter — each time a new one arrived.
+  describe("live regions", () => {
+    it("announces an error assertively and everything else politely", () => {
+      renderToasts();
+      act(() => show("Saved"));
+      act(() => show("Something broke", "error"));
+
+      expect(screen.getByRole("status")).toHaveTextContent("Saved");
+      expect(screen.getByRole("status")).not.toHaveTextContent("Something broke");
+      expect(screen.getByRole("alert")).toHaveTextContent("Something broke");
+    });
+
+    it("mounts both regions before there is anything to say", () => {
+      renderToasts();
+
+      // A region created in the same paint as its first message announces
+      // nothing — it has to already be there for the insertion to register.
+      expect(screen.getByRole("status")).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+    });
+
+    it("makes each toast atomic rather than the region, so one arrival re-reads one toast", () => {
+      renderToasts();
+      act(() => show("First"));
+      act(() => show("Second"));
+
+      const region = screen.getByRole("status");
+      expect(region).not.toHaveAttribute("aria-atomic");
+      for (const message of ["First", "Second"]) {
+        expect(screen.getByText(message).closest("[aria-atomic]")).toHaveAttribute("aria-atomic", "true");
+      }
+    });
+
+    it("stays announceable from behind a modal, which is where its toasts are raised", () => {
+      renderToasts();
+      act(() => show("Saved"));
+
+      // useFocusTrap inerts everything beside an open dialog; the toast stack
+      // opts out, or an action taken inside a dialog reports nothing.
+      expect(screen.getByRole("status").closest("[data-overlay-exempt]")).not.toBeNull();
+    });
   });
 });

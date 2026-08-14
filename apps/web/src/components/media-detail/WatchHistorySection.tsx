@@ -1,6 +1,7 @@
 import { Calendar, Clock, Film, Trash2, Tv } from "lucide-react";
 import { Poster } from "../Poster";
 import { WatchEvent } from "../../api";
+import { watchEventLabel } from "../../utils/watchEvents";
 import { KICKER } from "../typography";
 
 export function WatchHistorySection({
@@ -80,7 +81,7 @@ export function WatchHistorySection({
                 type="button"
                 onClick={() => onDeleteEvent(event)}
                 className="shrink-0 rounded p-1 text-[var(--text-mute)] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 hover:bg-rose-500/10 hover:text-danger transition-all duration-fast"
-                aria-label="Remove watch event"
+                aria-label={`Remove watch of ${watchEventLabel(event)}`}
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>

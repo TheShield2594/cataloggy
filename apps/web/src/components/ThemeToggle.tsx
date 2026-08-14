@@ -114,7 +114,12 @@ export function ThemeToggle({ theme, onChange }: { theme: Theme; onChange: (next
               style={{ color: "var(--text)" }}
             >
               {t.label}
-              {theme === t.id && <Check className="h-3.5 w-3.5" style={{ color: "var(--accent)" }} />}
+              {/* --accent-text, not --accent. This tick is the only thing saying
+                  which theme is in force, so SC 1.4.11 asks 3:1 of it against the
+                  menu behind it — and --accent measures 2.6:1 on the light theme.
+                  The tick is also not the only cue: aria-checked above carries it
+                  for anyone not reading the colour at all. */}
+              {theme === t.id && <Check className="h-3.5 w-3.5" style={{ color: "var(--accent-text)" }} />}
             </button>
           ))}
         </div>

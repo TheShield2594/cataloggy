@@ -217,47 +217,52 @@ function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => vo
   return (
     <div className="group flex flex-col">
       <div
-        role="button"
-        tabIndex={0}
         // `ring-black/5` was invisible on the four dark themes, so cards of the
         // same rank carried two different edge treatments — this one and the
         // Dashboard's themed hairline. --border matches the Dashboard. It stays
         // a ring rather than an inline inset shadow so .card-lift's hover
         // shadow can still replace it; an inline style would outrank that.
-        className="card-lift relative cursor-pointer overflow-hidden rounded-xl ring-1 ring-[var(--border)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
+        className="card-lift relative rounded-xl ring-1 ring-[var(--border)]"
         style={{ aspectRatio: "var(--poster-ratio)" }}
-        onClick={() => onSelect(game)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onSelect(game);
-          }
-        }}
-        aria-label={`View details for ${game.title}`}
       >
-        {game.coverUrl ? (
-          <img
-            src={game.coverUrl}
-            alt={game.title}
-            className="h-full w-full object-cover transition-transform duration-slow group-hover:scale-105"
-            loading="lazy"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br" style={{ "--tw-gradient-from": "var(--surface)", "--tw-gradient-to": "var(--surface-strong)" } as React.CSSProperties}>
-            <Gamepad2 className="h-12 w-12" style={{ color: "var(--text-mute)" }} />
-          </div>
-        )}
+        {/* A real button rather than a `role="button"` div, matching the
+            Dashboard card and the search result beside it: it inherits Enter and
+            Space, the disabled/active semantics and the announcement assistive
+            tech expects, instead of re-implementing the first and forgoing the
+            rest. `overflow-hidden` moved to the frame below so the cover's hover
+            scale is still clipped while this button's offset focus ring is not. */}
+        <button
+          type="button"
+          onClick={() => onSelect(game)}
+          aria-label={`View details for ${game.title}`}
+          className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
+        />
 
-        {/* Fixed green rather than --success-text, for the same reason
-            .btn-danger's rose is fixed: this badge sits on cover art, not on a
-            theme surface, so it has to carry its own contrast. The pale
-            emerald-500 it used measured 2.30:1 against the white on top of it;
-            this pairing is 6.8:1 and reads as the same green. */}
-        {game.finished && (
-          <span className="absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md bg-[#00693e] px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-white shadow-e1">
-            <Check aria-hidden="true" className="h-3 w-3" /> Finished
-          </span>
-        )}
+        <div className="absolute inset-0 overflow-hidden rounded-xl">
+          {game.coverUrl ? (
+            <img
+              src={game.coverUrl}
+              alt={game.title}
+              className="h-full w-full object-cover transition-transform duration-slow group-hover:scale-105"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br" style={{ "--tw-gradient-from": "var(--surface)", "--tw-gradient-to": "var(--surface-strong)" } as React.CSSProperties}>
+              <Gamepad2 className="h-12 w-12" style={{ color: "var(--text-mute)" }} />
+            </div>
+          )}
+
+          {/* Fixed green rather than --success-text, for the same reason
+              .btn-danger's rose is fixed: this badge sits on cover art, not on a
+              theme surface, so it has to carry its own contrast. The pale
+              emerald-500 it used measured 2.30:1 against the white on top of it;
+              this pairing is 6.8:1 and reads as the same green. */}
+          {game.finished && (
+            <span className="absolute left-2.5 top-2.5 flex items-center gap-1 rounded-md bg-[#00693e] px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-white shadow-e1">
+              <Check aria-hidden="true" className="h-3 w-3" /> Finished
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="mt-3">
@@ -427,7 +432,10 @@ export function GamesPage() {
               else next.set("sort", opt.value);
               return next;
             }, { replace: true })}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${sort === opt.value ? "bg-claw-500 text-claw-on" : ""}`}
+            // Without this the active sort is a background colour and nothing
+            // else — SC 1.4.1 and 4.1.2.
+            aria-pressed={sort === opt.value}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset ${sort === opt.value ? "bg-claw-500 text-claw-on" : ""}`}
             style={sort === opt.value ? undefined : { color: "var(--text-mute)" }}
           >
             {opt.label}

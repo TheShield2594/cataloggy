@@ -8,6 +8,7 @@ import { formatRating, formatStars, ratingLabel, starsLabel } from "../utils/rat
 import { monthlyBarGeometry } from "../utils/monthlyBars";
 import { PAGE_TITLE, SECTION_TITLE, KICKER } from "../components/typography";
 import { SelectField } from "../components/SelectField";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -48,6 +49,18 @@ export function StatsPage() {
   const [loading, setLoading] = useState(!statsMeta.hadCachedValue || !detailedMeta.hadCachedValue);
   const [error, setError] = useState<string | null>(null);
   const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
+
+  // SC 1.4.13: content shown on hover has to be dismissible without moving the
+  // pointer. The tooltip is already hoverable (it renders inside the column that
+  // owns the hover, so moving onto it doesn't dismiss it) and persistent (it
+  // stays until the pointer leaves), but there was no way to get rid of it at
+  // all — which matters most to the people it obscures the chart for, magnifier
+  // and low-vision users who can't simply look past it.
+  //
+  // Through useEscapeKey rather than a bare listener so it takes its place in
+  // the layer stack: the tooltip is the topmost transient thing while it is up,
+  // and dismissing it must not also close whatever is underneath.
+  useEscapeKey(() => setHoveredMonth(null), hoveredMonth !== null);
   // The year you're in, not the one that just ended. A "year in review" that
   // opens on last year reads as stale for the eleven months after January —
   // the current year is listed right above it in the picker, empty-looking by
