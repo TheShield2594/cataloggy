@@ -1,4 +1,5 @@
 import { prisma } from "./prisma.js";
+import { withDeadline } from "./deadline.js";
 
 // The one question a readiness probe has to answer: can this process still get
 // a connection and run a statement?
@@ -29,26 +30,13 @@ export type DatabaseHealth = {
 const describe = (error: unknown): string =>
   (error instanceof Error ? error.message : String(error)).slice(0, MAX_ERROR_LENGTH);
 
-/**
- * Racing does not cancel the query — Prisma has no abort for it, and a pool
- * that is exhausted now will hand this statement a connection eventually. It
- * is a single `SELECT 1` with nothing downstream of it, so letting the loser
- * settle unobserved is cheaper than the machinery to stop it.
- */
 export async function checkDatabase(timeoutMs: number = DATABASE_PROBE_TIMEOUT_MS): Promise<DatabaseHealth> {
   const startedAt = performance.now();
-  let timer: NodeJS.Timeout | undefined;
-
-  const deadline = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new Error(`Database probe timed out after ${timeoutMs}ms`)), timeoutMs);
-  });
 
   try {
-    await Promise.race([prisma.$queryRaw`SELECT 1`, deadline]);
+    await withDeadline(prisma.$queryRaw`SELECT 1`, timeoutMs, `Database probe timed out after ${timeoutMs}ms`);
     return { ok: true, latencyMs: Math.round(performance.now() - startedAt), error: null };
   } catch (error) {
     return { ok: false, latencyMs: Math.round(performance.now() - startedAt), error: describe(error) };
-  } finally {
-    clearTimeout(timer);
   }
 }

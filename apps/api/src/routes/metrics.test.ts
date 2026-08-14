@@ -31,6 +31,11 @@ const buildApp = () => buildRouteApp(() => import("./metrics.js"));
 
 describe("metrics route", () => {
   beforeEach(() => {
+    // Reset, not just re-stub: one test asserts a dependency was never called,
+    // and vitest keeps call history across tests in a file by default.
+    checkDatabase.mockReset();
+    getJobRuns.mockReset();
+    metricsSnapshot.mockReset();
     checkDatabase.mockResolvedValue({ ok: true, latencyMs: 1, error: null });
     getJobRuns.mockResolvedValue([]);
     metricsSnapshot.mockReturnValue(snapshot());
@@ -106,6 +111,33 @@ describe("metrics route", () => {
     expect(body.jobs).toBeNull();
     expect(body.jobsError).toBe("connection terminated");
     expect(body.requests.total).toBe(1);
+  });
+
+  it("answers even when the job-status query never comes back", async () => {
+    // An exhausted connection pool does not refuse a query, it queues it — so
+    // without a deadline this request hangs for as long as the fault lasts,
+    // and /metrics stops answering in the one case it is read to diagnose.
+    getJobRuns.mockReturnValue(new Promise(() => {}));
+    const app = await buildApp();
+
+    const res = await app.inject({ method: "GET", url: "/metrics" });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().jobs).toBeNull();
+    expect(res.json().jobsError).toMatch(/timed out/);
+  }, 10_000);
+
+  it("does not ask for job rows at all when the probe just failed", async () => {
+    // The probe already waited out its own deadline against this database.
+    // Asking it for rows now is a second wait for the same answer.
+    checkDatabase.mockResolvedValue({ ok: false, latencyMs: 2000, error: "connection refused" });
+    const app = await buildApp();
+
+    const res = await app.inject({ method: "GET", url: "/metrics" });
+
+    expect(getJobRuns).not.toHaveBeenCalled();
+    expect(res.json().jobs).toBeNull();
+    expect(res.json().jobsError).toMatch(/probe/);
   });
 
   it("truncates the job-status error rather than pasting a Prisma stack beside the counters", async () => {

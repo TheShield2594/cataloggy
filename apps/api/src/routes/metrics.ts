@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { checkDatabase } from "../lib/db-health.js";
+import { withDeadline } from "../lib/deadline.js";
 import { getJobRuns } from "../lib/job-status.js";
 import { metricsSnapshot } from "../lib/metrics.js";
 
@@ -12,10 +13,16 @@ import { metricsSnapshot } from "../lib/metrics.js";
 // reads) and does not flatten into counters without losing the error message
 // that explains the failure. A self-hoster with `curl` and `jq` gets more from
 // this than from a scrape they have nowhere to send.
+
 // Prisma's errors carry a rendered source excerpt of the failing call, which is
 // several hundred characters of context that belongs in the log this also
 // writes, not in a field beside a row of counters.
 const MAX_ERROR_LENGTH = 200;
+
+// The job rows are one indexed `findMany` over a handful of KV keys, so this is
+// far longer than it can legitimately take — it exists for the case where the
+// query never gets a connection at all, not to police a slow one.
+const JOB_STATUS_TIMEOUT_MS = 2000;
 
 const metricsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/metrics", async (request, reply) => {
@@ -29,13 +36,28 @@ const metricsRoutes: FastifyPluginAsync = async (app) => {
     // failure to read them is expected when it is down — and that is precisely
     // when someone is reading `/metrics`. Losing the rows must not lose the
     // counters, so it degrades to null rather than a 500.
+    //
+    // Which means the read is only attempted when the probe just succeeded, and
+    // is given a deadline even then. Both matter for the same reason the probe
+    // has one: a query against an exhausted pool waits for a connection instead
+    // of failing, so an unbounded read here would hang `/metrics` in the exact
+    // case it is being read to diagnose. The probe having passed is no promise
+    // the pool is still free a moment later.
     let jobs: Awaited<ReturnType<typeof getJobRuns>> | null = null;
     let jobsError: string | null = null;
-    try {
-      jobs = await getJobRuns();
-    } catch (error) {
-      jobsError = (error instanceof Error ? error.message : String(error)).slice(0, MAX_ERROR_LENGTH);
-      request.log.warn(error, "Could not read background job status for /metrics");
+    if (!database.ok) {
+      jobsError = "Skipped: the database did not answer this request's probe";
+    } else {
+      try {
+        jobs = await withDeadline(
+          getJobRuns(),
+          JOB_STATUS_TIMEOUT_MS,
+          `Reading background job status timed out after ${JOB_STATUS_TIMEOUT_MS}ms`
+        );
+      } catch (error) {
+        jobsError = (error instanceof Error ? error.message : String(error)).slice(0, MAX_ERROR_LENGTH);
+        request.log.warn(error, "Could not read background job status for /metrics");
+      }
     }
 
     const memory = process.memoryUsage();
