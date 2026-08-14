@@ -116,6 +116,14 @@ model ListItem {
   @@index([listId])
 }
 
+// A partial unique index, `watchevent_dedup_key` (migration 20260814120000), enforces
+// the dedup rule the code has always applied by hand: one row per profile, per title,
+// per UTC day, for every row that did not come from a Trakt history entry. It is an
+// expression index over COALESCE(...) and a date cast, and partial on
+// `traktHistoryId IS NULL` — Prisma's schema DSL can express none of those, so it isn't
+// declared here. Don't let `prisma migrate dev` generate a migration that drops it, and
+// note that `idx_watchevent_dedup` below is a different, non-unique index that exists to
+// make the lookup fast rather than correct.
 model WatchEvent {
   id             String         @id @default(uuid()) @db.Uuid
   type           WatchEventType

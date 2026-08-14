@@ -8,6 +8,7 @@ import {
 import { prisma } from "./prisma.js";
 import { upsertSeriesProgressIfNewer } from "./series-progress.js";
 import { getDefaultWatchlist } from "./watchlist.js";
+import { watchEventDedupWhere, type WatchEventDedupKey } from "./watch-event-dedup.js";
 import type { SeriesProgressCandidate } from "./types.js";
 import type { FastifyRequest } from "fastify";
 
@@ -461,6 +462,36 @@ export const pollTraktHistory = async (
     await prisma.watchEvent.update({ where: { id: existingEvent.id }, data });
   };
 
+  // The create the two loops below reach when the lookup found nothing, guarded
+  // against another writer having filled that gap in between.
+  //
+  // Which uniqueness rejects it depends on the entry. One carrying a Trakt id is
+  // keyed by `traktHistoryId` and sits outside `watchevent_dedup_key`, which is
+  // partial on that column being null — so one history entry stays one row and a
+  // same-day rewatch imports as the two plays it was. One without an id falls
+  // under the dedup key like every other writer's rows do, and the row that beat
+  // it there may carry any timestamp within the same UTC day.
+  //
+  // Either way the watch is now stored, which is what the import wanted. Re-read
+  // and reconcile, so an overlapping "Sync now" costs nothing rather than a 500
+  // that abandons the rest of the poll.
+  const createOrReconcileEvent = async (
+    data: Prisma.WatchEventUncheckedCreateInput,
+    historyId: bigint | null,
+    dedupKey: WatchEventDedupKey,
+    playsKey: string
+  ) => {
+    try {
+      await prisma.watchEvent.create({ data });
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
+      const winner = historyId
+        ? await prisma.watchEvent.findUnique({ where: { traktHistoryId: historyId } })
+        : await prisma.watchEvent.findFirst({ where: watchEventDedupWhere(dedupKey) });
+      if (winner) await reconcileExistingEvent(winner, historyId, playsKey);
+    }
+  };
+
   for (const entry of movieHistory) {
     const imdbId = entry.movie?.ids?.imdb;
     const watchedAt = entry.watched_at;
@@ -491,9 +522,12 @@ export const pollTraktHistory = async (
     if (existingEvent) {
       await reconcileExistingEvent(existingEvent, historyId, `movie:${imdbId}`);
     } else {
-      await prisma.watchEvent.create({
-        data: { type: "movie", imdbId, watchedAt: watchedAtDate, plays: 1, traktHistoryId: historyId, profileId },
-      });
+      await createOrReconcileEvent(
+        { type: "movie", imdbId, watchedAt: watchedAtDate, plays: 1, traktHistoryId: historyId, profileId },
+        historyId,
+        { profileId, type: "movie", imdbId, watchedAt: watchedAtDate },
+        `movie:${imdbId}`
+      );
     }
 
     importedWatchEvents.movies += 1;
@@ -534,8 +568,8 @@ export const pollTraktHistory = async (
     if (existingEvent) {
       await reconcileExistingEvent(existingEvent, historyId, `episode:${seriesImdbId}:${season}:${episode}`);
     } else {
-      await prisma.watchEvent.create({
-        data: {
+      await createOrReconcileEvent(
+        {
           type: "episode",
           imdbId: seriesImdbId,
           seriesImdbId,
@@ -546,7 +580,10 @@ export const pollTraktHistory = async (
           traktHistoryId: historyId,
           profileId,
         },
-      });
+        historyId,
+        { profileId, type: "episode", imdbId: seriesImdbId, season, episode, watchedAt: watchedAtDate },
+        `episode:${seriesImdbId}:${season}:${episode}`
+      );
     }
 
     const existing = seriesProgressByImdb.get(seriesImdbId);

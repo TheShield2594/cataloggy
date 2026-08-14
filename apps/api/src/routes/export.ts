@@ -249,7 +249,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       });
       summary.watchEvents += 1;
     }
-    await batchUpsertWatchEvents(profileId, watchEventInputs);
+    await batchUpsertWatchEvents(profileId, watchEventInputs, request.log);
 
     const progressInputs: { seriesImdbId: string; incoming: SeriesProgressCandidate }[] = [];
     for (const sp of collections.seriesProgress) {
@@ -374,7 +374,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       imported += 1;
     }
 
-    await batchUpsertWatchEvents(profileId, watchEventInputs);
+    await batchUpsertWatchEvents(profileId, watchEventInputs, request.log);
 
     return reply.code(200).send({ status: "imported", summary: { imported, skipped } });
   });

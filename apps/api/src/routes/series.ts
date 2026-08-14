@@ -1,6 +1,7 @@
 import { MetadataType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
+import { isUniqueConstraintError } from "../lib/prisma-tolerant.js";
 import { getTmdb } from "../lib/tmdb-client.js";
 import { upsertMetadata } from "../lib/metadata.js";
 import { upsertSeriesProgressIfNewer } from "../lib/series-progress.js";
@@ -254,18 +255,28 @@ const seriesRoutes: FastifyPluginAsync = async (app) => {
       const nextEpisode = next.episode;
       const watchedAt = new Date();
 
-      await prisma.watchEvent.create({
-        data: {
-          type: "episode",
-          imdbId,
-          seriesImdbId: imdbId,
-          season: nextSeason,
-          episode: nextEpisode,
-          watchedAt,
-          plays: 1,
-          profileId,
-        },
-      });
+      try {
+        await prisma.watchEvent.create({
+          data: {
+            type: "episode",
+            imdbId,
+            seriesImdbId: imdbId,
+            season: nextSeason,
+            episode: nextEpisode,
+            watchedAt,
+            plays: 1,
+            profileId,
+          },
+        });
+      } catch (error) {
+        // Two "watch next" requests racing — a double-tap, or the button and a
+        // scrobble for the same episode — both compute the same next episode and
+        // both reach this create. The dedup key lets one through; the other is
+        // asking for a state that now holds, so it falls through to the progress
+        // update rather than returning a 500. Advancing the show once is the
+        // point of the route; counting the tap twice never was.
+        if (!isUniqueConstraintError(error)) throw error;
+      }
 
       await upsertSeriesProgressIfNewer(profileId, imdbId, {
         lastSeason: nextSeason,
