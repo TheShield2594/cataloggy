@@ -25,10 +25,12 @@ const MANIFESTS = [
   "packages/migrate/package.json",
 ];
 
-// Plain `major.minor.patch`. Pre-release and build metadata are deliberately
+// Plain `major.minor.patch`, each component either `0` or without a leading
+// zero — `01.2.3` is not the same string as `1.2.3` and only one of them will
+// be a published image tag. Pre-release and build metadata are deliberately
 // unsupported: `CATALOGGY_IMAGE_TAG` is what a self-hoster types into a `.env`,
 // and a tag with a `+` in it is not a valid Docker tag.
-const SEMVER = /^\d+\.\d+\.\d+$/;
+const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 const read = (relPath) => {
   const path = join(repoRoot, relPath);
@@ -60,8 +62,23 @@ const setVersion = (version) => {
     return 1;
   }
 
+  // Every manifest is read and rewritten in memory first, and nothing touches
+  // the disk until all six have succeeded. Writing as it goes would leave the
+  // workspace half-bumped when the fifth file turns out to be unreadable or
+  // malformed — which is the exact state this script exists to prevent, and a
+  // confusing one to land in while cutting a release.
+  const pending = [];
   for (const relPath of MANIFESTS) {
-    const { path, raw } = read(relPath);
+    let path;
+    let raw;
+    try {
+      ({ path, raw } = read(relPath));
+      versionOf(raw);
+    } catch (error) {
+      console.error(`Could not read ${relPath}: ${error.message}`);
+      return 1;
+    }
+
     // A targeted replacement of the `version` line rather than a
     // parse-and-stringify round trip, which would reformat the whole file and
     // drop key order for the sake of one field.
@@ -70,6 +87,10 @@ const setVersion = (version) => {
       console.error(`Could not find a version field in ${relPath}.`);
       return 1;
     }
+    pending.push({ path, updated });
+  }
+
+  for (const { path, updated } of pending) {
     writeFileSync(path, updated);
     console.log(`${relative(repoRoot, path)} → ${version}`);
   }

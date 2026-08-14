@@ -67,6 +67,23 @@ describe("TmdbClient", () => {
 
       expect(results.map((r) => r.imdbId)).toEqual(["tt0001", "tt0003"]);
     });
+
+    it("drops a result whose lookup failed rather than emptying the catalog", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: URL) => {
+          if (!input.pathname.endsWith("/external_ids")) return json(searchPage(3));
+          const id = Number(input.pathname.split("/")[3]);
+          // 404 is not retried, so this is one lookup that is not coming back.
+          return id === 2 ? json({ status_message: "Not found" }, 404) : json({ imdb_id: `tt000${id}` });
+        })
+      );
+
+      const { TmdbClient } = await import("./tmdb.js");
+      const results = await TmdbClient.fromKey("key").popular(MetadataType.movie);
+
+      expect(results.map((r) => r.imdbId)).toEqual(["tt0001", "tt0003"]);
+    });
   });
 
   describe("throttling", () => {

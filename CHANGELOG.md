@@ -24,6 +24,7 @@ onward: one to three sentences per entry, with the reasoning in the PR.
 
 - `POST /checkin` validates its body. It had a TypeScript generic and no runtime check, so a non-string `name` or `imdbId` reached the database as an unhandled 500, a large enough `runtime` made the check-in's expiry an Invalid Date, and `name`/`poster` were bounded only by `MAX_BODY_SIZE_MB` — one request could park a multi-megabyte row per profile ([#464](https://github.com/TheShield2594/cataloggy/issues/464)).
 - The three notification-channel routes that take an `:id` reject a malformed UUID rather than letting Postgres error on it, which was a 500 where the caller sent a bad request. Authorization was never affected — the `profileId` filter is on every query there ([#464](https://github.com/TheShield2594/cataloggy/issues/464)).
+- `GET /watch/history` answers a repeated `type` or `imdbId` parameter (`?type=a&type=b`) with a `400` rather than a `500`. A repeat parses as an array, and the handler called a string method on it ([#464](https://github.com/TheShield2594/cataloggy/issues/464)).
 - A watch `note` is capped at 2,000 characters on both routes that write one. `PATCH /watch/:eventId` accepted any length onto a text column the history page loads fifty rows of at a time ([#464](https://github.com/TheShield2594/cataloggy/issues/464)).
 
 ## [0.1.0] - 2026-08-14

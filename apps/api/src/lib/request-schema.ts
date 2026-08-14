@@ -43,6 +43,14 @@ export const requestSchemaOptions: Pick<FastifyServerOptions, "ajv"> = {
   ajv: { customOptions: { coerceTypes: false } },
 };
 
+/**
+ * Requires at least one non-whitespace character. `minLength: 1` accepts
+ * `"   "`, which every hand-written check in these routes rejects by trimming
+ * first, so a schema that only bounds the length is more permissive than the
+ * code it replaces.
+ */
+export const NON_BLANK = "\\S";
+
 /** Bounds shared by the fields that show up in more than one payload. */
 export const MAX_IMDB_ID_LENGTH = 32;
 export const MAX_TITLE_LENGTH = 300;
@@ -114,7 +122,9 @@ export const schemaErrorFormatter = (
     case "exclusiveMaximum":
       return new Error(`${field} must be at most ${String(params.limit)}`);
     case "pattern":
-      return new Error(`${field} is not in the expected format`);
+      return params.pattern === NON_BLANK
+        ? new Error(`${field} must not be empty`)
+        : new Error(`${field} is not in the expected format`);
     default:
       return new Error(`${field} ${error.message ?? "is invalid"}`);
   }

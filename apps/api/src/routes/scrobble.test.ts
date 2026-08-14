@@ -310,6 +310,29 @@ describe("scrobble routes", () => {
       expect(response.json().error).toBe("name must be at most 300 characters");
     });
 
+    it.each(["imdbId", "name", "seriesImdbId"])("refuses a whitespace-only %s", async (field) => {
+      const app = await buildApp();
+      const response = await checkIn(app, {
+        type: "movie",
+        imdbId: "tt1",
+        name: "Movie A",
+        [field]: "   ",
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe(`${field} must not be empty`);
+      expect(prismaMock.checkIn.upsert).not.toHaveBeenCalled();
+    });
+
+    it("refuses a runtime of zero, which would expire the check-in as it was made", async () => {
+      const app = await buildApp();
+      const response = await checkIn(app, { type: "movie", imdbId: "tt1", name: "Movie A", runtime: 0 });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe("runtime must be at least 1");
+      expect(prismaMock.checkIn.upsert).not.toHaveBeenCalled();
+    });
+
     it("refuses a runtime that would make expiresAt an Invalid Date", async () => {
       const app = await buildApp();
       const response = await checkIn(app, {

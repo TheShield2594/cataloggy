@@ -220,6 +220,15 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const limit = Math.min(Math.max(Number(request.query.limit) || 50, 1), 200);
       const offset = Math.max(Number(request.query.offset) || 0, 0);
+
+      // A repeated parameter (`?type=a&type=b`) parses as an array, and calling
+      // a string method on one is a 500 where the caller sent a bad request.
+      for (const field of ["imdbId", "type"] as const) {
+        if (request.query[field] !== undefined && typeof request.query[field] !== "string") {
+          return reply.code(400).send({ error: `${field} must be given at most once` });
+        }
+      }
+
       const imdbId = request.query.imdbId?.trim();
       // Filtering here rather than client-side: the client paginates, so a
       // filter applied to the loaded page only searches the rows already

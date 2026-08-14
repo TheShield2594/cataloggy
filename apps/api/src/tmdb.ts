@@ -265,6 +265,12 @@ export class TmdbClient {
    * under a concurrency limit rather than `Promise.all`. Results whose id TMDB
    * doesn't know an IMDb id for are dropped: an entry Cataloggy cannot key is
    * one it cannot store, rate or mark watched.
+   *
+   * A lookup that *fails* is dropped the same way rather than failing the
+   * catalog. `Promise.all` semantics meant one refused `/external_ids` call —
+   * after its retries, so one that was genuinely not coming back — turned
+   * nineteen usable results into an empty row. A real outage still surfaces,
+   * because the list request itself fails before any of this runs.
    */
   private async withImdbIds(
     results: TmdbSearchResult[],
@@ -279,7 +285,7 @@ export class TmdbClient {
         const kind = classify(result);
         if (!kind) return null;
 
-        const imdbId = await this.getImdbId(kind.mediaType, result.id);
+        const imdbId = await this.getImdbId(kind.mediaType, result.id).catch(() => null);
         if (!imdbId) return null;
 
         return this.toMetadataPayload(kind.type, result, imdbId);

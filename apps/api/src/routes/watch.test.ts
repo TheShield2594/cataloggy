@@ -351,6 +351,19 @@ describe("watch routes", () => {
       expect(prismaMock.watchEvent.findMany).not.toHaveBeenCalled();
     });
 
+    it.each(["type", "imdbId"])("rejects a repeated %s rather than 500ing on the array", async (field) => {
+      prismaMock.watchEvent.findMany.mockResolvedValue([]);
+      const app = await buildApp();
+      const response = await app.inject({
+        method: "GET",
+        url: `/watch/history?${field}=movie&${field}=episode`,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe(`${field} must be given at most once`);
+      expect(prismaMock.watchEvent.findMany).not.toHaveBeenCalled();
+    });
+
     it("treats an empty type as no filter, which is what a cleared UI filter sends", async () => {
       prismaMock.watchEvent.findMany.mockResolvedValue([]);
       const app = await buildApp();

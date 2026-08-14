@@ -286,10 +286,94 @@ describe("fetchWithPolicy", () => {
       });
       vi.stubGlobal("fetch", fetchMock);
 
+      // The caller's own reason, not the abort the socket reported: it is the
+      // one that says why the request ended.
       await expect(
         run(fetchWithPolicy(nextUrl(), { signal: controller.signal }, { retries: 3 }))
-      ).rejects.toThrow("The operation was aborted");
+      ).rejects.toThrow("caller left");
       expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("opens no socket at all for a caller who has already given up", async () => {
+      const fetchMock = vi.fn(async () => ok());
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(
+        run(fetchWithPolicy(nextUrl(), { signal: AbortSignal.abort(new Error("too late")) }))
+      ).rejects.toThrow("too late");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("releases a queued request when the caller gives up waiting", async () => {
+      const controller = new AbortController();
+      const pending: (() => void)[] = [];
+      const fetchMock = vi.fn(async () => {
+        await new Promise<void>((resolve) => pending.push(resolve));
+        return ok();
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const url = nextUrl();
+      const holder = fetchWithPolicy(url, {}, { concurrency: 1 });
+      await flush();
+
+      // The second request is queued behind the first, which has not answered.
+      const queued = fetchWithPolicy(url, { signal: controller.signal }, { concurrency: 1 });
+      const rejection = expect(queued).rejects.toThrow("nobody is waiting");
+      await flush();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      controller.abort(new Error("nobody is waiting"));
+      await rejection;
+
+      // The slot the abandoned request was waiting for is still usable.
+      pending.shift()?.();
+      await expect(holder).resolves.toMatchObject({ status: 200 });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("total budget", () => {
+    it("gives up on a request that spends its whole budget queued", async () => {
+      const pending: (() => void)[] = [];
+      const fetchMock = vi.fn(async () => {
+        await new Promise<void>((resolve) => pending.push(resolve));
+        return ok();
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      // Real timers: the budget rides on `AbortSignal.timeout`, which is not
+      // something fake timers drive.
+      vi.useRealTimers();
+      const url = nextUrl();
+      const holder = fetchWithPolicy(url, {}, { concurrency: 1 });
+      await flush();
+
+      await expect(fetchWithPolicy(url, {}, { concurrency: 1, budgetMs: 20 })).rejects.toThrow(
+        /gave up after 20ms/
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      pending.shift()?.();
+      await expect(holder).resolves.toMatchObject({ status: 200 });
+    });
+
+    it("does not shorten a retry sequence the rest of the policy allows for", async () => {
+      let calls = 0;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => {
+          calls += 1;
+          return calls < 3 ? new Response("slow down", { status: 429 }) : ok();
+        })
+      );
+
+      // No explicit budget: the default is the worst case of timeouts and
+      // backoff, so two retries fit inside it with room to spare.
+      const response = await run(fetchWithPolicy(nextUrl(), {}, { retries: 2 }));
+
+      expect(calls).toBe(3);
+      expect(response.status).toBe(200);
     });
   });
 });

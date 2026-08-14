@@ -10,6 +10,7 @@ import {
   MAX_RUNTIME_MINUTES,
   MAX_TITLE_LENGTH,
   MAX_URL_LENGTH,
+  NON_BLANK,
   nullable,
 } from "../lib/request-schema.js";
 import type { CheckInData } from "../lib/types.js";
@@ -76,19 +77,27 @@ const getCheckInBackground = async (row: { type: WatchEventType; imdbId: string;
  * `MAX_BODY_SIZE_MB` — so one request could park a multi-megabyte row per
  * profile. Every neighbouring route validated explicitly; this one now does it
  * declaratively.
+ *
+ * The identifiers and the title require a non-space character rather than just
+ * a length, because `minLength` counts `"   "` as three characters and the
+ * hand-written checks it replaced all trimmed before deciding. A blank title is
+ * a check-in the UI would draw as an empty row.
  */
 const checkInBodySchema = {
   type: "object",
   required: ["type", "imdbId", "name"],
   properties: {
     type: { type: "string", enum: [WatchEventType.movie, WatchEventType.episode] },
-    imdbId: { type: "string", minLength: 1, maxLength: MAX_IMDB_ID_LENGTH },
-    seriesImdbId: nullable({ minLength: 1, maxLength: MAX_IMDB_ID_LENGTH }, "string"),
-    name: { type: "string", minLength: 1, maxLength: MAX_TITLE_LENGTH },
+    imdbId: { type: "string", pattern: NON_BLANK, maxLength: MAX_IMDB_ID_LENGTH },
+    seriesImdbId: nullable({ pattern: NON_BLANK, maxLength: MAX_IMDB_ID_LENGTH }, "string"),
+    name: { type: "string", pattern: NON_BLANK, maxLength: MAX_TITLE_LENGTH },
     poster: nullable({ maxLength: MAX_URL_LENGTH }, "string"),
     season: nullable({ minimum: 0, maximum: MAX_SEASON }, "integer"),
     episode: nullable({ minimum: 0, maximum: MAX_EPISODE }, "integer"),
-    runtime: nullable({ minimum: 0, maximum: MAX_RUNTIME_MINUTES }, "integer"),
+    // A minute is the smallest runtime that means anything: `expiresAt` is set
+    // from it, and zero would be a check-in that expired as it was made.
+    // TMDB never reports one either — it stores a runtime of 0 as absent.
+    runtime: nullable({ minimum: 1, maximum: MAX_RUNTIME_MINUTES }, "integer"),
   },
 } as const;
 

@@ -39,8 +39,12 @@ const query = async <T>(graphqlQuery: string, variables: Record<string, unknown>
       timeoutMs: 8_000,
       concurrency: 4,
       // AniList is GraphQL, so every read is a POST — retrying one duplicates
-      // nothing. It rate-limits at 90 requests a minute and says so in
-      // `Retry-After`, which the shared policy waits out.
+      // nothing. Its rate limit resets on a window boundary, so a throttled
+      // request can be told to come back in up to a minute; the shared 8s
+      // ceiling on a wait is deliberately left as it is, because the only
+      // caller is `/metadata/anime-search` and holding a search open for a
+      // minute is worse than answering that the search failed. A short
+      // `Retry-After` is waited out, a long one is declined.
       retryMethods: ["POST"],
     }
   );

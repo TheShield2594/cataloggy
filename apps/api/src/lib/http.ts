@@ -41,6 +41,14 @@ export type HttpPolicy = {
   /** How many requests this process keeps in flight to one host at a time. */
   concurrency?: number;
   /**
+   * Ceiling on the whole call: the wait for a host slot, every attempt, and the
+   * backoff between them. `timeoutMs` bounds one attempt and says nothing about
+   * how long a request can sit in a busy host's queue, which is unbounded
+   * without this. Defaults to the worst case the rest of the policy already
+   * allows, so the only thing it newly limits is queueing.
+   */
+  budgetMs?: number;
+  /**
    * Which methods are worth retrying. The default is the idempotent ones: a
    * retried POST can duplicate a scrobble, a notification or a sync, and a
    * timeout says nothing about whether the peer processed the body. A caller
@@ -86,7 +94,7 @@ const gates = new Map<string, HostGate>();
  * about a host's budget is a mistake in one of them and the safer reading is
  * the smaller number.
  */
-const acquire = async (host: string, limit: number): Promise<() => void> => {
+const acquire = async (host: string, limit: number, giveUp: AbortSignal): Promise<() => void> => {
   let gate = gates.get(host);
   if (!gate) {
     gate = { limit, active: 0, waiters: [] };
@@ -100,7 +108,30 @@ const acquire = async (host: string, limit: number): Promise<() => void> => {
   } else {
     // The releasing holder hands its slot over rather than freeing it, so the
     // count never dips between a wake-up and the woken request starting.
-    await new Promise<void>((resolve) => gate.waiters.push(resolve));
+    //
+    // The wait is abortable, because the queue is the one place a request can
+    // sit for longer than any timeout it carries: a caller that has already
+    // hung up, or a call past its budget, would otherwise wake up much later
+    // and spend a slot on a request nobody wants.
+    const queued = gate;
+    await new Promise<void>((resolve, reject) => {
+      const waiter = () => {
+        giveUp.removeEventListener("abort", onGiveUp);
+        resolve();
+      };
+      const onGiveUp = () => {
+        const index = queued.waiters.indexOf(waiter);
+        if (index !== -1) queued.waiters.splice(index, 1);
+        reject(new Error("Gave up waiting for a slot"));
+      };
+
+      if (giveUp.aborted) {
+        reject(new Error("Gave up waiting for a slot"));
+        return;
+      }
+      queued.waiters.push(waiter);
+      giveUp.addEventListener("abort", onGiveUp, { once: true });
+    });
   }
 
   let released = false;
@@ -180,10 +211,19 @@ const discard = async (response: Response): Promise<void> => {
   }
 };
 
-const timeoutSignal = (caller: AbortSignal | null | undefined, timeoutMs: number): AbortSignal => {
-  const deadline = AbortSignal.timeout(timeoutMs);
-  return caller ? AbortSignal.any([caller, deadline]) : deadline;
-};
+const timeoutSignal = (giveUp: AbortSignal, timeoutMs: number): AbortSignal =>
+  AbortSignal.any([giveUp, AbortSignal.timeout(timeoutMs)]);
+
+/**
+ * The worst case the rest of the policy already permits — every attempt timing
+ * out with a maximum backoff between each — so the default budget is not a new
+ * limit on anything except time spent queued.
+ */
+const defaultBudgetMs = (timeoutMs: number, retries: number, maxDelayMs: number): number =>
+  timeoutMs * (retries + 1) + maxDelayMs * retries;
+
+const asError = (reason: unknown, fallback: string): Error =>
+  reason instanceof Error ? reason : new Error(fallback, { cause: reason });
 
 // ─── The request ───
 
@@ -203,23 +243,43 @@ export async function fetchWithPolicy(
     ...DEFAULT_POLICY,
     ...policy,
   };
+  const budgetMs = policy.budgetMs ?? defaultBudgetMs(timeoutMs, retries, maxDelayMs);
 
   const target = url instanceof URL ? url : new URL(url);
   const method = (init.method ?? "GET").toUpperCase();
   const retryable = retries > 0 && retryMethods.includes(method);
   const callerSignal = init.signal ?? null;
 
-  const release = await acquire(target.hostname, concurrency);
+  // A caller who has already hung up gets their own reason back, without a
+  // socket being opened for them first.
+  if (callerSignal?.aborted) throw asError(callerSignal.reason, "Aborted");
+
+  const budgetSignal = AbortSignal.timeout(budgetMs);
+  const giveUp = callerSignal ? AbortSignal.any([callerSignal, budgetSignal]) : budgetSignal;
+  /** Whichever of the two ended the call, phrased for whoever reads the log. */
+  const giveUpError = (): Error =>
+    callerSignal?.aborted
+      ? asError(callerSignal.reason, "Aborted")
+      : new Error(`Request to ${target.hostname} gave up after ${budgetMs}ms`);
+
+  let release: () => void;
+  try {
+    release = await acquire(target.hostname, concurrency, giveUp);
+  } catch {
+    throw giveUpError();
+  }
+
   try {
     let lastError: unknown = null;
 
     for (let attempt = 0; ; attempt++) {
       let response: Response | null = null;
       try {
-        response = await fetch(target, { ...init, signal: timeoutSignal(callerSignal, timeoutMs) });
+        response = await fetch(target, { ...init, signal: timeoutSignal(giveUp, timeoutMs) });
       } catch (error) {
-        // The caller giving up is not a failure to retry around.
-        if (callerSignal?.aborted) throw error;
+        // The caller hanging up, or the budget running out, is not a failure to
+        // retry around — both mean nobody is waiting for the answer any more.
+        if (giveUp.aborted) throw giveUpError();
         lastError = error;
       }
 
@@ -235,10 +295,25 @@ export async function fetchWithPolicy(
       }
 
       const askedFor = response ? parseRetryAfter(response.headers.get("retry-after")) : null;
+      // The guard is on what the server actually asked for, so the jitter below
+      // can never turn a wait we accepted into one we would have declined.
       if (askedFor !== null && askedFor > maxDelayMs) return response!;
 
+      // A `Retry-After` is one number sent to everyone it throttled, so honouring
+      // it exactly returns a whole fan-out in lockstep and earns the next 429.
+      // The jitter is added on top, never subtracted: the server's number is a
+      // floor, not a suggestion.
+      const wait =
+        askedFor !== null
+          ? askedFor + Math.round(Math.random() * baseDelayMs)
+          : backoffMs(attempt, baseDelayMs, maxDelayMs);
+
       if (response) await discard(response);
-      await sleep(askedFor ?? backoffMs(attempt, baseDelayMs, maxDelayMs), callerSignal);
+      try {
+        await sleep(wait, giveUp);
+      } catch {
+        throw giveUpError();
+      }
     }
   } finally {
     release();
