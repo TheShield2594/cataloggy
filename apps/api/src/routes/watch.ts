@@ -5,6 +5,16 @@ import { resolveProfile } from "../lib/profile.js";
 import { recordWatchEvent } from "../lib/watch-event.js";
 import { UUID_V4_PATTERN } from "../lib/types.js";
 
+/**
+ * A note is a sentence or two about a watch, and `note` is a `text` column, so
+ * without a bound one `PATCH` could store as much as `MAX_BODY_SIZE_MB` allows
+ * — per event, on a row the history page loads fifty at a time. The two routes
+ * that write one used to disagree about this: `POST /watch` trimmed it and
+ * `PATCH /watch/:eventId` took whatever arrived.
+ */
+const MAX_NOTE_LENGTH = 2_000;
+const noteTooLongMessage = `note must be at most ${MAX_NOTE_LENGTH.toLocaleString("en-US")} characters`;
+
 function serializeWatchEvent<T extends { traktHistoryId: bigint | null }>(event: T) {
   return { ...event, traktHistoryId: event.traktHistoryId != null ? event.traktHistoryId.toString() : null };
 }
@@ -99,6 +109,9 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     if (body.note !== undefined && body.note !== null && typeof body.note !== "string") {
       return reply.code(400).send({ error: "note must be a string when provided" });
     }
+    if (typeof body.note === "string" && body.note.length > MAX_NOTE_LENGTH) {
+      return reply.code(400).send({ error: noteTooLongMessage });
+    }
     const note = typeof body.note === "string" ? body.note.trim() || null : undefined;
 
     const { watchEvent, wasCreated } = await recordWatchEvent({
@@ -130,6 +143,9 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
     const body = request.body as { note?: unknown } | null;
     if (!body || (body.note !== null && typeof body.note !== "string")) {
       return reply.code(400).send({ error: "note must be a string or null" });
+    }
+    if (typeof body.note === "string" && body.note.length > MAX_NOTE_LENGTH) {
+      return reply.code(400).send({ error: noteTooLongMessage });
     }
 
     const event = await prisma.watchEvent.findFirst({ where: { id: eventId, profileId } });
@@ -201,17 +217,22 @@ const watchRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Querystring: { limit?: string; offset?: string; imdbId?: string; type?: string } }>(
     "/watch/history",
-    async (request) => {
+    async (request, reply) => {
       const limit = Math.min(Math.max(Number(request.query.limit) || 50, 1), 200);
       const offset = Math.max(Number(request.query.offset) || 0, 0);
       const imdbId = request.query.imdbId?.trim();
       // Filtering here rather than client-side: the client paginates, so a
       // filter applied to the loaded page only searches the rows already
       // fetched and reports "nothing" for a type that's further back.
-      // Anything unrecognised is ignored rather than rejected.
-      const type = request.query.type === "movie" || request.query.type === "episode"
-        ? request.query.type
-        : undefined;
+      //
+      // An unrecognised type is rejected rather than ignored, which is what
+      // every other route does with one. Silently dropping the filter answers a
+      // typo with a full unfiltered page — the caller's mistake looks like data.
+      const rawType = request.query.type?.trim();
+      if (rawType !== undefined && rawType !== "" && rawType !== "movie" && rawType !== "episode") {
+        return reply.code(400).send({ error: "type must be one of: movie, episode" });
+      }
+      const type = rawType === "movie" || rawType === "episode" ? rawType : undefined;
 
       const events = await prisma.watchEvent.findMany({
         where: {

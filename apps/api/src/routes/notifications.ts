@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { resolveProfile } from "../lib/profile.js";
 import { SECRET_CONTEXT, encryptSecret } from "../lib/secret-box.js";
 import { validateNotificationUrl } from "../lib/ssrf.js";
+import { UUID_V4_PATTERN } from "../lib/types.js";
 import {
   NOTIFICATION_CHANNEL_KINDS,
   isNotificationChannelKind,
@@ -26,6 +27,13 @@ const DEFAULT_NAMES: Record<NotificationChannelKind, string> = {
 
 const URL_ERROR =
   "url must be an http(s) URL and must not target the cloud-metadata/link-local range";
+
+// `NotificationChannel.id` is a uuid column, so a malformed id is rejected by
+// Postgres rather than simply matching nothing — an unhandled driver error and
+// a 500 where the caller sent a bad request. Authorization never depended on
+// this (the `profileId` filter is on every query here); it is the difference
+// between a 400 and a logged exception.
+const CHANNEL_ID_ERROR = "id must be a valid UUID";
 
 // The token is write-only: it is a credential for someone else's server, and
 // nothing in the UI needs it back — only whether one is set.
@@ -135,6 +143,9 @@ const notificationRoutes: FastifyPluginAsync = async (app) => {
     "/notifications/channels/:id",
     { preHandler: resolveProfile },
     async (request, reply) => {
+      if (!UUID_V4_PATTERN.test(request.params.id)) {
+        return reply.code(400).send({ error: CHANNEL_ID_ERROR });
+      }
       const body = request.body as ChannelBody | null;
       const existing = await prisma.notificationChannel.findFirst({
         where: { id: request.params.id, profileId: request.profileId! },
@@ -183,6 +194,9 @@ const notificationRoutes: FastifyPluginAsync = async (app) => {
     "/notifications/channels/:id",
     { preHandler: resolveProfile },
     async (request, reply) => {
+      if (!UUID_V4_PATTERN.test(request.params.id)) {
+        return reply.code(400).send({ error: CHANNEL_ID_ERROR });
+      }
       const { count } = await prisma.notificationChannel.deleteMany({
         where: { id: request.params.id, profileId: request.profileId! },
       });
@@ -198,6 +212,9 @@ const notificationRoutes: FastifyPluginAsync = async (app) => {
     "/notifications/channels/:id/test",
     { preHandler: resolveProfile },
     async (request, reply) => {
+      if (!UUID_V4_PATTERN.test(request.params.id)) {
+        return reply.code(400).send({ error: CHANNEL_ID_ERROR });
+      }
       const channel = await prisma.notificationChannel.findFirst({
         where: { id: request.params.id, profileId: request.profileId! },
       });

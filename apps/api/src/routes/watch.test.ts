@@ -122,6 +122,17 @@ describe("watch routes", () => {
       });
       expect(response.statusCode).toBe(400);
     });
+
+    it("rejects a note longer than the column is meant to hold", async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: "POST",
+        url: "/watch",
+        payload: { type: "movie", imdbId: "tt1", note: "x".repeat(2_001) },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toMatch(/at most 2,000 characters/);
+    });
   });
 
   describe("POST /watch — success", () => {
@@ -199,6 +210,19 @@ describe("watch routes", () => {
       const app = await buildApp();
       const response = await app.inject({ method: "PATCH", url: `/watch/${EVENT_ID}`, payload: { note: 5 } });
       expect(response.statusCode).toBe(400);
+    });
+
+    it("rejects a note longer than the column is meant to hold", async () => {
+      const app = await buildApp();
+      const response = await app.inject({
+        method: "PATCH",
+        url: `/watch/${EVENT_ID}`,
+        payload: { note: "x".repeat(2_001) },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toMatch(/at most 2,000 characters/);
+      expect(prismaMock.watchEvent.update).not.toHaveBeenCalled();
     });
 
     it("rejects an eventId that is not a UUID before it reaches the database", async () => {
@@ -317,10 +341,20 @@ describe("watch routes", () => {
       );
     });
 
-    it("ignores an unrecognised type rather than rejecting the request", async () => {
+    it("rejects an unrecognised type rather than answering an unfiltered page", async () => {
       prismaMock.watchEvent.findMany.mockResolvedValue([]);
       const app = await buildApp();
       const response = await app.inject({ method: "GET", url: "/watch/history?type=banana" });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toMatch(/movie, episode/);
+      expect(prismaMock.watchEvent.findMany).not.toHaveBeenCalled();
+    });
+
+    it("treats an empty type as no filter, which is what a cleared UI filter sends", async () => {
+      prismaMock.watchEvent.findMany.mockResolvedValue([]);
+      const app = await buildApp();
+      const response = await app.inject({ method: "GET", url: "/watch/history?type=" });
 
       expect(response.statusCode).toBe(200);
       expect(prismaMock.watchEvent.findMany).toHaveBeenCalledWith(

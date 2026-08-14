@@ -4,6 +4,14 @@ import { prisma } from "../lib/prisma.js";
 import { recordWatchEvent } from "../lib/watch-event.js";
 import { pushTraktScrobble } from "../lib/trakt-client.js";
 import { resolveProfile } from "../lib/profile.js";
+import { MAX_EPISODE, MAX_SEASON } from "../lib/import-validation.js";
+import {
+  MAX_IMDB_ID_LENGTH,
+  MAX_RUNTIME_MINUTES,
+  MAX_TITLE_LENGTH,
+  MAX_URL_LENGTH,
+  nullable,
+} from "../lib/request-schema.js";
 import type { CheckInData } from "../lib/types.js";
 
 export const SCROBBLE_COMPLETE_THRESHOLD = 80;
@@ -60,6 +68,30 @@ const getCheckInBackground = async (row: { type: WatchEventType; imdbId: string;
   return meta?.background ?? null;
 };
 
+/**
+ * The one route in this file that had a TypeScript generic and no runtime check
+ * behind it, which is not a check at all: a non-string `name` or `imdbId` went
+ * to Prisma as-is and came back as an unhandled 500, a `runtime` big enough
+ * made `expiresAt` an Invalid Date, and `name`/`poster` were bounded only by
+ * `MAX_BODY_SIZE_MB` — so one request could park a multi-megabyte row per
+ * profile. Every neighbouring route validated explicitly; this one now does it
+ * declaratively.
+ */
+const checkInBodySchema = {
+  type: "object",
+  required: ["type", "imdbId", "name"],
+  properties: {
+    type: { type: "string", enum: [WatchEventType.movie, WatchEventType.episode] },
+    imdbId: { type: "string", minLength: 1, maxLength: MAX_IMDB_ID_LENGTH },
+    seriesImdbId: nullable({ minLength: 1, maxLength: MAX_IMDB_ID_LENGTH }, "string"),
+    name: { type: "string", minLength: 1, maxLength: MAX_TITLE_LENGTH },
+    poster: nullable({ maxLength: MAX_URL_LENGTH }, "string"),
+    season: nullable({ minimum: 0, maximum: MAX_SEASON }, "integer"),
+    episode: nullable({ minimum: 0, maximum: MAX_EPISODE }, "integer"),
+    runtime: nullable({ minimum: 0, maximum: MAX_RUNTIME_MINUTES }, "integer"),
+  },
+} as const;
+
 const scrobbleRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", resolveProfile);
 
@@ -76,14 +108,14 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
     Body: {
       type: "movie" | "episode";
       imdbId: string;
-      seriesImdbId?: string;
+      seriesImdbId?: string | null;
       name: string;
-      poster?: string;
-      season?: number;
-      episode?: number;
-      runtime?: number;
+      poster?: string | null;
+      season?: number | null;
+      episode?: number | null;
+      runtime?: number | null;
     };
-  }>("/checkin", async (request) => {
+  }>("/checkin", { schema: { body: checkInBodySchema } }, async (request) => {
     const { type, imdbId, seriesImdbId, name, poster, season, episode, runtime } = request.body;
     const startedAt = new Date();
     const expiresAt = runtime ? new Date(Date.now() + runtime * 60 * 1000) : null;

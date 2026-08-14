@@ -30,6 +30,11 @@ import { everyInterval, parseIntervalSec } from "./lib/scheduler.js";
 import { bodyTooLargeMessage, isBodyTooLargeError, mbToBytes, parseMaxBodySizeMb } from "./lib/body-limit.js";
 import { isServiceRequest } from "./lib/service-request.js";
 import { instrumentUpstreamFetch, recordRequest } from "./lib/metrics.js";
+import {
+  isSchemaValidationError,
+  registerRequestSchemas,
+  requestSchemaOptions,
+} from "./lib/request-schema.js";
 
 // Route modules
 import healthRoutes from "./routes/health.js";
@@ -108,7 +113,11 @@ const app = Fastify({
   bodyLimit: mbToBytes(MAX_BODY_SIZE_MB),
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   rewriteUrl: (request) => normalizeProxyPath(request.url ?? "/", PROXY_PATH_PREFIXES),
+  ...requestSchemaOptions,
 });
+
+// Schema-validated routes phrase their 400s like the hand-written checks do.
+registerRequestSchemas(app);
 
 // ─── Rate limiting ───
 //
@@ -213,6 +222,13 @@ app.addHook("onRequest", async (request, reply) => {
 // "Payload Too Large" and leaves someone restoring their own backup with no
 // idea that the fix is a single env var — so it's re-shaped here.
 app.setErrorHandler((error, request, reply) => {
+  // A schema rejection is a 400 the caller can act on, and its message is
+  // already written for a person — but Fastify's default body would drop it
+  // into `message` and put "Bad Request" in `error`, which is the field the web
+  // client shows.
+  if (isSchemaValidationError(error)) {
+    return reply.code(400).send({ error: error.message });
+  }
   if (isBodyTooLargeError(error)) {
     request.log.warn(
       { url: redactUrl(request.url), limitMb: MAX_BODY_SIZE_MB },
