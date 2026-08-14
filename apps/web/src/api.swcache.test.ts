@@ -91,6 +91,30 @@ describe("notifyServiceWorkerToInvalidateApiCache", () => {
     expect(second.settled).toBe(true);
   });
 
+  it("doesn't let a replaced worker's timeout mark its replacement silent", async () => {
+    // The 200ms after an update takes over. A timeout armed for the outgoing
+    // worker fires once the new one is already in control, and a single shared
+    // flag has no way to tell that the verdict it is writing is about a worker
+    // nobody will ask again — so it switched the wait off for the arriving
+    // build, which is the one that can answer it.
+    vi.useFakeTimers();
+    installController(silentController());
+    const { notifyServiceWorkerToInvalidateApiCache } = await loadApi();
+
+    const first = track(notifyServiceWorkerToInvalidateApiCache());
+    installController(silentController());
+    await vi.advanceTimersByTimeAsync(200);
+    expect(first.settled).toBe(true);
+
+    // Never asked, so it gets the full budget rather than the previous
+    // worker's verdict.
+    const second = track(notifyServiceWorkerToInvalidateApiCache());
+    await vi.advanceTimersByTimeAsync(199);
+    expect(second.settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(second.settled).toBe(true);
+  });
+
   it("keeps sending the message to a worker it has stopped waiting on", async () => {
     vi.useFakeTimers();
     const controller = silentController();

@@ -144,6 +144,30 @@ describe("Dashboard mark-next confirmation timer", () => {
     expect(getSeriesProgress).toHaveBeenCalledTimes(beforeUnmount);
   });
 
+  it("does not arm the confirmation timer when the mark lands after the page is gone", async () => {
+    // The other direction of the same leak: clearing the timers on unmount does
+    // nothing about a request still in flight *at* unmount, whose continuation
+    // arms a fresh timer after the cleanup that would have cleared it has run.
+    let finishMark: () => void = () => {};
+    markNextEpisodeWatched.mockImplementation(
+      () => new Promise((resolve) => { finishMark = () => resolve(undefined as never); })
+    );
+
+    const { unmount } = renderDashboard();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(await screen.findByRole("button", { name: "Mark S1:E4" }));
+
+    const beforeUnmount = getSeriesProgress.mock.calls.length;
+    unmount();
+    await act(async () => { finishMark(); });
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(getSeriesProgress).toHaveBeenCalledTimes(beforeUnmount);
+  });
+
   it("does not reload after the page is gone when the mark itself fails", async () => {
     // A failed mark reloads immediately rather than on a timer, from inside an
     // async handler that can resume just as late.

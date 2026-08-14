@@ -414,8 +414,15 @@ function ScrollArrows({
   return (
     // Stays mounted when the row fits on screen so a resize fades the cluster
     // out instead of blinking it away; disabled buttons keep it untabbable.
+    //
+    // The gap doubles on a touch screen, and only there. `.tap-target` takes
+    // each 32px button to 44, which is 6px of overhang per side — exactly the
+    // 6px of `gap-1.5`, so the two expanded areas met in the middle and the
+    // later sibling won the whole strip between them. At 12px they meet at the
+    // boundary and neither claims the other's side of it. A mouse keeps the
+    // tighter cluster, which is what lets it share a line with the heading.
     <div
-      className={`flex items-center gap-1.5 transition-opacity duration-slow ${scrollable ? "" : "pointer-events-none opacity-0"}`}
+      className={`flex items-center gap-1.5 [@media(pointer:coarse)]:gap-3 transition-opacity duration-slow ${scrollable ? "" : "pointer-events-none opacity-0"}`}
       aria-hidden={!scrollable}
     >
       <button
@@ -1070,6 +1077,10 @@ export function DashboardPage() {
     setMarkingNext((prev) => new Set(prev).add(imdbId));
     try {
       await api.markNextEpisodeWatched(imdbId);
+      // The request can outlast the page, and the cleanup below has then already
+      // run: a timer armed past it is one nothing will ever clear, which is the
+      // leak this whole path is about, reintroduced a second later.
+      if (!mountedRef.current) return;
       setMarkedDone((prev) => new Set(prev).add(imdbId));
       const timer = setTimeout(() => {
         markTimersRef.current.delete(timer);

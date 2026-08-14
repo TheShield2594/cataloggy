@@ -653,8 +653,7 @@ export async function tellServiceWorkerWhereTheApiIs(): Promise<void> {
 const INVALIDATE_ACK_TIMEOUT_MS = 200;
 
 /**
- * Whether the controlling worker answers `INVALIDATE_API_CACHE`. `null` until
- * one has been asked.
+ * Which workers answer `INVALIDATE_API_CACHE`, keyed by the worker itself.
  *
  * A worker that predates the ack handshake never replies, and the wait below is
  * on the path of every mutation the app makes: with the old one-second budget,
@@ -663,14 +662,17 @@ const INVALIDATE_ACK_TIMEOUT_MS = 200;
  * answered. Once a controller has failed to reply, stop waiting on it. The
  * message is still sent, so the invalidation still happens; there is just
  * nothing to await.
+ *
+ * Per worker rather than one flag reset on `controllerchange`, because the two
+ * are not the same during the 200ms after an update takes over: a timeout armed
+ * for the outgoing worker outlives the switch, and it cannot tell whether the
+ * flag it is about to write is still describing the worker it was armed for.
+ * Reset-on-change loses that race and marks the *new* worker silent — which
+ * turns the wait off exactly when the arriving build is the one that can answer
+ * it. Keyed on the worker, a late timeout writes a verdict about the worker it
+ * belongs to, and nothing else reads it.
  */
-let controllerAcksInvalidation: boolean | null = null;
-
-// A new worker is a different worker, and the one that replaces a pre-ack build
-// is by definition the build that acks.
-navigator.serviceWorker?.addEventListener("controllerchange", () => {
-  controllerAcksInvalidation = null;
-});
+const workerAcksInvalidation = new WeakMap<ServiceWorker, boolean>();
 
 export function notifyServiceWorkerToInvalidateApiCache(): Promise<void> {
   const sw = navigator.serviceWorker?.controller;
@@ -679,7 +681,7 @@ export function notifyServiceWorkerToInvalidateApiCache(): Promise<void> {
   const channel = new MessageChannel();
   const acked = new Promise<void>((resolve) => {
     channel.port1.onmessage = () => {
-      controllerAcksInvalidation = true;
+      workerAcksInvalidation.set(sw, true);
       resolve();
     };
   });
@@ -689,13 +691,15 @@ export function notifyServiceWorkerToInvalidateApiCache(): Promise<void> {
   // being served the response the mutation just invalidated — the runtime cache
   // is stale-while-revalidate, so a read that beats the delete paints stale data
   // and says nothing about it. Worth a millisecond; not worth a second.
-  if (controllerAcksInvalidation === false) return Promise.resolve();
+  if (workerAcksInvalidation.get(sw) === false) return Promise.resolve();
 
   return Promise.race([
     acked,
     new Promise<void>((resolve) => {
       setTimeout(() => {
-        controllerAcksInvalidation ??= false;
+        // Only if nothing is known yet: an ack that arrived while this timeout
+        // was pending is the newer answer, and the truthful one.
+        if (!workerAcksInvalidation.has(sw)) workerAcksInvalidation.set(sw, false);
         resolve();
       }, INVALIDATE_ACK_TIMEOUT_MS);
     }),
