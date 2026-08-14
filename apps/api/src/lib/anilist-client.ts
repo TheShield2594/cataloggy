@@ -1,4 +1,5 @@
 import { LRUCache } from "lru-cache";
+import { fetchWithPolicy } from "./http.js";
 
 const ANILIST_API_URL = "https://graphql.anilist.co";
 const ANILIST_CACHE_TTL_MS = 60 * 60 * 1000;
@@ -27,12 +28,22 @@ const titleOf = (title: { english: string | null; romaji: string | null; native:
   title.english ?? title.romaji ?? title.native ?? "Unknown";
 
 const query = async <T>(graphqlQuery: string, variables: Record<string, unknown>): Promise<T> => {
-  const res = await fetch(ANILIST_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: graphqlQuery, variables }),
-    signal: AbortSignal.timeout(8000),
-  });
+  const res = await fetchWithPolicy(
+    ANILIST_API_URL,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: graphqlQuery, variables }),
+    },
+    {
+      timeoutMs: 8_000,
+      concurrency: 4,
+      // AniList is GraphQL, so every read is a POST — retrying one duplicates
+      // nothing. It rate-limits at 90 requests a minute and says so in
+      // `Retry-After`, which the shared policy waits out.
+      retryMethods: ["POST"],
+    }
+  );
 
   if (!res.ok) {
     throw new Error(`AniList request failed with status ${res.status}`);

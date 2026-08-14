@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { SECRET_CONTEXT, decryptSecret, encryptSecret } from "./lib/secret-box.js";
+import { fetchWithPolicy } from "./lib/http.js";
 
 const TRAKT_API_BASE = "https://api.trakt.tv";
 const MAX_PAGES = 100;
@@ -504,12 +505,20 @@ export class TraktClient {
       url.searchParams.set("limit", String(options.perPage));
     }
 
-    const response = await fetch(url, {
-      method: options.method,
-      headers: { "User-Agent": "Cataloggy/1.0", ...options.headers },
-      body: options.body,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-    });
+    // A full import walks hundreds of pages against an API that rate-limits at
+    // 1,000 calls per five minutes, so a 429 mid-walk used to abort the import
+    // partway through. The shared policy waits out what Trakt asks for and
+    // retries reads only — a retried POST would double-count a scrobble or
+    // re-add a collection item.
+    const response = await fetchWithPolicy(
+      url,
+      {
+        method: options.method,
+        headers: { "User-Agent": "Cataloggy/1.0", ...options.headers },
+        body: options.body,
+      },
+      { timeoutMs: REQUEST_TIMEOUT_MS, concurrency: 4 }
+    );
 
     if (response.status === 401 && options.allowRefresh !== false) {
       await this.refreshAccessToken(options.logger);
