@@ -158,8 +158,13 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # Readiness, not liveness: /health answers from the process alone and would
+    # report a container healthy while its database is unreachable, so compose
+    # would keep the api in the rotation that the addon and web wait on.
+    # /health/ready runs a SELECT 1 (2s deadline, inside the timeout below), so
+    # an exhausted pool or a down database shows up as an unhealthy container.
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:7000/health || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:7000/health/ready || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10

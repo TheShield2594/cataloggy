@@ -13,7 +13,7 @@ something on top of it.
 - [Profiles](#profiles)
 - [Conventions](#conventions)
 - [Endpoints](#endpoints)
-  - [Health](#health)
+  - [Health and metrics](#health-and-metrics)
   - [Search and metadata](#search-and-metadata)
   - [Discovery](#discovery)
   - [Watch history](#watch-history)
@@ -48,11 +48,12 @@ That header is how the web client tells "your API token is wrong" apart from
 other 401s (an incorrect profile PIN, for instance), so keep it in mind if you
 write your own client.
 
-Five paths are exempt, because they cannot carry a bearer token by construction:
+Six paths are exempt, because they cannot carry a bearer token by construction:
 
 | Path | Why it is exempt | What guards it instead |
 | --- | --- | --- |
-| `GET /health` | Container health probe | Nothing — it reports no data |
+| `GET /health` | Liveness probe | Nothing — it reports no data |
+| `GET /health/ready` | Readiness probe (the container healthcheck) | Nothing — it reports only whether the database answered, never why |
 | `/addon/stremio/*` | Stremio sends no credentials | An unguessable per-profile secret in the path |
 | `GET /addon` | Add-on discovery | As above |
 | `/trakt/oauth/callback` | Browser redirect from trakt.tv | The `state` value that started the flow |
@@ -105,11 +106,13 @@ row genuinely is not found.
 
 ## Endpoints
 
-### Health
+### Health and metrics
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/health` | `{ status, service }`. No auth, no database. |
+| `GET` | `/health` | Liveness: `{ status, service }`. No auth, and no database — it keeps answering 200 during an outage, because restarting the container would not fix one. |
+| `GET` | `/health/ready` | Readiness: `SELECT 1` with a two-second deadline. `200` with `{ status, service, database: { ok, latencyMs } }`, or `503` when the database does not answer — which is also what an exhausted connection pool looks like. No auth; the failing body says only that the database did not answer, never why. This is what the `api` container's Docker healthcheck uses. |
+| `GET` | `/metrics` | Needs the token. Per-process counters as JSON: `uptimeSeconds`, `memory`, `requests` (total, by status class, and per route template with count/failures/total/max/average duration), `upstream` (the same per outbound hostname), `database` (the readiness probe, with its error), and `jobs` — the last run of every scheduled background job, the same rows Settings → Sync Status shows. Counters reset when the process does. `jobs` is `null` with `jobsError` set when the database is down, so the rest still answers. |
 
 ### Search and metadata
 

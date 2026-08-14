@@ -39,7 +39,19 @@ await check("API /health", async () => {
   }
 });
 
-// 2. GET /manifest.json on addon — expect 200 with valid JSON containing a catalogs array
+// 2. GET /health/ready on API — expect 200, which means it reached the database
+await check("API /health/ready", async () => {
+  const { response, body } = await getJson(`${apiBase}/health/ready`);
+  if (response.status !== 200) {
+    throw new Error(`Expected 200, got ${response.status} (body: ${JSON.stringify(body)})`);
+  }
+  const ready = body as { status?: string; database?: { ok?: boolean } };
+  if (ready?.status !== "ok" || ready.database?.ok !== true) {
+    throw new Error(`Unexpected body: ${JSON.stringify(body)}`);
+  }
+});
+
+// 3. GET /manifest.json on addon — expect 200 with valid JSON containing a catalogs array
 type Manifest = { catalogs?: Array<{ type: string; id: string; name: string }> };
 let manifest: Manifest | null = null;
 
@@ -55,7 +67,7 @@ await check("Addon /manifest.json", async () => {
   manifest = m;
 });
 
-// 3. If TRAKT_CLIENT_ID is set, POST /trakt/import — expect 200 with { imported: { movies, episodes } }
+// 4. If TRAKT_CLIENT_ID is set, POST /trakt/import — expect 200 with { imported: { movies, episodes } }
 if (process.env.TRAKT_CLIENT_ID) {
   await check("POST /trakt/import", async () => {
     const { response, body } = await getJson(`${apiBase}/trakt/import`, {
@@ -71,7 +83,7 @@ if (process.env.TRAKT_CLIENT_ID) {
     }
   });
 
-  // 4. GET /catalog/movie/{first catalog id}.json — expect { metas: [...] }
+  // 5. GET /catalog/movie/{first catalog id}.json — expect { metas: [...] }
   const firstMovieCatalog = manifest?.catalogs?.find((c) => c.type === "movie");
   if (firstMovieCatalog) {
     await check(`Catalog /catalog/movie/${firstMovieCatalog.id}.json`, async () => {
@@ -91,7 +103,7 @@ if (process.env.TRAKT_CLIENT_ID) {
   process.stdout.write("• Trakt checks... SKIP (TRAKT_CLIENT_ID not set)\n");
 }
 
-// 5. If STEAM_API_KEY and STEAM_ID are set, POST /games/steam/sync — expect
+// 6. If STEAM_API_KEY and STEAM_ID are set, POST /games/steam/sync — expect
 // 200 with a { total, created, updated, matched, unmatched } summary.
 if (process.env.STEAM_API_KEY && process.env.STEAM_ID) {
   await check("POST /games/steam/sync", async () => {
