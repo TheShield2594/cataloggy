@@ -1,4 +1,8 @@
-import { invalidateAll as invalidateMemoryCache, setCacheScope } from "./utils/dataCache";
+import {
+  invalidate as invalidateCachePrefix,
+  invalidateAll as invalidateMemoryCache,
+  setCacheScope,
+} from "./utils/dataCache";
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -640,17 +644,119 @@ export async function tellServiceWorkerWhereTheApiIs(): Promise<void> {
   }
 }
 
+/**
+ * How long to wait for the worker's ack before giving up on this one.
+ *
+ * A worker that answers does it in about a millisecond — this is the budget
+ * for a busy one, not for one that is never going to reply.
+ */
+const INVALIDATE_ACK_TIMEOUT_MS = 200;
+
+/**
+ * Which workers answer `INVALIDATE_API_CACHE`, keyed by the worker itself.
+ *
+ * A worker that predates the ack handshake never replies, and the wait below is
+ * on the path of every mutation the app makes: with the old one-second budget,
+ * a self-hoster who had updated Cataloggy but not yet reloaded paid a full
+ * second of spinner on every "Add to list" — after the server had already
+ * answered. Once a controller has failed to reply, stop waiting on it. The
+ * message is still sent, so the invalidation still happens; there is just
+ * nothing to await.
+ *
+ * Per worker rather than one flag reset on `controllerchange`, because the two
+ * are not the same during the 200ms after an update takes over: a timeout armed
+ * for the outgoing worker outlives the switch, and it cannot tell whether the
+ * flag it is about to write is still describing the worker it was armed for.
+ * Reset-on-change loses that race and marks the *new* worker silent — which
+ * turns the wait off exactly when the arriving build is the one that can answer
+ * it. Keyed on the worker, a late timeout writes a verdict about the worker it
+ * belongs to, and nothing else reads it.
+ */
+const workerAcksInvalidation = new WeakMap<ServiceWorker, boolean>();
+
 export function notifyServiceWorkerToInvalidateApiCache(): Promise<void> {
   const sw = navigator.serviceWorker?.controller;
   if (!sw) return Promise.resolve();
 
-  return new Promise((resolve) => {
-    const channel = new MessageChannel();
-    channel.port1.onmessage = () => resolve();
-    sw.postMessage({ type: "INVALIDATE_API_CACHE" }, [channel.port2]);
-    // Don't block the caller forever if an old SW (pre-dating the ack) is in control.
-    setTimeout(resolve, 1000);
+  const channel = new MessageChannel();
+  const acked = new Promise<void>((resolve) => {
+    channel.port1.onmessage = () => {
+      workerAcksInvalidation.set(sw, true);
+      resolve();
+    };
   });
+  sw.postMessage({ type: "INVALIDATE_API_CACHE" }, [channel.port2]);
+
+  // Awaiting the ack is what keeps a refetch issued right after a mutation from
+  // being served the response the mutation just invalidated — the runtime cache
+  // is stale-while-revalidate, so a read that beats the delete paints stale data
+  // and says nothing about it. Worth a millisecond; not worth a second.
+  if (workerAcksInvalidation.get(sw) === false) return Promise.resolve();
+
+  return Promise.race([
+    acked,
+    new Promise<void>((resolve) => {
+      setTimeout(() => {
+        // Only if nothing is known yet: an ack that arrived while this timeout
+        // was pending is the newer answer, and the truthful one.
+        if (!workerAcksInvalidation.has(sw)) workerAcksInvalidation.set(sw, false);
+        resolve();
+      }, INVALIDATE_ACK_TIMEOUT_MS);
+    }),
+  ]);
+}
+
+/**
+ * The in-memory cache prefixes a write to `path` can change, or `null` for
+ * "no idea — drop everything".
+ *
+ * Every mutation used to take the second branch. `invalidateAll()` is correct
+ * but blunt: rating one episode dropped the lists page's rows, the games
+ * library's and the calendar's along with the stats it actually moved, so the
+ * next visit to any of them was a full refetch behind a skeleton — precisely
+ * the wait `useCachedState` exists to remove.
+ *
+ * The rules below only claim what the API's own routes make true, and anything
+ * unrecognised still falls through to a full drop, so a new endpoint is
+ * over-invalidated rather than silently served stale.
+ */
+export function invalidatedCachePrefixes(path: string): string[] | null {
+  // The route, without the query string a few of these carry (`/checkin?log=1`).
+  const route = path.split(/[?#]/)[0];
+  const under = (prefix: string) => route === prefix || route.startsWith(`${prefix}/`);
+
+  // Nothing outside the games library reads a game: the watch stats, the
+  // calendar and the dashboard rails are all built from watch events.
+  if (under("/games")) return ["games:"];
+
+  // List membership is read by the lists page and by the detail panel, which
+  // fetches on open rather than from this cache. Watch progress, history,
+  // stats and the calendar are all independent of it — none of the write paths
+  // in `routes/lists.ts` touch a watch row.
+  if (under("/lists")) return ["lists:"];
+
+  // A rating shows up in the "top rated" section of the detailed stats, which
+  // the stats page and the dashboard each cache under their own key. It is not
+  // part of a watch event, a list or the calendar.
+  if (under("/ratings")) return ["stats:", "dash:"];
+
+  // The watch domain, and the widest of the three: a watch writes a history
+  // row, moves the totals, updates series progress — and the calendar is built
+  // from that same progress table, so a first episode of a new series adds a
+  // row to it.
+  if (
+    under("/watch") ||
+    under("/checkin") ||
+    /^\/series\/[^/]+\/(watch-next|season\/)/.test(route) ||
+    /^\/show\/[^/]+\/drop$/.test(route)
+  ) {
+    return ["dash:", "history:", "stats:", "calendar:"];
+  }
+
+  // Settings, keys, integrations and imports. A Trakt import writes thousands
+  // of watch rows, a metadata refresh changes every poster, and a language
+  // change re-renders titles — these genuinely do mean everything.
+  return null;
 }
 
 declare global {
@@ -755,8 +861,12 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
       // Same over-invalidate-rather-than-serve-stale rule the service-worker
       // cache follows, applied to the in-memory one: a write can touch rows on
       // pages other than the one that issued it, and the cost of being wrong
-      // here is showing the user data they just changed.
-      invalidateMemoryCache();
+      // here is showing the user data they just changed. What it does not have
+      // to do is take pages the write cannot reach down with it — see
+      // `invalidatedCachePrefixes`.
+      const prefixes = invalidatedCachePrefixes(path);
+      if (prefixes === null) invalidateMemoryCache();
+      else for (const prefix of prefixes) invalidateCachePrefix(prefix);
       await notifyServiceWorkerToInvalidateApiCache();
     }
   }

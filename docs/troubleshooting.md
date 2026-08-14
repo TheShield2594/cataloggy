@@ -301,7 +301,17 @@ hides it without deleting history, and `DELETE` on the same path undoes it.
   https, and it's checked by DNS as well as by name. That check exists so a
   stolen API token can't point the notification job at an internal address.
 - **Nothing on iOS** — the site has to be added to the home screen first. Safari
-  doesn't deliver push to a tab.
+  doesn't deliver push to a tab: in one, the notification APIs aren't merely
+  refused, they're absent, which is why **Settings → Notifications** used to
+  call it unsupported. Tap **Share** → **Add to Home Screen**, open Cataloggy
+  from the icon, and enable notifications from there. Needs iOS 16.4 or later;
+  on anything older, use a notification channel instead.
+- **The Enable button does nothing** — permission has already been denied for
+  this site, and a browser answers a second request instantly without showing a
+  prompt. Settings says so and stops offering the button; to undo it, allow
+  notifications in the browser's own site settings (behind the padlock or ⓘ in
+  the address bar; on Android Chrome, **⋮ → Settings → Site settings**) and
+  reload.
 - **Set `NOTIFICATION_CHECK_INTERVAL_SEC=0`** and the episode check is disabled
   entirely; the API logs this at startup.
 

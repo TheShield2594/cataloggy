@@ -339,7 +339,7 @@ export function DetailPanel({
             // Hovers to --text, not white: the light theme's circle is a
             // translucent cream, and white-on-cream made the X disappear under
             // the pointer on the one theme where it mattered most.
-            className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full shadow-e2 backdrop-blur transition-colors hover:text-[var(--text)]"
+            className="tap-target absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full shadow-e2 backdrop-blur transition-colors hover:text-[var(--text)]"
             style={{ background: "color-mix(in srgb, var(--bg-0) 80%, transparent)", color: "var(--text-dim)" }}
             aria-label="Close detail panel"
           >

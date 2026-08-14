@@ -916,6 +916,58 @@ body {
   .status-chip--ok { --status-color: var(--status-ok); }
   .status-chip--bad { --status-color: var(--status-bad); }
   .status-chip--warn { --status-color: var(--status-warn); }
+
+  /*
+   * Grows a small control's *touch* target to 44×44 without growing the
+   * control.
+   *
+   * WCAG 2.5.5 asks for 44×44 CSS pixels, and a handful of the app's most-tapped
+   * controls sit under it: the carousel arrows at 32, the detail panels' close
+   * button at 36. The obvious fix — making them bigger — is the wrong one twice
+   * over: a 44px circle sitting on a poster is a much heavier thing than the
+   * design wants, and the arrows are 32px because two of them at 44 crowd the
+   * section header they share a line with. So the visual box stays put and a
+   * transparent pseudo-element takes the taps around it, which is exactly the
+   * "target offset" the success criterion allows.
+   *
+   * Only under `pointer: coarse`. A mouse is precise enough for a 32px circle,
+   * and an invisible box that eats hovers on whatever sits behind a control
+   * would be a regression on the desktop the whole layout is built around.
+   *
+   * `position: relative` is the fallback for a control that positions itself —
+   * the close buttons are `absolute`, and a Tailwind utility outranks this, so
+   * they anchor the pseudo-element on their own box either way.
+   */
+  .tap-target {
+    position: relative;
+  }
+}
+
+@media (pointer: coarse) {
+  .tap-target::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 2.75rem);
+    height: max(100%, 2.75rem);
+    transform: translate(-50%, -50%);
+  }
+
+  /*
+   * The small button size is 26px tall — under the same 44px floor, and it is
+   * what the update prompt's "Reload" is, the one control standing between a
+   * phone and the new version. A minimum height rather than padding, so the
+   * label, the radius and the density are all unchanged on the desktop this
+   * size was drawn for.
+   *
+   * .btn-xs is deliberately left alone: it is used inside episode and search
+   * rows, where a 44px floor would set the height of the row itself. Those get
+   * .tap-target where they need it.
+   */
+  .btn-sm {
+    min-height: 2.75rem;
+  }
 }
 
 /*
