@@ -189,7 +189,7 @@ export function GameDetailPanel({
           onClick={requestClose}
           // See the matching close button in media-detail/DetailPanel.tsx: white
           // on hover is invisible against the light theme's cream circle.
-          className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full shadow-e2 backdrop-blur transition-colors hover:text-[var(--text)]"
+          className="tap-target absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full shadow-e2 backdrop-blur transition-colors hover:text-[var(--text)]"
           style={{ background: "color-mix(in srgb, var(--bg-0) 80%, transparent)", color: "var(--text-dim)" }}
           aria-label="Close detail panel"
         >

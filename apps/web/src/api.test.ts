@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, runtimeConfig } from "./api";
+import { api, ApiError, invalidatedCachePrefixes, runtimeConfig } from "./api";
+import { readCache, resetDataCacheForTests, writeCache } from "./utils/dataCache";
 
 type FetchMock = ReturnType<typeof vi.fn>;
 
@@ -326,5 +327,88 @@ describe("API response cache on sign-out", () => {
     await Promise.resolve();
 
     expect(runtimeConfig.getToken()).toBe("");
+  });
+});
+
+/*
+ * Which cached pages a write is allowed to take down with it.
+ *
+ * Every mutation used to call `invalidateAll()`, so rating one episode dropped
+ * the lists page's rows, the games library's and the calendar's alongside the
+ * stats it actually moved — and the next visit to any of them was a full
+ * refetch behind a skeleton, which is the wait the cache exists to remove.
+ */
+describe("memory cache invalidation after a mutation", () => {
+  it("keeps a write inside the domain it can reach", () => {
+    expect(invalidatedCachePrefixes("/games/abc")).toEqual(["games:"]);
+    expect(invalidatedCachePrefixes("/games/steam/sync")).toEqual(["games:"]);
+    expect(invalidatedCachePrefixes("/lists/watchlist/items")).toEqual(["lists:"]);
+    expect(invalidatedCachePrefixes("/ratings")).toEqual(["stats:", "dash:"]);
+  });
+
+  it("treats every way of recording a watch as one domain", () => {
+    const watchDomain = ["dash:", "history:", "stats:", "calendar:"];
+    for (const path of [
+      "/watch",
+      "/watch/evt-1",
+      "/checkin?log=true",
+      "/series/tt1/watch-next",
+      "/series/tt1/season/2/episode/3/watch",
+      "/series/tt1/season/2/watch-all",
+      "/show/tt1/drop",
+    ]) {
+      expect(invalidatedCachePrefixes(path)).toEqual(watchDomain);
+    }
+  });
+
+  it("drops everything for anything it doesn't recognise", () => {
+    // A Trakt import writes thousands of watch rows and a metadata refresh
+    // changes every poster, so these really do mean everything — and so does a
+    // route added later that nobody remembered to list here.
+    expect(invalidatedCachePrefixes("/trakt/import")).toBeNull();
+    expect(invalidatedCachePrefixes("/metadata/refresh-all")).toBeNull();
+    expect(invalidatedCachePrefixes("/settings/preferences")).toBeNull();
+    expect(invalidatedCachePrefixes("/some/future/endpoint")).toBeNull();
+  });
+
+  it("never mistakes /watchlist for the watch domain", () => {
+    expect(invalidatedCachePrefixes("/watchlist")).toBeNull();
+  });
+
+  it("leaves the games library alone when an episode is marked watched", async () => {
+    resetDataCacheForTests();
+    writeCache("games:recent", ["Outer Wilds"]);
+    writeCache("lists:all", [{ id: "watchlist" }]);
+    writeCache("dash:progress", [{ imdbId: "tt1" }]);
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await api.markEpisodeWatched("tt1", 2, 3);
+
+    expect(readCache("dash:progress")).toBeUndefined();
+    expect(readCache("games:recent")).toEqual(["Outer Wilds"]);
+    expect(readCache("lists:all")).toEqual([{ id: "watchlist" }]);
+  });
+
+  it("drops every page when the mutation is one with no mapping", async () => {
+    resetDataCacheForTests();
+    writeCache("games:recent", ["Outer Wilds"]);
+    writeCache("dash:progress", [{ imdbId: "tt1" }]);
+    fetchMock.mockResolvedValue(json({ imported: {} }));
+
+    await api.traktImport();
+
+    expect(readCache("games:recent")).toBeUndefined();
+    expect(readCache("dash:progress")).toBeUndefined();
+  });
+
+  it("invalidates even when the write failed", async () => {
+    // A half-failed write can still have landed server-side.
+    resetDataCacheForTests();
+    writeCache("dash:progress", [{ imdbId: "tt1" }]);
+    fetchMock.mockResolvedValue(routeError(500, { error: "nope" }));
+
+    await expect(api.markEpisodeWatched("tt1", 2, 3)).rejects.toThrow();
+
+    expect(readCache("dash:progress")).toBeUndefined();
   });
 });

@@ -82,7 +82,7 @@ export function UpdatePrompt() {
         type="button"
         onClick={requestClose}
         aria-label="Dismiss update notification"
-        className="ml-1 flex-none rounded-md p-1 hover:bg-[var(--surface-strong)]"
+        className="tap-target ml-1 flex-none rounded-md p-1 hover:bg-[var(--surface-strong)]"
         style={{ color: "var(--text-mute)" }}
       >
         <X aria-hidden="true" className="h-3.5 w-3.5" />

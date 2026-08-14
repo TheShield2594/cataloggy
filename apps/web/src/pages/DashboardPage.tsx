@@ -422,7 +422,7 @@ function ScrollArrows({
         type="button"
         onClick={() => onScroll("left")}
         disabled={!canScrollLeft}
-        className="flex h-8 w-8 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
+        className="tap-target flex h-8 w-8 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
         style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
         aria-label="Scroll left"
       >
@@ -432,7 +432,7 @@ function ScrollArrows({
         type="button"
         onClick={() => onScroll("right")}
         disabled={!canScrollRight}
-        className="flex h-8 w-8 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
+        className="tap-target flex h-8 w-8 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
         style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
         aria-label="Scroll right"
       >
@@ -1021,6 +1021,29 @@ export function DashboardPage() {
     return () => controller.abort();
   }, [load, profileId]);
 
+  // The "marked!" confirmation on a Continue Watching card holds for 1.2s and
+  // then reloads the dashboard, so the timer that does it can outlive the page:
+  // mark an episode, tap through to Settings inside that window, and five
+  // requests fire for a page that no longer exists — and their answers are then
+  // written into the shared cache, under whichever profile is active by the
+  // time they land. One timer per card, since several can be marked at once.
+  const markTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>());
+  // Read by the failure path in `handleMarkNext`, which reloads from inside an
+  // async handler that can resume after the page is gone.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    // Assigned on mount rather than only at declaration: a Strict Mode
+    // remount reuses the ref, and the first cleanup would otherwise leave the
+    // second mount marked unmounted for the rest of its life.
+    mountedRef.current = true;
+    const timers = markTimersRef.current;
+    return () => {
+      mountedRef.current = false;
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
+
   // Pulled out of the rail objects rather than called as methods on them.
   // useHorizontalScroll hands back a fresh object literal every render, so a
   // dependency on `continueScroll` re-arms this timer on every render; the
@@ -1048,14 +1071,18 @@ export function DashboardPage() {
     try {
       await api.markNextEpisodeWatched(imdbId);
       setMarkedDone((prev) => new Set(prev).add(imdbId));
-      setTimeout(() => {
+      const timer = setTimeout(() => {
+        markTimersRef.current.delete(timer);
         setMarkedDone((prev) => { const next = new Set(prev); next.delete(imdbId); return next; });
         void load();
       }, 1200);
+      markTimersRef.current.add(timer);
     } catch {
       // Mark failed (e.g. the series turned out to already be fully watched) —
-      // reload so a now-stale card can be dropped from the list.
-      void load();
+      // reload so a now-stale card can be dropped from the list. Same reason the
+      // timer above is cleared on unmount: the await this resumes from can land
+      // after the page is gone.
+      if (mountedRef.current) void load();
     } finally {
       setMarkingNext((prev) => { const next = new Set(prev); next.delete(imdbId); return next; });
     }

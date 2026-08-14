@@ -222,6 +222,15 @@ describe("ProfileSwitcher", () => {
       expect(onClose).toHaveBeenCalledTimes(2);
     });
 
+    // 32×32 as drawn; `.tap-target` is what takes the tappable area to 44 on a
+    // touch screen without making the button itself any heavier.
+    it("gives the close button a full-size touch target", async () => {
+      renderSwitcher({ onClose: vi.fn() });
+      await screen.findByRole("button", { name: /ben/i });
+
+      expect(screen.getByRole("button", { name: /close/i }).className).toContain("tap-target");
+    });
+
     it("renders as a labelled modal dialog", async () => {
       renderSwitcher({ onClose: vi.fn() });
       await screen.findByRole("button", { name: /ben/i });

@@ -41,7 +41,7 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
+              className="tap-target absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
               style={{ color: "var(--text-mute)" }}
             >
               <X className="h-4 w-4" />

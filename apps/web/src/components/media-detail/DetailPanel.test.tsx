@@ -200,6 +200,17 @@ describe("DetailPanel dismissal", () => {
     await waitFor(() => expect(props.onClose).toHaveBeenCalled(), { timeout: 1000 });
   });
 
+  // 36×36, and on a phone the panel is full-screen — so this X is the only way
+  // out besides the back gesture, and a miss lands on the poster behind it.
+  // `.tap-target` is what takes it to 44 on a touch screen without redrawing it.
+  it("gives the close button a full-size touch target", async () => {
+    renderPanel();
+
+    const close = await screen.findByRole("button", { name: "Close detail panel" });
+
+    expect(close.className).toContain("tap-target");
+  });
+
   it("closes on Escape", async () => {
     const user = userEvent.setup();
     const { props } = renderPanel();
