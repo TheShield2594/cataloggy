@@ -375,7 +375,7 @@ Unset, the tag means `latest`, which follows the most recent build of `main` —
 back to. Pin it:
 
 ```
-CATALOGGY_IMAGE_TAG=v1.2.0
+CATALOGGY_IMAGE_TAG=v0.1.0
 ```
 
 Rolling back is the same two commands with the previous tag.

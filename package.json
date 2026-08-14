@@ -13,6 +13,7 @@
     "lint": "pnpm --filter @cataloggy/shared build && eslint eslint.config.mjs scripts apps/web/scripts && pnpm -r lint",
     "test": "pnpm -r --if-present test",
     "check:env": "node scripts/check-compose-env.mjs",
+    "version:set": "node scripts/set-version.mjs",
     "smoke": "tsx scripts/smoke.ts"
   },
   "devDependencies": {

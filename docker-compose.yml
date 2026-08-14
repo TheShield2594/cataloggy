@@ -5,7 +5,7 @@
 # version to roll back to. Once the stack works, pin it: every image is also
 # published as `sha-<short-sha>` and, for tagged releases, `vX.Y.Z`.
 #
-#     CATALOGGY_IMAGE_TAG=v1.2.0
+#     CATALOGGY_IMAGE_TAG=v0.1.0
 #
 # Rolling back is the same edit with the previous tag, followed by
 # `docker compose pull && docker compose up -d`. Keep the four images on the

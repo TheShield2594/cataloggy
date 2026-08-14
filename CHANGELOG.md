@@ -4,7 +4,35 @@ All notable changes to Cataloggy are documented in this file, starting from this
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Dates are UTC.
 
+Each released version is a git tag (`vX.Y.Z`), and each tag is a set of Docker
+images you can pin `CATALOGGY_IMAGE_TAG` to. See [docs/releasing.md](docs/releasing.md)
+for how a release is cut, and for the entry style this file follows from 0.1.0
+onward: one to three sentences per entry, with the reasoning in the PR.
+
 ## [Unreleased]
+
+### Added
+
+- Cataloggy has releases. Versions are tagged `vX.Y.Z` and published as Docker image tags you can pin `CATALOGGY_IMAGE_TAG` to, so the rollback the README has always described now has something to point at. `pnpm version:set` keeps the six workspace manifests in step, and [docs/releasing.md](docs/releasing.md) documents the process and the changelog style from here on ([#461](https://github.com/TheShield2594/cataloggy/issues/461)).
+
+### Changed
+
+- Every outbound integration shares one HTTP policy: a per-attempt timeout, bounded retry with jitter on 429/5xx, `Retry-After` honoured, and a per-host concurrency cap. TMDB had only a timeout, so a throttle showed up as an empty catalog — and a cold Stremio home screen could fan out to several hundred simultaneous TMDB requests, which is how the throttle was earned. TMDB, Trakt, Steam, OMDb and AniList are behind it ([#470](https://github.com/TheShield2594/cataloggy/issues/470)).
+- `GET /watch/history` rejects an unrecognised `type` instead of ignoring it. Silently dropping the filter answered a typo with a full unfiltered page, so the caller's mistake looked like data ([#464](https://github.com/TheShield2594/cataloggy/issues/464)).
+
+### Fixed
+
+- `POST /checkin` validates its body. It had a TypeScript generic and no runtime check, so a non-string `name` or `imdbId` reached the database as an unhandled 500, a large enough `runtime` made the check-in's expiry an Invalid Date, and `name`/`poster` were bounded only by `MAX_BODY_SIZE_MB` — one request could park a multi-megabyte row per profile ([#464](https://github.com/TheShield2594/cataloggy/issues/464)).
+- The three notification-channel routes that take an `:id` reject a malformed UUID rather than letting Postgres error on it, which was a 500 where the caller sent a bad request. Authorization was never affected — the `profileId` filter is on every query there ([#464](https://github.com/TheShield2594/cataloggy/issues/464)).
+- A watch `note` is capped at 2,000 characters on both routes that write one. `PATCH /watch/:eventId` accepted any length onto a text column the history page loads fifty rows of at a time ([#464](https://github.com/TheShield2594/cataloggy/issues/464)).
+
+## [0.1.0] - 2026-08-14
+
+The first tagged release. Everything below shipped before Cataloggy had
+versions, which is what this release exists to fix: until now the only
+answer to "which build am I running" was `latest` or a commit sha, and the
+security fixes under **Security** were attached to no version anyone could
+name.
 
 ### Added
 
@@ -253,3 +281,6 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `PATCH /profiles/:id` now requires the profile's current PIN to change or remove an *existing* PIN (reusing the same verification/lockout logic as `/verify`); previously anyone with Settings access could strip another profile's PIN protection without ever knowing it.
 - The addon's mutation-token check no longer assumes the incoming token is a string — a repeated query param (`?token=a&token=b`) would have thrown instead of being rejected cleanly.
 - `dockerpublish.yml` reads the git ref type/name from the runner's `GITHUB_REF_TYPE`/`GITHUB_REF_NAME` environment variables instead of interpolating `github.ref_type`/`github.ref_name` into a shell script.
+
+[Unreleased]: https://github.com/TheShield2594/cataloggy/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/TheShield2594/cataloggy/releases/tag/v0.1.0
