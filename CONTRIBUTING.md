@@ -12,6 +12,13 @@ pnpm dev
 
 See the [README](README.md) for full setup instructions, including the Docker Compose path and required environment variables. You'll need a local Postgres instance (or `docker compose up db`) for the API to start.
 
+The `prisma:generate` step writes the typed client the API's source imports, and
+nothing in `node_modules` provides it until it runs. `dev` is the one command
+that needs it spelled out: the API's `build`, `typecheck`, `lint` and `test`
+scripts each run it themselves, because forgetting it doesn't look like a
+missing build step — it looks like 300-odd failing tests and type errors in
+files you never touched.
+
 ## Project structure
 
 ```text

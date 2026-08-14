@@ -10,9 +10,9 @@
     "dev": "tsx watch src/index.ts",
     "start": "prisma migrate deploy && node dist/index.js",
     "build": "prisma generate && tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint src",
-    "test": "vitest run",
+    "typecheck": "prisma generate && tsc -p tsconfig.json --noEmit",
+    "lint": "prisma generate && eslint src",
+    "test": "prisma generate && vitest run",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push"
   },
