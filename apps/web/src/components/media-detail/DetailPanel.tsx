@@ -74,6 +74,28 @@ export function DetailPanel({
   useScrollLock();
   useEscapeKey(requestClose);
 
+  // Following a recommendation swaps the `item` prop on this same instance, so
+  // nothing about the panel resets: the scroll container keeps the offset it had,
+  // and the recommendations rail is the last thing in it. Choosing a title from
+  // the bottom of one panel dropped you at the bottom of the next one, past its
+  // poster, its overview and every control on it.
+  //
+  // Handled here rather than with a `key` at the six call sites: remounting would
+  // replay the entrance animation over a panel that is meant to read as one
+  // surface replacing another, and would cycle useScrollLock's refcount through
+  // zero, which restores the body's scroll position on the way past.
+  const contentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // Assigned rather than scrollTo(): the jump should be instant, and the panel
+    // underneath may be mid-`scroll-behavior: smooth`.
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+    // The trap's own initial focus runs on mount, which this isn't. Without
+    // this, focus stays on the recommendation tile that has just been replaced
+    // by a different title's content.
+    dialogRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dialogRef is a stable ref from useFocusTrap
+  }, [item.imdbId, item.type]);
+
   // Cast, providers, recommendations and seasons all arrive together in `detail`
   // — one request made by `useDetailPanel`, rather than the five this component
   // used to fire on mount. They are read straight from the prop; only the
@@ -357,7 +379,7 @@ export function DetailPanel({
           </div>
 
           {/* Content */}
-          <div className="-mt-10 relative z-20 min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-10 sm:mt-0 sm:max-w-2xl sm:p-8">
+          <div ref={contentRef} className="-mt-10 relative z-20 min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-10 sm:mt-0 sm:max-w-2xl sm:p-8">
 
           {/* Title + badges
 

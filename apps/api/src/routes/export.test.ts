@@ -36,7 +36,9 @@ const resetMocks = () => {
   prismaMock.profile.findUnique.mockResolvedValue({ name: "Default" });
   prismaMock.list.findMany.mockResolvedValue([]);
   prismaMock.watchEvent.findMany.mockResolvedValue([]);
-  prismaMock.watchEvent.createMany.mockResolvedValue({ count: 0 });
+  // Mirrors a clean insert: every row asked for lands. Tests that care about the
+  // skipDuplicates path override this to report fewer.
+  prismaMock.watchEvent.createMany.mockImplementation(({ data }: { data: unknown[] }) => ({ count: data.length }));
   prismaMock.listItem.createMany.mockResolvedValue({ count: 0 });
   prismaMock.seriesProgress.findMany.mockResolvedValue([]);
   prismaMock.rating.findMany.mockResolvedValue([]);
@@ -98,6 +100,7 @@ describe("export routes", () => {
       expect(response.statusCode).toBe(200);
       expect(prismaMock.watchEvent.createMany).toHaveBeenCalledWith({
         data: [expect.objectContaining({ imdbId: "tt1", type: "movie", plays: 1 })],
+        skipDuplicates: true,
       });
       expect(response.json().summary.watchEvents).toBe(1);
     });
@@ -188,6 +191,7 @@ describe("export routes", () => {
       expect(response.json().summary).toEqual({ imported: 1, skipped: 0 });
       expect(prismaMock.watchEvent.createMany).toHaveBeenCalledWith({
         data: [expect.objectContaining({ imdbId: "tt1", type: "movie" })],
+        skipDuplicates: true,
       });
     });
 
@@ -201,6 +205,7 @@ describe("export routes", () => {
       expect(response.statusCode).toBe(200);
       expect(prismaMock.watchEvent.createMany).toHaveBeenCalledWith({
         data: [expect.objectContaining({ imdbId: "tt1" })],
+        skipDuplicates: true,
       });
     });
 

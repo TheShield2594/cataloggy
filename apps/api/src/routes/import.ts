@@ -1,5 +1,5 @@
 import { WatchEventType } from "@prisma/client";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyBaseLogger, FastifyPluginAsync } from "fastify";
 import { resolveProfile } from "../lib/profile.js";
 import { getTmdb } from "../lib/tmdb-client.js";
 import { batchUpsertWatchEvents, type WatchEventInput } from "../lib/batch-watch-events.js";
@@ -94,9 +94,9 @@ const importRoutes: FastifyPluginAsync = async (app) => {
     if (format === "imdb-ratings") {
       await importImdbRatings(dataRows, col, profileId, summary);
     } else if (format === "simkl") {
-      await importSimkl(dataRows, col, profileId, summary);
+      await importSimkl(dataRows, col, profileId, summary, request.log);
     } else {
-      await importLetterboxd(dataRows, col, profileId, summary, titleCache, format);
+      await importLetterboxd(dataRows, col, profileId, summary, titleCache, format, request.log);
     }
 
     return reply.code(200).send({ status: "imported", format, summary });
@@ -142,7 +142,8 @@ async function importSimkl(
   rows: string[][],
   col: (name: string) => number,
   profileId: string,
-  summary: { imported: number; ratingsImported: number; skipped: number }
+  summary: { imported: number; ratingsImported: number; skipped: number },
+  log: FastifyBaseLogger
 ) {
   // Simkl CSV export header: Title,Year,Type,WatchedDate,Rating,ImdbId (column naming varies by export tool;
   // we match loosely on common variants).
@@ -208,7 +209,7 @@ async function importSimkl(
     }
   }
 
-  await batchUpsertWatchEvents(profileId, watchInputs);
+  await batchUpsertWatchEvents(profileId, watchInputs, log);
   await batchUpsertRatings(profileId, ratingInputs);
 }
 
@@ -218,7 +219,8 @@ async function importLetterboxd(
   profileId: string,
   summary: { imported: number; ratingsImported: number; skipped: number },
   titleCache: Map<string, string | null>,
-  format: "letterboxd-diary" | "letterboxd-ratings"
+  format: "letterboxd-diary" | "letterboxd-ratings",
+  log: FastifyBaseLogger
 ) {
   // Letterboxd headers: Date,Name,Year,Letterboxd URI,Rating,Rewatch,Tags,Watched Date
   const nameCol = col("name");
@@ -274,7 +276,7 @@ async function importLetterboxd(
     }
   }
 
-  await batchUpsertWatchEvents(profileId, watchInputs);
+  await batchUpsertWatchEvents(profileId, watchInputs, log);
   await batchUpsertRatings(profileId, ratingInputs);
 }
 

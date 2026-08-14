@@ -58,6 +58,13 @@ function ToastContainer({
   const hiddenCount = toasts.length - visible.length;
   const stackRef = useRef<HTMLDivElement>(null);
 
+  // Split by politeness, not by looks: an error interrupts, everything else
+  // waits its turn. Errors render below the polite ones, which is the only
+  // visible consequence — and the two rarely share the stack.
+  const errorToasts = visible.filter((t) => t.type === "error");
+  const politeToasts = visible.filter((t) => t.type !== "error");
+  const rowProps = { onDismiss, onExited };
+
   // React's onFocus/onBlur are focusin/focusout, so they also fire when focus
   // merely moves from one button in the stack to another — Undo to Dismiss, say.
   // That is not focus leaving, and treating it as such would restart the timers
@@ -68,9 +75,15 @@ function ToastContainer({
   return (
     <div
       ref={stackRef}
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
+      // Exempt from the `inert` that useFocusTrap lays over everything outside an
+      // open dialog. A toast raised by an action taken *inside* a dialog is
+      // exactly the toast that most needs announcing, and inert would silence it.
+      data-overlay-exempt=""
+      // Not a live region itself — the two below are. A single polite region
+      // covering the whole stack announced an error toast in the same breath as
+      // "Saved", and the code already treats the two differently enough to give
+      // errors a 10s lifetime because they are "often the only copy of a failure
+      // reason". Politeness is the other half of that.
       // The max-sm offset has to clear the mobile tab bar *and* the safe-area
       // inset it pads itself with — the bar is ~4.25rem of content plus up to
       // 34px of inset on a notched phone, so a flat 5rem put the toast, and the
@@ -91,9 +104,42 @@ function ToastContainer({
           +{hiddenCount} more
         </span>
       )}
-      {visible.map((toast) => (
+      {/* Both regions are mounted whether or not they hold anything. A live
+          region has to exist before content arrives for the insertion to be
+          announced — mounting one together with its first message announces
+          nothing, which is the trap CommandPalette and SearchPage both carry
+          comments about. */}
+      <ToastRegion role="status" aria-live="polite" toasts={politeToasts} {...rowProps} />
+      <ToastRegion role="alert" aria-live="assertive" toasts={errorToasts} {...rowProps} />
+    </div>
+  );
+}
+
+/** One live region and the toasts currently inside it. */
+function ToastRegion({
+  role,
+  "aria-live": ariaLive,
+  toasts,
+  onDismiss,
+  onExited,
+}: {
+  role: "status" | "alert";
+  "aria-live": "polite" | "assertive";
+  toasts: Toast[];
+  onDismiss: (id: number) => void;
+  onExited: (id: number) => void;
+}) {
+  return (
+    <div role={role} aria-live={ariaLive} className="flex flex-col gap-3 empty:hidden">
+      {toasts.map((toast) => (
         <div
           key={toast.id}
+          // Atomic per toast rather than on the region. On the region it meant a
+          // new toast re-read everything in it — up to three toasts plus the
+          // "+N more" counter — so the fuller the stack, the harder the newest
+          // arrival was to pick out. Here it means this toast is read whole,
+          // which is what the reader wants and no more than that.
+          aria-atomic="true"
           // The enter animation has long since finished by the time a toast is
           // dismissed, so swapping the class is what starts the exit; the
           // animationend it raises is what unmounts the toast.
@@ -143,7 +189,9 @@ function ToastContainer({
             disabled={toast.exiting}
             onClick={() => onDismiss(toast.id)}
             aria-label="Dismiss notification"
-            className="ml-1 flex-none rounded-md p-1 hover:bg-[var(--surface-strong)]"
+            // The one interactive control in the app that had no focus-visible
+            // ring, so tabbing to it left no visible focus at all — SC 2.4.7.
+            className="ml-1 flex-none rounded-md p-1 transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
             style={{ color: "var(--text-mute)" }}
           >
             <X aria-hidden="true" className="h-3.5 w-3.5" />

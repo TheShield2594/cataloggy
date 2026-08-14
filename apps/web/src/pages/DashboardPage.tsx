@@ -1164,7 +1164,12 @@ export function DashboardPage() {
                 </span>
                 <span className={`${KICKER} text-claw-text`}>Now Watching</span>
               </div>
-              <p className={`mt-1 truncate ${PAGE_TITLE}`} style={{ color: "var(--text)" }}>{activeCheckin.name}</p>
+              {/* A heading, not a styled paragraph. This is visually the largest
+                  thing on the dashboard and it was invisible to heading
+                  navigation — the one element a screen-reader user jumping by
+                  heading would most expect to land on was the one they couldn't
+                  reach. */}
+              <h2 className={`mt-1 truncate ${PAGE_TITLE}`} style={{ color: "var(--text)" }}>{activeCheckin.name}</h2>
               {activeCheckin.season != null && activeCheckin.episode != null && (
                 <p className="mt-1 text-sm" style={{ color: "var(--text-dim)" }}>
                   S{String(activeCheckin.season).padStart(2, "0")}:E{String(activeCheckin.episode).padStart(2, "0")}
@@ -1195,13 +1200,16 @@ export function DashboardPage() {
       {/* ── Live: Plex/Jellyfin scrobble sessions ── */}
       {nowPlaying.length > 0 && (
         <section className="space-y-2">
-          <h3 className={`flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
+          {/* h2, not h3: this is a top-level dashboard section, and the only
+              heading above it is the sr-only h1. The KICKER class is what makes
+              it look like a kicker — the level says where it sits. */}
+          <h2 className={`flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
             </span>
             Playing now
-          </h3>
+          </h2>
           <div className="space-y-2">
             {nowPlaying.map((session) => (
               <div

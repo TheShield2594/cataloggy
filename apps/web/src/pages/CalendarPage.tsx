@@ -507,8 +507,15 @@ export function CalendarPage() {
                                   type="button"
                                   onClick={() => handleSelect(entry)}
                                   title={`${entry.seriesName} S${entry.season}:E${entry.episode}`}
-                                  className="block w-full truncate rounded px-1 py-0.5 text-left text-2xs font-medium transition-colors hover:opacity-80"
-                                  style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}
+                                  // --accent-text, not --accent. index.css documents
+                                  // the first as the token for accent-coloured text on
+                                  // a page background and the second as a fill; painted
+                                  // as body text --accent measures 2.68:1 on light and
+                                  // 4.21:1 on midnight, against 5.53 and 5.43 for the
+                                  // token that exists for this. The focus ring matches
+                                  // the "+N more" button below, which already had one.
+                                  className="block w-full truncate rounded px-1 py-0.5 text-left text-2xs font-medium transition-colors hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                                  style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent-text)" }}
                                 >
                                   {entry.seriesName}
                                 </button>

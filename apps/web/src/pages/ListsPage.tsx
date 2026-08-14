@@ -322,6 +322,17 @@ export function ListsPage() {
   const [newListName, setNewListName] = useState("");
   const [removingIds, setRemovingIds] = useState<Record<string, boolean>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Opening the confirm block unmounts the trash button that opened it, and
+  // cancelling unmounts the Cancel button, so both transitions used to drop focus
+  // to <body> — mid-flow, in the middle of a destructive action, with the alert
+  // that just appeared unread. ResultCard.closeAndFocusTrigger in SearchPage is
+  // the same pattern for the same reason.
+  const deleteTriggerRefs = useRef(new Map<string, HTMLButtonElement | null>());
+  const cancelDeleteRef = useRef<HTMLButtonElement>(null);
+  // Set when the *user* backs out, so a completed delete — whose row is gone —
+  // doesn't try to focus a button that no longer exists.
+  const restoreDeleteFocusRef = useRef<string | null>(null);
   const [deletingListId, setDeletingListId] = useState<string | null>(null);
   const [renamingListId, setRenamingListId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -459,6 +470,23 @@ export function ListsPage() {
       setError(err instanceof Error ? err.message : "Failed to create list");
     }
   };
+
+  // Focus follows the confirm block in, landing on Cancel rather than Delete: the
+  // block exists to make the second step deliberate, and putting focus on the
+  // destructive button would let one more Enter finish the job.
+  useEffect(() => {
+    if (confirmDeleteId) cancelDeleteRef.current?.focus();
+  }, [confirmDeleteId]);
+
+  // ...and back out again on cancel. No dependency array: this consumes a ref
+  // that is set during the click, one render before the trash button it points at
+  // is back in the DOM to receive focus.
+  useEffect(() => {
+    const listId = restoreDeleteFocusRef.current;
+    if (!listId || confirmDeleteId) return;
+    restoreDeleteFocusRef.current = null;
+    deleteTriggerRefs.current.get(listId)?.focus();
+  });
 
   const handleDeleteList = async (listId: string) => {
     setDeletingListId(listId);
@@ -623,8 +651,12 @@ export function ListsPage() {
                       {deletingListId === list.id ? "Deleting…" : "Delete"}
                     </button>
                     <button
+                      ref={cancelDeleteRef}
                       type="button"
-                      onClick={() => setConfirmDeleteId(null)}
+                      onClick={() => {
+                        restoreDeleteFocusRef.current = list.id;
+                        setConfirmDeleteId(null);
+                      }}
                       className="btn-secondary btn-sm flex-1"
                     >
                       Cancel
@@ -662,6 +694,10 @@ export function ListsPage() {
                   </button>
                   {list.kind === "custom" && (
                     <button
+                      ref={(el) => {
+                        if (el) deleteTriggerRefs.current.set(list.id, el);
+                        else deleteTriggerRefs.current.delete(list.id);
+                      }}
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(list.id); }}
                       className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/15 hover:text-danger transition-all duration-fast focus:opacity-100"

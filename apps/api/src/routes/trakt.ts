@@ -1,6 +1,7 @@
 import { ItemType, ListItemType, MetadataType, Prisma } from "@prisma/client";
 import type { FastifyPluginAsync, RouteHandlerMethod } from "fastify";
 import { prisma } from "../lib/prisma.js";
+import { isUniqueConstraintError } from "../lib/prisma-tolerant.js";
 import { getTmdb } from "../lib/tmdb-client.js";
 import { upsertMetadata } from "../lib/metadata.js";
 import { upsertSeriesProgressIfNewer } from "../lib/series-progress.js";
@@ -315,9 +316,18 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
       const existing = await prisma.watchEvent.findFirst({ where: { profileId, type: "movie", imdbId } });
       if (existing) continue;
 
-      await prisma.watchEvent.create({
-        data: { type: "movie", imdbId, watchedAt: new Date(watchedAt), plays: entry.plays ?? 1, profileId },
-      });
+      try {
+        await prisma.watchEvent.create({
+          data: { type: "movie", imdbId, watchedAt: new Date(watchedAt), plays: entry.plays ?? 1, profileId },
+        });
+      } catch (error) {
+        // A concurrent writer filled the same gap — the history pass above, a
+        // webhook, another import. Gap-fill only ever wanted the row to exist, so
+        // losing the race is success for everything except the count: skip the
+        // increment rather than claiming an import that was somebody else's.
+        if (!isUniqueConstraintError(error)) throw error;
+        continue;
+      }
       imported.movies += 1;
     }
 
@@ -340,19 +350,25 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
           });
 
           if (!existing) {
-            await prisma.watchEvent.create({
-              data: {
-                type: "episode",
-                imdbId: seriesImdbId,
-                seriesImdbId,
-                season: seasonNumber,
-                episode: episodeNumber,
-                watchedAt: new Date(watchedAt),
-                plays: ep.plays ?? 1,
-                profileId,
-              },
-            });
-            imported.episodes += 1;
+            try {
+              await prisma.watchEvent.create({
+                data: {
+                  type: "episode",
+                  imdbId: seriesImdbId,
+                  seriesImdbId,
+                  season: seasonNumber,
+                  episode: episodeNumber,
+                  watchedAt: new Date(watchedAt),
+                  plays: ep.plays ?? 1,
+                  profileId,
+                },
+              });
+              imported.episodes += 1;
+            } catch (error) {
+              // Same race as the movie pass above: the row now exists, which is
+              // all gap-fill wanted, so only the count is skipped.
+              if (!isUniqueConstraintError(error)) throw error;
+            }
           }
 
           const watchedAtDate = new Date(watchedAt);

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Prisma } from "@prisma/client";
 import type { FastifyBaseLogger } from "fastify";
 
 const txMock = {
@@ -198,6 +199,102 @@ describe("recordWatchEvent", () => {
       expect(txMock.watchEvent.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({ where: expect.objectContaining({ profileId: "profile-other" }) })
       );
+    });
+  });
+
+  // `watchevent_dedup_key` turns the read-then-write below into a race one writer
+  // loses out loud instead of both writers winning and leaving two rows behind.
+  describe("losing the create race", () => {
+    const uniqueViolation = () =>
+      Object.assign(new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "test",
+      }));
+
+    it("re-runs the transaction and increments the row the winner wrote", async () => {
+      txMock.watchEvent.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "we-winner", plays: 1 });
+      txMock.watchEvent.create.mockRejectedValueOnce(uniqueViolation());
+      txMock.watchEvent.update.mockResolvedValue({ id: "we-winner", plays: 2, traktHistoryId: null });
+
+      const { recordWatchEvent } = await import("./watch-event.js");
+      const result = await recordWatchEvent({
+        type: "movie",
+        imdbId: "tt-raced",
+        watchedAt: new Date("2024-05-01T09:00:00Z"),
+        source: "test",
+        profileId: "profile-1",
+        log: makeLog(),
+      });
+
+      expect(result.wasCreated).toBe(false);
+      expect(result.watchEvent).toMatchObject({ id: "we-winner", plays: 2 });
+      expect(txMock.watchEvent.create).toHaveBeenCalledTimes(1);
+      expect(txMock.watchEvent.update).toHaveBeenCalledWith({
+        where: { id: "we-winner" },
+        data: { plays: { increment: 1 }, watchedAt: expect.any(Date), dateUnknown: false },
+      });
+    });
+
+    it("does the same for episodes", async () => {
+      txMock.watchEvent.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "we-ep-winner", plays: 1 });
+      txMock.watchEvent.create.mockRejectedValueOnce(uniqueViolation());
+      txMock.watchEvent.update.mockResolvedValue({ id: "we-ep-winner", plays: 2, traktHistoryId: null });
+
+      const { recordWatchEvent } = await import("./watch-event.js");
+      const result = await recordWatchEvent({
+        type: "episode",
+        imdbId: "tt-series",
+        seriesImdbId: "tt-series",
+        season: 2,
+        episode: 3,
+        watchedAt: new Date("2024-05-01T09:00:00Z"),
+        source: "test",
+        profileId: "profile-1",
+        log: makeLog(),
+      });
+
+      expect(result.wasCreated).toBe(false);
+      expect(result.watchEvent).toMatchObject({ id: "we-ep-winner" });
+    });
+
+    // Retrying once absorbs the race. A second P2002 is a different conflict, and
+    // retrying forever would hide it.
+    it("gives up if the retry hits the constraint too", async () => {
+      txMock.watchEvent.findFirst.mockResolvedValue(null);
+      txMock.watchEvent.create.mockRejectedValue(uniqueViolation());
+
+      const { recordWatchEvent } = await import("./watch-event.js");
+      await expect(
+        recordWatchEvent({
+          type: "movie",
+          imdbId: "tt-stuck",
+          watchedAt: new Date("2024-05-02T09:00:00Z"),
+          source: "test",
+          profileId: "profile-1",
+          log: makeLog(),
+        })
+      ).rejects.toMatchObject({ code: "P2002" });
+
+      expect(txMock.watchEvent.create).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not retry an error that isn't a constraint violation", async () => {
+      txMock.watchEvent.findFirst.mockResolvedValue(null);
+      txMock.watchEvent.create.mockRejectedValue(new Error("connection reset"));
+
+      const { recordWatchEvent } = await import("./watch-event.js");
+      await expect(
+        recordWatchEvent({
+          type: "movie",
+          imdbId: "tt-broken",
+          watchedAt: new Date("2024-05-03T09:00:00Z"),
+          source: "test",
+          profileId: "profile-1",
+          log: makeLog(),
+        })
+      ).rejects.toThrow("connection reset");
+
+      expect(txMock.watchEvent.create).toHaveBeenCalledTimes(1);
     });
   });
 

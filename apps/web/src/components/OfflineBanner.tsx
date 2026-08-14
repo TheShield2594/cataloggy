@@ -19,31 +19,38 @@ import { useOnline } from "../hooks/useOnline";
  */
 export function OfflineBanner() {
   const online = useOnline();
-  if (online) return null;
-
   const cached = window.isSecureContext;
 
+  // The live region stays mounted; only its contents come and go. Returning null
+  // while online meant the region arrived *with* the message already inside it,
+  // and a region created in the same paint as its content announces nothing —
+  // the assistive technology has nothing to compare against. CommandPalette and
+  // SearchPage both carry comments about this exact hazard; the banner that
+  // exists to say "what you are looking at may be stale" was silent for the
+  // people least able to see it.
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="glass-surface overlay-dialog sticky top-[76px] z-20 mb-5 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm shadow-e2"
-      style={{
-        background: "var(--surface-strong)",
-        border: "1px solid var(--border-strong)",
-        color: "var(--text)",
-      }}
-    >
-      <WifiOff className="h-4 w-4 flex-none" aria-hidden="true" />
-      <p>
-        <span className="font-semibold">Offline</span>
-        <span style={{ color: "var(--text-dim)" }}>
-          {" "}
-          {cached
-            ? "— showing saved data. Anything you change now won’t be saved."
-            : "— nothing is saved for offline use on this address, so pages will be empty until you’re back."}
-        </span>
-      </p>
+    <div role="status" aria-live="polite">
+      {!online && (
+        <div
+          className="glass-surface overlay-dialog sticky top-[76px] z-20 mb-5 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm shadow-e2"
+          style={{
+            background: "var(--surface-strong)",
+            border: "1px solid var(--border-strong)",
+            color: "var(--text)",
+          }}
+        >
+          <WifiOff className="h-4 w-4 flex-none" aria-hidden="true" />
+          <p>
+            <span className="font-semibold">Offline</span>
+            <span style={{ color: "var(--text-dim)" }}>
+              {" "}
+              {cached
+                ? "— showing saved data. Anything you change now won’t be saved."
+                : "— nothing is saved for offline use on this address, so pages will be empty until you’re back."}
+            </span>
+          </p>
+        </div>
+      )}
     </div>
   );
 }

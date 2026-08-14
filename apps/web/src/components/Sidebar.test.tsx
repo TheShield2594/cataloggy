@@ -108,7 +108,7 @@ describe("Sidebar", () => {
 
     expect(screen.getByText("Quick tip")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Got it" }));
+    await user.click(screen.getByRole("button", { name: /Got it/ }));
     expect(screen.queryByText("Quick tip")).not.toBeInTheDocument();
   });
 

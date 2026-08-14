@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Check, Heart, ListPlus, Plus, X } from "lucide-react";
 import { api, CatalogList, MediaType } from "../../api";
 
@@ -21,6 +21,8 @@ export function ListsSection({
   const [newListName, setNewListName] = useState("");
   const [savingNewList, setSavingNewList] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
 
   // Membership resets when the panel moves to a different title, and only then.
   // `initialListIds` is a fresh array on each parent render, so depending on it
@@ -43,13 +45,23 @@ export function ListsSection({
     return () => { cancelled = true; };
   }, []);
 
+  // Escape closed the panel and left focus on a button that had just been
+  // unmounted, which drops it to the top of the document — the pattern
+  // ResultCard.closeAndFocusTrigger already establishes for the same feature's
+  // other panel. A pointer dismissal doesn't move focus, so it doesn't take it
+  // back either.
+  const closeAndFocusTrigger = useCallback(() => {
+    setMenuOpen(false);
+    triggerRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     if (!menuOpen) return;
     const handleClick = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
     };
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenuOpen(false);
+      if (e.key === "Escape") closeAndFocusTrigger();
     };
     document.addEventListener("mousedown", handleClick);
     document.addEventListener("keydown", handleKey);
@@ -57,7 +69,7 @@ export function ListsSection({
       document.removeEventListener("mousedown", handleClick);
       document.removeEventListener("keydown", handleKey);
     };
-  }, [menuOpen]);
+  }, [menuOpen, closeAndFocusTrigger]);
 
   // Reset the inline create form whenever the menu closes.
   useEffect(() => {
@@ -153,18 +165,29 @@ export function ListsSection({
 
       <div ref={menuRef} className="relative">
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
           className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors hover:text-[var(--text)]"
           style={{ borderColor: "var(--border-strong)", color: "var(--text-dim)" }}
-          aria-haspopup="menu"
           aria-expanded={menuOpen}
+          aria-controls={menuOpen ? panelId : undefined}
         >
           <ListPlus className="h-3 w-3" /> Add to list
         </button>
         {menuOpen && (
+          /*
+            Deliberately not role="menu" — the same decision, and the same reason,
+            as the quick-add panel in SearchPage, which is this feature's other
+            implementation. The panel holds a text field and a submit button for
+            the inline create flow, which the ARIA menu pattern doesn't allow, and
+            announcing a menu promised arrow-key navigation and a roving tabindex
+            that were never implemented. A plain disclosure is what this is, and
+            what it now says it is.
+          */
           <div
-            role="menu"
+            id={panelId}
+            role="group"
             aria-label="Add to list"
             className="absolute left-0 z-30 mt-1 w-48 overflow-hidden rounded-xl shadow-e2"
             style={{ background: "var(--bg-0)", borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }}
@@ -178,7 +201,6 @@ export function ListsSection({
                 <button
                   key={list.id}
                   type="button"
-                  role="menuitem"
                   disabled={pending[list.id]}
                   onClick={() => void toggle(list)}
                   aria-label={already ? `Remove from ${list.name}` : `Add to ${list.name}`}

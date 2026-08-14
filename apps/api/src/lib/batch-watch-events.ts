@@ -1,6 +1,8 @@
 import { WatchEventType } from "@prisma/client";
+import type { FastifyBaseLogger } from "fastify";
 import { prisma } from "./prisma.js";
 import { mapWithConcurrency } from "./concurrency.js";
+import { watchEventDayWindow } from "./watch-event-dedup.js";
 
 const UPDATE_CONCURRENCY = 10;
 
@@ -17,15 +19,7 @@ export type WatchEventInput = {
   plays?: number;
 };
 
-const dayRange = (date: Date) => {
-  const start = new Date(date);
-  start.setUTCHours(0, 0, 0, 0);
-  const end = new Date(date);
-  end.setUTCHours(23, 59, 59, 999);
-  return { start, end };
-};
-
-const dedupKey = (type: WatchEventType, matchId: string, season: number | null, episode: number | null) =>
+const dedupKey =(type: WatchEventType, matchId: string, season: number | null, episode: number | null) =>
   `${type}:${matchId}:${season ?? "null"}:${episode ?? "null"}`;
 
 /**
@@ -37,7 +31,11 @@ const dedupKey = (type: WatchEventType, matchId: string, season: number | null, 
  * the sequential version had), then flushes with one createMany and one batch of
  * concurrent updates.
  */
-export async function batchUpsertWatchEvents(profileId: string, inputs: WatchEventInput[]): Promise<number> {
+export async function batchUpsertWatchEvents(
+  profileId: string,
+  inputs: WatchEventInput[],
+  log?: Pick<FastifyBaseLogger, "warn">
+): Promise<number> {
   if (inputs.length === 0) return 0;
 
   const movieIds = new Set<string>();
@@ -86,7 +84,7 @@ export async function batchUpsertWatchEvents(profileId: string, inputs: WatchEve
     const weight = input.plays ?? 1;
     const matchId = input.type === WatchEventType.episode ? (input.seriesImdbId ?? input.imdbId) : input.imdbId;
     const key = dedupKey(input.type, matchId, input.season, input.episode);
-    const { start, end } = dayRange(input.watchedAt);
+    const { gte: start, lte: end } = watchEventDayWindow(input.watchedAt);
 
     const candidates = bucket.get(key) ?? [];
     const match = candidates.find((c) => c.watchedAt >= start && c.watchedAt <= end);
@@ -115,7 +113,20 @@ export async function batchUpsertWatchEvents(profileId: string, inputs: WatchEve
   }
 
   if (creates.length > 0) {
-    await prisma.watchEvent.createMany({ data: creates });
+    // `skipDuplicates` because the read at the top of this function and the insert
+    // here are not one operation: a webhook or a scrobble can write into one of
+    // these buckets in between, and `watchevent_dedup_key` would then reject the
+    // whole statement. An import of several thousand rows failing on one collision
+    // — and reporting an "imported" count for rows that were rolled back — is a far
+    // worse outcome than the one this trades for, which is that the colliding row's
+    // play weight folds into the row that won instead of being added to it.
+    const created = await prisma.watchEvent.createMany({ data: creates, skipDuplicates: true });
+    if (created.count < creates.length) {
+      log?.warn(
+        { requested: creates.length, created: created.count },
+        "Some watch events were already recorded by a concurrent writer and were skipped"
+      );
+    }
   }
   if (updates.size > 0) {
     await mapWithConcurrency([...updates.entries()], UPDATE_CONCURRENCY, ([id, increment]) =>

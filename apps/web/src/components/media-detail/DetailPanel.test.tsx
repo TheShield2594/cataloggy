@@ -162,7 +162,7 @@ describe("DetailPanel watch history", () => {
     deleteWatchEvent.mockResolvedValue(undefined as never);
     const { props } = renderPanel();
 
-    await user.click(await screen.findByRole("button", { name: "Remove watch event" }));
+    await user.click(await screen.findByRole("button", { name: "Remove watch of Solaris" }));
 
     await waitFor(() => expect(props.onHistoryChange).toHaveBeenCalledWith([]));
     expect(deleteWatchEvent).toHaveBeenCalledWith(WATCH.id);
@@ -178,7 +178,7 @@ describe("DetailPanel watch history", () => {
     deleteWatchEvent.mockRejectedValue(new Error("nope"));
     const { props } = renderPanel();
 
-    await user.click(await screen.findByRole("button", { name: "Remove watch event" }));
+    await user.click(await screen.findByRole("button", { name: "Remove watch of Solaris" }));
 
     await waitFor(() =>
       expect(props.onShowToast).toHaveBeenCalledWith("Failed to remove watch event", "error")

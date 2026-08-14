@@ -240,7 +240,6 @@ export function Sidebar({
           the rail or shifts the nav. */}
       {showHint && (
         <div
-          role="status"
           className="absolute bottom-4 w-56 rounded-lg p-3 text-xs shadow-e2 transition-[left] duration-base ease-out"
           style={{
             left: expanded ? "15.5rem" : "4.5rem",
@@ -248,13 +247,24 @@ export function Sidebar({
             border: "1px solid var(--border-strong)",
           }}
         >
-          <p className="font-semibold" style={{ color: "var(--text)" }}>Quick tip</p>
-          <p className="mt-1 leading-snug" style={{ color: "var(--text-dim)" }}>
-            Hover this rail to peek, or pin it open to keep the labels.
-          </p>
+          {/* The live region holds the prose and nothing else. It used to wrap the
+              button as well, so the tip was announced with a control folded into
+              the middle of it that then had to be hunted down — a live region
+              reads its contents out, it doesn't hand you what's inside. Outside
+              it, the button is still the very next thing in the tab order. */}
+          <div role="status">
+            <p className="font-semibold" style={{ color: "var(--text)" }}>Quick tip</p>
+            <p className="mt-1 leading-snug" style={{ color: "var(--text-dim)" }}>
+              Hover this rail to peek, or pin it open to keep the labels.
+            </p>
+          </div>
           <button
             type="button"
             onClick={dismissHint}
+            // "Got it" alone says nothing about what it acts on once the tip is no
+            // longer being read. The visible text stays inside the accessible name,
+            // which is what SC 2.5.3 asks.
+            aria-label="Got it — dismiss quick tip"
             className="btn-primary btn-xs mt-2"
           >
             Got it

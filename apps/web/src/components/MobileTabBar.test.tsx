@@ -139,4 +139,51 @@ describe("MobileTabBar", () => {
 
     await dismissSheet();
   });
+
+  // The sheet declared aria-modal="true" while trapping nothing, alone among the
+  // app's overlays. Tab walked straight out into the page the attribute had just
+  // declared inert, and on touch that page scrolled behind it.
+  describe("modality", () => {
+    it("keeps Tab inside the sheet instead of walking out into the bar behind it", async () => {
+      renderBar();
+      await userEvent.click(within(tabBar()).getByRole("button", { name: /more/i }));
+      const sheet = screen.getByRole("dialog", { name: "More destinations" });
+      const links = within(sheet).getAllByRole("link");
+
+      // From the last item, Tab wraps to the first rather than reaching the nav.
+      links[links.length - 1].focus();
+      await userEvent.tab();
+
+      expect(sheet.contains(document.activeElement)).toBe(true);
+    });
+
+    it("takes the page out of the accessibility tree while it is open", async () => {
+      renderBar();
+      await userEvent.click(within(tabBar()).getByRole("button", { name: /more/i }));
+
+      expect(tabBar()).toHaveAttribute("inert");
+    });
+
+    it("hands the page back when it closes", async () => {
+      renderBar();
+      await userEvent.click(within(tabBar()).getByRole("button", { name: /more/i }));
+
+      await userEvent.keyboard("{Escape}");
+      await dismissSheet();
+
+      expect(tabBar()).not.toHaveAttribute("inert");
+    });
+
+    it("locks background scroll, which is what the page did behind it on touch", async () => {
+      renderBar();
+      await userEvent.click(within(tabBar()).getByRole("button", { name: /more/i }));
+
+      expect(document.body.style.position).toBe("fixed");
+
+      await userEvent.keyboard("{Escape}");
+      await dismissSheet();
+
+      expect(document.body.style.position).toBe("");
+    });
+  });
 });

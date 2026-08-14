@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { hasOpenModalLayer } from "./useEscapeKey";
 
 /**
  * Owns the ⌘K shortcut and the palette's open state.
@@ -21,7 +22,16 @@ export function useCommandPalette() {
         // Holding the shortcut down autorepeats, and a toggle on every repeat
         // flickers the palette open and shut until the key is released.
         if (e.repeat) return;
-        setOpen((v) => !v);
+        setOpen((v) => {
+          // Closing is always allowed — the palette registers its own layer while
+          // open, so it is the top of the stack and the shortcut that opened it
+          // should shut it.
+          if (v) return false;
+          // Opening is not. The palette used to arrive on top of an open detail
+          // panel, which left two dialogs claiming `aria-modal` at once and put
+          // the focus trap of the one underneath in charge of the one above.
+          return !hasOpenModalLayer();
+        });
       }
     };
     window.addEventListener("keydown", handler);
