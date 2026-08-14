@@ -1,3 +1,5 @@
+import { fetchWithPolicy } from "./lib/http.js";
+
 const STEAM_API_BASE = "https://api.steampowered.com";
 const MAX_RETRIES = 3;
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -43,30 +45,12 @@ export type SteamPlayerSummary = {
   profileUrl: string | null;
 };
 
-// Steam occasionally 429s/503s under load; a short exponential backoff clears
-// most of these without giving up on what is otherwise a healthy request.
-async function fetchWithRetry(url: URL, maxRetries: number = MAX_RETRIES): Promise<Response> {
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-      if ((response.status === 429 || response.status === 503) && attempt < maxRetries) {
-        await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 1000));
-        continue;
-      }
-      return response;
-    } catch (error) {
-      lastError = error;
-      if (attempt < maxRetries) {
-        await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 1000));
-        continue;
-      }
-    }
-  }
-
-  throw lastError instanceof Error ? lastError : new Error("Failed to reach Steam after retries");
-}
+// Steam occasionally 429s/503s under load; the shared backoff clears most of
+// these without giving up on what is otherwise a healthy request. Kept at four
+// attempts, which is one more than the shared default, because a Steam sync is
+// a background job nobody is waiting on.
+const fetchWithRetry = (url: URL): Promise<Response> =>
+  fetchWithPolicy(url, {}, { timeoutMs: REQUEST_TIMEOUT_MS, retries: MAX_RETRIES, baseDelayMs: 1_000 });
 
 export class SteamClient {
   private constructor(private readonly apiKey: string) {}

@@ -4,6 +4,7 @@ import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_PROFILE_ID = "22222222-2222-4222-8222-222222222222";
+const CHANNEL_ID = "33333333-3333-4333-8333-333333333333";
 
 const prismaMock = {
   notificationChannel: {
@@ -31,7 +32,7 @@ vi.mock("../lib/notification-channels.js", async (importOriginal) => ({
 const buildApp = (): Promise<FastifyInstance> => buildRouteApp(() => import("./notifications.js"));
 
 const storedChannel = (over: Record<string, unknown> = {}) => ({
-  id: "channel-1",
+  id: CHANNEL_ID,
   kind: "ntfy",
   name: "Phone",
   url: "https://ntfy.sh/cataloggy",
@@ -188,7 +189,7 @@ describe("notification channel routes", () => {
 
   describe("PATCH /notifications/channels/:id", () => {
     const patch = (app: FastifyInstance, payload: Record<string, unknown>) =>
-      app.inject({ method: "PATCH", url: "/notifications/channels/channel-1", payload });
+      app.inject({ method: "PATCH", url: `/notifications/channels/${CHANNEL_ID}`, payload });
 
     it("scopes the lookup to the calling profile", async () => {
       prismaMock.notificationChannel.findFirst.mockResolvedValue(null);
@@ -198,7 +199,7 @@ describe("notification channel routes", () => {
 
       expect(res.statusCode).toBe(404);
       expect(prismaMock.notificationChannel.findFirst).toHaveBeenCalledWith({
-        where: { id: "channel-1", profileId: PROFILE_ID },
+        where: { id: CHANNEL_ID, profileId: PROFILE_ID },
       });
       expect(prismaMock.notificationChannel.update).not.toHaveBeenCalled();
     });
@@ -210,7 +211,7 @@ describe("notification channel routes", () => {
 
       expect(res.statusCode).toBe(200);
       expect(prismaMock.notificationChannel.update).toHaveBeenCalledWith({
-        where: { id: "channel-1" },
+        where: { id: CHANNEL_ID },
         data: { url: "https://ntfy.sh/cataloggy", token: null, enabled: false },
       });
     });
@@ -305,9 +306,29 @@ describe("notification channel routes", () => {
       prismaMock.notificationChannel.deleteMany.mockResolvedValue({ count: 0 });
       const app = await buildApp();
 
-      const res = await app.inject({ method: "DELETE", url: "/notifications/channels/channel-1" });
+      const res = await app.inject({ method: "DELETE", url: `/notifications/channels/${CHANNEL_ID}` });
 
       expect(res.statusCode).toBe(404);
+    });
+  });
+
+  // `NotificationChannel.id` is a uuid column, so Postgres errors on a
+  // malformed value rather than matching nothing — without the guard each of
+  // these is a 500 and a logged driver exception, not a 400.
+  describe.each([
+    { method: "PATCH" as const, url: `/notifications/channels/not-a-uuid`, payload: { enabled: false } },
+    { method: "DELETE" as const, url: `/notifications/channels/not-a-uuid`, payload: undefined },
+    { method: "POST" as const, url: `/notifications/channels/not-a-uuid/test`, payload: undefined },
+  ])("$method $url", ({ method, url, payload }) => {
+    it("rejects an id that is not a UUID before it reaches the database", async () => {
+      const app = await buildApp();
+
+      const res = await app.inject({ method, url, payload });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toBe("id must be a valid UUID");
+      expect(prismaMock.notificationChannel.findFirst).not.toHaveBeenCalled();
+      expect(prismaMock.notificationChannel.deleteMany).not.toHaveBeenCalled();
     });
   });
 
@@ -315,12 +336,12 @@ describe("notification channel routes", () => {
     it("sends a real notification through the channel", async () => {
       const app = await buildApp();
 
-      const res = await app.inject({ method: "POST", url: "/notifications/channels/channel-1/test" });
+      const res = await app.inject({ method: "POST", url: `/notifications/channels/${CHANNEL_ID}/test` });
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ success: true });
       expect(sendToChannel).toHaveBeenCalledWith(
-        expect.objectContaining({ id: "channel-1" }),
+        expect.objectContaining({ id: CHANNEL_ID }),
         expect.objectContaining({ event: "test" })
       );
     });
@@ -329,7 +350,7 @@ describe("notification channel routes", () => {
       sendToChannel.mockRejectedValue(new Error("Phone: HTTP 403"));
       const app = await buildApp();
 
-      const res = await app.inject({ method: "POST", url: "/notifications/channels/channel-1/test" });
+      const res = await app.inject({ method: "POST", url: `/notifications/channels/${CHANNEL_ID}/test` });
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ success: false, error: "Phone: HTTP 403" });

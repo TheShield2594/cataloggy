@@ -82,14 +82,18 @@ cataloggy/
 
    ```bash
    # in .env, next to docker-compose.yml
-   CATALOGGY_IMAGE_TAG=v1.2.0
+   CATALOGGY_IMAGE_TAG=v0.1.0
    ```
 
    ```bash
    docker compose pull && docker compose up -d
    ```
 
-   Rolling back is the same two commands with the previous tag. Keep all four images on one tag — the `migrate` image applies the schema the `api` image expects — which is why it's a single setting. The Postgres image and the Node base image the app images are built from are pinned by digest in the repo, so a rebuild uses the exact image the stack was tested against; Dependabot proposes those bumps weekly.
+   Rolling back is the same two commands with the previous tag. Released versions are listed under
+   [Releases](https://github.com/TheShield2594/cataloggy/releases), each with its changelog section;
+   `sha-` tags for individual builds are in the
+   [package listing](https://github.com/TheShield2594?tab=packages&repo_name=cataloggy).
+   Keep all four images on one tag — the `migrate` image applies the schema the `api` image expects — which is why it's a single setting. The Postgres image and the Node base image the app images are built from are pinned by digest in the repo, so a rebuild uses the exact image the stack was tested against; Dependabot proposes those bumps weekly.
 
 3. Run the smoke checks:
 

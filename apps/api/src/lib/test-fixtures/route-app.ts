@@ -4,6 +4,11 @@ import Fastify, {
   type FastifyPluginAsync,
   type FastifyServerOptions,
 } from "fastify";
+import {
+  isSchemaValidationError,
+  registerRequestSchemas,
+  requestSchemaOptions,
+} from "../request-schema.js";
 
 /**
  * Builds a Fastify instance carrying one route plugin, and closes it after the
@@ -32,7 +37,13 @@ export const buildRouteApp = async (
 ): Promise<FastifyInstance> => {
   vi.resetModules();
   const { default: routes } = await loadPlugin();
-  const app = Fastify({ logger: false, ...options });
+  const app = Fastify({ logger: false, ...requestSchemaOptions, ...options });
+  // The same two lines index.ts wires, so a schema-validated route answers a
+  // test the way it answers a real caller.
+  registerRequestSchemas(app);
+  app.setErrorHandler((error, _request, reply) =>
+    isSchemaValidationError(error) ? reply.code(400).send({ error: error.message }) : reply.send(error)
+  );
   await app.register(routes);
   await app.ready();
   openApps.add(app);

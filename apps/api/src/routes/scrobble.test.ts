@@ -11,7 +11,7 @@ const txMock = {
 const prismaMock = {
   scrobbleSession: { findFirst: vi.fn(), update: vi.fn(), create: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
   checkIn: { findUnique: vi.fn(), upsert: vi.fn(), deleteMany: vi.fn() },
-  metadata: { findMany: vi.fn() },
+  metadata: { findMany: vi.fn(), findUnique: vi.fn() },
   $transaction: vi.fn(async (callback: (tx: typeof txMock) => unknown) => callback(txMock)),
 };
 
@@ -246,6 +246,121 @@ describe("scrobble routes", () => {
       expect(response.json().sessions[0]).toEqual(
         expect.objectContaining({ name: "Movie A", poster: "poster.jpg" })
       );
+    });
+  });
+
+  describe("POST /checkin — validation", () => {
+    const checkIn = (app: FastifyInstance, payload: Record<string, unknown>) =>
+      app.inject({ method: "POST", url: "/checkin", payload });
+
+    const storedCheckIn = (over: Record<string, unknown> = {}) => ({
+      type: "movie",
+      imdbId: "tt1",
+      seriesImdbId: null,
+      season: null,
+      episode: null,
+      name: "Movie A",
+      poster: null,
+      startedAt: new Date("2026-08-06T12:00:00Z"),
+      expiresAt: null,
+      ...over,
+    });
+
+    it("stores a valid check-in", async () => {
+      prismaMock.checkIn.upsert.mockResolvedValue(storedCheckIn());
+      prismaMock.metadata.findUnique.mockResolvedValue(null);
+
+      const app = await buildApp();
+      const response = await checkIn(app, { type: "movie", imdbId: "tt1", name: "Movie A", runtime: 120 });
+
+      expect(response.statusCode).toBe(200);
+      expect(prismaMock.checkIn.upsert).toHaveBeenCalled();
+    });
+
+    it("rejects a non-string name before it reaches the database", async () => {
+      const app = await buildApp();
+      const response = await checkIn(app, { type: "movie", imdbId: "tt1", name: 42 });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe("name must be a string");
+      expect(prismaMock.checkIn.upsert).not.toHaveBeenCalled();
+    });
+
+    it("names the field that is missing", async () => {
+      const app = await buildApp();
+      const response = await checkIn(app, { type: "movie", name: "Movie A" });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe("imdbId is required");
+    });
+
+    it("rejects an unknown type the way its neighbours do", async () => {
+      const app = await buildApp();
+      const response = await checkIn(app, { type: "bogus", imdbId: "tt1", name: "Movie A" });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe("type must be one of: movie, episode");
+    });
+
+    it("refuses a name large enough to park a multi-megabyte row", async () => {
+      const app = await buildApp();
+      const response = await checkIn(app, { type: "movie", imdbId: "tt1", name: "x".repeat(5_000) });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe("name must be at most 300 characters");
+    });
+
+    it.each(["imdbId", "name", "seriesImdbId"])("refuses a whitespace-only %s", async (field) => {
+      const app = await buildApp();
+      const response = await checkIn(app, {
+        type: "movie",
+        imdbId: "tt1",
+        name: "Movie A",
+        [field]: "   ",
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe(`${field} must not be empty`);
+      expect(prismaMock.checkIn.upsert).not.toHaveBeenCalled();
+    });
+
+    it("refuses a runtime of zero, which would expire the check-in as it was made", async () => {
+      const app = await buildApp();
+      const response = await checkIn(app, { type: "movie", imdbId: "tt1", name: "Movie A", runtime: 0 });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe("runtime must be at least 1");
+      expect(prismaMock.checkIn.upsert).not.toHaveBeenCalled();
+    });
+
+    it("refuses a runtime that would make expiresAt an Invalid Date", async () => {
+      const app = await buildApp();
+      const response = await checkIn(app, {
+        type: "movie",
+        imdbId: "tt1",
+        name: "Movie A",
+        runtime: Number.MAX_SAFE_INTEGER,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe("runtime must be at most 1440");
+      expect(prismaMock.checkIn.upsert).not.toHaveBeenCalled();
+    });
+
+    it("accepts the nulls the web client sends for absent optional fields", async () => {
+      prismaMock.checkIn.upsert.mockResolvedValue(storedCheckIn());
+      prismaMock.metadata.findUnique.mockResolvedValue(null);
+
+      const app = await buildApp();
+      const response = await checkIn(app, {
+        type: "movie",
+        imdbId: "tt1",
+        name: "Movie A",
+        poster: null,
+        runtime: null,
+      });
+
+      expect(response.statusCode).toBe(200);
     });
   });
 });

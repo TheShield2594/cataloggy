@@ -1,5 +1,7 @@
 import { MetadataType } from "@prisma/client";
 import { externalIdsCache } from "./lib/cache.js";
+import { mapWithConcurrency } from "./lib/concurrency.js";
+import { fetchWithPolicy } from "./lib/http.js";
 
 type TmdbMediaType = "movie" | "tv";
 
@@ -209,6 +211,26 @@ export const STREAMING_PROVIDERS: Record<string, { id: number; name: string }> =
 
 const REQUEST_TIMEOUT_MS = 10_000;
 
+/**
+ * How many TMDB requests this process keeps in flight at once. Every catalog is
+ * a list request plus one external-id lookup per result, and a Stremio home
+ * screen asks for up to 20 catalogs at a time, so without a cap a cold cache
+ * turns one refresh into several hundred simultaneous requests — which is how a
+ * 429 is earned. Well under TMDB's own ~50/s allowance, and the queue behind it
+ * costs latency rather than results.
+ */
+const TMDB_CONCURRENCY = 8;
+
+/**
+ * Within a single catalog, how many external-id lookups run together. Kept
+ * below the host cap so one catalog can't monopolise the budget while twenty
+ * others wait.
+ */
+const IMDB_LOOKUP_CONCURRENCY = 5;
+
+/** TMDB list endpoints page at 20; anything past that is never rendered. */
+const MAX_CATALOG_RESULTS = 20;
+
 export class TmdbClient {
   private static readonly baseUrl = "https://api.themoviedb.org/3";
   private static readonly imageBaseUrl = "https://image.tmdb.org/t/p/w500";
@@ -234,27 +256,55 @@ export class TmdbClient {
     return new TmdbClient(trimmed, language);
   }
 
-  async search(type: MetadataType, query: string): Promise<MetadataPayload[]> {
-    const mediaType = this.toMediaType(type);
-    const response = await this.request<TmdbSearchResponse>(`/search/${mediaType}`, { query });
-    const results = response.results ?? [];
+  /**
+   * The shape every list endpoint here shares: TMDB answers with a page of
+   * results carrying its own ids, and Cataloggy keys everything by IMDb id, so
+   * each result needs an `/external_ids` lookup before it is usable.
+   *
+   * That lookup is the fan-out — one list request becomes up to 21 — so it runs
+   * under a concurrency limit rather than `Promise.all`. Results whose id TMDB
+   * doesn't know an IMDb id for are dropped: an entry Cataloggy cannot key is
+   * one it cannot store, rate or mark watched.
+   *
+   * A lookup that *fails* is dropped the same way rather than failing the
+   * catalog. `Promise.all` semantics meant one refused `/external_ids` call —
+   * after its retries, so one that was genuinely not coming back — turned
+   * nineteen usable results into an empty row. A real outage still surfaces,
+   * because the list request itself fails before any of this runs.
+   */
+  private async withImdbIds(
+    results: TmdbSearchResult[],
+    classify: (result: TmdbSearchResult) => { mediaType: TmdbMediaType; type: MetadataType } | null
+  ): Promise<MetadataPayload[]> {
+    const withImdb = await mapWithConcurrency(
+      results.slice(0, MAX_CATALOG_RESULTS),
+      IMDB_LOOKUP_CONCURRENCY,
+      async (result) => {
+        if (!result.id) return null;
 
-    const withImdb = await Promise.all(
-      results.map(async (result) => {
-        if (!result.id) {
-          return null;
-        }
+        const kind = classify(result);
+        if (!kind) return null;
 
-        const imdbId = await this.getImdbId(mediaType, result.id);
-        if (!imdbId) {
-          return null;
-        }
+        const imdbId = await this.getImdbId(kind.mediaType, result.id).catch(() => null);
+        if (!imdbId) return null;
 
-        return this.toMetadataPayload(type, result, imdbId);
-      })
+        return this.toMetadataPayload(kind.type, result, imdbId);
+      }
     );
 
     return withImdb.filter((item): item is MetadataPayload => item !== null);
+  }
+
+  /** The classifier for the endpoints whose media type is fixed by the caller. */
+  private asType(type: MetadataType): () => { mediaType: TmdbMediaType; type: MetadataType } {
+    const mediaType = this.toMediaType(type);
+    return () => ({ mediaType, type });
+  }
+
+  async search(type: MetadataType, query: string): Promise<MetadataPayload[]> {
+    const mediaType = this.toMediaType(type);
+    const response = await this.request<TmdbSearchResponse>(`/search/${mediaType}`, { query });
+    return this.withImdbIds(response.results ?? [], this.asType(type));
   }
 
   async searchMulti(query: string): Promise<MetadataPayload[]> {
@@ -263,75 +313,29 @@ export class TmdbClient {
       (r) => r.media_type === "movie" || r.media_type === "tv"
     );
 
-    const withImdb = await Promise.all(
-      results.map(async (result) => {
-        if (!result.id || !result.media_type) {
-          return null;
-        }
-
-        const mediaType = result.media_type as TmdbMediaType;
-        const type = mediaType === "movie" ? MetadataType.movie : MetadataType.series;
-        const imdbId = await this.getImdbId(mediaType, result.id);
-        if (!imdbId) {
-          return null;
-        }
-
-        return this.toMetadataPayload(type, result, imdbId);
-      })
-    );
-
-    return withImdb.filter((item): item is MetadataPayload => item !== null);
+    return this.withImdbIds(results, (result) => {
+      if (!result.media_type) return null;
+      const mediaType = result.media_type as TmdbMediaType;
+      return { mediaType, type: mediaType === "movie" ? MetadataType.movie : MetadataType.series };
+    });
   }
 
   async trending(type: MetadataType, timeWindow: "day" | "week" = "week"): Promise<MetadataPayload[]> {
     const mediaType = this.toMediaType(type);
     const response = await this.request<TmdbSearchResponse>(`/trending/${mediaType}/${timeWindow}`);
-    const results = response.results ?? [];
-
-    const withImdb = await Promise.all(
-      results.slice(0, 20).map(async (result) => {
-        if (!result.id) return null;
-        const imdbId = await this.getImdbId(mediaType, result.id);
-        if (!imdbId) return null;
-        return this.toMetadataPayload(type, result, imdbId);
-      })
-    );
-
-    return withImdb.filter((item): item is MetadataPayload => item !== null);
+    return this.withImdbIds(response.results ?? [], this.asType(type));
   }
 
   async popular(type: MetadataType): Promise<MetadataPayload[]> {
     const mediaType = this.toMediaType(type);
     const response = await this.request<TmdbSearchResponse>(`/${mediaType}/popular`);
-    const results = response.results ?? [];
-
-    const withImdb = await Promise.all(
-      results.slice(0, 20).map(async (result) => {
-        if (!result.id) return null;
-        const imdbId = await this.getImdbId(mediaType, result.id);
-        if (!imdbId) return null;
-        return this.toMetadataPayload(type, result, imdbId);
-      })
-    );
-
-    return withImdb.filter((item): item is MetadataPayload => item !== null);
+    return this.withImdbIds(response.results ?? [], this.asType(type));
   }
 
   async recommendations(type: MetadataType, tmdbId: number): Promise<MetadataPayload[]> {
     const mediaType = this.toMediaType(type);
     const response = await this.request<TmdbSearchResponse>(`/${mediaType}/${tmdbId}/recommendations`);
-    const results = response.results ?? [];
-
-    const withImdb = await Promise.all(
-      results.slice(0, 20).map(async (result) => {
-        if (!result.id) return null;
-        const imdbId = await this.getImdbId(mediaType, result.id);
-        if (!imdbId) return null;
-        return this.toMetadataPayload(type, result, imdbId);
-      })
-    );
-
-    return withImdb.filter((item): item is MetadataPayload => item !== null);
+    return this.withImdbIds(response.results ?? [], this.asType(type));
   }
 
   async discoverByProvider(type: MetadataType, providerId: number, region: string = "US"): Promise<MetadataPayload[]> {
@@ -341,18 +345,7 @@ export class TmdbClient {
       watch_region: region,
       sort_by: "popularity.desc",
     });
-    const results = response.results ?? [];
-
-    const withImdb = await Promise.all(
-      results.slice(0, 20).map(async (result) => {
-        if (!result.id) return null;
-        const imdbId = await this.getImdbId(mediaType, result.id);
-        if (!imdbId) return null;
-        return this.toMetadataPayload(type, result, imdbId);
-      })
-    );
-
-    return withImdb.filter((item): item is MetadataPayload => item !== null);
+    return this.withImdbIds(response.results ?? [], this.asType(type));
   }
 
   async discoverAnime(type: MetadataType): Promise<MetadataPayload[]> {
@@ -371,18 +364,7 @@ export class TmdbClient {
     }
 
     const response = await this.request<TmdbSearchResponse>(`/discover/${mediaType}`, params);
-    const results = response.results ?? [];
-
-    const withImdb = await Promise.all(
-      results.slice(0, 20).map(async (result) => {
-        if (!result.id) return null;
-        const imdbId = await this.getImdbId(mediaType, result.id);
-        if (!imdbId) return null;
-        return this.toMetadataPayload(type, result, imdbId);
-      })
-    );
-
-    return withImdb.filter((item): item is MetadataPayload => item !== null);
+    return this.withImdbIds(response.results ?? [], this.asType(type));
   }
 
   async getShowDetails(tmdbId: number): Promise<ShowDetails | null> {
@@ -645,12 +627,14 @@ export class TmdbClient {
       }
     }
 
-    const response = await fetch(url, {
-      headers: {
-        Accept: "application/json"
-      },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-    });
+    const response = await fetchWithPolicy(
+      url,
+      { headers: { Accept: "application/json" } },
+      {
+        timeoutMs: REQUEST_TIMEOUT_MS,
+        concurrency: TMDB_CONCURRENCY,
+      }
+    );
 
     if (!response.ok) {
       throw new Error(`TMDB request failed (${response.status})`);

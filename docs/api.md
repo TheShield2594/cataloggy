@@ -96,6 +96,12 @@ row genuinely is not found.
   Cataloggy's own rows (lists, games, profiles, tags, watch events). Those are
   uuid columns, so a malformed id is a `400` before any query runs rather than
   an empty result.
+- **Validation** rejects a request before it reaches the database, either way it
+  is written: a route's JSON Schema (`lib/request-schema.ts`, which is also what
+  phrases the message) runs before its handler is entered, and a route with
+  explicit checks makes them first thing inside the handler. Either way the
+  answer is a `400` naming the field. Types are taken as sent — a number where a
+  string belongs is rejected, not coerced.
 - **Caching**: `GET` responses carry an ETag. Send `If-None-Match` and you get a
   `304` with no body. Responses over 1 KB are compressed (`br`, `gzip`,
   `deflate`).
@@ -149,9 +155,9 @@ Discovery responses are cached in memory and returned as Stremio meta previews
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `POST` | `/watch` | Record a watch. `{ type: "movie" \| "episode", imdbId, seriesImdbId?, season?, episode?, watchedAt?, dateUnknown?, note? }`. |
-| `GET` | `/watch/history?limit=&offset=&imdbId=` | `limit` is 1–200, default 50. Filtering happens server-side so it searches every row, not just the loaded page. |
-| `PATCH` | `/watch/:eventId` | `{ note }` — sets or clears the note on an existing watch (`null`, or a blank string, clears it). It does not move the watch date. |
+| `POST` | `/watch` | Record a watch. `{ type: "movie" \| "episode", imdbId, seriesImdbId?, season?, episode?, watchedAt?, dateUnknown?, note? }`. `note` is capped at 2,000 characters. |
+| `GET` | `/watch/history?limit=&offset=&imdbId=&type=` | `limit` is 1–200, default 50. `type` is `movie` or `episode`; anything else is a `400` rather than a silently unfiltered page. Filtering happens server-side so it searches every row, not just the loaded page. |
+| `PATCH` | `/watch/:eventId` | `{ note }` — sets or clears the note on an existing watch (`null`, or a blank string, clears it), capped at 2,000 characters like `POST /watch`. It does not move the watch date. |
 | `DELETE` | `/watch/:eventId` | Deleting an episode rewinds series progress to the next-latest episode watched, or clears the progress row when none is left. |
 | `GET` | `/watch/stats` | Headline counts. |
 | `GET` | `/watch/stats/detailed` | Genres, runtime, patterns over time. |
@@ -180,7 +186,7 @@ Plex and Jellyfin webhooks drive.
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/checkin` | The current check-in, if any. |
-| `POST` | `/checkin` | `{ type, imdbId, name, poster?, seriesImdbId?, season?, episode?, runtime? }`. `runtime` is in **minutes**, and sets an expiry that far ahead so an abandoned check-in clears itself. |
+| `POST` | `/checkin` | `{ type, imdbId, name, poster?, seriesImdbId?, season?, episode?, runtime? }`. `runtime` is in **minutes** (1–1440), and sets an expiry that far ahead so an abandoned check-in clears itself. `name` is capped at 300 characters and `poster` at 2,048. |
 | `DELETE` | `/checkin?log=` | Clears the check-in. `?log=true` records a watch event from it first — that is the "finished watching" action, where the bare call is "cancel". A failure to record still clears the check-in. |
 | `GET` | `/scrobble/now-playing` | |
 | `POST` | `/scrobble/start` \| `/scrobble/pause` \| `/scrobble/stop` | Stale sessions are swept periodically. |

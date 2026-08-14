@@ -48,6 +48,14 @@ If your change reads a new environment variable, add it to the `environment:` bl
 
 If your change adds a Prisma migration, make sure it applies cleanly against a fresh database (`pnpm --filter @cataloggy/api exec prisma migrate deploy`) — CI runs every migration against a real Postgres instance and will fail if it doesn't.
 
+If your change is worth knowing about before upgrading — a feature, a
+behavioural change, a fix, anything security-related — add an entry to the
+`[Unreleased]` section of `CHANGELOG.md` under the appropriate heading. One to
+three sentences naming what changed and what it means for someone running it,
+with a link to the PR for the reasoning; the design notes belong in the PR
+description, where anyone digging can find them. Releases are cut from that
+section — see [docs/releasing.md](docs/releasing.md).
+
 ## Commit style
 
 Write commit messages that explain *why*, not just *what* — the diff already shows what changed. Imperative mood (`Fix ...`, `Add ...`, not `Fixed`/`Added`) is preferred, matching the existing history. No fixed prefix convention is enforced.

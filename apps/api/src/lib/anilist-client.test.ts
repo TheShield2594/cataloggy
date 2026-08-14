@@ -1,11 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockFetchOnce = (body: unknown, ok = true, status = 200) => {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-    ok,
-    status,
-    json: async () => body,
-  }));
+// Real `Response`s rather than a stand-in object: requests go through the
+// shared outbound policy, which reads `Retry-After` off the headers and
+// cancels the body of a response it is about to retry.
+const mockFetchOnce = (body: unknown, status = 200) => {
+  const fetchMock = vi.fn(
+    async () =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { "content-type": "application/json" },
+      })
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
 };
 
 describe("anilist-client", () => {
@@ -65,10 +72,21 @@ describe("anilist-client", () => {
       expect(results[0].title).toBe("Shingeki");
     });
 
-    it("throws when AniList returns a non-OK response", async () => {
-      mockFetchOnce({}, false, 500);
-      const { searchAnime } = await import("./anilist-client.js");
-      await expect(searchAnime("test")).rejects.toThrow("AniList request failed with status 500");
+    it("retries a non-OK response and throws once the retries run out", async () => {
+      vi.useFakeTimers();
+      try {
+        const fetchMock = mockFetchOnce({}, 500);
+        const { searchAnime } = await import("./anilist-client.js");
+
+        const search = searchAnime("test");
+        const assertion = expect(search).rejects.toThrow("AniList request failed with status 500");
+        await vi.runAllTimersAsync();
+        await assertion;
+
+        expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("throws when AniList returns GraphQL errors", async () => {
