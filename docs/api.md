@@ -124,7 +124,7 @@ row genuinely is not found.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/search?q=&type=` | `type` is `movie`, `series` or `all` (default). `query` works as an alias for `q`. Max 20 results, each flagged with `inWatchlist` / `inCollection` / `lists`. |
+| `GET` | `/search?q=&type=` | `type` is `movie`, `series` or `all` (default). `query` works as an alias for `q`. Max 20 results, best title match first, each flagged with `inWatchlist` / `inCollection` / `lists`. `q` also takes an IMDb id (`tt0110912`) or a themoviedb.org link, which resolve to that one title. A query matching no title is retried as a person, and answers with what they are known for. |
 | `GET` | `/meta/:type/:imdbId` | Full metadata for one title. |
 | `GET` | `/meta/:type/:imdbId/bundle` | Everything the detail panel needs — meta, cast, providers, recommendations, seasons, dropped state — in one round trip. Optional sections degrade to empty rather than failing the response. |
 | `GET` | `/meta/:type/:imdbId/cast` | Cast and director. |
