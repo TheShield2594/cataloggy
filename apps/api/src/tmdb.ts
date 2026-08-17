@@ -444,18 +444,30 @@ export class TmdbClient {
       }
     };
 
-    /** Resolves the best candidates not yet tried, up to what is still missing. */
+    /**
+     * Resolves the best candidates not yet tried, until the target is reached
+     * or there are none left.
+     *
+     * One pass is not enough, because a pass is exactly the thing that comes up
+     * short: a batch sized to the shortfall loses some of itself to results
+     * TMDB knows no IMDb id for. Trying the next-best candidates is only
+     * possible while there is a next page to trigger it — so on the last page,
+     * at the page cap, and after the person fallback, the search stopped with
+     * usable candidates it had never looked at.
+     *
+     * Terminates because a non-empty batch always marks at least one more
+     * candidate attempted, and the pool is finite.
+     */
     const resolveBest = async () => {
-      const shortfall = SEARCH_TARGET_RESULTS - found.length;
-      if (shortfall <= 0) return;
+      while (found.length < SEARCH_TARGET_RESULTS) {
+        const batch = this.rankCandidates(candidates, normalisedQuery)
+          .filter((result) => !attempted.has(result.id))
+          .slice(0, SEARCH_TARGET_RESULTS - found.length);
+        if (batch.length === 0) return;
 
-      const batch = this.rankCandidates(candidates, normalisedQuery)
-        .filter((result) => !attempted.has(result.id))
-        .slice(0, shortfall);
-      if (batch.length === 0) return;
-
-      for (const result of batch) attempted.add(result.id);
-      found.push(...(await this.withImdbIds(batch, classify)));
+        for (const result of batch) attempted.add(result.id);
+        found.push(...(await this.withImdbIds(batch, classify)));
+      }
     };
 
     for (let page = 1; page <= SEARCH_MAX_PAGES; page++) {

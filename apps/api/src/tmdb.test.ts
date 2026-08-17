@@ -190,6 +190,37 @@ describe("TmdbClient", () => {
       expect(listRequests(fetchMock).map((url) => url.searchParams.get("page"))).toEqual(["1", "2"]);
     });
 
+    it("keeps working through the last page's candidates instead of stopping short", async () => {
+      // Two pages exist, so there is no third to fall through to. Page two's
+      // batch is sized to the fifteen still missing and loses six of itself to
+      // titles with no IMDb id — the candidates behind them are the only ones
+      // left, and nothing else is coming to prompt a look at them.
+      const noImdbId = new Set([1, 2, 3, 4, 5, 21, 22, 23, 24, 25, 26]);
+      const fetchMock = vi.fn(async (input: URL) => {
+        if (input.pathname.endsWith("/external_ids")) {
+          const id = Number(input.pathname.split("/")[3]);
+          return json({ imdb_id: noImdbId.has(id) ? null : `tt${String(id).padStart(4, "0")}` });
+        }
+        const page = Number(input.searchParams.get("page"));
+        const offset = (page - 1) * 20;
+        return json(
+          titles(
+            Array.from({ length: 20 }, (_, i) => ({ id: offset + i + 1, title: `Show ${offset + i + 1}` })),
+            2
+          )
+        );
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { TmdbClient } = await import("./tmdb.js");
+      const results = await TmdbClient.fromKey("key").search(MetadataType.series, "show");
+
+      // Twenty-nine of the forty candidates are usable, so a full twenty is
+      // there to be had without a third page ever being requested.
+      expect(results).toHaveLength(20);
+      expect(listRequests(fetchMock).map((url) => url.searchParams.get("page"))).toEqual(["1", "2"]);
+    });
+
     it("stops at one page when the first one already fills the search", async () => {
       const fetchMock = vi.fn(async (input: URL) => {
         if (input.pathname.endsWith("/external_ids")) {
