@@ -1,5 +1,11 @@
 import { MetadataType } from "@prisma/client";
-import { externalIdsCache } from "./lib/cache.js";
+import {
+  externalIdsCache,
+  searchCache,
+  searchLookups,
+  EXTERNAL_IDS_MISS_CACHE_TTL_MS,
+  SEARCH_MISS_CACHE_TTL_MS,
+} from "./lib/cache.js";
 import { mapWithConcurrency } from "./lib/concurrency.js";
 import { fetchWithPolicy } from "./lib/http.js";
 
@@ -9,6 +15,8 @@ type TmdbSearchResult = {
   id: number;
   title?: string;
   name?: string;
+  original_title?: string;
+  original_name?: string;
   overview?: string;
   poster_path?: string | null;
   backdrop_path?: string | null;
@@ -55,7 +63,17 @@ type TmdbExternalIds = {
 };
 
 type TmdbSearchResponse = {
+  page?: number;
+  total_pages?: number;
   results?: TmdbSearchResult[];
+};
+
+type TmdbPersonSearchResponse = {
+  results?: {
+    id: number;
+    name?: string;
+    known_for?: TmdbSearchResult[];
+  }[];
 };
 
 type TmdbDetailsResponse = TmdbDetailsResult;
@@ -231,6 +249,70 @@ const IMDB_LOOKUP_CONCURRENCY = 5;
 /** TMDB list endpoints page at 20; anything past that is never rendered. */
 const MAX_CATALOG_RESULTS = 20;
 
+/**
+ * How many usable results a search tries to come back with. The same number the
+ * `/search` route caps its response at, so a search that reaches it has lost
+ * nothing to the trimming below.
+ */
+const SEARCH_TARGET_RESULTS = 20;
+
+/**
+ * How far a search will page for them. Search is the one place where the
+ * catalog endpoints' "page one is the answer" assumption does not hold: every
+ * result whose IMDb id TMDB does not know is dropped, so a page of twenty can
+ * leave six, and a title sitting at rank 21 was never a candidate at all. That
+ * was the shape of the complaint this exists to fix — a title findable on
+ * themoviedb.org that Cataloggy answered with nothing.
+ *
+ * Three is a ceiling, not a cost: pages are fetched one at a time and only
+ * while the target is still short, so a search whose first page resolves
+ * cleanly still costs exactly one list request.
+ */
+const SEARCH_MAX_PAGES = 3;
+
+/**
+ * When a query turns out to be a person rather than a title, how many of the
+ * people it matched contribute their known-for titles. Three covers the
+ * "which Chris" problem without turning one search into a filmography.
+ */
+const SEARCH_PEOPLE_CONSIDERED = 3;
+
+const IMDB_ID_PATTERN = /^tt\d{6,10}$/i;
+const TMDB_URL_PATTERN = /(?:^|\/\/)(?:www\.)?themoviedb\.org\/(movie|tv)\/(\d+)/i;
+
+/**
+ * Case, accents and punctuation removed, so "wall-e" finds "WALL·E" and
+ * "pokemon" finds "Pokémon" — the difference between the two is exactly the
+ * kind of thing a person types and does not expect to matter.
+ */
+const normaliseTitle = (value: string): string =>
+  value
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+
+/**
+ * How closely one title answers the query, as a coarse tier: exact hit >
+ * prefix > word-start > substring > no hit.
+ *
+ * Deliberately the same tiers as `mergeByRelevance` in the web client, which
+ * interleaves the movie and series halves of an "All" search. Two different
+ * notions of "good match" on the two sides of one result list is how a search
+ * ends up ordered by neither.
+ */
+const titleMatchScore = (title: string | undefined, normalisedQuery: string): number => {
+  if (!title || !normalisedQuery) return 0;
+  const name = normaliseTitle(title);
+  if (!name) return 0;
+  if (name === normalisedQuery) return 4;
+  if (name.startsWith(`${normalisedQuery} `)) return 3;
+  if (name.includes(` ${normalisedQuery} `) || name.endsWith(` ${normalisedQuery}`)) return 2;
+  if (name.includes(normalisedQuery)) return 1;
+  return 0;
+};
+
 export class TmdbClient {
   private static readonly baseUrl = "https://api.themoviedb.org/3";
   private static readonly imageBaseUrl = "https://image.tmdb.org/t/p/w500";
@@ -303,21 +385,241 @@ export class TmdbClient {
 
   async search(type: MetadataType, query: string): Promise<MetadataPayload[]> {
     const mediaType = this.toMediaType(type);
-    const response = await this.request<TmdbSearchResponse>(`/search/${mediaType}`, { query });
-    return this.withImdbIds(response.results ?? [], this.asType(type));
+    return this.cachedSearch(`${mediaType}:${normaliseTitle(query)}`, async () => {
+      const direct = await this.lookupByReference(query, [type]);
+      if (direct) return direct;
+
+      return this.runSearch(`/search/${mediaType}`, query, [mediaType], this.asType(type));
+    });
   }
 
   async searchMulti(query: string): Promise<MetadataPayload[]> {
-    const response = await this.request<TmdbSearchResponse>("/search/multi", { query });
-    const results = (response.results ?? []).filter(
-      (r) => r.media_type === "movie" || r.media_type === "tv"
-    );
+    return this.cachedSearch(`multi:${normaliseTitle(query)}`, async () => {
+      const direct = await this.lookupByReference(query, [MetadataType.movie, MetadataType.series]);
+      if (direct) return direct;
 
-    return this.withImdbIds(results, (result) => {
-      if (!result.media_type) return null;
-      const mediaType = result.media_type as TmdbMediaType;
-      return { mediaType, type: mediaType === "movie" ? MetadataType.movie : MetadataType.series };
+      return this.runSearch("/search/multi", query, ["movie", "tv"], (result) => {
+        if (result.media_type !== "movie" && result.media_type !== "tv") return null;
+        const mediaType = result.media_type;
+        return { mediaType, type: mediaType === "movie" ? MetadataType.movie : MetadataType.series };
+      });
     });
+  }
+
+  /**
+   * A search, paged until it has enough to show.
+   *
+   * The catalog endpoints take one page and are done, because every result on
+   * it is one TMDB chose to put there. A search is not like that: its results
+   * are ranked by popularity rather than by how well they answer the query, and
+   * this client then drops every one whose IMDb id TMDB does not know — so the
+   * twenty candidates on page one routinely become a handful of results, and
+   * the title actually being searched for can be sitting at rank 21 having
+   * never been looked at.
+   *
+   * So each round takes the best of what has arrived so far, resolves as many
+   * as are still missing from the target, and asks for another page only if it
+   * is still short and TMDB says there is one. The ranking runs before the
+   * resolution on purpose: `/external_ids` is the expensive half, and spending
+   * it on the twenty most relevant candidates rather than the twenty most
+   * popular ones is the whole point.
+   */
+  private async runSearch(
+    path: string,
+    query: string,
+    mediaTypes: TmdbMediaType[],
+    classify: (result: TmdbSearchResult) => { mediaType: TmdbMediaType; type: MetadataType } | null
+  ): Promise<MetadataPayload[]> {
+    const normalisedQuery = normaliseTitle(query);
+    const seen = new Set<number>();
+    const attempted = new Set<number>();
+    const candidates: TmdbSearchResult[] = [];
+    const found: MetadataPayload[] = [];
+
+    const collect = (results: TmdbSearchResult[] | undefined) => {
+      for (const result of results ?? []) {
+        if (!result.id || seen.has(result.id)) continue;
+        seen.add(result.id);
+        candidates.push(result);
+      }
+    };
+
+    /**
+     * Resolves the best candidates not yet tried, until the target is reached
+     * or there are none left.
+     *
+     * One pass is not enough, because a pass is exactly the thing that comes up
+     * short: a batch sized to the shortfall loses some of itself to results
+     * TMDB knows no IMDb id for. Trying the next-best candidates is only
+     * possible while there is a next page to trigger it — so on the last page,
+     * at the page cap, and after the person fallback, the search stopped with
+     * usable candidates it had never looked at.
+     *
+     * Terminates because a non-empty batch always marks at least one more
+     * candidate attempted, and the pool is finite.
+     */
+    const resolveBest = async () => {
+      while (found.length < SEARCH_TARGET_RESULTS) {
+        const batch = this.rankCandidates(candidates, normalisedQuery)
+          .filter((result) => !attempted.has(result.id))
+          .slice(0, SEARCH_TARGET_RESULTS - found.length);
+        if (batch.length === 0) return;
+
+        for (const result of batch) attempted.add(result.id);
+        found.push(...(await this.withImdbIds(batch, classify)));
+      }
+    };
+
+    for (let page = 1; page <= SEARCH_MAX_PAGES; page++) {
+      const response = await this.request<TmdbSearchResponse>(path, { query, page: String(page) });
+      collect(response.results);
+      await resolveBest();
+
+      if (found.length >= SEARCH_TARGET_RESULTS || page >= (response.total_pages ?? 1)) break;
+    }
+
+    // A query that matched no title at all is usually a person — the search box
+    // is the only one on the page, and "villeneuve" is a reasonable thing to
+    // type into it. TMDB answers that from `/search/person`; Cataloggy has
+    // nowhere to put a person, so what it borrows is their known-for titles.
+    if (
+      found.length < SEARCH_TARGET_RESULTS &&
+      !found.some((result) => titleMatchScore(result.name, normalisedQuery) >= 2)
+    ) {
+      collect(await this.knownForTitles(query, mediaTypes));
+      await resolveBest();
+    }
+
+    // Ranked once more at the end: a page-two exact match was resolved after a
+    // page-one near-miss, and the order results are found in is not the order
+    // they should be read in.
+    return found
+      .map((result, index) => ({ result, index, score: titleMatchScore(result.name, normalisedQuery) }))
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .map((entry) => entry.result);
+  }
+
+  /**
+   * Best match first, with TMDB's own order — popularity, broadly — as the
+   * tiebreak inside a tier, so an exact hit outranks a more popular near-miss
+   * without the ranking having to invent an opinion about anything else.
+   */
+  private rankCandidates(results: TmdbSearchResult[], normalisedQuery: string): TmdbSearchResult[] {
+    const score = (result: TmdbSearchResult) =>
+      Math.max(
+        titleMatchScore(result.title, normalisedQuery),
+        titleMatchScore(result.name, normalisedQuery),
+        titleMatchScore(result.original_title, normalisedQuery),
+        titleMatchScore(result.original_name, normalisedQuery)
+      );
+
+    return results
+      .map((result, index) => ({ result, index, score: score(result) }))
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .map((entry) => entry.result);
+  }
+
+  /** The known-for titles of the people a query matched, best-effort. */
+  private async knownForTitles(query: string, mediaTypes: TmdbMediaType[]): Promise<TmdbSearchResult[]> {
+    try {
+      const response = await this.request<TmdbPersonSearchResponse>("/search/person", { query });
+      const titles: TmdbSearchResult[] = [];
+      for (const person of (response.results ?? []).slice(0, SEARCH_PEOPLE_CONSIDERED)) {
+        for (const credit of person.known_for ?? []) {
+          if (!credit.id || !credit.media_type) continue;
+          if (!mediaTypes.includes(credit.media_type as TmdbMediaType)) continue;
+          titles.push(credit);
+        }
+      }
+      return titles;
+    } catch {
+      // A search that found titles must not fail because the person lookup did.
+      return [];
+    }
+  }
+
+  /**
+   * A pasted IMDb id (`tt0110912`) or themoviedb.org link, resolved to the one
+   * title it names. Both are things people paste into a search box when the
+   * name alone is not finding it, and both previously matched nothing —
+   * `/search/movie?query=tt0110912` is a search for that literal string.
+   *
+   * Returns null when the query is an ordinary one, so the caller searches.
+   */
+  private async lookupByReference(query: string, types: MetadataType[]): Promise<MetadataPayload[] | null> {
+    const trimmed = query.trim();
+
+    if (IMDB_ID_PATTERN.test(trimmed)) {
+      const imdbId = trimmed.toLowerCase();
+      const response = await this.request<TmdbFindResponse>(`/find/${encodeURIComponent(imdbId)}`, {
+        external_source: "imdb_id",
+      });
+
+      const found: MetadataPayload[] = [];
+      for (const type of types) {
+        const result =
+          type === MetadataType.movie ? response.movie_results?.[0] : response.tv_results?.[0];
+        if (result?.id) found.push(this.toMetadataPayload(type, result, imdbId));
+      }
+      return found;
+    }
+
+    const link = TMDB_URL_PATTERN.exec(trimmed);
+    if (link) {
+      const mediaType = link[1].toLowerCase() as TmdbMediaType;
+      const type = mediaType === "movie" ? MetadataType.movie : MetadataType.series;
+      if (!types.includes(type)) return [];
+
+      const tmdbId = Number(link[2]);
+      const imdbId = await this.getImdbId(mediaType, tmdbId).catch(() => null);
+      if (!imdbId) return [];
+
+      const appendFields = mediaType === "movie" ? "release_dates" : "content_ratings";
+      const details = await this.request<TmdbDetailsResponse>(`/${mediaType}/${tmdbId}`, {
+        append_to_response: appendFields,
+      });
+      return [this.toMetadataPayloadFromDetails(type, details, imdbId)];
+    }
+
+    return null;
+  }
+
+  /**
+   * Search results, cached and de-duplicated across callers.
+   *
+   * A search is the most expensive thing this client does — a list request plus
+   * an `/external_ids` lookup per result, per page — and it is also the one
+   * that runs while someone is typing. The web client debounces and aborts, but
+   * an aborted request is only abandoned by the browser: the work it started
+   * here runs to completion regardless. So identical searches share one flight,
+   * and the answer is held briefly afterwards, which is what keeps a typed
+   * query from spending a burst of TMDB's rate limit on itself and earning the
+   * 429 that would empty the next one.
+   *
+   * A search that found nothing is held for far less time than one that found
+   * something: "no results" is the answer most worth being wrong about, and the
+   * fix for it is often a key or a setting that has just been corrected.
+   */
+  private async cachedSearch(key: string, run: () => Promise<MetadataPayload[]>): Promise<MetadataPayload[]> {
+    const cacheKey = `${this.language}:${key}`;
+
+    const cached = searchCache.get(cacheKey);
+    if (cached) return cached;
+
+    const inFlight = searchLookups.get(cacheKey);
+    if (inFlight) return inFlight;
+
+    const lookup = run()
+      .then((results) => {
+        searchCache.set(cacheKey, results, results.length === 0 ? { ttl: SEARCH_MISS_CACHE_TTL_MS } : undefined);
+        return results;
+      })
+      .finally(() => {
+        searchLookups.delete(cacheKey);
+      });
+
+    searchLookups.set(cacheKey, lookup);
+    return lookup;
   }
 
   async trending(type: MetadataType, timeWindow: "day" | "week" = "week"): Promise<MetadataPayload[]> {
@@ -506,7 +808,11 @@ export class TmdbClient {
 
     const externalIds = await this.request<TmdbExternalIds>(`/${mediaType}/${tmdbId}/external_ids`);
     const imdbId = externalIds.imdb_id?.trim() || null;
-    externalIdsCache.set(cacheKey, { imdbId });
+    externalIdsCache.set(
+      cacheKey,
+      { imdbId },
+      imdbId ? undefined : { ttl: EXTERNAL_IDS_MISS_CACHE_TTL_MS }
+    );
     return imdbId;
   }
 

@@ -1,5 +1,5 @@
 import { LRUCache } from "lru-cache";
-import type { Credits, EpisodeInfo, SeasonInfo, ShowDetails, WatchProviders } from "../tmdb.js";
+import type { Credits, EpisodeInfo, MetadataPayload, SeasonInfo, ShowDetails, WatchProviders } from "../tmdb.js";
 import type { StremioMetaPreview } from "./types.js";
 
 export type TrendingCacheEntry = { data: StremioMetaPreview[]; reasons?: Record<string, string> };
@@ -8,6 +8,12 @@ export const TRENDING_CACHE_TTL_MS = 30 * 60 * 1000;
 export const CAST_CACHE_TTL_MS = 60 * 60 * 1000;
 export const WATCH_PROVIDERS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 export const EXTERNAL_IDS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// A title TMDB knows no IMDb id for is one Cataloggy drops from every catalog
+// and every search, so this is the entry that decides whether something is
+// findable at all — and it is the one most likely to change, because the usual
+// fix is somebody filling the field in on TMDB. A week of remembering "no" made
+// that correction take a week to arrive.
+export const EXTERNAL_IDS_MISS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 // next_episode_to_air/status rarely change within a day; this is refetched on every
 // /calendar load and dashboard "Upcoming" widget render for every in-progress series.
 export const SHOW_DETAILS_CACHE_TTL_MS = 3 * 60 * 60 * 1000;
@@ -37,6 +43,28 @@ export const showDetailsCache = new LRUCache<string, { details: ShowDetails }>({
   max: 1000,
   ttl: SHOW_DETAILS_CACHE_TTL_MS,
 });
+
+// A search costs a list request per page plus an external-id lookup per result,
+// and it runs while someone is typing. Ten minutes is long enough to cover a
+// query being refined and returned to, and short enough that a title added to
+// TMDB today is findable today.
+export const SEARCH_CACHE_TTL_MS = 10 * 60 * 1000;
+
+// An empty result is held only long enough to absorb the burst of a query being
+// typed. Holding "nothing matched" for ten minutes would make the one answer
+// worth re-asking for the one that sticks — including right after the TMDB key
+// or the language setting that caused it has been fixed.
+export const SEARCH_MISS_CACHE_TTL_MS = 30 * 1000;
+
+export const searchCache = new LRUCache<string, MetadataPayload[]>({
+  max: 300,
+  ttl: SEARCH_CACHE_TTL_MS,
+});
+
+// Identical searches in flight together share one, rather than each starting
+// its own fan-out: a debounced search box that has already aborted its previous
+// request in the browser has not stopped the work it started here.
+export const searchLookups = new Map<string, Promise<MetadataPayload[]>>();
 
 // Every profile-scoped request resolves its profile before doing anything else, so
 // one dashboard load — around a dozen requests fired in parallel — pays a dozen

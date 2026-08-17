@@ -171,6 +171,15 @@ saves, so a typo can't overwrite a working one.
   key gives rating-badge posters instead.
 - **Metadata is stale** — `POST /metadata/refresh-all` re-fetches in batches. It
   is rate-limit friendly by design and caps at 500 titles per call.
+- **A title you can find on themoviedb.org doesn't come up in search** — first
+  try pasting its IMDb id (`tt0110912`) or its themoviedb.org link into the
+  search box; both resolve straight to that title. If that comes back empty
+  too, the title is one TMDB has no IMDb id for. Cataloggy keys everything —
+  lists, ratings, watch history, the Stremio add-on — by IMDb id, so a title
+  without one is a title it cannot store, and search leaves it out rather than
+  offering something that can't be added. TMDB takes corrections: adding the
+  IMDb id on the title's *Edit → External IDs* page makes it findable here
+  within a few hours, or immediately after a restart.
 - **Posters don't load offline** — on an `https://` (or `localhost`) address the
   service worker caches them as they're first fetched, so a title you've never
   opened online won't be there. On a plain `http://LAN-IP` address none of them
