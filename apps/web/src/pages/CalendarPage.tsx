@@ -143,7 +143,7 @@ function DayEntriesModal({
         <div className="flex flex-none items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <div className="min-w-0">
             <h2 id="calendar-day-modal-title" className={`truncate ${SECTION_TITLE}`} style={{ color: "var(--text)" }}>{heading}</h2>
-            <p className="meta-caps" style={{ color: "var(--text-mute)" }}>
+            <p className="meta-row" style={{ color: "var(--text-mute)" }}>
               {entries.length} {entries.length === 1 ? "episode" : "episodes"}
             </p>
           </div>

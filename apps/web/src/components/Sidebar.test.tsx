@@ -1,8 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
-import { Sidebar } from "./Sidebar";
+import { SIDEBAR_MANAGE_ITEMS, Sidebar } from "./Sidebar";
 
 // The rail is `hidden sm:flex`, and it asks `matchMedia` whether it is on screen
 // before offering its one-time tip. The shared setup stubs every query as
@@ -38,6 +38,22 @@ const EXPANDED_WIDTH = "240px";
 const rail = () => screen.getByRole("navigation", { name: "Primary" }).parentElement as HTMLElement;
 
 describe("Sidebar", () => {
+  /*
+   * The second group. Lists, Games and History were a row of links inside the
+   * Shelf's own header — a page carrying navigation to three other pages,
+   * level with its subtitle. They belong in the source list, under a heading
+   * that says what kind of destination they are.
+   */
+  it("files the manage surfaces in a group of their own", () => {
+    renderSidebar(true);
+
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(within(nav).getByText("Manage")).toBeInTheDocument();
+    for (const item of SIDEBAR_MANAGE_ITEMS) {
+      expect(within(nav).getByRole("link", { name: item.label })).toHaveAttribute("href", item.to);
+    }
+  });
+
   it("expands when focus reaches the rail, not only on hover", async () => {
     const user = userEvent.setup();
     renderSidebar();

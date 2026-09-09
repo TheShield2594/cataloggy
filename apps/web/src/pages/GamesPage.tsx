@@ -328,7 +328,7 @@ function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => vo
       <div className="mt-3">
         <p className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>{game.title}</p>
         <div className="mt-0.5 flex items-center gap-2">
-          <span className="meta-caps flex items-center gap-1.5" style={{ color: "var(--text-mute)" }}>
+          <span className="meta-row flex items-center gap-1.5" style={{ color: "var(--text-mute)" }}>
             <Clock className="h-3 w-3" /> {formatPlaytime(game.playtimeMinutes)}
           </span>
           {game.rating != null && (

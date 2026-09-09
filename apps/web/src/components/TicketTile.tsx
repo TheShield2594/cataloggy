@@ -58,13 +58,13 @@ export function TicketTile({
           in a row, and proportional figures put each value's digits at a
           different width, so the row reads as five differently-sized numbers
           rather than as one measurement taken five ways. */}
-      <span className="truncate font-mono text-2xl font-bold leading-none tabular-nums" style={{ color: "var(--text)" }}>
+      <span className="truncate text-2xl font-bold leading-none tabular-nums" style={{ color: "var(--text)" }}>
         {typeof value === "number" ? value.toLocaleString() : value}
       </span>
       {bars && bars.length > 0 ? (
         <MiniBarChart data={bars} />
       ) : sub ? (
-        <p className="meta-caps" style={{ color: "var(--text-dim)" }}>{sub}</p>
+        <p className="meta-row" style={{ color: "var(--text-dim)" }}>{sub}</p>
       ) : null}
     </div>
   );

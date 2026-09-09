@@ -14,6 +14,7 @@ import { GameDetailPanel } from "../components/GameDetailPanel";
 import { GhostLoader } from "../components/GhostLoader";
 import { Poster, POSTER_GRID_SIZES } from "../components/Poster";
 import { ProgressRuler } from "../components/ProgressRuler";
+import { SegmentedControl, type SegmentedOption } from "../components/SegmentedControl";
 import { PAGE_TITLE, SECTION_TITLE } from "../components/typography";
 import { useCachedState } from "../hooks/useCachedState";
 import { useToast } from "../hooks/useToast";
@@ -47,8 +48,8 @@ import {
  *
  * The pages this replaces as a *browsing* surface still exist as the places you
  * manage things: /lists creates and edits lists, /games adds a game and runs a
- * Steam sync, /history is the full log. They are reachable from the header
- * here, and from the rail.
+ * Steam sync, /history is the full log. They are reachable from the rail's
+ * "Manage" group, and from the tab bar's "More" sheet.
  */
 
 // Same reasoning as the Lists page's constant of the same name: an imported
@@ -70,82 +71,62 @@ const SHELF_ITEMS_CACHE_KEY = "shelf:items";
 /* ─── The filter row ───────────────────────────────────────── */
 
 /**
- * The kind filter — All / Shows / Films / Games, each with what it would show.
+ * The kind filter, as options for the segmented control.
  *
- * The counts are the point as much as the filtering is: they say how much of
- * the shelf each kind accounts for without anyone having to click through to
- * find out, and they are what makes an empty kind safe to disable rather than
- * hide.
+ * The counts moved out of the labels and into the accessible names. They were
+ * carried as a second number inside each button — "Shows 12" — which is a
+ * useful fact and the wrong place for it: a segmented control is a row of peers
+ * whose widths are fixed and equal, and four labels each carrying a variable
+ * number is how that row starts wrapping on a 320px phone. The page already
+ * writes the totals out under its title, and the Library header repeats the
+ * count for whatever filter is on.
+ *
+ * The fact itself is not lost. It stays in the announced name — "Shows, 12
+ * titles" — which is where it was doing the most work anyway: it is the reason
+ * an empty kind can be disabled rather than hidden, and a disabled control with
+ * no explanation is the thing that reads as a fault.
  */
-function KindFilter({
-  active,
-  counts,
-  onChange,
-}: {
-  active: ShelfFilter;
-  counts: Record<ShelfFilter, number>;
-  onChange: (filter: ShelfFilter) => void;
-}) {
-  return (
-    /*
-     * A named group of toggle buttons, not a `tablist`.
-     *
-     * The ARIA tabs pattern is a promise of a roving tabindex, arrow-key
-     * navigation and a `tabpanel` each tab controls — the Settings page
-     * implements all three, and its own comment says announcing the role
-     * without them is the mistake `role="menu"` made on the lists panel. This
-     * row has none of them, and could not honestly have the third: it filters
-     * two sections at once, so there is no single panel to point at.
-     *
-     * `aria-pressed` is what these actually are — the same treatment the search
-     * page gives its sort pills — and it announces the selected state without
-     * claiming a keyboard contract that isn't here.
-     */
-    <div role="group" aria-label="Filter the shelf by kind" className="scrollbar-hide -mx-1 flex gap-2 overflow-x-auto px-1 py-1">
-      {SHELF_FILTERS.map((filter) => {
-        const selected = active === filter.value;
-        // A kind with nothing in it is still shown, but disabled — hiding it
-        // would make the row change length as a library grows, and a viewer who
-        // has learned where "Games" sits would find "Films" there instead.
-        const empty = counts[filter.value] === 0;
-        return (
-          <button
-            key={filter.value}
-            type="button"
-            aria-pressed={selected}
-            disabled={empty && !selected}
-            onClick={() => onChange(filter.value)}
-            className={`tap-target flex flex-none items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset disabled:opacity-40 ${
-              selected ? "bg-claw-500 text-claw-on" : "hover:bg-[var(--surface-strong)]"
-            }`}
-            style={
-              selected
-                ? undefined
-                : { color: "var(--text-dim)", background: "var(--surface)", border: "1px solid var(--border)" }
-            }
-          >
-            {filter.label}
-            <span className="meta" style={{ opacity: 0.75 }}>
-              {counts[filter.value]}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
+function kindOptions(counts: Record<ShelfFilter, number>): SegmentedOption<ShelfFilter>[] {
+  return SHELF_FILTERS.map((filter) => {
+    const count = counts[filter.value];
+    return {
+      value: filter.value,
+      label: filter.label,
+      // The visible label leads, which is what SC 2.5.3 asks of a name longer
+      // than its text.
+      ariaLabel: `${filter.label}, ${count} ${count === 1 ? "title" : "titles"}`,
+      // A kind with nothing in it is still shown, but disabled — hiding it
+      // would make the row change length as a library grows, and a viewer who
+      // has learned where "Games" sits would find "Films" there instead.
+      disabled: count === 0,
+    };
+  });
 }
 
-/* ─── In progress ──────────────────────────────────────────── */
+/* ─── Up Next ──────────────────────────────────────────────── */
 
 /**
- * A row in the in-progress card: art, title, its own unit, and one action.
+ * A card for something you are part-way through: the art, what comes next, the
+ * unit it is measured in, and one action.
  *
- * Deliberately a list of rows rather than the carousel of poster cards this
- * replaces. What you are half-way through is a small set that you want to read
- * rather than browse — and a row has space for the unit, which a 12rem poster
- * caption does not.
+ * This was a list of rows in a bordered panel, on the argument that what you
+ * are half-way through is a small set you want to *read* rather than browse.
+ * The argument still holds and this is still a small set — but a 46px thumbnail
+ * is not the artwork, it is a stamp of it, and the row spent its width on a
+ * caption while the thing that identifies a show sat in a strip beside it.
+ *
+ * A 16:9 card is what the platform gives the same content: the still is the
+ * subject, the caption is over it, and the episode ruler runs along the bottom
+ * where a scrubber would. The unit the row was protecting is all still here —
+ * ticks for a season, a caption for hours, nothing for a film.
+ *
+ * Two buttons rather than one: the card body opens the title, and the trailing
+ * circle marks the next unit. They cannot be nested, so the body's hit area is
+ * an absolutely positioned button under the caption and the caption is
+ * `pointer-events-none` above it, with the action button opting back in. Both
+ * are named, and the caption's text is not a control.
  */
-function InProgressRow({
+function UpNextCard({
   entry,
   onOpen,
   onResume,
@@ -158,72 +139,91 @@ function InProgressRow({
   resumeLabel?: string;
   resumeBusy?: boolean;
 }) {
+  // The landscape still if the record carries one, the poster if not. A poster
+  // in a 16:9 frame is cropped to its middle, which is a worse picture than the
+  // still and a much better one than a grey box.
+  const art = entry.item?.background ?? entry.art ?? undefined;
+
   return (
-    <div role="group" aria-label={entry.title} className="flex items-center gap-3.5 px-4 py-3 sm:gap-4 sm:px-5">
+    <div
+      className="relative isolate w-[19rem] flex-none snap-start overflow-hidden rounded-2xl sm:w-auto"
+      style={{ aspectRatio: "16 / 9", background: "var(--surface)" }}
+    >
+      <Poster
+        src={art}
+        alt=""
+        className="absolute inset-0 h-full w-full"
+        eager
+        sizes="(min-width: 640px) 420px, 304px"
+      />
+      {/* The scrim starts at 35% rather than at the top: a caption needs a
+          floor under it, and darkening the whole frame to get one takes the
+          picture down with it. */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0"
+        style={{ background: "linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,0.78) 100%)" }}
+      />
       <button
         type="button"
         onClick={onOpen}
         aria-label={`Open details for ${entry.title}`}
-        className="flex min-w-0 flex-1 items-center gap-3.5 rounded-xl text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset sm:gap-4"
-      >
-        <Poster
-          src={entry.art ?? undefined}
-          alt={entry.title}
-          className="h-[4.3rem] w-[2.9rem] flex-none overflow-hidden rounded-lg ring-1 ring-[var(--border)]"
-          sizes="46px"
-        />
-        <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <span className="flex items-baseline justify-between gap-3">
-            <span className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>
-              {entry.title}
-            </span>
-            {entry.trailing && (
-              <span className="meta-caps flex-none" style={{ color: "var(--text-dim)" }}>
-                {entry.trailing}
-              </span>
-            )}
-          </span>
-          <span className="meta-caps block truncate" style={{ color: "var(--text-mute)" }}>
+        className="absolute inset-0 h-full w-full rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
+      />
+      <div className="pointer-events-none absolute inset-x-3.5 bottom-3.5 flex items-end gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="eyebrow truncate" style={{ color: "rgba(255,255,255,0.72)" }}>
             {entry.meta}
-          </span>
-          {entry.ruler && (
+          </p>
+          <p className="mt-0.5 truncate text-[1.125rem] font-bold text-white">{entry.title}</p>
+          {entry.ruler ? (
             <ProgressRuler
               value={entry.ruler.value}
               total={entry.ruler.total}
               partial={entry.ruler.partial}
               discrete={entry.ruler.discrete}
-              // The row already writes the count out beside the title, so the
-              // ruler repeating it would announce the same fact twice in two
-              // different wordings.
-              decorative={!!entry.trailing}
+              // Nothing on the card writes the count out in words — the ticks
+              // are the count — so this is the only thing that can say "4 of 10
+              // episodes watched" to someone who can't see them.
               label={entry.ruler.label}
-              // Capped rather than fluid. Across a 1400px row a ruler stops
-              // reading as "eight episodes, three watched" and starts reading
-              // as a progress bar for the page itself; at this width the ticks
-              // stay countable at a glance, which is the whole point of them.
-              className="mt-0.5 max-w-sm"
+              // Short of the full card width: a ruler that runs edge to edge
+              // reads as a scrubber for the card rather than as a count of
+              // episodes, and it would run under the action button.
+              className="mt-2.5 max-w-[12.5rem]"
             />
-          )}
-        </span>
-      </button>
-      {onResume && (
-        <button
-          type="button"
-          onClick={onResume}
-          disabled={resumeBusy}
-          aria-label={resumeLabel}
-          title={resumeLabel}
-          className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-claw-500 text-claw-on transition-transform duration-fast active:scale-95 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
-        >
-          {resumeBusy ? (
-            <RotateCw className="h-4 w-4 animate-spin" />
           ) : (
-            // Nudged right by a pixel: a triangle's optical centre sits left of
-            // its bounding box, so a centred play glyph reads as off-centre.
-            <Play className="h-4 w-4 translate-x-[1px] fill-current" />
+            entry.trailing && (
+              <p className="meta mt-1 truncate" style={{ color: "rgba(255,255,255,0.72)" }}>
+                {entry.trailing}
+              </p>
+            )
           )}
-        </button>
-      )}
+        </div>
+        {onResume && (
+          <button
+            type="button"
+            onClick={onResume}
+            disabled={resumeBusy}
+            aria-label={resumeLabel}
+            title={resumeLabel}
+            className="pointer-events-auto flex h-11 w-11 flex-none items-center justify-center rounded-full transition-transform duration-fast active:scale-95 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            // White rather than the accent: it sits on artwork of unknown
+            // colour, where the accent is one hue among however many the still
+            // happens to contain, and white is the only fill that is legible
+            // over all of them.
+            style={{ background: "rgba(255,255,255,0.92)", color: "#000" }}
+          >
+            {resumeBusy ? (
+              <RotateCw className="h-4 w-4 animate-spin" />
+            ) : (
+              // Nudged right by a pixel: a triangle's optical centre sits left
+              // of its bounding box, so a centred play glyph reads as
+              // off-centre.
+              <Play className="h-4 w-4 translate-x-[1px] fill-current" />
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -231,7 +231,7 @@ function InProgressRow({
 /* ─── A cell in the grid ───────────────────────────────────── */
 
 /**
- * One cell of the grid: artwork, title, and the mono run that says what it is.
+ * One cell of the grid: artwork, title, and the run that says what it is.
  *
  * Deliberately the same cell for all three kinds — the run underneath is where
  * they differ, and it is doing the work the type badges used to do badly.
@@ -243,7 +243,11 @@ function ShelfCell({ entry, eager, onOpen }: { entry: ShelfEntry; eager: boolean
         type="button"
         onClick={onOpen}
         aria-label={`Open details for ${entry.title}`}
-        className="card-lift relative block w-full overflow-hidden rounded-xl text-left ring-1 ring-[var(--border)]"
+        // The hairline is `inset` rather than a ring: a poster is a rectangle
+        // of someone else's colour, and a dark one on a black page has no edge
+        // at all without a line — but the line belongs to the picture, not
+        // around it, so it must not add to the box the grid measures.
+        className="card-lift art-hairline relative block w-full overflow-hidden rounded-xl text-left"
         style={{ aspectRatio: "2/3", backgroundColor: "var(--surface)" }}
       >
         <Poster
@@ -259,12 +263,12 @@ function ShelfCell({ entry, eager, onOpen }: { entry: ShelfEntry; eager: boolean
        * grids used to carry were the tell the redesign is aimed at: a label
        * shouted over the picture, in a colour that means nothing, saying what
        * the line below already says quietly. The kind is the first token of the
-       * mono run instead, where the year and the runtime already live.
+       * caption instead, where the year and the runtime already live.
        */}
-      <p className="mt-2.5 truncate text-sm font-semibold" style={{ color: "var(--text)" }}>
+      <p className="mt-2 truncate text-[0.8125rem] font-semibold" style={{ color: "var(--text)" }}>
         {entry.title}
       </p>
-      <p className="meta-caps truncate" style={{ color: "var(--text-mute)" }}>
+      <p className="meta truncate" style={{ color: "var(--text-mute)" }}>
         {entry.meta}
       </p>
     </div>
@@ -453,37 +457,16 @@ export function ShelfPage() {
 
   return (
     <div>
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0">
-          <h1 className={PAGE_TITLE} style={{ color: "var(--text)" }}>
-            Shelf
-          </h1>
-          <p className="meta-caps mt-1.5" style={{ color: "var(--text-mute)" }}>
-            {summary}
-          </p>
-        </div>
-        {/* The management surfaces the Shelf browses on behalf of. Not nav
-            items in their own right any more — you come here to look at what
-            you track, and go there to change how it is organised. */}
-        {/* Hidden below `sm`, where these three are already one tap away in the
-            tab bar's "More" sheet and a second row of the same words above the
-            kind filter reads as two competing tab strips. */}
-        <nav aria-label="Manage" className="hidden flex-none items-center gap-1 sm:flex">
-          {[
-            { to: "/lists", label: "Lists" },
-            { to: "/games", label: "Games" },
-            { to: "/history", label: "History" },
-          ].map((link) => (
-            <Link
-              key={link.to}
-              to={link.to}
-              className="rounded-lg px-3 py-2 text-sm font-semibold transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
-              style={{ color: "var(--text-dim)" }}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
+      <header className="mb-4 min-w-0">
+        <h1 className={PAGE_TITLE} style={{ color: "var(--text)" }}>
+          Shelf
+        </h1>
+        {/* 15px, not the 12px caption rank: this is the large title's own
+            subtitle, and the only line on the screen that describes the whole
+            of what is under it. */}
+        <p className="mt-0.5 truncate text-[0.9375rem] tabular-nums" style={{ color: "var(--text-dim)" }}>
+          {summary}
+        </p>
       </header>
 
       {error && (
@@ -499,20 +482,28 @@ export function ShelfPage() {
         </div>
       )}
 
-      {!nothingAtAll && <KindFilter active={filter} counts={counts} onChange={(next) => {
-        setSearchParams(
-          (prev) => {
-            const params = new URLSearchParams(prev);
-            if (next === "all") params.delete("kind");
-            else params.set("kind", next);
-            return params;
-          },
-          // Replace rather than push: flicking along the filter row is one act
-          // of looking, and Back should leave the Shelf rather than walk back
-          // through four filters to get there.
-          { replace: true }
-        );
-      }} />}
+      {!nothingAtAll && (
+        <SegmentedControl
+          label="Filter the shelf by kind"
+          options={kindOptions(counts)}
+          value={filter}
+          onChange={(next) =>
+            setSearchParams(
+              (prev) => {
+                const params = new URLSearchParams(prev);
+                if (next === "all") params.delete("kind");
+                else params.set("kind", next);
+                return params;
+              },
+              // Replace rather than push: flicking along the filter row is one
+              // act of looking, and Back should leave the Shelf rather than
+              // walk back through four filters to get there.
+              { replace: true }
+            )
+          }
+          className="sm:max-w-md"
+        />
+      )}
 
       {loading && shelf.length === 0 && inProgress.length === 0 ? (
         <GhostLoader label="Loading your shelf…" className="items-center py-24" />
@@ -535,61 +526,57 @@ export function ShelfPage() {
           </div>
         </div>
       ) : (
-        <div className="mt-6 flex flex-col gap-9">
+        <div className="mt-6 flex flex-col gap-7">
           {visibleInProgress.length > 0 && (
-            <section aria-labelledby="shelf-in-progress">
-              <h2 id="shelf-in-progress" className="eyebrow mb-3">
-                In progress
+            <section aria-labelledby="shelf-up-next">
+              <h2 id="shelf-up-next" className={`${SECTION_TITLE} mb-3`} style={{ color: "var(--text)" }}>
+                Up Next
               </h2>
               {/*
-               * Card rank: 2xl radius on elevation 1, which is what the app's
-               * surface ranks give an in-flow panel. The rows inside are
-               * separated by hairlines rather than being cards of their own —
-               * one surface holding a list, not a list of surfaces.
+               * A snapping rail below `sm`, a grid above it.
+               *
+               * The same cards either way — what changes is whether they are
+               * laid out or scrolled. A phone has room for one and a bit, which
+               * is what makes a rail readable (the half-card is the affordance);
+               * a desktop has room for three across, where a rail would be a
+               * horizontal scrollbar in the middle of a page that scrolls
+               * vertically.
+               *
+               * The negative margin lets the rail bleed to the edges of the
+               * screen while its first card still lines up with the column, so
+               * the last card doesn't stop short of the edge with a gutter's
+               * worth of black beside it.
                */}
-              <div
-                className="overflow-hidden rounded-2xl shadow-e1"
-                style={{ background: "var(--bg-1)", border: "1px solid var(--border)" }}
-              >
-                {visibleInProgress.map((entry, index) => (
-                  <div key={entry.key}>
-                    {index > 0 && <div className="mx-4 h-px sm:mx-5" style={{ background: "var(--border)" }} />}
-                    <InProgressRow
+              <div className="scrollbar-hide -mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 lg:grid-cols-3">
+                {visibleInProgress.map((entry) => {
+                  const series =
+                    entry.kind === "show" ? progress.find((s) => `series:${s.imdbId}` === entry.key) : undefined;
+                  return (
+                    <UpNextCard
+                      key={entry.key}
                       entry={entry}
                       onOpen={() => openEntry(entry)}
-                      onResume={
-                        entry.kind === "show"
-                          ? () => {
-                              const series = progress.find((s) => `series:${s.imdbId}` === entry.key);
-                              if (series) void markNext(series);
-                            }
-                          : undefined
-                      }
+                      onResume={series ? () => void markNext(series) : undefined}
                       resumeLabel={
-                        entry.kind === "show"
-                          ? (() => {
-                              const series = progress.find((s) => `series:${s.imdbId}` === entry.key);
-                              return series
-                                ? `Mark S${series.nextSeason}:E${series.nextEpisode} of ${entry.title} watched`
-                                : undefined;
-                            })()
+                        series
+                          ? `Mark S${series.nextSeason}:E${series.nextEpisode} of ${entry.title} watched`
                           : undefined
                       }
                       resumeBusy={markingId !== null && `series:${markingId}` === entry.key}
                     />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           )}
 
           <section aria-labelledby="shelf-rest">
             <div className="mb-3 flex items-baseline justify-between gap-4">
-              <h2 id="shelf-rest" className="eyebrow">
-                {visibleInProgress.length > 0 ? "Everything else" : "Everything"}
+              <h2 id="shelf-rest" className={SECTION_TITLE} style={{ color: "var(--text)" }}>
+                Library
               </h2>
-              <span className="meta-caps" style={{ color: "var(--text-mute)" }}>
-                {rest.length} · sorted by added
+              <span className="meta flex-none" style={{ color: "var(--text-dim)" }}>
+                {rest.length} · Recently added
               </span>
             </div>
 
@@ -598,9 +585,14 @@ export function ShelfPage() {
                 Nothing else under this filter.
               </p>
             ) : (
-              <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              /* Three across on a phone rather than two. A poster is
+                 recognisable well below the width two-up gives it, and three is
+                 what turns the grid into a *library* — you see a shelf of them
+                 at once instead of a stack you scroll through a pair at a
+                 time. */
+              <div className="grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 sm:gap-x-4 sm:gap-y-5">
                 {visibleRest.map((entry, index) => (
-                  <ShelfCell key={entry.key} entry={entry} eager={index < 5} onOpen={() => openEntry(entry)} />
+                  <ShelfCell key={entry.key} entry={entry} eager={index < 6} onOpen={() => openEntry(entry)} />
                 ))}
               </div>
             )}

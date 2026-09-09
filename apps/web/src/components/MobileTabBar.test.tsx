@@ -2,7 +2,7 @@ import { render, screen, waitForElementToBeRemoved, within } from "@testing-libr
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { MemoryRouter } from "react-router";
-import { MORE_NAV_ITEMS, MobileTabBar, PRIMARY_NAV_ITEMS } from "./MobileTabBar";
+import { MORE_NAV_ITEMS, MobileTabBar, PRIMARY_NAV_ITEMS, SEARCH_ITEM } from "./MobileTabBar";
 
 // Closing the sheet plays its exit animation before it leaves the DOM. jsdom
 // never fires animationend on its own, so these tests ride useExitAnimation's
@@ -20,12 +20,23 @@ const renderBar = (pathname = "/") =>
 const tabBar = () => screen.getByRole("navigation", { name: "Mobile navigation" });
 
 describe("MobileTabBar", () => {
-  it("shows five tabs, the count the bar can fit at 320px", () => {
+  it("shows five slots in the pill, the count it can fit at 320px", () => {
     renderBar();
     const bar = tabBar();
-    expect(within(bar).getAllByRole("link")).toHaveLength(PRIMARY_NAV_ITEMS.length);
+    // The four tabs and the search circle. Search is a link too, but it sits
+    // outside the pill — see the note on SEARCH_ITEM.
+    expect(within(bar).getAllByRole("link")).toHaveLength(PRIMARY_NAV_ITEMS.length + 1);
     expect(within(bar).getByRole("button", { name: /more/i })).toBeInTheDocument();
     expect(PRIMARY_NAV_ITEMS.length + 1).toBe(5);
+  });
+
+  // Search is the one destination you arrive at with something already in
+  // mind, so it gets an affordance of its own instead of a fifth of the pill.
+  it("gives search a button of its own beside the pill", () => {
+    renderBar("/search");
+    const search = within(tabBar()).getByRole("link", { name: SEARCH_ITEM.label });
+    expect(search).toHaveAttribute("href", SEARCH_ITEM.to);
+    expect(search).toHaveAttribute("aria-current", "page");
   });
 
   it("keeps every destination reachable — the four that moved are behind More", async () => {
@@ -42,7 +53,14 @@ describe("MobileTabBar", () => {
 
   it("lets a tab label shrink rather than push the bar past the viewport", () => {
     renderBar();
-    for (const tab of [...within(tabBar()).getAllByRole("link"), within(tabBar()).getByRole("button", { name: /more/i })]) {
+    const labelled = [
+      // The search circle carries an icon and no label, so it is not one of
+      // these — it is a fixed 64px and the pill flexes around it.
+      ...within(tabBar()).getAllByRole("link", { name: /shelf|discover|calendar|stats/i }),
+      within(tabBar()).getByRole("button", { name: /more/i }),
+    ];
+    expect(labelled).toHaveLength(PRIMARY_NAV_ITEMS.length + 1);
+    for (const tab of labelled) {
       expect(tab.className).toContain("min-w-0");
       expect(tab.querySelector("span.truncate")).not.toBeNull();
     }
@@ -54,33 +72,18 @@ describe("MobileTabBar", () => {
     expect(within(tabBar()).getByRole("link", { name: /shelf/i })).not.toHaveAttribute("aria-current");
   });
 
-  // One marker that moves, not one per tab that blinks on and off — the whole
-  // point of positioning it arithmetically off the active index.
-  it("keeps a single active marker and slides it to the current tab", () => {
-    const marker = (bar: HTMLElement) => {
-      const found = bar.querySelectorAll(':scope > span[aria-hidden="true"]');
-      expect(found).toHaveLength(1);
-      return found[0] as HTMLElement;
-    };
-
-    const { unmount } = renderBar("/");
-    expect(marker(tabBar()).style.transform).toBe("translateX(0%)");
-    unmount();
-
+  // No marker under the selected tab. There isn't one on the platform: the
+  // accent tint on the icon and the label is the selection, and a rule sliding
+  // between five slots was a second answer to a question the colour had
+  // already answered.
+  it("says which tab is current with the accent, not with a marker under it", () => {
     renderBar("/discover");
-    // Third of five slots.
-    expect(marker(tabBar()).style.transform).toBe("translateX(200%)");
-  });
-
-  it("parks the marker on More while a route behind it is open", () => {
-    renderBar("/stats");
-    const marker = tabBar().querySelector<HTMLElement>(':scope > span[aria-hidden="true"]');
-    expect(marker?.style.transform).toBe("translateX(400%)");
-  });
-
-  it("shows no marker at all on a route the bar doesn't own", () => {
-    renderBar("/nowhere");
-    expect(tabBar().querySelectorAll(':scope > span[aria-hidden="true"]')).toHaveLength(0);
+    const bar = tabBar();
+    expect(bar.querySelectorAll('span[aria-hidden="true"]')).toHaveLength(0);
+    expect(within(bar).getByRole("link", { name: /discover/i })).toHaveStyle({
+      color: "rgb(var(--accent-rgb))",
+    });
+    expect(within(bar).getByRole("link", { name: /shelf/i })).toHaveStyle({ color: "var(--text-dim)" });
   });
 
   it("matches the Shelf only on the exact root path", () => {
@@ -89,14 +92,14 @@ describe("MobileTabBar", () => {
   });
 
   it("highlights More while a route behind it is open, and marks that route inside", async () => {
-    renderBar("/stats");
+    renderBar("/settings");
     const moreTab = within(tabBar()).getByRole("button", { name: /more/i });
-    expect(moreTab.className).toContain("text-claw-text");
+    expect(moreTab).toHaveStyle({ color: "rgb(var(--accent-rgb))" });
 
     await userEvent.click(moreTab);
 
     const sheet = screen.getByRole("dialog", { name: "More destinations" });
-    expect(within(sheet).getByRole("link", { name: "Stats" })).toHaveAttribute("aria-current", "page");
+    expect(within(sheet).getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
   });
 
   it("opens the sheet with focus on its first item and reports its state to assistive tech", async () => {

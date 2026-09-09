@@ -338,7 +338,7 @@ export function StatsPage() {
                       />
                     )}
                   </div>
-                  <span className="meta-caps" style={{ color: "var(--text-mute)" }}>{label}</span>
+                  <span className="meta-row" style={{ color: "var(--text-mute)" }}>{label}</span>
                 </div>
               );
             })}
@@ -420,7 +420,7 @@ export function StatsPage() {
                   )}
                 </div>
                 <p className="mt-1.5 truncate text-sm font-medium" style={{ color: "var(--text)" }}>{item.name}</p>
-                <p className="meta-caps" style={{ color: "var(--text-mute)" }}>{item.type}</p>
+                <p className="meta-row" style={{ color: "var(--text-mute)" }}>{item.type}</p>
               </div>
             ))}
           </div>
@@ -498,7 +498,7 @@ export function StatsPage() {
                         </div>
                       </div>
                       <p className="mt-1.5 truncate text-sm font-medium" style={{ color: "var(--text)" }}>{item.name ?? item.imdbId}</p>
-                      <p className="meta-caps" style={{ color: "var(--text-mute)" }}>{item.type}</p>
+                      <p className="meta-row" style={{ color: "var(--text-mute)" }}>{item.type}</p>
                     </div>
                   ))}
                 </div>

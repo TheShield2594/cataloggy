@@ -240,11 +240,15 @@ export function SeasonsSection({
             : null;
 
           return (
-            <div key={s.seasonNumber} className="overflow-hidden rounded-xl border" style={{ borderColor: "var(--border)" }}>
+            // A grouped inset list per season — the group carries the fill and
+            // the radius, and the episodes inside it are separated by hairlines
+            // that start past the check circle rather than boxed each in a
+            // border of their own. See `.list-group` in index.css.
+            <div key={s.seasonNumber} className="list-group">
               {/* Wraps because the star picker is 240px wide — the width ten
                   24px pointer targets need — which a narrow panel can't spare
                   beside a season name and a "Mark watched" button. */}
-              <div className="flex flex-wrap items-center gap-2 px-3 py-2.5" style={{ background: "var(--surface)" }}>
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
                 <button
                   type="button"
                   onClick={() => toggleExpand(s.seasonNumber)}
@@ -258,7 +262,7 @@ export function SeasonsSection({
                     <ChevronRight className="h-3.5 w-3.5 flex-none" style={{ color: "var(--text-mute)" }} />
                   )}
                   <div
-                    className="flex h-8 w-8 flex-none items-center justify-center rounded-lg font-mono text-xs font-bold"
+                    className="flex h-8 w-8 flex-none items-center justify-center rounded-lg text-xs font-bold tabular-nums"
                     style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
                   >
                     {s.seasonNumber}
@@ -267,7 +271,7 @@ export function SeasonsSection({
                     <p className="text-xs font-medium truncate" style={{ color: "var(--text)" }}>{s.name}</p>
                     {/* The watched count climbs as episodes are ticked off
                         under it — tabular figures keep the row still. */}
-                    <p className="meta-caps" style={{ color: "var(--text-mute)" }}>
+                    <p className="meta-row" style={{ color: "var(--text-mute)" }}>
                       {watchedCount != null ? `${watchedCount}/${s.episodeCount} watched` : `${s.episodeCount} eps`}
                       {s.airYear ? ` · ${s.airYear}` : ""}
                     </p>
@@ -299,7 +303,7 @@ export function SeasonsSection({
                   ) : (episodes ?? []).length === 0 ? (
                     <p className="p-3 text-center text-xs" style={{ color: "var(--text-mute)" }}>No episode data</p>
                   ) : (
-                    episodes!.map((ep, i) => {
+                    episodes!.map((ep) => {
                       const k = episodeKey(s.seasonNumber, ep.episodeNumber);
                       const isWatched = watched.has(k);
                       return (
@@ -308,36 +312,54 @@ export function SeasonsSection({
                         // watched toggle.
                         <div
                           key={ep.episodeNumber}
-                          className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
-                          style={{ borderTop: i > 0 ? "1px solid var(--border)" : undefined }}
+                          className="list-row flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
+                          // Past the check circle and its gap, so the hairline
+                          // starts under the episode number rather than under
+                          // the control beside it.
+                          style={{ "--list-inset": "3.25rem" } as React.CSSProperties}
                         >
                           <button
                             type="button"
                             onClick={() => void toggleEpisode(s.seasonNumber, ep.episodeNumber)}
                             disabled={pendingEpisode[k]}
-                            className="flex min-w-40 flex-1 items-center gap-3 rounded-lg text-left transition-opacity hover:opacity-75 disabled:opacity-50"
+                            className="flex min-h-[2.75rem] min-w-40 flex-1 items-center gap-3 rounded-lg text-left transition-opacity hover:opacity-75 disabled:opacity-50"
                             aria-pressed={isWatched}
                             aria-label={`${isWatched ? "Unmark" : "Mark"} ${ep.name} watched`}
                           >
+                            {/* Filled when watched, an open ring when not — the
+                                two states of a checklist row on the platform.
+                                `ring-inset` so the ring is the edge of the
+                                circle rather than a halo around it, which at
+                                20px is most of the circle. */}
                             <span
-                              className="flex h-5 w-5 flex-none items-center justify-center rounded-full ring-1"
-                              style={isWatched
-                                ? { background: "rgb(var(--accent-rgb))", borderColor: "transparent" }
-                                : { borderColor: "var(--border-strong)" }}
+                              className={`flex h-5 w-5 flex-none items-center justify-center rounded-full ${
+                                isWatched ? "" : "ring-[1.5px] ring-current ring-inset"
+                              }`}
+                              style={
+                                isWatched
+                                  ? { background: "rgb(var(--accent-rgb))" }
+                                  : { color: "var(--text-mute)" }
+                              }
                             >
-                              {isWatched && <Check className="h-3 w-3 text-claw-on" />}
+                              {isWatched && <Check className="h-3 w-3 text-claw-on" strokeWidth={3} />}
                             </span>
-                            <span className="meta-caps w-9 flex-none font-semibold" style={{ color: "var(--text-mute)" }}>
+                            <span
+                              className="w-8 flex-none text-[0.8125rem] tabular-nums"
+                              style={{ color: "var(--text-mute)" }}
+                            >
                               E{String(ep.episodeNumber).padStart(2, "0")}
                             </span>
-                            <span className="min-w-0 flex-1 truncate text-xs" style={{ color: isWatched ? "var(--text-mute)" : "var(--text)" }}>
+                            <span
+                              className="min-w-0 flex-1 truncate text-[0.9375rem]"
+                              style={{ color: isWatched ? "var(--text-mute)" : "var(--text)" }}
+                            >
                               {ep.name}
                             </span>
                           </button>
                           {ep.airDate && (
                             <time
                               dateTime={ep.airDate}
-                              className="meta-caps hidden flex-none sm:block"
+                              className="meta-row hidden flex-none sm:block"
                               style={{ color: "var(--text-mute)" }}
                             >
                               {new Date(ep.airDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}

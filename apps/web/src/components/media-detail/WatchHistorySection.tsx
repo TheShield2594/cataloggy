@@ -64,7 +64,7 @@ export function WatchHistorySection({
                 {event.type === "episode" && event.season != null && event.episode != null ? (
                   <>
                     <p className="truncate text-sm" style={{ color: "var(--text)" }}>{event.name}</p>
-                    <p className="meta-caps" style={{ color: "var(--text-mute)" }}>
+                    <p className="meta-row" style={{ color: "var(--text-mute)" }}>
                       S{String(event.season).padStart(2, "0")}:E{String(event.episode).padStart(2, "0")}
                     </p>
                   </>
@@ -72,7 +72,7 @@ export function WatchHistorySection({
                   <p className="truncate text-sm" style={{ color: "var(--text)" }}>{event.name || "Watched"}</p>
                 )}
               </div>
-              <time className="meta-caps shrink-0" style={{ color: "var(--text-mute)" }}>
+              <time className="meta-row shrink-0" style={{ color: "var(--text-mute)" }}>
                 {event.dateUnknown
                   ? "Unknown date"
                   : new Date(event.watchedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}

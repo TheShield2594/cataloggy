@@ -154,7 +154,7 @@ export function StarPicker({
         );
       })}
       <span
-        className={`ml-1.5 font-mono font-semibold tabular-nums text-warning ${size === "sm" ? "text-2xs" : "text-xs sm:text-sm"}`}
+        className={`ml-1.5 font-semibold tabular-nums text-warning ${size === "sm" ? "text-2xs" : "text-xs sm:text-sm"}`}
       >
         {shown > 0 ? `${formatStars(shown)}/${STARS_MAX}` : ""}
       </span>

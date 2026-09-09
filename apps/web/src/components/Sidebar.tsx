@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router";
-import { BarChart3, CalendarDays, Compass, Library, Pin, PinOff, Search, Settings, User } from "lucide-react";
+import { BarChart3, CalendarDays, Compass, Gamepad2, History, Library, List, Pin, PinOff, Search, Settings, User } from "lucide-react";
 import { Profile } from "../api";
 import { BRAND_WORDMARK, BrandMark } from "./BrandMark";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -27,6 +27,22 @@ export const SIDEBAR_NAV_ITEMS = [
   { to: "/calendar", label: "Calendar", icon: CalendarDays, end: false },
   { to: "/stats", label: "Stats", icon: BarChart3, end: false },
   { to: "/settings", label: "Settings", icon: Settings, end: false },
+] as const;
+
+/**
+ * The second group: where you go to *change* how the shelf is organised, as
+ * opposed to the six above, which are places to look at it.
+ *
+ * These three used to be a row of links in the Shelf's own header, which put
+ * them in the middle of the page, level with a subtitle, on one screen out of
+ * nine. A source list is where a desktop app keeps this kind of thing, under a
+ * heading that says which kind it is — and the mobile bar already files them
+ * the same way, behind "More".
+ */
+export const SIDEBAR_MANAGE_ITEMS = [
+  { to: "/lists", label: "Lists", icon: List, end: false },
+  { to: "/games", label: "Games", icon: Gamepad2, end: false },
+  { to: "/history", label: "History", icon: History, end: false },
 ] as const;
 
 export const PIN_KEY = "cataloggy:sidebar-pinned";
@@ -68,6 +84,12 @@ export function Sidebar({
   // state from wherever it was to wherever it now belongs. Measured off the
   // active link rather than derived from the index, so it stays correct if an
   // item's height ever stops matching its neighbours'.
+  //
+  // The mechanism is unchanged and the shape is not: it was a 3px bar down the
+  // leading edge, and a source list on the platform selects a row by filling
+  // it. A rule beside a row is a margin note about it; a fill is the row being
+  // the one you are on, and it is also the only treatment that still reads once
+  // the rail is collapsed to icons.
   const navRef = useRef<HTMLElement>(null);
   const location = useLocation();
   const [marker, setMarker] = useState<{ top: number; height: number } | null>(null);
@@ -154,12 +176,16 @@ export function Sidebar({
       onBlur={handleBlur}
     >
       <div
-        className="glass-surface flex h-full flex-col py-4 transition-[width] duration-base ease-out overflow-hidden"
+        className="glass-surface flex h-full flex-col overflow-hidden py-3 backdrop-blur-xl transition-[width] duration-base"
         style={{
           width: expanded ? "15rem" : "4rem",
-          background: "var(--bg-1)",
-          borderRight: "1px solid var(--border)",
-          boxShadow: expanded && !pinned ? "8px 0 24px rgba(0,0,0,0.12)" : "none",
+          // Translucent rather than opaque: a source list on the platform is a
+          // pane the window's material shows through, and the app's own content
+          // scrolls past behind it.
+          background: "color-mix(in srgb, var(--bg-1) 86%, transparent)",
+          borderRight: "0.5px solid var(--border)",
+          boxShadow: expanded && !pinned ? "8px 0 24px rgba(0,0,0,0.18)" : "none",
+          transitionTimingFunction: "var(--ease-ios)",
         }}
       >
         <div className="flex items-center gap-2.5 px-4 pb-5" style={{ color: "var(--text)" }}>
@@ -176,12 +202,13 @@ export function Sidebar({
           {marker && (
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute left-2.5 top-0 w-[3px] rounded-full bg-claw-500 transition-transform duration-slow ease-out"
-              // 6px in from each end of the row, which is where the marker sat
-              // when it was a child of the link itself (`top-1.5 bottom-1.5`).
-              // Floored at 0 for the layout-less case (jsdom, `display: none`),
-              // where every offset measures zero and the inset would go negative.
-              style={{ height: Math.max(marker.height - 12, 0), transform: `translateY(${marker.top + 6}px)` }}
+              className="pointer-events-none absolute inset-x-2.5 top-0 rounded-[0.4375rem] transition-transform duration-slow"
+              style={{
+                height: marker.height,
+                transform: `translateY(${marker.top}px)`,
+                background: "var(--surface-strong)",
+                transitionTimingFunction: "var(--ease-ios)",
+              }}
             />
           )}
           {SIDEBAR_NAV_ITEMS.map((item) => (
@@ -190,8 +217,8 @@ export function Sidebar({
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
-                `group relative flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset ${
-                  isActive ? "" : "hover:bg-[var(--surface-strong)]"
+                `group relative flex items-center gap-2.5 rounded-[0.4375rem] px-2.5 py-[0.4375rem] text-[0.8125rem] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset ${
+                  isActive ? "font-medium" : "hover:bg-[var(--surface)]"
                 }`
               }
               style={({ isActive }) => ({ color: isActive ? "var(--text)" : "var(--text-dim)" })}
@@ -204,7 +231,49 @@ export function Sidebar({
               onPointerEnter={() => prefetchRoute(item.to)}
               onFocus={() => prefetchRoute(item.to)}
             >
-              <item.icon className="h-[1.1rem] w-[1.1rem] flex-none" />
+              {/* Accent-tinted whether or not the row is selected, which is
+                  how a source list draws its glyphs — the fill behind the row
+                  is what says which one you are on, so the icon is free to be
+                  the app's colour rather than a second selection signal. */}
+              <item.icon
+                className="h-[1.0625rem] w-[1.0625rem] flex-none"
+                strokeWidth={2}
+                style={{ color: "rgb(var(--accent-rgb))" }}
+              />
+              <span className="whitespace-nowrap" style={{ opacity: expanded ? 1 : 0 }}>
+                {item.label}
+              </span>
+            </NavLink>
+          ))}
+
+          {/* Fades out with the labels rather than being replaced by a rule:
+              a heading over a column of unlabelled icons names nothing. */}
+          <p
+            className="px-2.5 pb-1 pt-4 text-[0.6875rem] font-semibold uppercase tracking-[0.04em] transition-opacity"
+            style={{ color: "var(--text-mute)", opacity: expanded ? 1 : 0 }}
+          >
+            Manage
+          </p>
+          {SIDEBAR_MANAGE_ITEMS.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) =>
+                `group relative flex items-center gap-2.5 rounded-[0.4375rem] px-2.5 py-[0.4375rem] text-[0.8125rem] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset ${
+                  isActive ? "font-medium" : "hover:bg-[var(--surface)]"
+                }`
+              }
+              style={({ isActive }) => ({ color: isActive ? "var(--text)" : "var(--text-dim)" })}
+              title={expanded ? undefined : item.label}
+              onPointerEnter={() => prefetchRoute(item.to)}
+              onFocus={() => prefetchRoute(item.to)}
+            >
+              <item.icon
+                className="h-[1.0625rem] w-[1.0625rem] flex-none"
+                strokeWidth={2}
+                style={{ color: "rgb(var(--accent-rgb))" }}
+              />
               <span className="whitespace-nowrap" style={{ opacity: expanded ? 1 : 0 }}>
                 {item.label}
               </span>
@@ -217,13 +286,19 @@ export function Sidebar({
             <button
               type="button"
               onClick={onSwitchProfile}
-              className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
+              className="flex w-full items-center gap-2.5 rounded-[0.4375rem] px-2.5 py-[0.4375rem] text-[0.8125rem] transition-colors hover:bg-[var(--surface)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
               style={{ color: "var(--text-dim)" }}
               aria-label={profile ? `Switch profile (currently ${profile.name})` : "Switch profile"}
               title={expanded ? undefined : (profile?.name ?? "Switch profile")}
             >
-              <span className="flex h-[1.1rem] w-[1.1rem] flex-none items-center justify-center rounded-full" style={{ background: "var(--surface-strong)" }}>
-                <User className="h-3 w-3" />
+              <span
+                className="flex h-[1.0625rem] w-[1.0625rem] flex-none items-center justify-center rounded-full text-[0.5rem] font-bold"
+                style={{
+                  background: "linear-gradient(145deg, rgb(var(--accent-2-rgb)), rgb(var(--accent-rgb)))",
+                  color: "var(--on-accent)",
+                }}
+              >
+                {profile?.name?.trim().charAt(0).toUpperCase() ?? <User className="h-3 w-3" />}
               </span>
               <span className="truncate whitespace-nowrap" style={{ opacity: expanded ? 1 : 0 }}>
                 {profile?.name ?? "Switch profile"}
@@ -233,12 +308,16 @@ export function Sidebar({
           <button
             type="button"
             onClick={togglePin}
-            className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
+            className="flex w-full items-center gap-2.5 rounded-[0.4375rem] px-2.5 py-[0.4375rem] text-[0.8125rem] transition-colors hover:bg-[var(--surface)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
             style={{ color: "var(--text-dim)" }}
             aria-label={pinned ? "Unpin sidebar" : "Pin sidebar open"}
             title={expanded ? undefined : pinned ? "Unpin sidebar" : "Pin sidebar open"}
           >
-            {pinned ? <PinOff className="h-[1.1rem] w-[1.1rem] flex-none" /> : <Pin className="h-[1.1rem] w-[1.1rem] flex-none" />}
+            {pinned ? (
+              <PinOff className="h-[1.0625rem] w-[1.0625rem] flex-none" strokeWidth={2} />
+            ) : (
+              <Pin className="h-[1.0625rem] w-[1.0625rem] flex-none" strokeWidth={2} />
+            )}
             <span className="whitespace-nowrap" style={{ opacity: expanded ? 1 : 0 }}>
               {pinned ? "Unpin" : "Pin open"}
             </span>

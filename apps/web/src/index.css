@@ -29,65 +29,114 @@
  * of an accent.
  */
 
+/*
+ * Platform surfaces — the tokens the Apple-style chrome needs that a palette
+ * of backgrounds and borders can't supply on its own.
+ *
+ * Declared here, ahead of the themes, and derived from --text / --bg-1 so the
+ * three themes that don't restate them (glass, midnight, letterboxd) still get
+ * a segmented control and a tab bar that belong to their own palette. Custom
+ * properties substitute at use time rather than at declaration, so these read
+ * whichever theme's --text is in force on the element.
+ *
+ * Light and dark restate every one of them with UIKit's own values below.
+ */
+:root {
+  /* The segmented control: a recessed track with one raised thumb in it. */
+  --segment-track: color-mix(in srgb, var(--text) 12%, transparent);
+  --segment-thumb: var(--bg-1);
+  --segment-thumb-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+  /* The floating tab bar and the nav bar that blurs in behind the large title. */
+  --bar-tint: color-mix(in srgb, var(--bg-1) 76%, transparent);
+  --bar-hairline: color-mix(in srgb, var(--text) 14%, transparent);
+  --bar-highlight: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
 :root,
 [data-theme="light"] {
   color-scheme: light;
   --poster-ratio: 2 / 3;
 
-  /* Clawdia core — light, warm off-white */
-  --bg-0: #faf6ef;
-  --bg-1: #f3ecdd;
-  --bg-2: #1c1814;
-  --surface: rgba(28,24,20,0.03);
-  --surface-strong: rgba(28,24,20,0.05);
-  --border: rgba(28,24,20,0.08);
-  --border-strong: rgba(28,24,20,0.14);
-  --text: #1c1814;
-  --text-dim: #635849;
-  --text-mute: #6c6155;
-  --accent: #d97742;
-  --accent-2: #e89163;
-  --accent-3: #10b981;
-  --accent-rgb: 217 119 66;
-  --accent-2-rgb: 232 145 99;
-  --accent-strong-rgb: 195 107 59;
-  --accent-tint-rgb: 250 233 224;
-  --accent-light-rgb: 242 191 165;
-  --on-accent-rgb: 28 24 20;
+  /*
+   * iOS/macOS light — a grey page with white cards on it, which is the
+   * inversion the grouped-list style depends on: an inset list is only inset
+   * if the surface behind it is darker than the rows.
+   */
+  --bg-0: #f2f2f7;
+  --bg-1: #ffffff;
+  --bg-2: #1c1c1e;
+  --surface: rgba(118,118,128,0.12);
+  --surface-strong: rgba(118,118,128,0.2);
+  --border: rgba(60,60,67,0.18);
+  --border-strong: rgba(60,60,67,0.3);
+  --text: #000000;
+  /* UIKit's own secondary and tertiary labels are 0.6 and 0.3 alpha, which
+     measure 3.30:1 and 1.6:1 on this page — below the 4.5:1 the rest of this
+     file holds itself to. Held at the alpha that clears it instead; see the
+     contrast note at the top. */
+  --text-dim: rgba(60,60,67,0.85);
+  --text-mute: rgba(60,60,67,0.75);
+  --accent: #ff9500;
+  --accent-2: #ffb340;
+  --accent-3: #34c759;
+  --accent-rgb: 255 149 0;
+  --accent-2-rgb: 255 179 64;
+  --accent-strong-rgb: 224 134 0;
+  --accent-tint-rgb: 255 240 219;
+  --accent-light-rgb: 255 201 128;
+  --on-accent-rgb: 0 0 0;
   --on-accent: rgb(var(--on-accent-rgb));
-  --accent-text-rgb: 149 72 30;
+  --accent-text-rgb: 168 80 0;
   --accent-text: rgb(var(--accent-text-rgb));
-  --focus-ring: #b8501f;
+  --focus-ring: #b25400;
+
+  --segment-track: rgba(118,118,128,0.12);
+  --segment-thumb: #ffffff;
+  --segment-thumb-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04);
+  --bar-tint: rgba(255,255,255,0.72);
+  --bar-hairline: rgba(255,255,255,0.8);
+  --bar-highlight: rgba(255,255,255,0.9);
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
   --poster-ratio: 2 / 3;
 
-  /* Original dark scheme — near-black bg, off-white text */
-  --bg-0: #0d0b0a;
-  --bg-1: #17140f;
-  --bg-2: #faf5f0;
-  --surface: rgba(250,245,240,0.04);
-  --surface-strong: rgba(250,245,240,0.07);
-  --border: rgba(250,245,240,0.10);
-  --border-strong: rgba(250,245,240,0.18);
-  --text: #faf5f0;
-  --text-dim: #b5ab9a;
-  --text-mute: #958b7c;
-  --accent: #e89163;
-  --accent-2: #f0ad88;
-  --accent-3: #34d399;
-  --accent-rgb: 232 145 99;
-  --accent-2-rgb: 240 173 136;
-  --accent-strong-rgb: 190 119 81;
-  --accent-tint-rgb: 252 239 231;
-  --accent-light-rgb: 246 207 186;
-  --on-accent-rgb: 20 17 16;
+  /*
+   * iOS/macOS dark — true black, not a warm near-black. The page is #000 so an
+   * OLED phone paints nothing at all where the artwork isn't, and the grouped
+   * surface above it is systemGray6 rather than a tint of the text colour.
+   */
+  --bg-0: #000000;
+  --bg-1: #1c1c1e;
+  --bg-2: #ffffff;
+  --surface: rgba(118,118,128,0.24);
+  --surface-strong: rgba(118,118,128,0.36);
+  --border: rgba(84,84,88,0.65);
+  --border-strong: rgba(235,235,245,0.2);
+  --text: #ffffff;
+  --text-dim: rgba(235,235,245,0.6);
+  --text-mute: rgba(235,235,245,0.5);
+  --accent: #ff9f0a;
+  --accent-2: #ffb340;
+  --accent-3: #30d158;
+  --accent-rgb: 255 159 10;
+  --accent-2-rgb: 255 179 64;
+  --accent-strong-rgb: 224 139 0;
+  --accent-tint-rgb: 255 240 219;
+  --accent-light-rgb: 255 201 128;
+  --on-accent-rgb: 0 0 0;
   --on-accent: rgb(var(--on-accent-rgb));
-  --accent-text-rgb: 232 145 99;
+  --accent-text-rgb: 255 159 10;
   --accent-text: rgb(var(--accent-text-rgb));
-  --focus-ring: #f0ad88;
+  --focus-ring: #ffb340;
+
+  --segment-track: rgba(118,118,128,0.24);
+  --segment-thumb: #636366;
+  --segment-thumb-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+  --bar-tint: rgba(40,40,44,0.72);
+  --bar-hairline: rgba(255,255,255,0.14);
+  --bar-highlight: rgba(255,255,255,0.12);
 }
 
 [data-theme="glass"] {
@@ -205,16 +254,18 @@
  *       rendered over a scrim takes e3 — including a dialog opened *from*
  *       another dialog, which shares the tier and wins on z-index.
  *
- * Split light/dark because one rgba can't do both: the warm near-black these
- * shadows used is 8% alpha over a #faf6ef page (visible) and 8% alpha over a
- * #0d0b0a page (nothing at all). The dark themes get real black at the alpha
- * it takes to read against their own backgrounds.
+ * Split light/dark because one rgba can't do both: 8% alpha of near-black is
+ * visible over a #f2f2f7 page and nothing at all over a #000 one. The dark
+ * themes get real black at the alpha it takes to read against their own
+ * backgrounds — and on the true-black theme the shadow is doing less work than
+ * it does anywhere else, because a card there is a *lighter* fill on black
+ * rather than a raised plane.
  */
 :root,
 [data-theme="light"] {
-  --elevation-1: 0 1px 2px rgba(28, 24, 20, 0.05), 0 2px 6px rgba(28, 24, 20, 0.06);
-  --elevation-2: 0 2px 6px rgba(28, 24, 20, 0.06), 0 10px 24px rgba(28, 24, 20, 0.10);
-  --elevation-3: 0 6px 16px rgba(28, 24, 20, 0.10), 0 24px 48px rgba(28, 24, 20, 0.18);
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 6px rgba(0, 0, 0, 0.06);
+  --elevation-2: 0 2px 6px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.12);
+  --elevation-3: 0 6px 16px rgba(0, 0, 0, 0.10), 0 24px 48px rgba(0, 0, 0, 0.18);
 }
 
 [data-theme="dark"],
@@ -227,14 +278,6 @@
 }
 
 :root {
-  /*
-   * The accent halo under a primary button. Not an elevation — it sits at the
-   * same height as the button it wraps and only says "this is the one". Themed
-   * off --accent-rgb, which resolves here because every [data-theme] block
-   * lands on the same element this does.
-   */
-  --elevation-glow: 0 8px 22px rgb(var(--accent-rgb) / 0.28);
-
   /*
    * Motion — three tiers, and every transition picks one.
    *
@@ -252,6 +295,21 @@
   --duration-fast: 120ms;
   --duration-base: 200ms;
   --duration-slow: 300ms;
+
+  /*
+   * The curve, singular.
+   *
+   * `ease-out` is fine for a tint and wrong for anything that travels: it
+   * leaves at full speed and coasts to a stop, which reads as a thing being
+   * dragged. This is the curve UIKit moves sheets, segmented thumbs and
+   * push transitions on — almost all of the ease is spent decelerating, so a
+   * control arrives rather than stops.
+   *
+   * Used by everything that moves a distance: the segmented thumb, the
+   * sidebar's selection, the tab bar's marker, sheet entrances. Colour
+   * transitions keep `ease-in-out`; there is no distance to decelerate over.
+   */
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
 
   /*
    * The poster card — the dashboard's repeating grid unit.
@@ -276,13 +334,35 @@
   --poster-card-w: 12rem;
 
   /*
-   * The metadata face. One definition, read from both sides: `.meta` and
-   * `.eyebrow` below take it directly, and tailwind.config.ts points
-   * `font-mono` at this variable rather than restating the stack, so a utility
-   * class and a component class can't drift onto two different fonts.
+   * The interface face — one stack, no webfont.
    *
-   * Platform faces only. Metadata carries no prose, and shipping a second
-   * variable font to render "42 MIN LEFT" would cost more than the rule earns.
+   * The app shipped a variable webfont (Plus Jakarta Sans) as its interface
+   * face, which is the single most legible way an interface can announce that
+   * it is not a platform app: on an iPhone every system control around it is
+   * set in SF, and a page that isn't reads as a website inside a browser
+   * chrome even when the browser chrome is hidden. This asks for SF by the
+   * names the platform answers to, and falls through to each other platform's
+   * own UI face rather than to a second download.
+   *
+   * `-apple-system` and `BlinkMacSystemFont` reach SF without naming it, which
+   * is what Safari and Chrome on Apple platforms want; the two 'SF Pro' names
+   * catch the desktop where the family is installed by name. `system-ui` is the
+   * rest of the world — Segoe on Windows, Roboto on Android, whatever the
+   * distribution has set on Linux.
+   */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /*
+   * The mono face. For content that is genuinely code — an API base URL, a
+   * webhook body, a job's error text — and nothing else.
+   *
+   * Metadata used to take this too: "S3 E4", "42 MIN LEFT", "Synced 4m ago"
+   * were all set in mono and uppercased, on the argument that a number which
+   * changes on every render should not reflow the row it sits in. The argument
+   * was right and the remedy was wrong — `font-variant-numeric: tabular-nums`
+   * holds the column still in any face, including this one's replacement, and
+   * a system interface sets its captions in the interface face. See `.meta`
+   * below.
    */
   --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
@@ -463,7 +543,7 @@ body {
   @apply m-0 min-h-screen;
   background-color: var(--bg-0);
   color: var(--text);
-  font-family: "Plus Jakarta Sans Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   line-height: 1.5;
 }
 
@@ -841,19 +921,23 @@ body {
   }
 
   /*
-   * --elevation-glow is the accent halo this token was named for. It is fed
-   * through Tailwind's --tw-shadow rather than declared as a box-shadow of its
-   * own, because `focus-visible:ring-2` paints its ring *as* a box-shadow — a
-   * plain declaration here would either lose to the ring (halo vanishes on
-   * focus) or, at equal specificity, beat it and swap a focused button's ring
-   * for a glow. Composed this way both draw.
+   * A flat fill, and no halo under it.
    *
-   * The resting halo is the glow at a third of its spread; .btn-lg takes the
-   * token at full strength, since a hero CTA is what it was measured for.
+   * The primary button used to carry an accent-coloured glow, at a third
+   * strength when it was a row action and at full strength as a hero CTA. A
+   * system button doesn't: `.borderedProminent` is a tinted rectangle with a
+   * label on it, and the only thing that ever sits under one is the sheet's
+   * own shadow. The glow was the app's loudest non-platform gesture and it was
+   * on the control the eye goes to first.
+   *
+   * The --tw-shadow indirection stays, emptied. `focus-visible:ring-2` paints
+   * its ring *as* a box-shadow, so a plain `box-shadow` here would either lose
+   * to the ring or beat it; composed this way the ring still draws, and
+   * `.btn-saved` below can still put an inset hairline in the same slot.
    */
   .btn-primary {
     @apply bg-claw-500 text-claw-on hover:bg-claw-600;
-    --tw-shadow: 0 2px 8px rgb(var(--accent-rgb) / 0.22);
+    --tw-shadow: 0 0 #0000;
     box-shadow: var(--tw-shadow);
   }
 
@@ -910,10 +994,6 @@ body {
     @apply rounded-xl px-5 py-3;
   }
 
-  .btn-primary.btn-lg {
-    --tw-shadow: var(--elevation-glow);
-  }
-
   /* Status chips — a series' status, and anything else that reads as a state
      rather than an action. Paint only; the caller sets shape and size. Text,
      fill and hairline all come from one --status-* token, so they cannot drift
@@ -929,33 +1009,38 @@ body {
   .status-chip--warn { --status-color: var(--status-warn); }
 
   /*
-   * Metadata type. The one typographic rule the redesign adds, and the only
-   * place anything but Plus Jakarta Sans is allowed to appear.
+   * Metadata type — the caption rank, one step under body.
    *
-   * Every numeral, date, duration and source name goes here — "S3 E4",
-   * "42 min left", "18.4 h", "Synced 2 min ago", "Plex". The argument is
-   * tabular rather than decorative: a shelf row's right edge carries a number
-   * that changes on every render, and a proportional face reflows the row each
-   * time it does. Mono holds the column still, and `font-variant-numeric:
-   * tabular-nums` holds it still even across a face whose figures are
-   * proportional by default.
+   * Every numeral, date, duration and source name goes here: "S3 E4",
+   * "42 min left", "18.4 h", "Synced 2 min ago", "Plex".
    *
-   * The secondary effect is the one the redesign is actually after: a title in
-   * a humanist sans over metadata in mono reads as two ranks of information
-   * rather than as one paragraph at two sizes. Everything the app *knows* looks
-   * different from everything the app was *told*.
+   * This used to be set in mono and, on two of the three classes, uppercased.
+   * The argument for it was tabular and it was a good one — a row's right edge
+   * carries a number that changes on every render, and a proportional face
+   * reflows the row each time it does — but `font-variant-numeric: tabular-nums`
+   * is what actually holds that column still, and it does so in any face. The
+   * mono was buying a second, weaker thing: a visible rank change between what
+   * the app was told and what it knows.
+   *
+   * A platform interface buys that rank with size and colour instead, and
+   * spends the face on belonging: SF Text at 12px in the secondary label colour
+   * is what every caption in Settings, Music and TV is set in, and a run of
+   * SMALL-CAPS MONO beside it is the one thing on the screen that could not
+   * have come from the system. So all three keep the tabular figures and give
+   * up the face, and two of the three give up the uppercasing with it.
    *
    * Three classes, one face:
    *
    *   .meta       a value that is read as written — a title's own name, a note.
-   *   .meta-caps  a metadata run — "Show · S3 E4 of 8 · 42 min left".
+   *   .meta-row   a metadata run — "Show · S3 E4 of 8 · 42 min left".
    *   .eyebrow    the label above a block — "In progress", "Recently added".
    *
-   * The two caps variants uppercase in CSS rather than in the string, so the
-   * accessible name stays sentence case: "IN PROGRESS" written into the markup
-   * is spelled out letter by letter by some screen readers, and is
-   * untranslatable by all of them. Write the words normally; the stylesheet
-   * shouts them.
+   * `.eyebrow` stays uppercase, because a grouped-list section header is
+   * uppercase on the platform too — and it uppercases in CSS rather than in
+   * the string, so the accessible name stays sentence case: "IN PROGRESS"
+   * written into the markup is spelled out letter by letter by some screen
+   * readers, and is untranslatable by all of them. Write the words normally;
+   * the stylesheet shouts them.
    *
    * Colour is left to the caller on the first two. These strings sit on poster
    * overlays (--text on a scrim), in rows (--text-mute) and inside status chips
@@ -963,32 +1048,25 @@ body {
    * call sites out of three.
    */
   .meta,
-  .meta-caps,
+  .meta-row,
   .eyebrow {
-    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
-    /* 0.6875rem = 11px. Mono faces run visually larger than Plus Jakarta Sans
-       at the same size — taller x-height, wider counters — so metadata drops
-       one step below the 12px `2xs` body minimum and still measures level with
-       the sans text beside it. Prose never takes these classes, so the 12px
-       floor that token documents doesn't apply. */
-    font-size: 0.6875rem;
-    line-height: 1.45;
-    letter-spacing: 0.04em;
+    /* 0.75rem = 12px, the platform's caption size — and one step *up* from the
+       11px the mono ran at, which it could afford because a mono face sets
+       visibly larger than the interface face at the same size. */
+    font-size: 0.75rem;
+    line-height: 1.4;
+    letter-spacing: 0;
   }
 
-  .meta-caps {
+  .eyebrow {
     text-transform: uppercase;
     /* Uppercase set solid is hard to read; this is the tracking that buys the
-       letterforms back without opening the run up as far as an eyebrow, which
-       is a label rather than a line to be read left to right. */
-    letter-spacing: 0.07em;
-  }
-
-  .eyebrow {
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    line-height: 1;
+       letterforms back. Well short of the 0.12em it ran at as mono — that
+       spacing was answering a face this no longer uses. */
+    letter-spacing: 0.04em;
+    font-weight: 600;
+    line-height: 1.2;
     color: var(--text-mute);
   }
 
@@ -1021,6 +1099,159 @@ body {
   .status-dot--ok { --status-color: var(--status-ok); }
   .status-dot--bad { --status-color: var(--status-bad); }
   .status-dot--warn { --status-color: var(--status-warn); }
+
+  /*
+   * The segmented control — one exclusive choice out of two to five, where the
+   * options are peers and all of them fit.
+   *
+   * A recessed track with one raised thumb in it, and the thumb *slides*. That
+   * last part is the whole component: the row it replaces was four independent
+   * pills that each filled and emptied in place, so the only piece of state the
+   * control carried teleported across the row every time it changed. Here there
+   * is one thumb, positioned arithmetically off the selected index, riding
+   * `translateX` on the platform curve.
+   *
+   * The options are `flex: 1` siblings inside a grid of equal columns, so a
+   * slot is exactly `100 / count` percent and nothing has to be measured — no
+   * ResizeObserver, and nothing to re-measure on a rotation.
+   *
+   * Shape and paint only. What the options *are* — buttons with `aria-pressed`,
+   * tabs, radios — is the caller's decision and is argued at the call site; see
+   * `SegmentedControl.tsx`.
+   */
+  .segmented {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    position: relative;
+    padding: 2px;
+    border-radius: 0.5625rem;
+    background: var(--segment-track);
+    isolation: isolate;
+  }
+
+  .segmented-thumb {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    left: 2px;
+    z-index: -1;
+    border-radius: 0.4375rem;
+    background: var(--segment-thumb);
+    box-shadow: var(--segment-thumb-shadow);
+    transition: transform var(--duration-base) var(--ease-ios);
+  }
+
+  .segmented-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    min-width: 0;
+    height: 1.75rem;
+    padding: 0 0.5rem;
+    border-radius: 0.4375rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-dim);
+    white-space: nowrap;
+    transition: color var(--duration-fast) ease-in-out;
+  }
+
+  .segmented-option[aria-pressed="true"],
+  .segmented-option[aria-selected="true"] {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .segmented-option:disabled {
+    opacity: 0.4;
+  }
+
+  /*
+   * The grouped inset list — the platform's answer to "a run of rows that
+   * belong together".
+   *
+   * One surface holding a list, not a list of surfaces: the group carries the
+   * radius, the fill and (on light) the shadow, and the rows inside it are
+   * separated by hairlines that stop short of the leading edge so the line
+   * reads as *between* two rows rather than as a border around each.
+   *
+   * The separator is drawn on the row rather than between rows so a list can be
+   * built by mapping without a `{index > 0 && <hr/>}` in the middle of it;
+   * `:last-child` takes it back off the bottom, where the group's own edge is
+   * already the line.
+   *
+   * --list-inset is how far in the separator starts, and a row that leads with
+   * artwork sets it wider so the line begins under the text rather than under
+   * the picture. 1rem is the plain-row default: the row's own padding.
+   */
+  .list-group {
+    --list-inset: 1rem;
+    overflow: hidden;
+    border-radius: 0.875rem;
+    background: var(--bg-1);
+    box-shadow: var(--elevation-1);
+  }
+
+  .list-row {
+    position: relative;
+  }
+
+  .list-row + .list-row::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: var(--list-inset);
+    right: 0;
+    /* A hairline, not a border. Declared as 1px and halved, which is the only
+       way to get a sub-pixel line that a 1x display still renders: a literal
+       0.5px height rounds to 0 on some engines and to a full pixel on others. */
+    height: 1px;
+    transform: scaleY(0.5);
+    transform-origin: top;
+    background: var(--border);
+  }
+
+  /*
+   * Frosted chrome that floats over content — the tab bar, the nav bar, the
+   * buttons sitting on artwork.
+   *
+   * Distinct from `.glass-surface`, which is the glass *theme*'s treatment of
+   * the app's own panels: this one is on in every theme, because the chrome it
+   * paints is over scrolling content in all of them and an opaque slab there is
+   * the tell. The tint, the hairline and the inner highlight all come from
+   * tokens, so a bar belongs to whichever theme is on.
+   *
+   * `saturate(180%)` is the half of the effect people actually read as glass —
+   * blur alone gives grey; the saturation is what makes the colour behind it
+   * bleed through. It is also the expensive half, which is why this is on a
+   * handful of surfaces rather than on panels a page can stack a dozen of.
+   */
+  .bar-glass {
+    background: var(--bar-tint);
+    border: 0.5px solid var(--bar-hairline);
+    box-shadow:
+      inset 1px 1px 0 var(--bar-highlight),
+      0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    .bar-glass {
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+    }
+  }
+
+  /*
+   * The hairline around artwork. A poster is a rectangle of someone else's
+   * colour, and a dark one on a dark page has no edge at all without this —
+   * `inset` rather than a border so it doesn't add to the box, and 0.5px so it
+   * reads as the edge of the image rather than as a frame around it.
+   */
+  .art-hairline {
+    box-shadow: inset 0 0 0 0.5px var(--border-strong);
+  }
 
   /*
    * Grows a small control's *touch* target to 44×44 without growing the
