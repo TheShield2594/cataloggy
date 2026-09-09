@@ -111,6 +111,19 @@ const searchBox = () => screen.getByLabelText("Search settings");
 const tabBar = () => screen.queryByRole("tab", { name: SETTINGS_TABS[1].label });
 
 describe("SettingsPage", () => {
+  /*
+   * The page's half of the contract, and only its half: it asks the shared
+   * provider for a fresh read when it opens. Whether that ask reaches the
+   * network is the provider's business — it folds one asked for before its own
+   * first load has landed — and useSettingsHealth.test.tsx is where that is
+   * asserted.
+   */
+  it("asks for a fresh health read when Settings opens", () => {
+    renderPage();
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
   // The tab strip is a real tablist, which is a promise of arrow-key navigation
   // and a roving tabindex — announcing the role without implementing them is the
   // mistake the list panel's `role="menu"` made.

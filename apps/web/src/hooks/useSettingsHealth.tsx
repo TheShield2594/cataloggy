@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { timeAgo } from "../utils/timeAgo";
 import {
@@ -57,7 +57,27 @@ export function SettingsHealthProvider({ children }: { children: ReactNode }) {
   // that fetches, so a refresh that arrives while one is in flight cancels it
   // through the same `cancelled` flag as an unmount.
   const [epoch, setEpoch] = useState(0);
-  const refresh = useCallback(() => setEpoch((n) => n + 1), []);
+  // Whether a load has ever landed. Gates `refresh` — see below.
+  const settledRef = useRef(false);
+
+  const refresh = useCallback(() => {
+    /*
+     * Folded into the first load rather than queued behind it.
+     *
+     * Opening /settings directly mounts the page *inside* this provider, and
+     * React runs a child's effect before its parent's — so the page asks for a
+     * refresh before the provider has started its own first load. Honouring
+     * that sent six requests, then six more, for the same six answers; nothing
+     * aborts the first set, so both were on the wire together.
+     *
+     * Until a load has landed there is nothing to refresh: the one already
+     * running will deliver an answer exactly as current as a re-ask would.
+     * After that, every refresh is real — which is the case that matters, a
+     * reader coming back to the status board later in the session.
+     */
+    if (!settledRef.current) return;
+    setEpoch((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,6 +106,7 @@ export function SettingsHealthProvider({ children }: { children: ReactNode }) {
       // than a wrong one. Only the row that is *about* the jobs needs them.
       if (jobs) next["job-status"] = jobsHealth(jobs);
 
+      settledRef.current = true;
       setSections(next);
     })();
 

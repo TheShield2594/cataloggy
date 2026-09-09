@@ -48,13 +48,19 @@ beforeEach(() => {
   }));
 });
 
-function renderSidebar(pinned = false) {
+function renderSidebar(pinned = false, path = "/") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <Sidebar pinned={pinned} onPinnedChange={() => {}} />
     </MemoryRouter>
   );
 }
+
+/** Every rail row announcing itself as the page you are on. Should be one. */
+const currentRows = () =>
+  [...screen.getByRole("navigation", { name: "Primary" }).querySelectorAll('[aria-current="page"]')].map(
+    (el) => el.textContent
+  );
 
 // The rail's width is the only thing that says "expanded" — the labels stay in
 // the DOM either way, which is exactly why hover-only expansion was invisible
@@ -66,6 +72,56 @@ const EXPANDED_WIDTH = "240px";
 const rail = () => screen.getByRole("navigation", { name: "Primary" }).parentElement as HTMLElement;
 
 describe("Sidebar", () => {
+  /*
+   * `NavLink` matches the pathname and nothing else, and the list rows differ
+   * only by their query string — so all of them, plus the "All Lists" row that
+   * `end` was supposed to hold back, announced themselves as the current page
+   * at once. Three answers to "where am I", and the marker takes the first one
+   * it finds, so it parked on the wrong row too.
+   */
+  it("marks exactly one row current on a list route, and it is the open list", async () => {
+    lists.value = [
+      list({ id: "w", name: "Watchlist", kind: "watchlist", itemCount: 3 }),
+      list({ id: "m", name: "Movie Night", kind: "custom", itemCount: 2 }),
+    ];
+    renderSidebar(true, "/lists?list=m");
+
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    await within(nav).findByRole("link", { name: /Movie Night/ });
+
+    expect(currentRows()).toHaveLength(1);
+    expect(within(nav).getByRole("link", { name: /Movie Night/ })).toHaveAttribute("aria-current", "page");
+  });
+
+  // The bare page is its own destination: with no `?list=`, the row that
+  // manages the lists is the one you are on.
+  it("marks All Lists current only when no list is open", async () => {
+    lists.value = [list({ id: "w", name: "Watchlist", kind: "watchlist", itemCount: 3 })];
+    renderSidebar(true, "/lists");
+
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    await within(nav).findByRole("link", { name: /Watchlist/ });
+
+    expect(currentRows()).toHaveLength(1);
+    expect(within(nav).getByRole("link", { name: "All Lists" })).toHaveAttribute("aria-current", "page");
+  });
+
+  /*
+   * The source rows are shortcuts into Settings, not destinations of their
+   * own — the Settings row above them is the page. As NavLinks they all lit up
+   * beside it the moment you arrived there.
+   */
+  it("leaves the source rows uncurrent on the settings route", async () => {
+    health.value = { trakt: { tone: "ok", label: "Synced 4m ago" } };
+    renderSidebar(true, "/settings?tab=integrations");
+
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    await within(nav).findByRole("link", { name: /Trakt/ });
+
+    expect(currentRows()).toHaveLength(1);
+    expect(within(nav).getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
+  });
+
   /*
    * The rail was a menu of routes with a column of empty space under it. A
    * source list on the platform carries the app's own contents: your lists by

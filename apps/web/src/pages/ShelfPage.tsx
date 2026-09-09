@@ -128,12 +128,20 @@ function kindOptions(counts: Record<ShelfFilter, number>): SegmentedOption<Shelf
  */
 function UpNextCard({
   entry,
+  eager,
   onOpen,
   onResume,
   resumeLabel,
   resumeBusy,
 }: {
   entry: ShelfEntry;
+  /**
+   * Whether this card's still is above the fold. Only the first few are: past
+   * that they are off the end of the rail or below the grid, and `eager` asks
+   * the browser for `fetchPriority: high` on artwork nobody is looking at,
+   * against the artwork they are.
+   */
+  eager: boolean;
   onOpen: () => void;
   onResume?: () => void;
   resumeLabel?: string;
@@ -153,7 +161,7 @@ function UpNextCard({
         src={art}
         alt=""
         className="absolute inset-0 h-full w-full"
-        eager
+        eager={eager}
         sizes="(min-width: 640px) 420px, 304px"
       />
       {/* The scrim starts at 35% rather than at the top: a caption needs a
@@ -548,13 +556,18 @@ export function ShelfPage() {
                * worth of black beside it.
                */}
               <div className="scrollbar-hide -mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 lg:grid-cols-3">
-                {visibleInProgress.map((entry) => {
+                {visibleInProgress.map((entry, index) => {
                   const series =
                     entry.kind === "show" ? progress.find((s) => `series:${s.imdbId}` === entry.key) : undefined;
                   return (
                     <UpNextCard
                       key={entry.key}
                       entry={entry}
+                      // Three: what a desktop shows across, and one and a bit
+                      // more than a phone's rail has room for. The rest load
+                      // lazily as they are scrolled to, the same way the grid
+                      // below does.
+                      eager={index < 3}
                       onOpen={() => openEntry(entry)}
                       onResume={series ? () => void markNext(series) : undefined}
                       resumeLabel={

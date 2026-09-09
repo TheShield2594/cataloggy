@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { NavLink, useLocation } from "react-router";
+import { Link, NavLink, useLocation } from "react-router";
 import { BarChart3, CalendarDays, Compass, Gamepad2, History, Library, List, Pin, PinOff, Search, Settings, User } from "lucide-react";
 import { api, CatalogList, Profile } from "../api";
 import { BRAND_WORDMARK, BrandMark } from "./BrandMark";
@@ -133,6 +133,7 @@ export function Sidebar({
   const railLists = useMemo(() => orderListsForRail(lists), [lists]);
   const sources = useMemo(() => railSources(health), [health]);
 
+
   useEffect(() => {
     if (!railVisible) return;
     const controller = new AbortController();
@@ -159,17 +160,34 @@ export function Sidebar({
   // the rail is collapsed to icons.
   const navRef = useRef<HTMLElement>(null);
   const location = useLocation();
+  /*
+   * Which row is the page you are on — computed here rather than left to
+   * `NavLink`, because `NavLink` matches the pathname and nothing else.
+   *
+   * The list rows differ only by their query string, so every one of them
+   * matched `/lists` and announced itself as the current page at once; `end`
+   * did not save the "All Lists" row either, since it narrows the *path* and
+   * has no opinion about `?list=`. Three rows carrying `aria-current="page"`
+   * is three answers to "where am I", and the marker — which takes the first
+   * one it finds — parked on the wrong row.
+   */
+  const onListsRoute = location.pathname === "/lists";
+  const openListId = onListsRoute ? new URLSearchParams(location.search).get("list") : null;
   const [marker, setMarker] = useState<{ top: number; height: number } | null>(null);
   useLayoutEffect(() => {
     // NavLink writes aria-current on whichever link matched, which spares us
     // re-implementing its `end`/trailing-slash rules to find the same one.
     const active = navRef.current?.querySelector<HTMLElement>('a[aria-current="page"]');
     setMarker(active ? { top: active.offsetTop, height: active.offsetHeight } : null);
-    // `railVisible` as well as the route: below `sm` the whole rail is
-    // `display: none`, where every offset measures zero. Widening the window
-    // past 640px is not a navigation, so without this the rail would appear
-    // with its marker still holding those zeroes until the next route change.
-  }, [location.pathname, railVisible]);
+    // The search string as well as the path: the list rows differ only by
+    // `?list=`, so moving between two of them is a navigation that changes
+    // which row is current without changing the pathname at all.
+    //
+    // `railVisible` too: below `sm` the whole rail is `display: none`, where
+    // every offset measures zero. Widening the window past 640px is not a
+    // navigation, so without this the rail would appear with its marker still
+    // holding those zeroes until the next route change.
+  }, [location.pathname, location.search, railVisible]);
 
   useEffect(() => {
     hintSeenRef.current = localStorage.getItem(HINT_KEY) === "1";
@@ -333,12 +351,15 @@ export function Sidebar({
             * install gets a rail of six routes rather than an empty heading.
             */}
           <RailSectionLabel expanded={expanded}>Lists</RailSectionLabel>
-          {railLists.map((list) => (
-              <NavLink
+          {railLists.map((list) => {
+            const isCurrent = openListId === list.id;
+            return (
+              <Link
                 key={list.id}
                 to={`/lists?list=${encodeURIComponent(list.id)}`}
-                className={({ isActive }) => `${RAIL_ROW} ${isActive ? "font-medium" : "hover:bg-[var(--surface)]"}`}
-                style={({ isActive }) => ({ color: isActive ? "var(--text)" : "var(--text-dim)" })}
+                aria-current={isCurrent ? "page" : undefined}
+                className={`${RAIL_ROW} ${isCurrent ? "font-medium" : "hover:bg-[var(--surface)]"}`}
+                style={{ color: isCurrent ? "var(--text)" : "var(--text-dim)" }}
                 title={expanded ? undefined : `${list.name} — ${list.itemCount}`}
                 onPointerEnter={() => prefetchRoute("/lists")}
                 onFocus={() => prefetchRoute("/lists")}
@@ -356,24 +377,26 @@ export function Sidebar({
                 <span className="min-w-0 flex-1 truncate" style={{ opacity: expanded ? 1 : 0 }}>
                   {list.name}
                 </span>
-            <span
-              className="flex-none tabular-nums transition-opacity"
-              style={{ color: "var(--text-mute)", opacity: expanded ? 1 : 0 }}
-            >
-              {list.itemCount}
-            </span>
-            </NavLink>
-          ))}
+                <span
+                  className="flex-none tabular-nums transition-opacity"
+                  style={{ color: "var(--text-mute)", opacity: expanded ? 1 : 0 }}
+                >
+                  {list.itemCount}
+                </span>
+              </Link>
+            );
+          })}
           {/* The page where lists are made, renamed and deleted, at the foot of
               the group it manages rather than as a second row called "Lists"
-              further down. `end` so it is only current on the bare /lists — a
-              list row above it carries the `?list=` and would otherwise light
-              both. */}
-          <NavLink
+              further down. Current only on the bare /lists: with a `?list=` in
+              the URL, the row above it is the page you are on. */}
+          <Link
             to="/lists"
-            end
-            className={({ isActive }) => `${RAIL_ROW} ${isActive ? "font-medium" : "hover:bg-[var(--surface)]"}`}
-            style={({ isActive }) => ({ color: isActive ? "var(--text)" : "var(--text-mute)" })}
+            aria-current={onListsRoute && !openListId ? "page" : undefined}
+            className={`${RAIL_ROW} ${
+              onListsRoute && !openListId ? "font-medium" : "hover:bg-[var(--surface)]"
+            }`}
+            style={{ color: onListsRoute && !openListId ? "var(--text)" : "var(--text-mute)" }}
             title={expanded ? undefined : "All Lists"}
             onPointerEnter={() => prefetchRoute("/lists")}
             onFocus={() => prefetchRoute("/lists")}
@@ -386,15 +409,19 @@ export function Sidebar({
             <span className="whitespace-nowrap" style={{ opacity: expanded ? 1 : 0 }}>
               All Lists
             </span>
-          </NavLink>
+          </Link>
 
           {/*
             * Sources, with whether they are working.
             *
             * Only the ones that are actually set up — see `railSources`. All
-            * four rows lead to the same place, which is the point: the rail
+            * of them lead to the same place, which is the point: the rail
             * answers "is anything wrong?" and Settings answers "what, and how
             * do I fix it?".
+            *
+            * Plain links, and never `aria-current`: they are shortcuts into
+            * one page, and the Settings row above is the one that *is* that
+            * page. As NavLinks they all lit up alongside it on arrival.
             *
             * The dot is never the whole message (SC 1.4.1): the words beside
             * it are what separate "Synced 4m ago" from "Token expired", and
@@ -404,7 +431,7 @@ export function Sidebar({
             <>
               <RailSectionLabel expanded={expanded}>Sources</RailSectionLabel>
               {sources.map((source) => (
-                <NavLink
+                <Link
                   key={source.id}
                   to="/settings?tab=integrations"
                   className={`${RAIL_ROW} hover:bg-[var(--surface)]`}
@@ -425,7 +452,7 @@ export function Sidebar({
                   >
                     {source.status}
                   </span>
-                </NavLink>
+                </Link>
               ))}
             </>
           )}
