@@ -28,8 +28,21 @@ const gamesSteamRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/games/steam/sync", { preHandler: resolveProfile }, async (request, reply) => {
+    // Unconfigured, not broken — the same distinction `/games/search` draws for
+    // IGDB. `STEAM_API_KEY`/`STEAM_ID` are optional, so an instance without
+    // them is working as installed, and 500 filed that as a server fault every
+    // time someone pressed Sync. The 500 below is the real one: a sync that
+    // started with credentials and failed.
+    //
+    // `GET /games/steam/status` already answers this question with a 200 and
+    // `configured: false`, because a status endpoint reporting on a disabled
+    // integration is doing its job. This route cannot do the work asked of it,
+    // so it declines with a code the caller can branch on.
     if (!isSteamSyncConfigured()) {
-      return reply.code(500).send({ error: "Steam integration is not configured" });
+      return reply.code(503).send({
+        error: "Steam sync needs STEAM_API_KEY and STEAM_ID. Set both to enable it.",
+        code: "steam_not_configured"
+      });
     }
 
     try {

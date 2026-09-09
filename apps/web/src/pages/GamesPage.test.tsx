@@ -15,6 +15,7 @@ vi.mock("../api", async (importOriginal) => {
       searchGames: vi.fn(),
       addGame: vi.fn(),
       getSteamStatus: vi.fn(),
+      getIgdbStatus: vi.fn(),
       triggerSteamSync: vi.fn(),
     },
   };
@@ -31,11 +32,12 @@ vi.mock("../components/GameDetailPanel", () => ({
   ),
 }));
 
-const { api } = await import("../api");
+const { api, ApiError } = await import("../api");
 const listGames = vi.mocked(api.listGames);
 const searchGames = vi.mocked(api.searchGames);
 const addGame = vi.mocked(api.addGame);
 const getSteamStatus = vi.mocked(api.getSteamStatus);
+const getIgdbStatus = vi.mocked(api.getIgdbStatus);
 const triggerSteamSync = vi.mocked(api.triggerSteamSync);
 
 function game(title: string, over: Partial<Game> = {}): Game {
@@ -103,6 +105,10 @@ beforeEach(() => {
   listGames.mockResolvedValue([HADES, OUTER_WILDS]);
   searchGames.mockResolvedValue([]);
   getSteamStatus.mockResolvedValue({ configured: false, player: null });
+  // The default is an instance with IGDB set up and no Steam, which is the
+  // shape of every library test below: games exist, so something configured
+  // put them there.
+  getIgdbStatus.mockResolvedValue({ configured: true });
 });
 
 describe("GamesPage library", () => {
@@ -137,6 +143,79 @@ describe("GamesPage library", () => {
     renderPage();
 
     expect(await screen.findByText(/no games in your library yet/i)).toBeInTheDocument();
+    // The invitation used to say "add one manually" and offer nothing to do it
+    // with; the only Add control was at the top of the page.
+    const empty = screen.getByText(/no games in your library yet/i).closest("div")!;
+    expect(within(empty).getByRole("button", { name: /add game/i })).toBeInTheDocument();
+  });
+
+  it("adds from the empty state's own button", async () => {
+    const user = userEvent.setup();
+    listGames.mockResolvedValue([]);
+    renderPage();
+    const empty = (await screen.findByText(/no games in your library yet/i)).closest("div")!;
+
+    await user.click(within(empty).getByRole("button", { name: /add game/i }));
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  // An empty library and no integration is a different statement from an empty
+  // library, and the page showed the second for both: `GET /games` is a plain
+  // database read that cannot tell them apart.
+  it("offers setup, not an empty library, when neither integration is configured", async () => {
+    listGames.mockResolvedValue([]);
+    getIgdbStatus.mockResolvedValue({ configured: false });
+    renderPage();
+
+    expect(await screen.findByText(/games isn.t set up yet/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /connect igdb or steam/i })).toHaveAttribute(
+      "href",
+      "/settings?tab=integrations"
+    );
+    expect(screen.queryByText(/no games in your library yet/i)).not.toBeInTheDocument();
+  });
+
+  // Either integration alone is enough to be useful, so Steam without IGDB is a
+  // set-up instance — it just cannot search for a game to add by hand.
+  it("treats Steam alone as configured", async () => {
+    listGames.mockResolvedValue([]);
+    getIgdbStatus.mockResolvedValue({ configured: false });
+    getSteamStatus.mockResolvedValue({ configured: true, player: null });
+    renderPage();
+
+    expect(await screen.findByText(/no games in your library yet/i)).toBeInTheDocument();
+    expect(screen.queryByText(/games isn.t set up yet/i)).not.toBeInTheDocument();
+  });
+
+  // "We could not ask" is not "the answer is no". Sending someone to Settings
+  // for credentials they may already have, because a status request failed, is
+  // worse than showing the ordinary empty state.
+  it("falls back to the empty library when the status requests fail", async () => {
+    listGames.mockResolvedValue([]);
+    getIgdbStatus.mockRejectedValue(new Error("offline"));
+    getSteamStatus.mockRejectedValue(new Error("offline"));
+    renderPage();
+
+    expect(await screen.findByText(/no games in your library yet/i)).toBeInTheDocument();
+    expect(screen.queryByText(/games isn.t set up yet/i)).not.toBeInTheDocument();
+  });
+
+  // The empty state waits for both status reads, so a hanging one used to leave
+  // that region blank for `request()`'s full 30s default. They carry a short
+  // deadline and a signal now, and leaving the page abandons them.
+  it("drops the status reads when the page unmounts", async () => {
+    const { unmount } = renderPage();
+    await waitFor(() => expect(getIgdbStatus).toHaveBeenCalled());
+    const igdbSignal = getIgdbStatus.mock.calls[0]?.[0];
+    const steamSignal = getSteamStatus.mock.calls[0]?.[0];
+    expect(igdbSignal).toBeInstanceOf(AbortSignal);
+    expect(igdbSignal?.aborted).toBe(false);
+
+    unmount();
+
+    expect(igdbSignal?.aborted).toBe(true);
+    expect(steamSignal?.aborted).toBe(true);
   });
 
   it("reports a failed load and doesn't claim the library is empty", async () => {
@@ -202,6 +281,38 @@ describe("GamesPage add-game modal", () => {
     await user.click(screen.getByRole("button", { name: /add game/i }));
     return within(screen.getByRole("dialog"));
   };
+
+  // The API answers an unconfigured IGDB with 503 + `igdb_not_configured`, which
+  // is a setup step outstanding rather than a failure — so it reads as a notice
+  // with a way forward, not as the red error box a 502 gets.
+  it("offers setup instead of an error when search reports IGDB is unconfigured", async () => {
+    const user = userEvent.setup();
+    searchGames.mockRejectedValue(new ApiError("Game search needs IGDB credentials.", 503, "igdb_not_configured"));
+    const dialog = await openModal(user);
+
+    await user.type(dialog.getByLabelText("Search games"), "celeste");
+
+    expect(await dialog.findByText(/game search isn.t set up yet/i)).toBeInTheDocument();
+    expect(dialog.getByRole("link", { name: /open settings/i })).toHaveAttribute(
+      "href",
+      "/settings?tab=integrations"
+    );
+    expect(dialog.queryByRole("alert")).not.toBeInTheDocument();
+    expect(dialog.queryByText(/no results found/i)).not.toBeInTheDocument();
+  });
+
+  // Branching on the code, not the status: any other 503 is a thing to retry
+  // and still belongs in the error box.
+  it("reports an unrelated search failure as an error", async () => {
+    const user = userEvent.setup();
+    searchGames.mockRejectedValue(new ApiError("IGDB search is temporarily unavailable.", 502));
+    const dialog = await openModal(user);
+
+    await user.type(dialog.getByLabelText("Search games"), "celeste");
+
+    expect(await dialog.findByRole("alert")).toHaveTextContent(/temporarily unavailable/i);
+    expect(dialog.queryByText(/isn.t set up yet/i)).not.toBeInTheDocument();
+  });
 
   it("searches IGDB once for a query typed a letter at a time", async () => {
     const user = userEvent.setup();

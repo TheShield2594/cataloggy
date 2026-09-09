@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router";
 import { AlertCircle, Award, BarChart3, Calendar, Clock, Film, Flame, Minus, Star, Trophy, TrendingDown, TrendingUp } from "lucide-react";
 import { api, DetailedWatchStats, WatchStats, YearInReviewStats } from "../api";
 import { TicketTile } from "../components/TicketTile";
@@ -130,6 +131,40 @@ export function StatsPage() {
           ))}
         </div>
         <div className="skeleton h-64 rounded-2xl" />
+      </div>
+    );
+  }
+
+  /*
+   * A profile with no watch history has nothing to compute statistics from, and
+   * the page rendered that as four zero tiles, a flat chart, an empty genre list
+   * and "No badges earned yet — keep watching!" — a screen that reads as a
+   * failure and offers no way out of it. Every other page says what its empty
+   * state means and points somewhere; this was the one that said nothing.
+   *
+   * `stats` is non-null by here (the error and loading branches have both
+   * returned), and the two counts are of watch-event rows, so no rows means
+   * both are zero — the same condition as `totalPlays === 0`, stated in the
+   * terms the tiles above use.
+   */
+  if (stats && stats.totalMovies === 0 && stats.totalEpisodes === 0) {
+    return (
+      <div className="mx-auto max-w-4xl space-y-6">
+        <h1 className={PAGE_TITLE} style={{ color: "var(--text)" }}>Watch Statistics</h1>
+        <div className="glass-panel rounded-2xl p-8 text-center" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
+          <BarChart3 className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
+          <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
+            Nothing watched yet, so there is nothing to count.
+          </p>
+          {/* The expected state for a new profile, not a fault — and the reason
+              the streaks and badges below are missing rather than broken. */}
+          <p className="mt-1 text-xs" style={{ color: "var(--text-mute)" }}>
+            Every figure here — streaks, genres, badges, your year in review — is built from your watch history.
+          </p>
+          <Link to="/search" className="mt-2 inline-block py-1 text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
+            Find something to watch &rarr;
+          </Link>
+        </div>
       </div>
     );
   }

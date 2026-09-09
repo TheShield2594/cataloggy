@@ -5,7 +5,15 @@ import {
 } from "./utils/dataCache";
 
 export class ApiError extends Error {
-  constructor(message: string, public readonly status: number) {
+  /**
+   * `code` is the API's machine-readable reason, when the response carried one
+   * — `igdb_not_configured`, `too_many_rows`, `profile_not_active`. It is what
+   * lets a caller tell apart two failures that share a status: a 503 because an
+   * optional integration was never set up is a thing to offer setup for, while
+   * any other 503 is a thing to retry. Branch on `code` before `message`, which
+   * is prose meant for a human and free to change.
+   */
+  constructor(message: string, public readonly status: number, public readonly code?: string) {
     super(message);
     this.name = "ApiError";
   }
@@ -555,6 +563,28 @@ export type SteamStatus = {
   player: SteamPlayerSummary | null;
 };
 
+/**
+ * Whether the server has IGDB credentials. Game *search* is the only thing that
+ * needs them, so `GET /games` cannot answer this — an empty library reads the
+ * same either way.
+ */
+export type IgdbStatus = {
+  configured: boolean;
+};
+
+/**
+ * Both integration-status reads get this instead of `request()`'s 30s default,
+ * because the Games page holds its empty state back until they settle: a status
+ * endpoint that hangs would otherwise leave that region blank for half a minute,
+ * which is worse than either sentence it is choosing between.
+ *
+ * Not tighter than this because `GET /games/steam/status` makes one outbound
+ * Steam call when Steam is configured. Timing out costs the "Steam connected
+ * as X" bar for that load and nothing else — the page falls back to treating
+ * the answer as unknown, which is the safe direction.
+ */
+const INTEGRATION_STATUS_TIMEOUT_MS = 6000;
+
 export type SteamSyncSummary = {
   total: number;
   created: number;
@@ -917,7 +947,7 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
       runtimeConfig.setToken("");
       window.dispatchEvent(new Event("cataloggy:unauthorized"));
     }
-    throw new ApiError(message || `Request failed: ${response.status}`, response.status);
+    throw new ApiError(message || `Request failed: ${response.status}`, response.status, errorCode);
   }
 
   if (response.status === 204) {
@@ -1451,8 +1481,11 @@ export const api = {
   deleteGame(id: string) {
     return request<void>(`/games/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
-  getSteamStatus() {
-    return request<SteamStatus>("/games/steam/status");
+  getSteamStatus(signal?: AbortSignal) {
+    return request<SteamStatus>("/games/steam/status", { signal, timeoutMs: INTEGRATION_STATUS_TIMEOUT_MS });
+  },
+  getIgdbStatus(signal?: AbortSignal) {
+    return request<IgdbStatus>("/games/igdb/status", { signal, timeoutMs: INTEGRATION_STATUS_TIMEOUT_MS });
   },
   triggerSteamSync() {
     return request<SteamSyncSummary>("/games/steam/sync", { method: "POST", timeoutMs: 60000 });

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { Check, Clock, Gamepad2, Plus, RefreshCw, Search, Star, X } from "lucide-react";
-import { api, Game, GameSearchResult, GameSort, SteamStatus } from "../api";
+import { api, ApiError, Game, GameSearchResult, GameSort, SteamStatus } from "../api";
 import { GameDetailPanel } from "../components/GameDetailPanel";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useScrollLock } from "../hooks/useScrollLock";
@@ -38,6 +38,53 @@ function compareGames(a: Game, b: Game, sort: GameSort): number {
   }
 }
 
+/* ─── "Games isn't set up" notice ──────────────────────────── */
+
+/**
+ * The state for an instance that was never given credentials for Games.
+ *
+ * This is a different statement from "you have no games", and the page showed
+ * the second for both until now. It could not do better: `GET /games` is a
+ * plain database read, so an empty library looks identical either way, and the
+ * one route that knows — search — is behind the add dialog. `/games/igdb/status`
+ * and `/games/steam/status` are what make the distinction available up front.
+ *
+ * Two integrations doing two jobs, so the copy names both rather than telling
+ * someone to "configure Games": adding a game is an IGDB search, and the
+ * automatic library and playtime sync is Steam's. Either alone is useful.
+ */
+function ConnectGamesNotice({ compact = false }: { compact?: boolean }) {
+  const body = (
+    <>
+      Adding a game is an IGDB search, and automatic library and playtime sync comes from Steam.
+      Setting up either one is enough to get started.
+    </>
+  );
+
+  if (compact) {
+    return (
+      <div className="rounded-xl border px-3 py-3 text-xs" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+        <p className="font-semibold" style={{ color: "var(--text)" }}>Game search isn&rsquo;t set up yet</p>
+        <p className="mt-1" style={{ color: "var(--text-dim)" }}>{body}</p>
+        <Link to="/settings?tab=integrations" className="mt-1.5 inline-block py-1 font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
+          Open Settings &rarr;
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3 py-24 text-center">
+      <Gamepad2 className="h-12 w-12" style={{ color: "var(--text-mute)" }} />
+      <p style={{ color: "var(--text-dim)" }}>Games isn&rsquo;t set up yet.</p>
+      <p className="max-w-sm text-sm" style={{ color: "var(--text-mute)" }}>{body}</p>
+      <Link to="/settings?tab=integrations" className="btn-secondary btn-sm mt-1">
+        Connect IGDB or Steam
+      </Link>
+    </div>
+  );
+}
+
 /* ─── Add Game Modal (search-to-add via IGDB) ─────────────── */
 
 function AddGameModal({
@@ -52,6 +99,10 @@ function AddGameModal({
   const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  // Held apart from `error` because it isn't one: searching an instance without
+  // IGDB credentials is a setup step outstanding, not a failure, and it reads
+  // as a notice with a way forward rather than as red text.
+  const [notConfigured, setNotConfigured] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useFocusTrap<HTMLDivElement>();
@@ -81,11 +132,18 @@ function AddGameModal({
 
     setSearching(true);
     setError(null);
+    setNotConfigured(false);
     try {
       const res = await api.searchGames(q, controller.signal);
       setResults(res);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
+      // Branch on the code, not the message: the prose is the API's to reword.
+      if (err instanceof ApiError && err.code === "igdb_not_configured") {
+        setNotConfigured(true);
+        setResults([]);
+        return;
+      }
       setError(err instanceof Error ? err.message : "Search failed");
     } finally {
       if (abortRef.current === controller) setSearching(false);
@@ -98,6 +156,7 @@ function AddGameModal({
       if (debounceRef.current) clearTimeout(debounceRef.current);
       setResults([]);
       setSearching(false);
+      setNotConfigured(false);
       return;
     }
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -170,8 +229,9 @@ function AddGameModal({
             where the keyboard starts instead of scrolling on behind it. */}
         <div className="min-h-0 flex-auto overflow-y-auto px-5 py-3 sm:max-h-[50vh]">
           {error && <p role="alert" className="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-danger">{error}</p>}
+          {notConfigured && <div className="mb-2"><ConnectGamesNotice compact /></div>}
           {searching && <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>Searching...</p>}
-          {!searching && query.trim() && results.length === 0 && !error && (
+          {!searching && query.trim() && results.length === 0 && !error && !notConfigured && (
             <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>No results found.</p>
           )}
           <div className="space-y-1">
@@ -286,20 +346,12 @@ function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => vo
 
 /* ─── Steam status bar ────────────────────────────────────── */
 
-function SteamStatusBar({ onSynced }: { onSynced: () => void }) {
-  const [status, setStatus] = useState<SteamStatus | null>(null);
+// Takes the status rather than fetching it: the page now needs the same answer
+// for its empty state, and two components asking the same question is two
+// requests that can disagree.
+function SteamStatusBar({ status, onSynced }: { status: SteamStatus | null; onSynced: () => void }) {
   const [syncing, setSyncing] = useState(false);
   const { showToast } = useToast();
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        setStatus(await api.getSteamStatus());
-      } catch {
-        setStatus(null);
-      }
-    })();
-  }, []);
 
   if (!status || !status.configured) return null;
 
@@ -358,6 +410,47 @@ export function GamesPage() {
   const { showToast } = useToast();
   const loadAbortRef = useRef<AbortController | null>(null);
 
+  /*
+   * Whether either integration is set up. `null` means the question hasn't been
+   * answered yet — which is not the same as "no", and the empty state waits for
+   * it rather than guessing. Telling somebody to go and connect IGDB because a
+   * status request was slow would be worse than the bug this replaces.
+   *
+   * Each request is allowed to fail alone and a failure counts as "don't know",
+   * following `useSettingsHealth`: a health answer nobody could fetch should
+   * contribute nothing rather than a wrong claim.
+   */
+  const [igdbConfigured, setIgdbConfigured] = useState<boolean | null>(null);
+  const [steamStatus, setSteamStatus] = useState<SteamStatus | null>(null);
+  // Both requests have settled, however they settled. The empty state waits for
+  // this rather than rendering on what it knows so far, because the two readings
+  // of an empty library are different sentences and showing one then swapping it
+  // for the other is the same wrong statement this fixes, just briefly.
+  //
+  // What makes that wait safe is the short deadline on the two reads
+  // (`INTEGRATION_STATUS_TIMEOUT_MS`) rather than the library load, which can
+  // finish first and leave this the only thing outstanding — with `request()`'s
+  // 30s default that was a blank region for half a minute.
+  const [integrationsKnown, setIntegrationsKnown] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Dropped on unmount like every other request on this page: leaving is as
+    // much a reason to abandon the answer as switching profile is.
+    const controller = new AbortController();
+    void (async () => {
+      const [igdb, steam] = await Promise.all([
+        api.getIgdbStatus(controller.signal).catch(() => null),
+        api.getSteamStatus(controller.signal).catch(() => null),
+      ]);
+      if (cancelled) return;
+      setIgdbConfigured(igdb ? igdb.configured : null);
+      setSteamStatus(steam);
+      setIntegrationsKnown(true);
+    })();
+    return () => { cancelled = true; controller.abort(); };
+  }, []);
+
   const loadGames = useCallback(async (currentSort: GameSort) => {
     loadAbortRef.current?.abort();
     const controller = new AbortController();
@@ -402,8 +495,17 @@ export function GamesPage() {
   };
 
   const emptyState = useMemo(
-    () => games !== null && games.length === 0 && !loading,
-    [games, loading]
+    () => games !== null && games.length === 0 && !loading && integrationsKnown,
+    [games, loading, integrationsKnown]
+  );
+
+  // Both questions answered, both answers no. A request that failed leaves its
+  // answer unknown and falls through to the library-empty state below — the
+  // safer of the two to be wrong about, since it still offers Add rather than
+  // sending someone to Settings for credentials they may already have.
+  const nothingConfigured = useMemo(
+    () => igdbConfigured === false && steamStatus !== null && !steamStatus.configured,
+    [igdbConfigured, steamStatus]
   );
 
   return (
@@ -419,7 +521,7 @@ export function GamesPage() {
         </button>
       </div>
 
-      <SteamStatusBar onSynced={() => void loadGames(sort)} />
+      <SteamStatusBar status={steamStatus} onSynced={() => void loadGames(sort)} />
 
       <div className="mb-5 flex items-center gap-1.5 rounded-full border p-1 w-fit" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
         {SORT_OPTIONS.map((opt) => (
@@ -455,15 +557,23 @@ export function GamesPage() {
         </div>
       )}
 
-      {emptyState && (
+      {emptyState && (nothingConfigured ? (
+        <ConnectGamesNotice />
+      ) : (
         <div className="flex flex-col items-center gap-3 py-24 text-center">
           <Gamepad2 className="h-12 w-12" style={{ color: "var(--text-mute)" }} />
           <p style={{ color: "var(--text-dim)" }}>No games in your library yet.</p>
-          <p className="text-sm" style={{ color: "var(--text-mute)" }}>
+          <p className="max-w-sm text-sm" style={{ color: "var(--text-mute)" }}>
             Add one manually, or connect Steam to sync your library automatically.
           </p>
+          {/* The text said "add one manually" and then offered nothing to do it
+              with — the only Add control is at the top of the page, which is
+              not where somebody reading this is looking. */}
+          <button type="button" onClick={() => setShowAddModal(true)} className="btn-primary btn-sm mt-1">
+            <Plus className="h-4 w-4" /> Add game
+          </button>
         </div>
-      )}
+      ))}
 
       {!loading && games && games.length > 0 && (
         <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">

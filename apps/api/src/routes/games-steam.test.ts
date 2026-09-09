@@ -90,16 +90,22 @@ describe("Steam games routes", () => {
       expect(syncSteamLibrary).toHaveBeenCalledWith(expect.anything(), PROFILE_ID);
     });
 
-    it("returns 500 when Steam is not configured", async () => {
+    // 503, not 500: Steam is optional, so an instance without the pair is
+    // unconfigured rather than faulting. The `code` is what a caller branches
+    // on to offer "Connect Steam" instead of reporting a server error.
+    it("returns 503 with a branchable code when Steam is not configured", async () => {
       isSteamSyncConfigured.mockReturnValue(false);
       const app = await buildApp();
 
       const res = await app.inject({ method: "POST", url: "/games/steam/sync" });
 
-      expect(res.statusCode).toBe(500);
+      expect(res.statusCode).toBe(503);
+      expect(res.json().code).toBe("steam_not_configured");
       expect(syncSteamLibrary).not.toHaveBeenCalled();
     });
 
+    // The other side of the split: credentials were there and the work failed,
+    // which is a genuine 500 and keeps it.
     it("returns 500 when the sync throws", async () => {
       syncSteamLibrary.mockRejectedValue(new Error("boom"));
       const app = await buildApp();

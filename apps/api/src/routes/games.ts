@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { resolveProfile } from "../lib/profile.js";
-import { getIgdb } from "../lib/igdb-client.js";
+import { getIgdb, isIgdbConfigured } from "../lib/igdb-client.js";
 import { UUID_V4_PATTERN } from "../lib/types.js";
 
 type GameSort = "recent" | "playtime" | "rating";
@@ -45,12 +45,31 @@ const gamesRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "q is required" });
     }
 
+    // Missing Twitch credentials are a configuration state, not a fault. Games
+    // is optional — `README.md` says leaving the pair unset is safe — so an
+    // instance without it is working as installed. Answering 500 filed that as
+    // a server error in the logs and in Sentry, and left the UI unable to tell
+    // "no games in your library" apart from "Games was never set up", so it
+    // showed the first for both. 503 says the capability is absent rather than
+    // broken, and `code` is what the empty state branches on.
+    //
+    // No `Retry-After`: retrying doesn't help until someone edits the env.
+    if (!isIgdbConfigured()) {
+      return reply.code(503).send({
+        error: "Game search needs IGDB credentials. Set TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET to enable it.",
+        code: "igdb_not_configured"
+      });
+    }
+
     let igdb: ReturnType<typeof getIgdb>;
     try {
       igdb = getIgdb();
     } catch (error) {
+      // Both credentials are present, so this is a genuine construction
+      // failure rather than the unconfigured case above — which is what 500 is
+      // actually for.
       request.log.error(error, "IGDB client initialization failed");
-      return reply.code(500).send({ error: "IGDB integration is not configured" });
+      return reply.code(500).send({ error: "Game search is unavailable due to a server error." });
     }
 
     let results: Awaited<ReturnType<typeof igdb.searchGames>>;
