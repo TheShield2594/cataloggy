@@ -69,6 +69,14 @@ const SHELF_ITEMS_CACHE_KEY = "shelf:items";
 
 /* ─── The filter row ───────────────────────────────────────── */
 
+/**
+ * The kind filter — All / Shows / Films / Games, each with what it would show.
+ *
+ * The counts are the point as much as the filtering is: they say how much of
+ * the shelf each kind accounts for without anyone having to click through to
+ * find out, and they are what makes an empty kind safe to disable rather than
+ * hide.
+ */
 function KindFilter({
   active,
   counts,
@@ -222,6 +230,12 @@ function InProgressRow({
 
 /* ─── A cell in the grid ───────────────────────────────────── */
 
+/**
+ * One cell of the grid: artwork, title, and the mono run that says what it is.
+ *
+ * Deliberately the same cell for all three kinds — the run underneath is where
+ * they differ, and it is doing the work the type badges used to do badly.
+ */
 function ShelfCell({ entry, eager, onOpen }: { entry: ShelfEntry; eager: boolean; onOpen: () => void }) {
   return (
     <div className="group">

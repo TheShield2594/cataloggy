@@ -73,6 +73,7 @@ export function lastRunLabel(
   return run ? timeAgo(run.at) : null;
 }
 
+/** The recorded failure for a named job, if its last run was one. */
 const failed = (jobs: JobStatus | null, job: string): JobFailure | undefined =>
   jobs?.failures.find((failure) => failure.job === job);
 

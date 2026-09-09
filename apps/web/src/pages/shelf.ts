@@ -22,8 +22,6 @@ import { formatPlaytime } from "../utils/playtime";
 /** Books are in the redesign but not in the schema, so there are three. */
 export type ShelfKind = "show" | "film" | "game";
 
-export const SHELF_KINDS: readonly ShelfKind[] = ["show", "film", "game"] as const;
-
 export type ShelfFilter = "all" | ShelfKind;
 
 export const SHELF_FILTERS: readonly { value: ShelfFilter; label: string }[] = [
@@ -68,12 +66,17 @@ export type ShelfEntry = {
 
 const KIND_LABEL: Record<ShelfKind, string> = { show: "Show", film: "Film", game: "Game" };
 
-export const shelfKindLabel = (kind: ShelfKind): string => KIND_LABEL[kind];
-
 /** Joined with the separator the whole redesign uses for metadata runs. */
 export const metaLine = (...parts: (string | null | undefined | false)[]): string =>
   parts.filter((part): part is string => typeof part === "string" && part.length > 0).join(" · ");
 
+/**
+ * An ISO timestamp as epoch ms, or null when it is missing or unparseable.
+ *
+ * Null rather than `NaN`, because `NaN` compares false against everything and
+ * would sort a broken row to wherever the comparator happened to leave it —
+ * `buildShelf` files a null deliberately, at the end.
+ */
 const parseTime = (value: string | null | undefined): number | null => {
   if (!value) return null;
   const ms = new Date(value).getTime();
@@ -92,7 +95,7 @@ const listItemName = (item: ListItemWithMeta): string =>
  * everything it actually needs, so this only has to be accurate about identity
  * and good enough to paint the first frame.
  */
-export function listItemToSearchResult(item: ListItemWithMeta): SearchResult {
+function listItemToSearchResult(item: ListItemWithMeta): SearchResult {
   return {
     imdbId: item.imdbId,
     type: item.type,
@@ -110,6 +113,13 @@ export function listItemToSearchResult(item: ListItemWithMeta): SearchResult {
   };
 }
 
+/**
+ * A shelf row for a title in a list — a show or a film, depending on its type.
+ *
+ * This is the shape most of the grid is made of, and the one that knows the
+ * least: a list row carries a title, a year and a poster, and nothing about how
+ * far into it you are.
+ */
 export function shelfEntryFromListItem(item: ListItemWithMeta): ShelfEntry {
   const kind: ShelfKind = item.type === "series" ? "show" : "film";
   const year = item.metadata?.year;
@@ -130,6 +140,12 @@ export function shelfEntryFromListItem(item: ListItemWithMeta): ShelfEntry {
   };
 }
 
+/**
+ * A shelf row for a game, measured in hours rather than in parts.
+ *
+ * A finished game says so instead of showing a total that has stopped moving,
+ * which is the only completion signal the schema has.
+ */
 export function shelfEntryFromGame(game: Game): ShelfEntry {
   return {
     key: `game:${game.id}`,
@@ -336,6 +352,7 @@ export function countByKind(entries: ShelfEntry[]): Record<ShelfFilter, number> 
   return counts;
 }
 
+/** Narrows to one kind. `all` is the identity, and returns the same array. */
 export const applyShelfFilter = (entries: ShelfEntry[], filter: ShelfFilter): ShelfEntry[] =>
   filter === "all" ? entries : entries.filter((entry) => entry.kind === filter);
 
