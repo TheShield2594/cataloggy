@@ -258,7 +258,7 @@ export function SeasonsSection({
                     <ChevronRight className="h-3.5 w-3.5 flex-none" style={{ color: "var(--text-mute)" }} />
                   )}
                   <div
-                    className="flex h-8 w-8 flex-none items-center justify-center rounded-lg text-xs font-bold"
+                    className="flex h-8 w-8 flex-none items-center justify-center rounded-lg font-mono text-xs font-bold"
                     style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
                   >
                     {s.seasonNumber}
@@ -267,7 +267,7 @@ export function SeasonsSection({
                     <p className="text-xs font-medium truncate" style={{ color: "var(--text)" }}>{s.name}</p>
                     {/* The watched count climbs as episodes are ticked off
                         under it — tabular figures keep the row still. */}
-                    <p className="text-2xs tabular-nums" style={{ color: "var(--text-mute)" }}>
+                    <p className="meta-caps" style={{ color: "var(--text-mute)" }}>
                       {watchedCount != null ? `${watchedCount}/${s.episodeCount} watched` : `${s.episodeCount} eps`}
                       {s.airYear ? ` · ${s.airYear}` : ""}
                     </p>
@@ -327,7 +327,7 @@ export function SeasonsSection({
                             >
                               {isWatched && <Check className="h-3 w-3 text-claw-on" />}
                             </span>
-                            <span className="w-9 flex-none text-2xs font-semibold" style={{ color: "var(--text-mute)" }}>
+                            <span className="meta-caps w-9 flex-none font-semibold" style={{ color: "var(--text-mute)" }}>
                               E{String(ep.episodeNumber).padStart(2, "0")}
                             </span>
                             <span className="min-w-0 flex-1 truncate text-xs" style={{ color: isWatched ? "var(--text-mute)" : "var(--text)" }}>
@@ -337,7 +337,7 @@ export function SeasonsSection({
                           {ep.airDate && (
                             <time
                               dateTime={ep.airDate}
-                              className="hidden flex-none text-2xs sm:block"
+                              className="meta-caps hidden flex-none sm:block"
                               style={{ color: "var(--text-mute)" }}
                             >
                               {new Date(ep.airDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}

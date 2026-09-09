@@ -14,9 +14,10 @@ import { ThemeToggle } from "./components/ThemeToggle";
 import { useTheme } from "./hooks/useTheme";
 import { ToastProvider } from "./hooks/useToast";
 import { ProfileProvider, useProfile } from "./hooks/useProfile";
-import { DashboardPage } from "./pages/DashboardPage";
+import { ShelfPage } from "./pages/ShelfPage";
 import {
   loadCalendarPage,
+  loadDashboardPage,
   loadGamesPage,
   loadHistoryPage,
   loadListsPage,
@@ -30,7 +31,7 @@ import {
   schedulePrefetchOnIdle,
 } from "./utils/routePrefetch";
 
-// DashboardPage stays eager — it is the landing route. The profile switcher and
+// ShelfPage stays eager — it is the landing route. The profile switcher and
 // the setup wizard are first-run/occasional surfaces, so they ride in their own
 // chunks rather than in the entry bundle every visit pays for.
 //
@@ -46,6 +47,10 @@ const SetupWizard = lazy(() => loadSetupWizard().then((m) => ({ default: m.Setup
 const CommandPalette = lazy(() => loadCommandPalette().then((m) => ({ default: m.CommandPalette })));
 
 const CalendarPage = lazy(() => loadCalendarPage().then((m) => ({ default: m.CalendarPage })));
+// Discovery — trending, recommendations, the poster rails. This was the landing
+// route until the Shelf took that job; it is now the second destination rather
+// than the first, so it is code-split like every other one.
+const DashboardPage = lazy(() => loadDashboardPage().then((m) => ({ default: m.DashboardPage })));
 const GamesPage = lazy(() => loadGamesPage().then((m) => ({ default: m.GamesPage })));
 const HistoryPage = lazy(() => loadHistoryPage().then((m) => ({ default: m.HistoryPage })));
 const ListsPage = lazy(() => loadListsPage().then((m) => ({ default: m.ListsPage })));
@@ -71,8 +76,9 @@ const LoadingFallback = ({ label = "Loading…" }: { label?: string }) => (
  * be added without the omission being visible here.
  */
 const ROUTE_TITLES: Record<string, string> = {
-  "/": "Dashboard",
+  "/": "Shelf",
   "/search": "Search",
+  "/discover": "Discover",
   "/lists": "Lists",
   "/games": "Games",
   "/calendar": "Calendar",
@@ -350,8 +356,9 @@ function AppShell({
           <ErrorBoundary key={location.pathname} variant="page">
             <Suspense fallback={<LoadingFallback />}>
               <Routes key={profile?.id ?? runtimeConfig.getProfileId() ?? "default"}>
-                <Route path="/" element={<DashboardPage />} />
+                <Route path="/" element={<ShelfPage />} />
                 <Route path="/search" element={<SearchPage />} />
+                <Route path="/discover" element={<DashboardPage />} />
                 <Route path="/lists" element={<ListsPage />} />
                 <Route path="/games" element={<GamesPage />} />
                 <Route path="/calendar" element={<CalendarPage />} />

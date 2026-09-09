@@ -71,6 +71,11 @@ export default {
       fontFamily: {
         heading: ['"Plus Jakarta Sans Variable"', "system-ui", "sans-serif"],
         sans: ['"Plus Jakarta Sans Variable"', "system-ui", "-apple-system", "BlinkMacSystemFont", '"Segoe UI"', "sans-serif"],
+        // Every numeral, date and source name in the app — see the `.meta` note
+        // in src/index.css, which is also where the stack itself lives. Pointed
+        // at the variable rather than restating it so `font-mono` and the
+        // `.meta` component class can't end up on two different faces.
+        mono: "var(--font-mono)",
       },
       fontSize: {
         // Supporting metadata (year, genre chips, episode counts) leans on this

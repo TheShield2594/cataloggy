@@ -1,12 +1,13 @@
 # Cataloggy
 
-Cataloggy is your own personal Netflix-style home page for everything you watch. It pulls together what's on your watchlist, what you're currently binging, and what's trending, and gives you one clean dashboard instead of jumping between five different apps.
+Cataloggy is your own personal home page for everything you watch and play. It opens on one shelf — your shows, films and games together, with whatever you're part-way through at the top — instead of making you jump between five different apps to find it.
 
 Self-host it on your home server, open it on your phone or computer, and keep track of your shows and movies the way you actually want to. On the TV, a Stremio add-on puts your catalogs in front of the remote.
 
 ## Why you might like it
 
-- **One home screen for everything** — continue watching, recently watched, and upcoming episodes, all in one place
+- **One shelf for everything** — shows, films and games in one grid, each measured in its own units: episodes for a season, hours for a game
+- **Discovery when you want it, not in the way** — trending, recommendations and upcoming episodes live on their own page
 - **Works with the tools you already use** — pairs with Stremio, Plex, Jellyfin, Trakt, and Stremio/Omni add-ons
 - **No account you can't walk away from** — watch history comes straight from Stremio, Plex or Jellyfin, and every third-party service is optional and replaceable
 - **Yours, not the cloud's** — runs on your own hardware, your data stays on your network

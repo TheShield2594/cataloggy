@@ -342,7 +342,9 @@ describe("memory cache invalidation after a mutation", () => {
   it("keeps a write inside the domain it can reach", () => {
     expect(invalidatedCachePrefixes("/games/abc")).toEqual(["games:"]);
     expect(invalidatedCachePrefixes("/games/steam/sync")).toEqual(["games:"]);
-    expect(invalidatedCachePrefixes("/lists/watchlist/items")).toEqual(["lists:"]);
+    // Two prefixes rather than one: the Shelf's grid is the union of every
+    // list, cached under its own key, so adding a title has to move both.
+    expect(invalidatedCachePrefixes("/lists/watchlist/items")).toEqual(["lists:", "shelf:"]);
     expect(invalidatedCachePrefixes("/ratings")).toEqual(["stats:", "dash:"]);
   });
 

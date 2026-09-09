@@ -1,7 +1,7 @@
 /**
  * The routes offered as long-press shortcuts on the installed app's icon.
  *
- * A subset of PRIMARY_NAV_ITEMS in components/MobileTabBar.tsx, minus Dashboard
+ * A subset of PRIMARY_NAV_ITEMS in components/MobileTabBar.tsx, minus the Shelf
  * (which is start_url). It cannot import that module directly — this is read by
  * vite.config.ts while the config is being loaded, and MobileTabBar pulls in
  * React and lucide-react, neither of which belongs in a Vite config's module
@@ -10,6 +10,6 @@
  */
 export const PWA_SHORTCUTS: { label: string; url: string }[] = [
   { label: "Search", url: "/search" },
-  { label: "Lists", url: "/lists" },
+  { label: "Discover", url: "/discover" },
   { label: "Calendar", url: "/calendar" },
 ];

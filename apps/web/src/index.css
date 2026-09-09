@@ -274,6 +274,17 @@
    * at that width the two-up grid is itself the repeating unit.
    */
   --poster-card-w: 12rem;
+
+  /*
+   * The metadata face. One definition, read from both sides: `.meta` and
+   * `.eyebrow` below take it directly, and tailwind.config.ts points
+   * `font-mono` at this variable rather than restating the stack, so a utility
+   * class and a component class can't drift onto two different fonts.
+   *
+   * Platform faces only. Metadata carries no prose, and shipping a second
+   * variable font to render "42 MIN LEFT" would cost more than the rule earns.
+   */
+  --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 /*
@@ -916,6 +927,100 @@ body {
   .status-chip--ok { --status-color: var(--status-ok); }
   .status-chip--bad { --status-color: var(--status-bad); }
   .status-chip--warn { --status-color: var(--status-warn); }
+
+  /*
+   * Metadata type. The one typographic rule the redesign adds, and the only
+   * place anything but Plus Jakarta Sans is allowed to appear.
+   *
+   * Every numeral, date, duration and source name goes here — "S3 E4",
+   * "42 min left", "18.4 h", "Synced 2 min ago", "Plex". The argument is
+   * tabular rather than decorative: a shelf row's right edge carries a number
+   * that changes on every render, and a proportional face reflows the row each
+   * time it does. Mono holds the column still, and `font-variant-numeric:
+   * tabular-nums` holds it still even across a face whose figures are
+   * proportional by default.
+   *
+   * The secondary effect is the one the redesign is actually after: a title in
+   * a humanist sans over metadata in mono reads as two ranks of information
+   * rather than as one paragraph at two sizes. Everything the app *knows* looks
+   * different from everything the app was *told*.
+   *
+   * Three classes, one face:
+   *
+   *   .meta       a value that is read as written — a title's own name, a note.
+   *   .meta-caps  a metadata run — "Show · S3 E4 of 8 · 42 min left".
+   *   .eyebrow    the label above a block — "In progress", "Recently added".
+   *
+   * The two caps variants uppercase in CSS rather than in the string, so the
+   * accessible name stays sentence case: "IN PROGRESS" written into the markup
+   * is spelled out letter by letter by some screen readers, and is
+   * untranslatable by all of them. Write the words normally; the stylesheet
+   * shouts them.
+   *
+   * Colour is left to the caller on the first two. These strings sit on poster
+   * overlays (--text on a scrim), in rows (--text-mute) and inside status chips
+   * (the --status-* trio), and baking one in would mean overriding it at two
+   * call sites out of three.
+   */
+  .meta,
+  .meta-caps,
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    /* 0.6875rem = 11px. Mono faces run visually larger than Plus Jakarta Sans
+       at the same size — taller x-height, wider counters — so metadata drops
+       one step below the 12px `2xs` body minimum and still measures level with
+       the sans text beside it. Prose never takes these classes, so the 12px
+       floor that token documents doesn't apply. */
+    font-size: 0.6875rem;
+    line-height: 1.45;
+    letter-spacing: 0.04em;
+  }
+
+  .meta-caps {
+    text-transform: uppercase;
+    /* Uppercase set solid is hard to read; this is the tracking that buys the
+       letterforms back without opening the run up as far as an eyebrow, which
+       is a label rather than a line to be read left to right. */
+    letter-spacing: 0.07em;
+  }
+
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    line-height: 1;
+    color: var(--text-mute);
+  }
+
+  /*
+   * The status dot — health, reduced to the smallest thing that can carry it.
+   *
+   * Paired with a `.meta` timestamp, never alone: colour is not a permitted
+   * sole channel (SC 1.4.1), and "healthy" and "not configured" differ only in
+   * hue. The words beside it — "4 min ago", "Token expired", "Not set" — are
+   * what say which of the three a row is in; the dot is how you find the one
+   * bad row among eleven without reading any of them.
+   *
+   * Takes the same --status-* trio as .status-chip, so a dot and a chip on one
+   * page can't disagree about what "warning" looks like. The default — no
+   * modifier — is --text-mute: a source that is switched off is a state, not a
+   * fault, and it should not borrow the colour of one.
+   */
+  .status-dot {
+    display: inline-block;
+    flex: none;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: var(--status-color, var(--text-mute));
+    /* A ring at the same hue, so an 8px dot still reads as deliberate against a
+       busy row rather than as a rendering speck. */
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-color, var(--text-mute)) 18%, transparent);
+  }
+
+  .status-dot--ok { --status-color: var(--status-ok); }
+  .status-dot--bad { --status-color: var(--status-bad); }
+  .status-dot--warn { --status-color: var(--status-warn); }
 
   /*
    * Grows a small control's *touch* target to 44×44 without growing the

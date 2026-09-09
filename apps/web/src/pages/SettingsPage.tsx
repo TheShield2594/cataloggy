@@ -2,6 +2,8 @@ import { ReactNode, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Key, Link, Database, Info, Clapperboard, Film, Image, Globe, Star, Sparkles, Bell, Users, Activity, Search, X } from "lucide-react";
 import { Section } from "../components/settings/Section";
+import { healthSummary } from "../components/settings/health";
+import { useSettingsHealth } from "../hooks/useSettingsHealth";
 import { ApiTokenSettings } from "../components/settings/ApiTokenSettings";
 import { TraktSettings } from "../components/settings/TraktSettings";
 import { TmdbSettings } from "../components/settings/TmdbSettings";
@@ -28,6 +30,14 @@ export type SettingsSection = {
   /** Also the key `Section` persists its open/closed state under. */
   id: string;
   tab: SettingsTab;
+  /**
+   * The eyebrow this section sits under, grouping the tab by what a thing does
+   * rather than by which vendor supplies it — "where history comes from" is a
+   * question someone actually has; "Trakt, Stremio, TMDB, OMDB" in a flat list
+   * is not an answer to it. Sections in the same group have to be adjacent in
+   * this array; the renderer prints a heading when the group changes.
+   */
+  group?: string;
   title: string;
   icon: ReactNode;
   /** Extra terms the section should be findable by; the title is always searched. */
@@ -93,41 +103,22 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     keywords: "version build release cataloggy",
     content: <AboutSection />,
   },
-  {
-    id: "api-token",
-    tab: "integrations",
-    title: "API Token",
-    icon: <Key size={20} />,
-    keywords: "auth authentication bearer secret credentials",
-    content: <ApiTokenSettings />,
-  },
-  {
-    id: "tmdb",
-    tab: "integrations",
-    title: "TMDB Metadata",
-    icon: <Film size={20} />,
-    keywords: "the movie database api key posters metadata artwork cast",
-    content: <TmdbSettings />,
-  },
+  // Where history comes from. These lead the tab because they are what the
+  // page is usually opened to check: everything below is configuration, and
+  // these are the ones that can quietly stop working.
   {
     id: "trakt",
     tab: "integrations",
+    group: "Where history comes from",
     title: "Trakt Integration",
     icon: <Link size={20} />,
     keywords: "scrobble import watchlist history oauth sync",
     content: <TraktSettings />,
   },
   {
-    id: "addon",
-    tab: "integrations",
-    title: "Stremio Addon",
-    icon: <Clapperboard size={20} />,
-    keywords: "stremio catalogs manifest install url",
-    content: <AddonSettings />,
-  },
-  {
     id: "stremio-sync",
     tab: "integrations",
+    group: "Where history comes from",
     title: "Stremio Watched Sync",
     icon: <Clapperboard size={20} />,
     keywords: "stremio watched history sync library account import scrobble",
@@ -136,14 +127,26 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   {
     id: "play-detection",
     tab: "integrations",
+    group: "Where history comes from",
     title: "Play Detection",
     icon: <Activity size={20} />,
     keywords: "stremio vidi omni nuvio addon apps automatic watched inferred signals",
     content: <PlayDetectionSettings />,
   },
+  // What titles look like once they arrive.
+  {
+    id: "tmdb",
+    tab: "integrations",
+    group: "Metadata & artwork",
+    title: "TMDB Metadata",
+    icon: <Film size={20} />,
+    keywords: "the movie database api key posters metadata artwork cast",
+    content: <TmdbSettings />,
+  },
   {
     id: "omdb",
     tab: "integrations",
+    group: "Metadata & artwork",
     title: "OMDB Ratings",
     icon: <Star size={20} />,
     keywords: "imdb rotten tomatoes metacritic scores api key",
@@ -152,14 +155,35 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   {
     id: "rpdb",
     tab: "integrations",
+    group: "Metadata & artwork",
     title: "RPDB Posters",
     icon: <Image size={20} />,
     keywords: "rating poster database artwork images api key",
     content: <RpdbSettings />,
   },
+  // The app's own surfaces and the keys that reach them.
+  {
+    id: "addon",
+    tab: "integrations",
+    group: "This server",
+    title: "Stremio Addon",
+    icon: <Clapperboard size={20} />,
+    keywords: "stremio catalogs manifest install url",
+    content: <AddonSettings />,
+  },
+  {
+    id: "api-token",
+    tab: "integrations",
+    group: "This server",
+    title: "API Token",
+    icon: <Key size={20} />,
+    keywords: "auth authentication bearer secret credentials",
+    content: <ApiTokenSettings />,
+  },
   {
     id: "ai",
     tab: "integrations",
+    group: "This server",
     title: "AI Recommendations",
     icon: <Sparkles size={20} />,
     keywords: "llm openai ollama model provider suggestions",
@@ -168,6 +192,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   {
     id: "data",
     tab: "integrations",
+    group: "This server",
     title: "Data",
     icon: <Database size={20} />,
     keywords: "export import backup restore refresh metadata steam wipe",
@@ -201,6 +226,7 @@ function isSettingsTab(value: string | null): value is SettingsTab {
 }
 
 export function SettingsPage() {
+  const health = useSettingsHealth();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab: SettingsTab = isSettingsTab(searchParams.get("tab")) ? (searchParams.get("tab") as SettingsTab) : "preferences";
   const [query, setQuery] = useState("");
@@ -241,9 +267,32 @@ export function SettingsPage() {
     [query, searching, tab]
   );
 
+  // Empty until the status requests land, and empty again if every one of them
+  // failed — in which case saying nothing is right, because the alternative is
+  // reporting a health the page could not actually read.
+  const summary = healthSummary(health);
+
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <h1 className={PAGE_TITLE}>Settings</h1>
+      <div>
+        <h1 className={PAGE_TITLE}>Settings</h1>
+        {/*
+         * Health first. Every number here was already in the app — one level
+         * inside the Sync Status section and inside each integration's own
+         * panel — which is to say it was everywhere except where someone
+         * wondering "is this working?" would look.
+         *
+         * A polite live region because it arrives a moment after the page: six
+         * status requests resolve together, and a screen reader that has
+         * already moved on should hear the answer rather than have it appear
+         * silently behind it.
+         */}
+        {summary && (
+          <p role="status" className="meta-caps mt-1.5" style={{ color: "var(--text-mute)" }}>
+            {summary}
+          </p>
+        )}
+      </div>
 
       <div className="relative">
         <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2" style={{ color: "var(--text-mute)" }} />
@@ -329,17 +378,25 @@ export function SettingsPage() {
           ? {}
           : { role: "tabpanel", id: `${tabsId}-panel`, "aria-labelledby": `${tabsId}-tab-${tab}` })}
       >
-        {visible.map((section) => (
-          <Section
-            key={section.id}
-            title={section.title}
-            icon={section.icon}
-            storageKey={section.id}
-            defaultOpen={INITIALLY_OPEN_SECTION_IDS.has(section.id)}
-            alwaysOpen={searching}
-          >
-            {section.content}
-          </Section>
+        {visible.map((section, index) => (
+          <div key={section.id} className="space-y-4">
+            {/* A heading only where the group changes, and never while
+                searching — results span both tabs and every group, so a run of
+                one-section headings would be noise rather than structure. */}
+            {!searching && section.group && section.group !== visible[index - 1]?.group && (
+              <p className={index === 0 ? "eyebrow" : "eyebrow pt-3"}>{section.group}</p>
+            )}
+            <Section
+              title={section.title}
+              icon={section.icon}
+              storageKey={section.id}
+              defaultOpen={INITIALLY_OPEN_SECTION_IDS.has(section.id)}
+              alwaysOpen={searching}
+              health={health[section.id]}
+            >
+              {section.content}
+            </Section>
+          </div>
         ))}
       </div>
     </div>

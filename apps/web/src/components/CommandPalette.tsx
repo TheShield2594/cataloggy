@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { BarChart3, CalendarDays, Clapperboard, Film, Gamepad2, List, Search, Settings, Tv } from "lucide-react";
+import { BarChart3, CalendarDays, Compass, Film, Gamepad2, History, Library, List, Search, Settings, Tv } from "lucide-react";
 import { api, SearchResult } from "../api";
 import { Poster } from "./Poster";
 import { DetailPanel, useDetailPanel } from "./MediaDetailPanel";
@@ -151,13 +151,19 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   }, [setSelectedItem]);
 
   const actions: Action[] = [
-    { id: "nav-dashboard", label: "Go to Dashboard", icon: Clapperboard, run: () => { requestClose(); navigate("/"); } },
+    { id: "nav-shelf", label: "Go to Shelf", icon: Library, run: () => { requestClose(); navigate("/"); } },
     { id: "nav-search", label: "Go to Search", icon: Search, run: () => { requestClose(); navigate("/search"); } },
-    { id: "nav-lists", label: "Go to Lists", icon: List, run: () => { requestClose(); navigate("/lists"); } },
-    { id: "nav-games", label: "Go to Games", icon: Gamepad2, run: () => { requestClose(); navigate("/games"); } },
+    { id: "nav-discover", label: "Go to Discover", icon: Compass, run: () => { requestClose(); navigate("/discover"); } },
     { id: "nav-calendar", label: "Go to Calendar", icon: CalendarDays, run: () => { requestClose(); navigate("/calendar"); } },
     { id: "nav-stats", label: "Go to Stats", icon: BarChart3, run: () => { requestClose(); navigate("/stats"); } },
     { id: "nav-settings", label: "Go to Settings", icon: Settings, run: () => { requestClose(); navigate("/settings"); } },
+    // The three surfaces the Shelf browses on behalf of. They are no longer in
+    // the rail, so the palette is the fastest way to reach one from anywhere —
+    // and typing "list" or "history" is how someone who used to have a tab for
+    // them will look.
+    { id: "nav-lists", label: "Go to Lists", icon: List, run: () => { requestClose(); navigate("/lists"); } },
+    { id: "nav-games", label: "Go to Games", icon: Gamepad2, run: () => { requestClose(); navigate("/games"); } },
+    { id: "nav-history", label: "Go to History", icon: History, run: () => { requestClose(); navigate("/history"); } },
   ];
 
   const visibleActions = query.trim()

@@ -143,7 +143,7 @@ function DayEntriesModal({
         <div className="flex flex-none items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <div className="min-w-0">
             <h2 id="calendar-day-modal-title" className={`truncate ${SECTION_TITLE}`} style={{ color: "var(--text)" }}>{heading}</h2>
-            <p className="text-xs tabular-nums" style={{ color: "var(--text-mute)" }}>
+            <p className="meta-caps" style={{ color: "var(--text-mute)" }}>
               {entries.length} {entries.length === 1 ? "episode" : "episodes"}
             </p>
           </div>
@@ -503,7 +503,7 @@ export function CalendarPage() {
                             </span>
                             <span
                               aria-hidden="true"
-                              className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-2xs font-semibold ${isToday ? "bg-claw-500 text-claw-on" : ""}`}
+                              className={`meta inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 font-semibold ${isToday ? "bg-claw-500 text-claw-on" : ""}`}
                               style={isToday ? undefined : { color: "var(--text-mute)" }}
                             >
                               {day.getDate()}

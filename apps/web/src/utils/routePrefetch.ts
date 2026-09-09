@@ -15,14 +15,15 @@ import { getCacheScope, isFresh, writeCacheForScope } from "./dataCache";
 // named export straight out of a prefetch loader in `lazy()`.
 type Loader = () => Promise<unknown>;
 
-// The dashboard is not here on purpose. App.tsx imports it statically — it is
-// the landing route, so it ships in the entry bundle — and a dynamic import of
-// a statically-imported module can't be split out, so Rollup folds the chunk
-// back in and warns about the mixed import for every build. There is nothing to
+// The Shelf is not here on purpose. App.tsx imports it statically — it is the
+// landing route, so it ships in the entry bundle — and a dynamic import of a
+// statically-imported module can't be split out, so Rollup folds the chunk back
+// in and warns about the mixed import for every build. There is nothing to
 // prefetch: the code is already loaded before any nav link exists to hover.
 export const EAGER_ROUTES = new Set(["/"]);
 
 export const loadSearchPage = () => import("../pages/SearchPage");
+export const loadDashboardPage = () => import("../pages/DashboardPage");
 export const loadListsPage = () => import("../pages/ListsPage");
 export const loadGamesPage = () => import("../pages/GamesPage");
 export const loadCalendarPage = () => import("../pages/CalendarPage");
@@ -47,6 +48,19 @@ export const loadCommandPalette = () => import("../components/CommandPalette");
 // switching profile mid-flight files the previous profile's lists or history
 // under the new one.
 const ROUTE_DATA_WARMERS: Record<string, (scope: string) => Promise<void>> = {
+  // What the Shelf already holds under the same keys: hovering Discover from
+  // the Shelf costs nothing, because the Shelf fetched both of these on mount.
+  // `isFresh` below is what turns that into a skipped request rather than a
+  // duplicated one.
+  "/discover": async (scope) => {
+    const { api } = await import("../api");
+    const [progress, history] = await Promise.all([
+      api.getSeriesProgress(),
+      api.getWatchHistory(20),
+    ]);
+    writeCacheForScope(scope, "dash:progress", progress);
+    writeCacheForScope(scope, "dash:history", history);
+  },
   "/lists": async (scope) => {
     const { api } = await import("../api");
     const { lists } = await api.getLists();
@@ -88,6 +102,7 @@ const ROUTE_DATA_WARMERS: Record<string, (scope: string) => Promise<void>> = {
 /** Keyed by the `to` of every nav link that points at a code-split route. */
 const ROUTE_LOADERS: Record<string, Loader> = {
   "/search": loadSearchPage,
+  "/discover": loadDashboardPage,
   "/lists": loadListsPage,
   "/games": loadGamesPage,
   "/calendar": loadCalendarPage,
@@ -127,6 +142,7 @@ export function prefetchRoute(path: string): void {
 // The key whose freshness stands in for "this page already has what it opens
 // with". Hovering a page visited a moment ago should cost no request at all.
 const PRIMARY_DATA_KEY: Record<string, string> = {
+  "/discover": "dash:progress",
   "/lists": "lists:all",
   "/calendar": "calendar:entries:30",
   "/history": "history:events:all",
@@ -186,6 +202,9 @@ const IDLE_PREFETCH: Loader[] = [
   // ⌘K expects to be instant, and there is no hover to warm it on.
   loadCommandPalette,
   loadSearchPage,
+  // Discover is one tab away from the Shelf and is the largest of the routes
+  // reachable in a tap, so it is the one whose chunk most wants a head start.
+  loadDashboardPage,
   loadListsPage,
   loadCalendarPage,
   loadHistoryPage

@@ -73,10 +73,10 @@
     <title>Cataloggy</title>
     <script src="/config.js"></script>
     <script src="/theme-init.js"></script>
-    <!-- Starts the dashboard's opening requests during HTML parse, before the app
+    <!-- Starts the Shelf's opening requests during HTML parse, before the app
          bundle has finished downloading. Without this the first byte of data
          cannot be asked for until the entry chunk has arrived and been parsed,
-         React has mounted, and the dashboard's effect has run — on a phone that
+         React has mounted, and the Shelf's effect has run — on a phone that
          ordering leaves the connection idle for several hundred milliseconds.
 
          Inline rather than a <script src>: an external classic script blocks the
@@ -118,7 +118,13 @@
           // These must stay character-for-character what api.ts requests, since that
           // is how it recognises them. A mismatch is not a breakage — the response
           // goes unclaimed and the app fetches again — but it is a wasted request.
-          var paths = ["/series/progress", "/watch/history?limit=20&offset=0", "/watch/stats"];
+          //
+          // The Shelf's three: the lists it is built from (which also gates the
+          // per-list fan-out that follows, so it is the most valuable head start
+          // of the three), what is part-way watched, and the game library. The
+          // check-in and the one-row history are cheap and only decorate a
+          // string, so they wait their turn.
+          var paths = ["/lists", "/series/progress", "/games?sort=recent"];
 
           var preloaded = {};
           for (var i = 0; i < paths.length; i++) {
