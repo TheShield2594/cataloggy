@@ -103,6 +103,8 @@ cataloggy/
 
    This validates API and add-on health endpoints, (when all Trakt env vars are configured) runs `/trakt/import` and verifies a catalog response contains a `metas` array, and (when `STEAM_API_KEY`/`STEAM_ID` are configured) runs `/games/steam/sync` and verifies it returns a sync summary.
 
+   The authenticated checks need the same `API_TOKEN` the stack is running with, so the script reads `.env` from the repository root — the file Compose already uses — rather than expecting you to export it. Anything set in your shell takes precedence, which is how you point it at another host: `API_BASE=http://nas.lan:7000 ADDON_BASE=http://nas.lan:7001 pnpm smoke`.
+
 ## Local development without Docker
 
 1. Install dependencies from the repository root:
