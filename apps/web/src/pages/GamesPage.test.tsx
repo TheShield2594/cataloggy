@@ -201,6 +201,23 @@ describe("GamesPage library", () => {
     expect(screen.queryByText(/games isn.t set up yet/i)).not.toBeInTheDocument();
   });
 
+  // The empty state waits for both status reads, so a hanging one used to leave
+  // that region blank for `request()`'s full 30s default. They carry a short
+  // deadline and a signal now, and leaving the page abandons them.
+  it("drops the status reads when the page unmounts", async () => {
+    const { unmount } = renderPage();
+    await waitFor(() => expect(getIgdbStatus).toHaveBeenCalled());
+    const igdbSignal = getIgdbStatus.mock.calls[0]?.[0];
+    const steamSignal = getSteamStatus.mock.calls[0]?.[0];
+    expect(igdbSignal).toBeInstanceOf(AbortSignal);
+    expect(igdbSignal?.aborted).toBe(false);
+
+    unmount();
+
+    expect(igdbSignal?.aborted).toBe(true);
+    expect(steamSignal?.aborted).toBe(true);
+  });
+
   it("reports a failed load and doesn't claim the library is empty", async () => {
     listGames.mockRejectedValue(new Error("Games unavailable"));
     renderPage();

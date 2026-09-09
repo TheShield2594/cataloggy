@@ -572,6 +572,19 @@ export type IgdbStatus = {
   configured: boolean;
 };
 
+/**
+ * Both integration-status reads get this instead of `request()`'s 30s default,
+ * because the Games page holds its empty state back until they settle: a status
+ * endpoint that hangs would otherwise leave that region blank for half a minute,
+ * which is worse than either sentence it is choosing between.
+ *
+ * Not tighter than this because `GET /games/steam/status` makes one outbound
+ * Steam call when Steam is configured. Timing out costs the "Steam connected
+ * as X" bar for that load and nothing else — the page falls back to treating
+ * the answer as unknown, which is the safe direction.
+ */
+const INTEGRATION_STATUS_TIMEOUT_MS = 6000;
+
 export type SteamSyncSummary = {
   total: number;
   created: number;
@@ -1468,11 +1481,11 @@ export const api = {
   deleteGame(id: string) {
     return request<void>(`/games/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
-  getSteamStatus() {
-    return request<SteamStatus>("/games/steam/status");
+  getSteamStatus(signal?: AbortSignal) {
+    return request<SteamStatus>("/games/steam/status", { signal, timeoutMs: INTEGRATION_STATUS_TIMEOUT_MS });
   },
-  getIgdbStatus() {
-    return request<IgdbStatus>("/games/igdb/status");
+  getIgdbStatus(signal?: AbortSignal) {
+    return request<IgdbStatus>("/games/igdb/status", { signal, timeoutMs: INTEGRATION_STATUS_TIMEOUT_MS });
   },
   triggerSteamSync() {
     return request<SteamSyncSummary>("/games/steam/sync", { method: "POST", timeoutMs: 60000 });

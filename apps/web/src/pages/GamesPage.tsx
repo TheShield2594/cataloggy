@@ -425,24 +425,30 @@ export function GamesPage() {
   // Both requests have settled, however they settled. The empty state waits for
   // this rather than rendering on what it knows so far, because the two readings
   // of an empty library are different sentences and showing one then swapping it
-  // for the other is the same wrong statement this fixes, just briefly. Both
-  // requests run alongside the library load and `request()` caps every call at
-  // 30s, so the wait is bounded by the page's own worst case.
+  // for the other is the same wrong statement this fixes, just briefly.
+  //
+  // What makes that wait safe is the short deadline on the two reads
+  // (`INTEGRATION_STATUS_TIMEOUT_MS`) rather than the library load, which can
+  // finish first and leave this the only thing outstanding — with `request()`'s
+  // 30s default that was a blank region for half a minute.
   const [integrationsKnown, setIntegrationsKnown] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    // Dropped on unmount like every other request on this page: leaving is as
+    // much a reason to abandon the answer as switching profile is.
+    const controller = new AbortController();
     void (async () => {
       const [igdb, steam] = await Promise.all([
-        api.getIgdbStatus().catch(() => null),
-        api.getSteamStatus().catch(() => null),
+        api.getIgdbStatus(controller.signal).catch(() => null),
+        api.getSteamStatus(controller.signal).catch(() => null),
       ]);
       if (cancelled) return;
       setIgdbConfigured(igdb ? igdb.configured : null);
       setSteamStatus(steam);
       setIntegrationsKnown(true);
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
   }, []);
 
   const loadGames = useCallback(async (currentSort: GameSort) => {
