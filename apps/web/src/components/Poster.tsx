@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { getGradient, getInitials } from "./carousel-utils";
 
 // TMDB serves the same image at fixed widths under /t/p/<size>/<path>.
@@ -54,10 +54,29 @@ export function Poster({
   const [loadFailed, setLoadFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
+  /*
+   * Reset when the src changes — during render rather than in an effect,
+   * because an effect runs *after* the ref callback below.
+   *
+   * The ref exists to mark an already-decoded image as loaded in the commit
+   * that mounts it (see its own note). A mount effect then cleared that flag
+   * on the very next tick, so the optimisation never actually applied — and
+   * for an image whose `load` had already fired before React attached
+   * `onLoad`, nothing was left to set it again and the poster stayed at
+   * opacity 0 permanently. That is every image a browser can complete
+   * synchronously on assignment: a `data:` URI, and a memory-cached one on
+   * some paths.
+   *
+   * The same shape as the key change in `useCachedState`, and for the same
+   * reason: state derived from a prop has to settle before the first paint,
+   * not one commit after it.
+   */
+  const renderedSrcRef = useRef(src);
+  if (renderedSrcRef.current !== src) {
+    renderedSrcRef.current = src;
     setLoadFailed(false);
     setLoaded(false);
-  }, [src]);
+  }
 
   if (!src || loadFailed) {
     return (

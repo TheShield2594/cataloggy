@@ -738,11 +738,12 @@ export function invalidatedCachePrefixes(path: string): string[] | null {
   // calendar and the dashboard rails are all built from watch events.
   if (under("/games")) return ["games:"];
 
-  // List membership is read by the lists page and by the detail panel, which
-  // fetches on open rather than from this cache. Watch progress, history,
-  // stats and the calendar are all independent of it — none of the write paths
-  // in `routes/lists.ts` touch a watch row.
-  if (under("/lists")) return ["lists:"];
+  // List membership is read by the lists page, by the Shelf (whose grid is the
+  // union of every list) and by the detail panel, which fetches on open rather
+  // than from this cache. Watch progress, history, stats and the calendar are
+  // all independent of it — none of the write paths in `routes/lists.ts` touch
+  // a watch row.
+  if (under("/lists")) return ["lists:", "shelf:"];
 
   // A rating shows up in the "top rated" section of the detailed stats, which
   // the stats page and the dashboard each cache under their own key. It is not

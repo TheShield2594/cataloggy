@@ -688,7 +688,7 @@ export function ListsPage() {
                     >
                       {list.name}
                     </p>
-                    <p className="mt-0.5 text-xs" style={{ color: "var(--text-mute)" }}>
+                    <p className="meta-caps mt-1" style={{ color: "var(--text-mute)" }}>
                       {list.itemCount} {list.itemCount === 1 ? "item" : "items"}
                     </p>
                   </button>
@@ -801,7 +801,7 @@ export function ListsPage() {
                     </button>
                   </div>
                 )}
-                <p className="mt-0.5 text-sm tabular-nums" style={{ color: "var(--text-mute)" }}>
+                <p className="meta-caps mt-1" style={{ color: "var(--text-mute)" }}>
                   {items.length} {items.length === 1 ? "item" : "items"}
                 </p>
               </div>
@@ -939,7 +939,7 @@ export function ListsPage() {
                       </button>
                       {/* Title & year */}
                       <p className="mt-2.5 truncate text-sm font-semibold" style={{ color: "var(--text)" }}>{name}</p>
-                      <p className="text-xs" style={{ color: "var(--text-mute)" }}>{year ?? "Unknown year"}</p>
+                      <p className="meta-caps" style={{ color: "var(--text-mute)" }}>{year ?? "Unknown year"}</p>
                     </div>
                   );
                 })}

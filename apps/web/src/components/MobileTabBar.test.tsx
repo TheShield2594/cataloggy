@@ -49,9 +49,9 @@ describe("MobileTabBar", () => {
   });
 
   it("marks the current primary tab", () => {
-    renderBar("/lists/abc");
-    expect(within(tabBar()).getByRole("link", { name: /lists/i })).toHaveAttribute("aria-current", "page");
-    expect(within(tabBar()).getByRole("link", { name: /dashboard/i })).not.toHaveAttribute("aria-current");
+    renderBar("/calendar/2026-09");
+    expect(within(tabBar()).getByRole("link", { name: /calendar/i })).toHaveAttribute("aria-current", "page");
+    expect(within(tabBar()).getByRole("link", { name: /shelf/i })).not.toHaveAttribute("aria-current");
   });
 
   // One marker that moves, not one per tab that blinks on and off — the whole
@@ -67,7 +67,7 @@ describe("MobileTabBar", () => {
     expect(marker(tabBar()).style.transform).toBe("translateX(0%)");
     unmount();
 
-    renderBar("/lists");
+    renderBar("/discover");
     // Third of five slots.
     expect(marker(tabBar()).style.transform).toBe("translateX(200%)");
   });
@@ -83,9 +83,9 @@ describe("MobileTabBar", () => {
     expect(tabBar().querySelectorAll(':scope > span[aria-hidden="true"]')).toHaveLength(0);
   });
 
-  it("matches Dashboard only on the exact root path", () => {
+  it("matches the Shelf only on the exact root path", () => {
     renderBar("/search");
-    expect(within(tabBar()).getByRole("link", { name: /dashboard/i })).not.toHaveAttribute("aria-current");
+    expect(within(tabBar()).getByRole("link", { name: /shelf/i })).not.toHaveAttribute("aria-current");
   });
 
   it("highlights More while a route behind it is open, and marks that route inside", async () => {

@@ -278,7 +278,7 @@ export function StatsPage() {
                         tooltip opens into exactly this space. */}
                     {total > 0 && !isHovered && (
                       <span
-                        className="pointer-events-none absolute inset-x-0 text-center text-2xs tabular-nums"
+                        className="meta pointer-events-none absolute inset-x-0 text-center"
                         style={{ bottom: `calc(${height}% + 2px)`, color: "var(--text-mute)" }}
                       >
                         {total}
@@ -303,7 +303,7 @@ export function StatsPage() {
                       />
                     )}
                   </div>
-                  <span className="text-2xs" style={{ color: "var(--text-mute)" }}>{label}</span>
+                  <span className="meta-caps" style={{ color: "var(--text-mute)" }}>{label}</span>
                 </div>
               );
             })}
@@ -338,7 +338,7 @@ export function StatsPage() {
                     style={{ width: `${(g.count / maxGenreCount) * 100}%` }}
                   />
                 </div>
-                <span className="w-8 text-right text-sm tabular-nums" style={{ color: "var(--text-mute)" }}>{g.count}</span>
+                <span className="meta w-8 text-right" style={{ color: "var(--text-mute)" }}>{g.count}</span>
               </div>
             ))}
           </div>
@@ -380,12 +380,12 @@ export function StatsPage() {
                       scrim this is 5.2:1 even over a white poster. */}
                   {item.rating != null && (
                     <div role="img" aria-label={ratingLabel(item.rating)} title={ratingLabel(item.rating)} className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
-                      <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-[#f5c451]">{formatRating(item.rating)}</span>
+                      <span aria-hidden="true" className="meta font-bold text-[#f5c451]">{formatRating(item.rating)}</span>
                     </div>
                   )}
                 </div>
                 <p className="mt-1.5 truncate text-sm font-medium" style={{ color: "var(--text)" }}>{item.name}</p>
-                <p className="text-2xs capitalize" style={{ color: "var(--text-mute)" }}>{item.type}</p>
+                <p className="meta-caps" style={{ color: "var(--text-mute)" }}>{item.type}</p>
               </div>
             ))}
           </div>
@@ -459,11 +459,11 @@ export function StatsPage() {
                             pickers use — unlike the community score on the card
                             above, which is TMDB's and stays out of ten. */}
                         <div role="img" aria-label={starsLabel(item.rating)} title={starsLabel(item.rating)} className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
-                          <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-[#f5c451]">{formatStars(item.rating)}</span>
+                          <span aria-hidden="true" className="meta font-bold text-[#f5c451]">{formatStars(item.rating)}</span>
                         </div>
                       </div>
                       <p className="mt-1.5 truncate text-sm font-medium" style={{ color: "var(--text)" }}>{item.name ?? item.imdbId}</p>
-                      <p className="text-2xs capitalize" style={{ color: "var(--text-mute)" }}>{item.type}</p>
+                      <p className="meta-caps" style={{ color: "var(--text-mute)" }}>{item.type}</p>
                     </div>
                   ))}
                 </div>

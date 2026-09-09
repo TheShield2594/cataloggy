@@ -1,18 +1,30 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router";
-import { BarChart3, CalendarDays, Clapperboard, Gamepad2, History, Pin, PinOff, Search, List, Settings, User } from "lucide-react";
+import { BarChart3, CalendarDays, Compass, Library, Pin, PinOff, Search, Settings, User } from "lucide-react";
 import { Profile } from "../api";
 import { BRAND_WORDMARK, BrandMark } from "./BrandMark";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { prefetchRoute } from "../utils/routePrefetch";
 
+/*
+ * Six destinations, down from eight.
+ *
+ * Lists, Games and History were never really places — they were three filters
+ * over one collection, each given a tab because of the table it happened to be
+ * stored in. The Shelf is that collection, and its filter row does what the
+ * three tabs did. All three pages still exist as the surfaces where you
+ * *manage* things (make a list, add a game, read the full log); they are linked
+ * from the Shelf's header, which is where you are when you want one.
+ *
+ * What is left is six things that genuinely differ: what you have (Shelf), what
+ * you're looking for (Search), what you might want (Discover), what's coming
+ * (Calendar), what you've done (Stats), and how it all works (Settings).
+ */
 export const SIDEBAR_NAV_ITEMS = [
-  { to: "/", label: "Dashboard", icon: Clapperboard, end: true },
+  { to: "/", label: "Shelf", icon: Library, end: true },
   { to: "/search", label: "Search", icon: Search, end: false },
-  { to: "/lists", label: "Lists", icon: List, end: false },
-  { to: "/games", label: "Games", icon: Gamepad2, end: false },
+  { to: "/discover", label: "Discover", icon: Compass, end: false },
   { to: "/calendar", label: "Calendar", icon: CalendarDays, end: false },
-  { to: "/history", label: "History", icon: History, end: false },
   { to: "/stats", label: "Stats", icon: BarChart3, end: false },
   { to: "/settings", label: "Settings", icon: Settings, end: false },
 ] as const;
@@ -35,8 +47,8 @@ export function Sidebar({
 }) {
   const [hovered, setHovered] = useState(false);
   // Keyboard users can't hover, and the collapsed rail hides its labels — so
-  // tabbing into it has to expand it too, or the nav is eight bare icons with
-  // no way to reveal what they are short of picking up the mouse.
+  // tabbing into it has to expand it too, or the nav is a column of bare icons
+  // with no way to reveal what they are short of picking up the mouse.
   const [focused, setFocused] = useState(false);
   // One-time discovery hint: the hover-to-expand / pin pattern is invisible until
   // you happen to hover, so surface it once on the first visit, then never again.
@@ -184,7 +196,7 @@ export function Sidebar({
               }
               style={({ isActive }) => ({ color: isActive ? "var(--text)" : "var(--text-dim)" })}
               // Pointer-user fallback while the label is hidden: without it the
-              // collapsed rail is eight icons with nothing to hover for a name.
+              // collapsed rail is a column of icons with nothing to hover for a name.
               title={expanded ? undefined : item.label}
               // Start the route's chunk on the approach rather than on the
               // click, so the page is usually already in memory by the time it

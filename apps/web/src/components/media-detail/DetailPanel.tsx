@@ -417,8 +417,9 @@ export function DetailPanel({
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {hasRating && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-sm font-semibold text-warning ring-1 ring-amber-500/20" title={ratingLabel(item.rating!)}>
-                    <Star className="h-3.5 w-3.5 fill-warning" />{formatRating(item.rating!)}
-                    <span className="text-xs font-normal" style={{ color: "var(--text-mute)" }}>/{RATING_MAX}</span>
+                    <Star className="h-3.5 w-3.5 fill-warning" />
+                    <span className="font-mono tabular-nums">{formatRating(item.rating!)}</span>
+                    <span className="font-mono text-xs font-normal" style={{ color: "var(--text-mute)" }}>/{RATING_MAX}</span>
                   </span>
                 )}
                 {hasRuntime && (
@@ -426,7 +427,8 @@ export function DetailPanel({
                     className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm"
                     style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
                   >
-                    <Clock className="h-3.5 w-3.5" />{formatRuntime(item.runtime!)}
+                    <Clock className="h-3.5 w-3.5" />
+                    <span className="font-mono tabular-nums">{formatRuntime(item.runtime!)}</span>
                   </span>
                 )}
               </div>
@@ -434,7 +436,7 @@ export function DetailPanel({
 
             {/* Everything demoted, as one line that wraps like prose */}
             {metaLine.length > 0 && (
-              <p className="mt-2 text-sm" style={{ color: "var(--text-mute)" }}>
+              <p className="meta-caps mt-2.5" style={{ color: "var(--text-mute)" }}>
                 {metaLine.join(" · ")}
               </p>
             )}

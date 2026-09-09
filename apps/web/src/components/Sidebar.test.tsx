@@ -45,7 +45,7 @@ describe("Sidebar", () => {
     expect(rail()).toHaveStyle({ width: COLLAPSED_WIDTH });
 
     await user.tab();
-    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveFocus();
+    expect(screen.getByRole("link", { name: "Shelf" })).toHaveFocus();
     expect(rail()).toHaveStyle({ width: EXPANDED_WIDTH });
   });
 
@@ -80,11 +80,11 @@ describe("Sidebar", () => {
     const user = userEvent.setup();
     renderSidebar();
 
-    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("title", "Dashboard");
+    expect(screen.getByRole("link", { name: "Shelf" })).toHaveAttribute("title", "Shelf");
     expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("title", "Settings");
 
     await user.tab();
-    expect(screen.getByRole("link", { name: "Dashboard" })).not.toHaveAttribute("title");
+    expect(screen.getByRole("link", { name: "Shelf" })).not.toHaveAttribute("title");
   });
 
   // The rail's marker is one element that moves, so there is exactly one of it

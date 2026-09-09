@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useId, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { SECTION_TITLE } from "../typography";
+import { healthDotClass, type SectionHealth } from "./health";
 
 const STORAGE_PREFIX = "cataloggy:settings-section:";
 
@@ -19,6 +20,7 @@ export function Section({
   defaultOpen,
   storageKey,
   alwaysOpen = false,
+  health,
   children,
 }: {
   title: string;
@@ -28,6 +30,12 @@ export function Section({
   storageKey: string;
   /** Renders the section expanded and without a toggle (search results). */
   alwaysOpen?: boolean;
+  /**
+   * What this integration is currently doing, shown on the header row. Absent
+   * for sections that aren't integrations, and for one whose status could not
+   * be read — a missing dot is honest, an alarming one would not be.
+   */
+  health?: SectionHealth;
   children: ReactNode;
 }) {
   const [storedOpen, setStoredOpen] = useState(() => readStoredOpen(storageKey, defaultOpen ?? false));
@@ -74,11 +82,38 @@ export function Section({
   const header = (
     <>
       <span className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: "var(--surface-strong)", color: "var(--text-mute)" }}>{icon}</span>
-      <span className={`flex-1 ${SECTION_TITLE}`} style={{ color: "var(--text)" }}>{title}</span>
+      <span className={`min-w-0 flex-1 ${SECTION_TITLE}`} style={{ color: "var(--text)" }}>{title}</span>
+      {/*
+       * Status on the row, which is the whole point of the change: the answer
+       * to "why isn't my history showing up" was already in the app, one level
+       * inside a collapsed section, where nobody looking for it would find it.
+       *
+       * The dot is a wayfinding device — how you spot the one bad row in a list
+       * of eighteen without reading any of them — and the words beside it are
+       * what actually carry the state, so colour is never the sole channel.
+       *
+       * `sr-only` below `sm` rather than `hidden`: at 320px the title, the
+       * status and the chevron cannot share a row, but a phone is exactly where
+       * someone checks whether the sync is working, and `display: none` would
+       * take the answer out of the accessibility tree along with the pixels.
+       * The label sits inside the header button either way, so it is part of
+       * the name announced for "TMDB Metadata, collapsed" on every viewport.
+       */}
+      {/* An explicit space, because the accessible name of the header button is
+          the concatenation of its children and nothing else would separate
+          "TMDB Metadata" from "Key set". A white-space-only text run in a flex
+          container is not rendered, so this costs no pixels. */}
+      {health && " "}
+      {health && (
+        <span className="sr-only flex-none sm:not-sr-only sm:flex sm:items-center sm:gap-2">
+          <span aria-hidden="true" className={healthDotClass(health.tone)} />
+          <span className="meta-caps" style={{ color: "var(--text-mute)" }}>{health.label}</span>
+        </span>
+      )}
       {!alwaysOpen && (
         <ChevronDown
           size={18}
-          className={`transition-transform duration-slow ${open ? "rotate-180" : ""}`}
+          className={`flex-none transition-transform duration-slow ${open ? "rotate-180" : ""}`}
           style={{ color: "var(--text-mute)" }}
         />
       )}

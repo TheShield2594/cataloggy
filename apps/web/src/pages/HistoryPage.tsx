@@ -418,12 +418,12 @@ export function HistoryPage() {
                     <p className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>
                       {event.name}
                       {event.type === "episode" && event.season != null && event.episode != null && (
-                        <span style={{ color: "var(--text-mute)" }}>
+                        <span className="meta-caps" style={{ color: "var(--text-mute)" }}>
                           {" "}S{event.season}E{event.episode}
                         </span>
                       )}
                     </p>
-                    <p className="text-2xs" style={{ color: "var(--text-mute)" }}>
+                    <p className="meta-caps" style={{ color: "var(--text-mute)" }}>
                       {new Date(event.watchedAt).toLocaleString(undefined, {
                         dateStyle: "medium",
                         timeStyle: "short",

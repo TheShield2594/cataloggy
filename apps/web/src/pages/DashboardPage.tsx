@@ -123,7 +123,7 @@ export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
                 scrim over poster art, not on a theme surface, and the token
                 goes dark on the light theme. Same pairing as the Stats page's
                 rating badges. */}
-            <span aria-hidden="true" className="text-2xs font-bold tabular-nums text-[#f5c451]">{formatRating(item.rating)}</span>
+            <span aria-hidden="true" className="meta font-bold text-[#f5c451]">{formatRating(item.rating)}</span>
           </div>
         )}
         {badge && <div className="absolute top-2 right-2">{badge}</div>}
@@ -134,7 +134,7 @@ export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
       <p className="mt-2.5 truncate text-sm font-semibold text-[var(--text)] transition-colors group-hover:text-claw-text">
         {item.name}
       </p>
-      <p className="truncate text-2xs" style={{ color: "var(--text-dim)" }}>
+      <p className="meta-caps truncate" style={{ color: "var(--text-dim)" }}>
         {item.year ?? ""}
         {item.type ? ` · ${item.type === "movie" ? "Movie" : "Series"}` : ""}
         {item.genres && item.genres.length > 0 ? ` · ${item.genres.slice(0, 2).join(", ")}` : ""}
@@ -258,7 +258,7 @@ export function ContinueWatchingCard({
                 <div className="h-full rounded-full bg-claw-500 transition-all duration-slow" style={{ width: `${progressPct}%` }} />
               </div>
             )}
-            <p className="text-xs text-white/70">
+            <p className="meta-caps text-white/75">
               S{s.lastSeason}:E{s.lastEpisode}
               {seasonCountSuffix(s.totalSeasons)}
             </p>
@@ -288,7 +288,7 @@ export function ContinueWatchingCard({
         {s.name}
       </p>
       {progressPct !== null && (
-        <p className="text-2xs tabular-nums" style={{ color: "var(--text-dim)" }}>
+        <p className="meta-caps" style={{ color: "var(--text-dim)" }}>
           {s.watchedEpisodes} of {s.totalEpisodes} episodes
         </p>
       )}
@@ -352,15 +352,15 @@ export function ContinueWatchingHero({
       <div className="relative z-10 min-w-0 flex-1">
         <p className={`${MICRO_LABEL} text-claw-text`}>Series &middot; In Progress</p>
         <p className="mt-1 truncate font-heading text-xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{s.name}</p>
-        <p className="mt-0.5 text-sm" style={{ color: "var(--text-dim)" }}>
+        <p className="meta-caps mt-1" style={{ color: "var(--text-dim)" }}>
           S{s.lastSeason}:E{s.lastEpisode}
           {seasonCountSuffix(s.totalSeasons)}
         </p>
         {progress && (
           <div className="mt-3 max-w-xs">
-            <div className="mb-1.5 flex items-center justify-between text-2xs" style={{ color: "var(--text-mute)" }}>
+            <div className="meta-caps mb-1.5 flex items-center justify-between" style={{ color: "var(--text-mute)" }}>
               <span>{progress.label}</span>
-              <span className="font-semibold tabular-nums text-claw-text">{progress.watched} / {progress.total} episodes</span>
+              <span className="font-semibold text-claw-text">{progress.watched} / {progress.total} episodes</span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--surface-strong)" }}>
               <div className="h-full rounded-full bg-claw-500 transition-all duration-slow" style={{ width: `${progress.pct}%` }} />
@@ -467,7 +467,7 @@ function SectionHeader({
         <h2 className={SECTION_TITLE} style={{ color: "var(--text)" }}>{title}</h2>
         {count !== undefined && count > 0 && (
           <span
-            className="rounded-full px-2.5 py-0.5 text-xs font-medium tabular-nums"
+            className="meta rounded-full px-2.5 py-1"
             style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
           >
             {count}
@@ -640,7 +640,7 @@ function StatChip({ icon: Icon, label, value, accent }: { icon: React.ElementTyp
     <span className="flex items-center gap-1.5 text-sm" style={{ color: accent ? undefined : "var(--text-dim)" }}>
       <Icon className={`h-3.5 w-3.5 ${accent ? "text-claw-text" : ""}`} style={accent ? undefined : { color: "var(--text-mute)" }} />
       {/* Tabular figures so a ticking count doesn't shuffle the label beside it. */}
-      <span className={`tabular-nums ${accent ? "font-semibold text-claw-text" : ""}`}>
+      <span className={`font-mono tabular-nums ${accent ? "font-semibold text-claw-text" : ""}`}>
         {typeof value === "number" ? value.toLocaleString() : value}
       </span>
       <span className="hidden sm:inline" style={{ color: "var(--text-mute)" }}>{label}</span>
@@ -1220,7 +1220,7 @@ export function DashboardPage() {
                     />
                   </div>
                 </div>
-                <span className="flex-none text-2xs font-medium capitalize" style={{ color: "var(--text-mute)" }}>
+                <span className="meta-caps flex-none" style={{ color: "var(--text-mute)" }}>
                   {session.status}
                 </span>
               </div>
@@ -1383,12 +1383,12 @@ export function DashboardPage() {
                         <p className="truncate text-xs font-semibold" style={{ color: "var(--text)" }}>
                           {entry.seriesName}
                         </p>
-                        <p className="mt-0.5 truncate text-2xs" style={{ color: "var(--text-dim)" }}>
+                        <p className="meta-caps mt-0.5 truncate" style={{ color: "var(--text-dim)" }}>
                           S{entry.season}:E{entry.episode}
                         </p>
                       </div>
                       <span
-                        className={`flex-none rounded-full px-2 py-0.5 text-2xs font-semibold ${
+                        className={`meta-caps flex-none rounded-full px-2 py-1 font-semibold ${
                           isToday
                             ? "bg-claw-500/15 text-claw-text"
                             : isTomorrow
@@ -1512,7 +1512,7 @@ export function DashboardPage() {
                 <p className="mt-2.5 truncate text-sm font-semibold text-[var(--text)] transition-colors group-hover:text-claw-text">
                   {event.name}
                 </p>
-                <p className="text-2xs" style={{ color: "var(--text-dim)" }}>
+                <p className="meta-caps" style={{ color: "var(--text-dim)" }}>
                   {timeAgo(event.watchedAt)}
                 </p>
               </div>

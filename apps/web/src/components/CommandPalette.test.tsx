@@ -98,10 +98,10 @@ describe("CommandPalette", () => {
     renderPalette();
     await waitFor(() => expect(screen.getByLabelText("Search everything")).toHaveFocus());
 
-    // Dashboard, Search, Lists — the third action down.
+    // Shelf, Search, Discover — the third action down.
     await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
 
-    await waitFor(() => expect(path()).toBe("/lists"));
+    await waitFor(() => expect(path()).toBe("/discover"));
   });
 
   it("stops at the first row rather than wrapping past the top", async () => {

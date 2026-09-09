@@ -600,7 +600,7 @@ export function SearchPage() {
         {hasSearched && results !== null && results.length > 0 && (
           <>
             <div className="flex items-center justify-between">
-              <p className="text-sm tabular-nums" style={{ color: "var(--text-mute)" }}>
+              <p className="meta-caps" style={{ color: "var(--text-mute)" }}>
                 {results.length} result{results.length !== 1 ? "s" : ""}
                 {rawResults && results.length !== rawResults.length && (
                   <span style={{ color: "var(--text-mute)" }}> (filtered from {rawResults.length})</span>
@@ -1049,9 +1049,9 @@ function ResultCard({
       <div className="mt-3">
         <p className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>{result.name}</p>
         <div className="mt-0.5 flex items-center gap-2">
-          <span className="text-xs" style={{ color: "var(--text-mute)" }}>{result.year ?? "Unknown year"}</span>
+          <span className="meta-caps" style={{ color: "var(--text-mute)" }}>{result.year ?? "Unknown year"}</span>
           {result.rating != null && result.rating > 0 && (
-            <span className="flex items-center gap-0.5 text-xs text-warning" title={ratingLabel(result.rating)}>
+            <span className="meta flex items-center gap-0.5 text-warning" title={ratingLabel(result.rating)}>
               <Star className="h-3 w-3 fill-warning text-warning" />
               {formatRating(result.rating)}
               <span style={{ color: "var(--text-mute)" }}>/{RATING_MAX}</span>

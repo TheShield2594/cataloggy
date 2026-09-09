@@ -3,9 +3,10 @@ import { Link } from "react-router";
 import {
   BarChart3,
   CalendarDays,
-  Clapperboard,
+  Compass,
   Gamepad2,
   History,
+  Library,
   List,
   MoreHorizontal,
   Search,
@@ -25,14 +26,22 @@ type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean };
 // overflowed by 24px — clipped (not scrolled) by `overflow-x: hidden` on the
 // body, which cost Settings its label and half its hit area. Everything past
 // the fifth slot lives behind "More".
+//
+// The Shelf is what made this fit rather than merely survive. Lists, Games and
+// History used to take three of the eight slots to say three versions of "the
+// things you track"; now the first tab is all three, and the pages behind them
+// are the surfaces where you manage rather than browse, reached from the
+// Shelf's own header — kept here in "More" as well, because a habit of tapping
+// More → History shouldn't break on the day the redesign ships.
 export const PRIMARY_NAV_ITEMS: NavItem[] = [
-  { to: "/", label: "Dashboard", icon: Clapperboard, end: true },
+  { to: "/", label: "Shelf", icon: Library, end: true },
   { to: "/search", label: "Search", icon: Search },
-  { to: "/lists", label: "Lists", icon: List },
+  { to: "/discover", label: "Discover", icon: Compass },
   { to: "/calendar", label: "Calendar", icon: CalendarDays },
 ];
 
 export const MORE_NAV_ITEMS: NavItem[] = [
+  { to: "/lists", label: "Lists", icon: List },
   { to: "/games", label: "Games", icon: Gamepad2 },
   { to: "/history", label: "History", icon: History },
   { to: "/stats", label: "Stats", icon: BarChart3 },
@@ -146,7 +155,7 @@ function MoreSheet({ pathname, onClose }: { pathname: string; onClose: () => voi
   // This sheet declared `aria-modal="true"` while trapping nothing — alone among
   // the app's overlays, all of which share these three hooks. Tab walked straight
   // out into the page the attribute had just declared inert, and on touch the page
-  // scrolled behind it. It is the nav surface for four of the eight mobile
+  // scrolled behind it. It is the nav surface for five of the app's mobile
   // destinations, so it is also the overlay that got out of a keyboard user's way
   // least willingly.
   const sheetRef = useFocusTrap<HTMLDivElement>();

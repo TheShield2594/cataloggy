@@ -12,9 +12,9 @@ vi.mock("./api", async (importOriginal) => {
   };
 });
 
-// The dashboard is the landing route and fires a page's worth of requests on
+// The Shelf is the landing route and fires a page's worth of requests on
 // mount; this suite is only about what the top bar renders around it.
-vi.mock("./pages/DashboardPage", () => ({ DashboardPage: () => <p>dashboard</p> }));
+vi.mock("./pages/ShelfPage", () => ({ ShelfPage: () => <p>shelf</p> }));
 
 vi.mock("./utils/routePrefetch", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./utils/routePrefetch")>();
@@ -46,7 +46,7 @@ describe("top bar search", () => {
   it("offers the palette trigger on a route with no search field of its own", async () => {
     renderAt("/");
 
-    expect(await screen.findByText("dashboard")).toBeInTheDocument();
+    expect(await screen.findByText("shelf")).toBeInTheDocument();
     expect(headerSearch()).toBeInTheDocument();
   });
 
