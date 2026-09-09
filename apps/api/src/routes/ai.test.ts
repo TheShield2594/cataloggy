@@ -507,19 +507,41 @@ describe("ai routes", () => {
       expect(fetchMock.mock.calls[0][1]).toMatchObject({ redirect: "error" });
     });
 
-    it("reports only the status code, never the upstream body", async () => {
-      // Echoing the body would turn this endpoint into an SSRF probe.
+    it("reports neither the upstream body nor its status code", async () => {
+      // Either would turn this endpoint into an SSRF probe with a readable
+      // answer: the body leaks the response, and 401 against 404 is enough to
+      // fingerprint what is listening on a LAN port.
       const secret = "internal service says: db password is hunter2";
       vi.stubGlobal(
         "fetch",
-        vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({ error: secret }) })
+        vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ error: secret }) })
       );
       const app = await buildApp();
 
       const res = await app.inject({ method: "POST", url: "/ai/test", payload: { config: validConfig } });
 
-      expect(res.json()).toEqual({ success: false, error: "HTTP 500" });
+      expect(res.json()).toMatchObject({ success: false, outcome: "rejected" });
       expect(res.body).not.toContain("hunter2");
+      expect(res.body).not.toContain("401");
+    });
+
+    it("gives an unusable 200 the same verdict as a refusal", async () => {
+      // Something is listening and speaks HTTP but is not an OpenAI-compatible
+      // provider. Saying so separately would be another bit of the port scan.
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => {
+            throw new Error("Unexpected token < in JSON at position 0");
+          },
+        })
+      );
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "POST", url: "/ai/test", payload: { config: validConfig } });
+
+      expect(res.json()).toMatchObject({ success: false, outcome: "rejected" });
     });
 
     it("refuses a URL whose hostname resolves to a blocked address", async () => {
@@ -534,14 +556,18 @@ describe("ai routes", () => {
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    it("reports a transport failure rather than throwing", async () => {
-      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connect ECONNREFUSED")));
+    it("reports a transport failure as one verdict, not as the socket error", async () => {
+      // `ECONNREFUSED` against a timeout is the difference between a closed
+      // port and a filtered one — the whole answer a port scan is after.
+      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connect ECONNREFUSED 10.0.0.5:22")));
       const app = await buildApp();
 
       const res = await app.inject({ method: "POST", url: "/ai/test", payload: { config: validConfig } });
 
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toMatchObject({ success: false, error: "connect ECONNREFUSED" });
+      expect(res.json()).toMatchObject({ success: false, outcome: "unreachable" });
+      expect(res.body).not.toContain("ECONNREFUSED");
+      expect(res.body).not.toContain("10.0.0.5");
     });
 
     it("rejects an invalid config without making a request", async () => {

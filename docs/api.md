@@ -295,7 +295,7 @@ Any OpenAI-compatible chat-completions endpoint, including a local one.
 | `GET` | `/ai/config` | Headers are redacted. Includes `lastGeneratedAt`. |
 | `POST` | `/ai/config` | `{ config: { url, headers, payload: { model, max_tokens? } } }`. `max_tokens` below 2048 is clamped up — under that, responses truncate mid-JSON. |
 | `DELETE` | `/ai/config` | |
-| `POST` | `/ai/test` | Sends one trivial prompt. Reports the status code on failure and never the upstream body, so it can't be used as an SSRF probe. Redirects are not followed. |
+| `POST` | `/ai/test` | Sends one trivial prompt. On failure returns `{ success: false, outcome, error }`, where `outcome` is one of `blocked` / `misconfigured` / `unreachable` / `rejected` / `failed` — never the status code, the socket error or the upstream body, so it can't be used as an SSRF probe. Redirects are not followed; the detail is in the server log. |
 | `GET` | `/recommendations/ai?type=&limit=` | With reasons per title. Falls back to TMDB seeds when no provider is configured. `limit` caps at 20. |
 | `POST` | `/recommendations/ai/refresh` | Drops the cached set; the next request regenerates. |
 
@@ -367,7 +367,7 @@ re-resolved immediately before each send. Redirects are refused, not followed.
 | `POST` | `/notifications/channels` | `{ kind, url, name?, token?, enabled? }`. An ntfy URL must include its topic; Gotify requires a token. Ten channels per profile. |
 | `PATCH` | `/notifications/channels/:id` | `{ name?, url?, token?, enabled? }`. Omitting `token` keeps the stored one; `""` clears it. |
 | `DELETE` | `/notifications/channels/:id` | |
-| `POST` | `/notifications/channels/:id/test` | Sends a real test notification. Returns `{ success, error? }` — an upstream failure is a result, not a `500`, and the upstream body is never echoed back. |
+| `POST` | `/notifications/channels/:id/test` | Sends a real test notification. Returns `{ success }`, or `{ success: false, outcome, error }` with the same collapsed `outcome` set as `/ai/test` — an upstream failure is a result, not a `500`, and neither the status code nor the socket error is echoed back. |
 
 A generic `webhook` receives `{ event, title, message, url, data }`; for an
 upcoming episode, `data` carries `seriesImdbId`, `seriesName`, `season`,

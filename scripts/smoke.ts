@@ -1,3 +1,49 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+// `.env` is where a Compose install keeps its API_TOKEN — docker-compose.yml
+// uses the `${API_TOKEN:?}` form, so the stack refuses to start without one —
+// and nothing here was reading it. README step 3 sends people straight from
+// `docker compose up` to `pnpm smoke`, which then authenticated as the
+// "dev-token" default below and got 401s from every token-bearing check, at
+// the exact moment they were trying to confirm the install worked. Compose
+// reads the same file from the repo root.
+//
+// Six lines rather than a dotenv dependency, because this parses only what the
+// file actually contains: `KEY=value`, `#` comments, and optional quotes. A
+// variable already in the environment wins, so `API_BASE=… pnpm smoke` still
+// overrides the file.
+const loadDotEnv = (): void => {
+  let contents: string;
+  try {
+    contents = readFileSync(fileURLToPath(new URL("../.env", import.meta.url)), "utf8");
+  } catch (error) {
+    // No .env is a from-source dev run, where the defaults below are right.
+    // Anything else — a file that exists but can't be read — is worth failing
+    // on: falling back to "dev-token" would report the 401s that follow as the
+    // problem, which is the misdiagnosis this whole change exists to fix.
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
+  }
+
+  for (const line of contents.split("\n")) {
+    const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    if (!match) continue;
+    const [, key, rawValue] = match;
+    if (key in process.env) continue;
+
+    const value = rawValue.trim();
+    const quoted = /^(['"])([\s\S]*)\1$/.exec(value);
+    // Compose treats an unquoted `#` after whitespace as a trailing comment.
+    const parsed = quoted ? quoted[2] : value.replace(/\s+#.*$/, "");
+    // `KEY=` (the shape .env.example ships) is left unset rather than set to
+    // "", so the defaults below still apply.
+    if (parsed !== "") process.env[key] = parsed;
+  }
+};
+
+loadDotEnv();
+
 const apiBase = process.env.API_BASE ?? "http://localhost:7000";
 const addonBase = process.env.ADDON_BASE ?? "http://localhost:7001";
 const apiToken = process.env.API_TOKEN ?? "dev-token";

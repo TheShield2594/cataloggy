@@ -35,6 +35,7 @@ import { useToast } from "../hooks/useToast";
 import { timeAgo, timeUntil } from "../utils/timeAgo";
 import { formatRating, ratingLabel } from "../utils/rating";
 import { useCachedState } from "../hooks/useCachedState";
+import { useClockBoundary } from "../hooks/useClockBoundary";
 import { PAGE_TITLE, SECTION_TITLE, KICKER, MICRO_LABEL } from "../components/typography";
 
 /* ─── Skeleton placeholders ─── */
@@ -585,77 +586,13 @@ export function timeOfDayGreeting(now: Date) {
 
 // The hours at which the header's two clock-derived strings change: the
 // greeting cutoffs above, plus midnight, which also rolls the date over.
-const GREETING_CUTOFF_HOURS = [0, 5, 12, 18];
+export const GREETING_CUTOFF_HOURS = [0, 5, 12, 18];
 
-export function msUntilNextBoundary(now: Date): number {
-  const next = new Date(now);
-  next.setMinutes(0, 0, 0);
-  const nextCutoff = GREETING_CUTOFF_HOURS.find((hour) => hour > now.getHours());
-  if (nextCutoff === undefined) {
-    next.setDate(next.getDate() + 1);
-    next.setHours(0);
-  } else {
-    next.setHours(nextCutoff);
-  }
-  // A DST shift can land the "next" boundary in the past; never schedule a
-  // zero-delay timeout that would spin.
-  return Math.max(next.getTime() - now.getTime(), 60_000);
-}
-
-/**
- * The current time, re-read whenever the greeting or the date would change.
- *
- * Both were computed once at render, so a dashboard left open overnight kept
- * saying "Good evening" under yesterday's date. Waking at the boundaries costs
- * four re-renders a day rather than a poll running all night.
- */
-// Whether two instants would render the header identically. Returning the
-// previous Date when they would lets React bail out of the re-render, so the
-// common case — the effect running microseconds after the first render — costs
-// nothing.
+// Whether two instants would render the header identically — the greeting and
+// the date together, which is more than the day-boundary default the hook uses
+// for pages that only ask what day it is.
 export const showsSameHeader = (a: Date, b: Date) =>
   timeOfDayGreeting(a) === timeOfDayGreeting(b) && a.toDateString() === b.toDateString();
-
-function useClockBoundary(): Date {
-  const [now, setNow] = useState(() => new Date());
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-
-    const schedule = (current: Date) => {
-      timer = setTimeout(() => {
-        const updated = new Date();
-        setNow(updated);
-        schedule(updated);
-      }, msUntilNextBoundary(current));
-    };
-
-    // A suspended laptop wakes with a timeout that was scheduled yesterday still
-    // pending, so re-read the clock on the way back rather than wait it out.
-    const onVisibilityChange = () => {
-      if (document.visibilityState !== "visible") return;
-      clearTimeout(timer);
-      const updated = new Date();
-      setNow(updated);
-      schedule(updated);
-    };
-
-    // Schedule from the same value the header is showing. The clock can cross a
-    // cutoff between the first render and this effect, and scheduling from a
-    // fresher Date than the one on screen would leave the two disagreeing until
-    // the *next* cutoff — a stale greeting for hours, not milliseconds.
-    const current = new Date();
-    setNow((previous) => (showsSameHeader(previous, current) ? previous : current));
-    schedule(current);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, []);
-
-  return now;
-}
 
 // The stat row's stand-in while getWatchStats and getDetailedStats are in
 // flight. Without it the header renders as greeting + date only and then grows
@@ -734,7 +671,7 @@ function DashboardHeader({
   statsFailed: boolean;
   onRetryStats: () => void;
 }) {
-  const now = useClockBoundary();
+  const now = useClockBoundary(GREETING_CUTOFF_HOURS, showsSameHeader);
   const today = now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   return (
     <div

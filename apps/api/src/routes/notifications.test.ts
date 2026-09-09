@@ -29,6 +29,10 @@ vi.mock("../lib/notification-channels.js", async (importOriginal) => ({
   sendToChannel: (...args: unknown[]) => sendToChannel(...args),
 }));
 
+// Imported after the mocks above are in place — a static import would pull the
+// module in (and its prisma import with it) before the factories run.
+const { ChannelSendError } = await import("../lib/notification-channels.js");
+
 const buildApp = (): Promise<FastifyInstance> => buildRouteApp(() => import("./notifications.js"));
 
 const storedChannel = (over: Record<string, unknown> = {}) => ({
@@ -347,13 +351,60 @@ describe("notification channel routes", () => {
     });
 
     it("reports a failure as a result rather than a 500", async () => {
-      sendToChannel.mockRejectedValue(new Error("Phone: HTTP 403"));
+      sendToChannel.mockRejectedValue(new ChannelSendError("rejected", "Phone: HTTP 403"));
       const app = await buildApp();
 
       const res = await app.inject({ method: "POST", url: `/notifications/channels/${CHANNEL_ID}/test` });
 
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({ success: false, error: "Phone: HTTP 403" });
+      expect(res.json()).toMatchObject({ success: false, outcome: "rejected" });
+    });
+
+    it("answers with a verdict, never the status code or the socket error", async () => {
+      // Otherwise an API_TOKEN holder points a channel at each LAN address in
+      // turn and reads open, closed and filtered ports off the responses.
+      const app = await buildApp();
+
+      for (const [error, outcome] of [
+        [new ChannelSendError("rejected", "Phone: HTTP 403"), "rejected"],
+        [new ChannelSendError("unreachable", "Phone: connect ECONNREFUSED 10.0.0.5:22"), "unreachable"],
+      ] as const) {
+        sendToChannel.mockRejectedValueOnce(error);
+
+        const res = await app.inject({ method: "POST", url: `/notifications/channels/${CHANNEL_ID}/test` });
+
+        expect(res.json()).toMatchObject({ success: false, outcome });
+        expect(res.body).not.toContain("403");
+        expect(res.body).not.toContain("ECONNREFUSED");
+        expect(res.body).not.toContain("10.0.0.5");
+      }
+    });
+
+    it("still explains a failure that is about this install rather than the target", async () => {
+      sendToChannel.mockRejectedValue(
+        new ChannelSendError("misconfigured", "Phone: stored token could not be decrypted", {
+          publicMessage: "The stored token could not be decrypted — re-enter it in Settings.",
+        })
+      );
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "POST", url: `/notifications/channels/${CHANNEL_ID}/test` });
+
+      expect(res.json()).toEqual({
+        success: false,
+        outcome: "misconfigured",
+        error: "The stored token could not be decrypted — re-enter it in Settings.",
+      });
+    });
+
+    it("does not leak the detail of an error it did not expect", async () => {
+      sendToChannel.mockRejectedValue(new Error("connect ECONNREFUSED 10.0.0.5:22"));
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "POST", url: `/notifications/channels/${CHANNEL_ID}/test` });
+
+      expect(res.json()).toMatchObject({ success: false, outcome: "failed" });
+      expect(res.body).not.toContain("ECONNREFUSED");
     });
   });
 });

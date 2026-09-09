@@ -6,10 +6,12 @@ import { SECRET_CONTEXT, encryptSecret } from "../lib/secret-box.js";
 import { validateNotificationUrl } from "../lib/ssrf.js";
 import { UUID_V4_PATTERN } from "../lib/types.js";
 import {
+  ChannelSendError,
   NOTIFICATION_CHANNEL_KINDS,
   isNotificationChannelKind,
   sendToChannel,
 } from "../lib/notification-channels.js";
+import { outboundFailure } from "../lib/outbound-test.js";
 
 // A ceiling rather than a considered limit: nobody needs ten notification
 // targets per profile, and without one a loop bug in a client could fill the
@@ -229,10 +231,15 @@ const notificationRoutes: FastifyPluginAsync = async (app) => {
         });
         return { success: true };
       } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Failed to send test notification",
-        };
+        // The status code and the socket error stay here. Handing them back
+        // would let an API_TOKEN holder — an XSS'd tab, say — point a channel
+        // at each address on the LAN in turn and read off which ports are
+        // open, closed and filtered. The operator still gets the detail, in
+        // the place operators look.
+        request.log.warn({ err: error, channelId: channel.id }, "Notification channel test failed");
+        return error instanceof ChannelSendError
+          ? outboundFailure(error.outcome, error.publicMessage)
+          : outboundFailure("failed");
       }
     }
   );

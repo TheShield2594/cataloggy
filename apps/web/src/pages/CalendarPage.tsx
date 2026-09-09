@@ -11,6 +11,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useToast } from "../hooks/useToast";
 import { useCachedState } from "../hooks/useCachedState";
+import { useClockBoundary } from "../hooks/useClockBoundary";
 import { PAGE_TITLE, SECTION_TITLE, KICKER, MICRO_LABEL } from "../components/typography";
 
 type ViewMode = "agenda" | "month";
@@ -175,7 +176,10 @@ export function CalendarPage() {
   const { showToast } = useToast();
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading, detail: panelDetail, detailLoading: panelDetailLoading } = useDetailPanel();
 
-  const today = useMemo(() => startOfDay(new Date()), []);
+  // Re-read at midnight rather than frozen at mount: a tab left open overnight
+  // labelled tomorrow's episodes "Today" and highlighted the wrong grid cell.
+  const now = useClockBoundary();
+  const today = useMemo(() => startOfDay(now), [now]);
   // The month grid needs width the phone doesn't have, so on narrow screens
   // agenda is the only view — the toggle isn't offered either.
   const compact = useMediaQuery(COMPACT_QUERY);
@@ -228,6 +232,10 @@ export function CalendarPage() {
     // later range's results under the wrong key.
   }, [setEntries]);
 
+  // `today` is a dependency for the agenda, where `daysNeeded` is the selected
+  // range and so does not change at midnight. The API answers "the next N days
+  // from now", so without it a tab left open overnight kept yesterday's window:
+  // still holding yesterday's episodes, and a day short at the far end.
   useEffect(() => {
     if (monthOutOfRange) {
       setEntries([]);
@@ -235,7 +243,7 @@ export function CalendarPage() {
       return;
     }
     void load(daysNeeded);
-  }, [daysNeeded, monthOutOfRange, load, setEntries]);
+  }, [daysNeeded, today, monthOutOfRange, load, setEntries]);
 
   const entriesByDate = useMemo(() => {
     const map = new Map<string, CalendarEntry[]>();

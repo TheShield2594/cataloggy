@@ -183,6 +183,33 @@ describe("HistoryPage", () => {
   });
 });
 
+describe("HistoryPage group headings", () => {
+  it("re-labels an overnight tab instead of leaving yesterday's watches under Today", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 4, 15, 23, 50));
+      getWatchHistory.mockResolvedValue([
+        watched("Alien", { watchedAt: new Date(2026, 4, 15, 20, 0).toISOString() }),
+      ]);
+
+      renderPage();
+      // The fetch resolves on a microtask, which fake timers do not hold up.
+      await act(async () => {});
+      expect(screen.getByText("Today")).toBeInTheDocument();
+
+      // Past midnight, without the tab being touched.
+      await act(async () => {
+        vi.advanceTimersByTime(11 * 60 * 1000);
+      });
+
+      expect(screen.getByText("Yesterday")).toBeInTheDocument();
+      expect(screen.queryByText("Today")).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("HistoryPage caching and pagination", () => {
   const byFilter = async (
     _limit: number,

@@ -5,6 +5,7 @@ import { api, SearchResult, WatchEvent } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useToast } from "../hooks/useToast";
 import { useCachedState } from "../hooks/useCachedState";
+import { useClockBoundary } from "../hooks/useClockBoundary";
 import { relogWatchEvent, watchEventLabel } from "../utils/watchEvents";
 import { PAGE_TITLE, SECTION_TITLE, KICKER } from "../components/typography";
 
@@ -61,6 +62,10 @@ export function HistoryPage() {
   // `hadCachedValue` suppressing even the skeleton that would have hinted more
   // was coming. CalendarPage keys on its day range for the same reason.
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  // "Today" and "Yesterday" are relative to when the grouping runs, not to when
+  // the page mounted — a tab left open overnight headed yesterday's watches
+  // "Today" until it was reloaded.
+  const now = useClockBoundary();
   const [firstPage, setFirstPage, firstPageMeta] = useCachedState<WatchEvent[]>(
     `history:events:${typeFilter}`,
     []
@@ -262,7 +267,6 @@ export function HistoryPage() {
   };
 
   const groups = useMemo(() => {
-    const now = new Date();
     const result: { label: string; events: WatchEvent[] }[] = [];
     for (const event of events) {
       const label = groupLabel(new Date(event.watchedAt), now);
@@ -274,7 +278,7 @@ export function HistoryPage() {
       }
     }
     return result;
-  }, [events]);
+  }, [events, now]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">

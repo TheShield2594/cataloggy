@@ -296,10 +296,23 @@ hides it without deleting history, and `DELETE` on the same path undoes it.
   (`https://ntfy.sh/my-topic`, not `https://ntfy.sh`), and Gotify needs an
   application token.
 - **A channel saves but nothing arrives** — use **Send a test notification** on
-  the channel; it POSTs for real and reports the status it got back. `HTTP 401`
-  or `403` is a token the other server didn't accept, `404` on ntfy is usually
-  a topic typo, and a failure to connect at all usually means the address is
-  reachable from your desk but not from inside the `api` container.
+  the channel; it POSTs for real. It answers with one of five verdicts rather
+  than a status code:
+  - *reached it, but it did not accept the request* — usually a token the other
+    server rejected or, on ntfy, a topic typo.
+  - *could not reach that address* — usually an address that is reachable from
+    your desk but not from inside the `api` container.
+  - *not an address Cataloggy will send to* — the URL, or what its hostname
+    resolves to, is in the blocked cloud-metadata/link-local range.
+  - *the stored token could not be decrypted* — `API_TOKEN` changed after the
+    channel was saved; re-enter the token here.
+  - *the test could not be completed* — something failed before the send; the
+    log says what.
+
+  The status code and the socket error are in `docker compose logs api`. They
+  stay server-side because a channel may point anywhere on your LAN, and
+  echoing them back would make the test button a port scanner for anyone
+  holding the API token.
 - **Notifications have no link to tap** — set `CATALOGGY_WEB_PUBLIC` to the
   externally reachable URL of the web UI. Without it the API doesn't know its
   own address, so it sends the notification without a link rather than a broken
@@ -354,9 +367,16 @@ job off.
 Optional. Without a provider configured, recommendations fall back to TMDB's
 own similar-titles data.
 
-- **Test fails with just "HTTP 500"** — that's on purpose. Echoing the provider's
-  response body back would make the endpoint an SSRF probe, so only the status
-  code is reported. Check the provider's own logs.
+- **Test fails without saying why** — that's on purpose. The endpoint may point
+  at your LAN, so it answers with a verdict and not with the status code, the
+  socket error or the provider's response body, any of which would let anyone
+  holding the API token map your network one test at a time. The verdicts are
+  the same five the notification-channel test uses (above): *could not reach
+  that address*, *reached it, but it did not accept the request* — which also
+  covers a 200 that isn't a usable completions response, so a service that
+  isn't an LLM reads the same as one that refused — plus the blocked-address,
+  invalid-config and could-not-complete cases. The detail is in
+  `docker compose logs api`, and in the provider's own logs.
 - **"url resolves to an address that is not an allowed outbound target"** — the
   hostname resolves somewhere blocked (cloud metadata, link-local). A LAN LLM on
   a normal private address is fine.

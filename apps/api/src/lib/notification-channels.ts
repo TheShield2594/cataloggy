@@ -21,6 +21,31 @@ import type { NotificationChannelKind } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { SECRET_CONTEXT, decryptSecret } from "./secret-box.js";
 import { resolveNotificationUrl } from "./ssrf.js";
+import { OUTBOUND_FAILURE_MESSAGE } from "./outbound-test.js";
+import type { OutboundFailure } from "./outbound-test.js";
+
+/**
+ * A send that failed, carrying both halves of the story: `message` names the
+ * status code or socket error for the log and for Sync Status, and
+ * `publicMessage` is the collapsed verdict the test endpoint may hand back to
+ * the caller. Keeping them apart is what stops the endpoint being an internal
+ * port scanner with readable output — see `outbound-test.ts`.
+ */
+export class ChannelSendError extends Error {
+  readonly outcome: OutboundFailure;
+  readonly publicMessage: string;
+
+  constructor(
+    outcome: OutboundFailure,
+    message: string,
+    options: { cause?: unknown; publicMessage?: string } = {}
+  ) {
+    super(message, { cause: options.cause });
+    this.name = "ChannelSendError";
+    this.outcome = outcome;
+    this.publicMessage = options.publicMessage ?? OUTBOUND_FAILURE_MESSAGE[outcome];
+  }
+}
 
 export const NOTIFICATION_CHANNEL_KINDS = ["ntfy", "gotify", "discord", "webhook"] as const;
 
@@ -185,9 +210,13 @@ export const sendToChannel = async (channel: ChannelTarget, event: NotificationE
   // more than an attempt that cannot succeed.
   const token = channel.token === null ? null : decryptSecret(SECRET_CONTEXT.notificationChannelToken, channel.token);
   if (channel.token !== null && token === null) {
-    throw new Error(
-      `${channel.name}: stored token could not be decrypted — API_TOKEN has changed since it was saved. Re-enter the token in Settings.`
-    );
+    const detail =
+      "stored token could not be decrypted — API_TOKEN has changed since it was saved. Re-enter the token in Settings.";
+    // Safe to repeat back: it describes this install's own state, not anything
+    // learned from the target.
+    throw new ChannelSendError("misconfigured", `${channel.name}: ${detail}`, {
+      publicMessage: `The ${detail}`,
+    });
   }
 
   const request = buildChannelRequest({ ...channel, token }, event);
@@ -195,21 +224,35 @@ export const sendToChannel = async (channel: ChannelTarget, event: NotificationE
   // Resolved here rather than trusting the save-time check: the channel may
   // have been stored months ago, and the name could point somewhere else now.
   if (!(await resolveNotificationUrl(request.url))) {
-    throw new Error(`${channel.name}: URL resolves to an address that is not an allowed outbound target`);
+    throw new ChannelSendError(
+      "blocked",
+      `${channel.name}: URL resolves to an address that is not an allowed outbound target`
+    );
   }
 
-  const response = await fetch(request.url, {
-    ...request.init,
-    signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
-    // An allowed host must not be able to bounce this request to an internal
-    // address the validator would have rejected.
-    redirect: "error",
-  });
+  let response: Response;
+  try {
+    response = await fetch(request.url, {
+      ...request.init,
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+      // An allowed host must not be able to bounce this request to an internal
+      // address the validator would have rejected.
+      redirect: "error",
+    });
+  } catch (cause) {
+    // The socket error names the address and says whether the port was closed
+    // or filtered, so it stays here and in the log rather than going back to
+    // the caller.
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    throw new ChannelSendError("unreachable", `${channel.name}: ${detail}`, { cause });
+  }
 
   if (!response.ok) {
     // Deliberately without the response body: echoing it back would turn a
-    // notification channel into an SSRF probe with a readable answer.
-    throw new Error(`${channel.name}: HTTP ${response.status}`);
+    // notification channel into an SSRF probe with a readable answer. The
+    // status code goes the same way — 401 against 404 is enough to fingerprint
+    // what is listening.
+    throw new ChannelSendError("rejected", `${channel.name}: HTTP ${response.status}`);
   }
 };
 
