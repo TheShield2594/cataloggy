@@ -79,10 +79,21 @@ function KindFilter({
   onChange: (filter: ShelfFilter) => void;
 }) {
   return (
-    // A tab list rather than a row of buttons: these swap what the grid below
-    // shows without navigating, which is what `tablist` describes and what lets
-    // a screen reader announce "2 of 4" as the user moves along it.
-    <div role="tablist" aria-label="Filter the shelf by kind" className="scrollbar-hide -mx-1 flex gap-2 overflow-x-auto px-1 py-1">
+    /*
+     * A named group of toggle buttons, not a `tablist`.
+     *
+     * The ARIA tabs pattern is a promise of a roving tabindex, arrow-key
+     * navigation and a `tabpanel` each tab controls — the Settings page
+     * implements all three, and its own comment says announcing the role
+     * without them is the mistake `role="menu"` made on the lists panel. This
+     * row has none of them, and could not honestly have the third: it filters
+     * two sections at once, so there is no single panel to point at.
+     *
+     * `aria-pressed` is what these actually are — the same treatment the search
+     * page gives its sort pills — and it announces the selected state without
+     * claiming a keyboard contract that isn't here.
+     */
+    <div role="group" aria-label="Filter the shelf by kind" className="scrollbar-hide -mx-1 flex gap-2 overflow-x-auto px-1 py-1">
       {SHELF_FILTERS.map((filter) => {
         const selected = active === filter.value;
         // A kind with nothing in it is still shown, but disabled — hiding it
@@ -93,8 +104,7 @@ function KindFilter({
           <button
             key={filter.value}
             type="button"
-            role="tab"
-            aria-selected={selected}
+            aria-pressed={selected}
             disabled={empty && !selected}
             onClick={() => onChange(filter.value)}
             className={`tap-target flex flex-none items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset disabled:opacity-40 ${
@@ -348,7 +358,27 @@ export function ShelfPage() {
   /* ── Everything else ── */
 
   const shelf = useMemo(() => buildShelf(items, games), [items, games]);
-  const counts = useMemo(() => countByKind(shelf), [shelf]);
+
+  /*
+   * Everything the page can render, which is not the same as `shelf`.
+   *
+   * The grid is built from lists and the game library; the in-progress block is
+   * built from the series-progress feed, and a show you watch through a Plex
+   * webhook without ever adding it to a list appears only in the second. Counting
+   * `shelf` alone therefore undercounts the page — and worse, a library whose
+   * only series is one of those left the "Shows" filter reading 0 and *disabled*
+   * while shows were visible on screen above it.
+   *
+   * In-progress wins a key collision: its entry carries the ruler and the
+   * episode the list row knows nothing about.
+   */
+  const everything = useMemo(() => {
+    const byKey = new Map(shelf.map((entry) => [entry.key, entry]));
+    for (const entry of inProgress) byKey.set(entry.key, entry);
+    return [...byKey.values()];
+  }, [shelf, inProgress]);
+
+  const counts = useMemo(() => countByKind(everything), [everything]);
 
   // What is already pinned at the top doesn't also belong in the grid — the
   // section is called "everything else" and has to mean it.
@@ -401,11 +431,11 @@ export function ShelfPage() {
   };
 
   const summary = shelfSummary(
-    shelf,
+    everything,
     lastEvent ? `Last watched ${timeAgo(lastEvent.watchedAt)}` : null
   );
 
-  const nothingAtAll = !loading && shelf.length === 0 && inProgress.length === 0;
+  const nothingAtAll = !loading && everything.length === 0;
 
   return (
     <div>

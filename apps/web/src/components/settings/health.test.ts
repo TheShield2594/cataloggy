@@ -35,13 +35,17 @@ describe("healthDotClass", () => {
 
 describe("traktHealth", () => {
   const connected = { connected: true, configured: true, expiresAt: "2027-01-01T00:00:00.000Z" };
+  // Every call pins the clock. Left to `Date.now()` these cases would pass
+  // until the fixture's expiry and then start reporting "Token expired" for a
+  // connected account — a test that changes its answer on a date is not a test.
+  const NOW = new Date("2026-09-09T12:00:00.000Z").getTime();
 
   it("separates 'no credentials' from 'no account linked' — they need different fixes", () => {
-    expect(traktHealth({ connected: false, configured: false, expiresAt: null }, null, timeAgo)).toEqual({
+    expect(traktHealth({ connected: false, configured: false, expiresAt: null }, null, timeAgo, NOW)).toEqual({
       tone: "idle",
       label: "Not set up",
     });
-    expect(traktHealth({ connected: false, configured: true, expiresAt: null }, null, timeAgo)).toEqual({
+    expect(traktHealth({ connected: false, configured: true, expiresAt: null }, null, timeAgo, NOW)).toEqual({
       tone: "warn",
       label: "Not connected",
     });
@@ -49,19 +53,19 @@ describe("traktHealth", () => {
 
   it("calls an expired token what it is — the commonest reason history quietly stops", () => {
     expect(
-      traktHealth({ ...connected, expiresAt: "2026-01-01T00:00:00.000Z" }, null, timeAgo)
+      traktHealth({ ...connected, expiresAt: "2026-01-01T00:00:00.000Z" }, null, timeAgo, NOW)
     ).toEqual({ tone: "bad", label: "Token expired" });
   });
 
   it("reports when it last actually ran, not merely that it is connected", () => {
-    expect(traktHealth(connected, jobs({ runs: [run("trakt-history-poll")] }), timeAgo)).toEqual({
+    expect(traktHealth(connected, jobs({ runs: [run("trakt-history-poll")] }), timeAgo, NOW)).toEqual({
       tone: "ok",
       label: "Synced 4m ago",
     });
   });
 
   it("says only 'Connected' for an account that has never synced", () => {
-    expect(traktHealth(connected, jobs(), timeAgo)).toEqual({ tone: "ok", label: "Connected" });
+    expect(traktHealth(connected, jobs(), timeAgo, NOW)).toEqual({ tone: "ok", label: "Connected" });
   });
 
   it("lets a failing poll outrank a recorded success, which may predate it", () => {
@@ -70,11 +74,13 @@ describe("traktHealth", () => {
       failures: [{ job: "trakt-history-poll", message: "401", failedAt: "2026-09-09T13:05:00.000Z" }],
     });
 
-    expect(traktHealth(connected, status, timeAgo)).toEqual({ tone: "bad", label: "Last sync failed" });
+    expect(traktHealth(connected, status, timeAgo, NOW)).toEqual({ tone: "bad", label: "Last sync failed" });
   });
 
-  it("reports nothing rather than a fault when the status itself could not be read", () => {
-    expect(traktHealth(null, null, timeAgo)).toEqual({ tone: "idle", label: "Not set up" });
+  it("still reports a connected account when the job list is the thing that failed", () => {
+    // A missing "synced 4m ago" is a smaller loss than a wrong one, so `jobs`
+    // stays nullable where the status itself does not.
+    expect(traktHealth(connected, null, timeAgo, NOW)).toEqual({ tone: "ok", label: "Connected" });
   });
 });
 
@@ -82,7 +88,10 @@ describe("stremioHealth", () => {
   const connected = { connected: true, email: "a@b.c", apiBase: null, connectedAt: null };
 
   it("is idle until an account is linked", () => {
-    expect(stremioHealth(null, null, timeAgo)).toEqual({ tone: "idle", label: "Not connected" });
+    expect(stremioHealth({ ...connected, connected: false }, null, timeAgo)).toEqual({
+      tone: "idle",
+      label: "Not connected",
+    });
   });
 
   it("carries the last sync once one has happened", () => {
@@ -101,8 +110,10 @@ describe("stremioHealth", () => {
 
 describe("tmdbHealth", () => {
   it("treats a missing TMDB key as a fault, because the app is visibly broken without one", () => {
-    expect(tmdbHealth(null)).toEqual({ tone: "warn", label: "No key — artwork is off" });
-    expect(tmdbHealth({ configured: false, source: null })).toMatchObject({ tone: "warn" });
+    expect(tmdbHealth({ configured: false, source: null })).toEqual({
+      tone: "warn",
+      label: "No key — artwork is off",
+    });
   });
 
   it("says where a configured key came from, since one of the two can't be edited here", () => {
@@ -114,7 +125,6 @@ describe("tmdbHealth", () => {
 describe("optionalKeyHealth", () => {
   it("is never a fault — these buy extra ratings and prettier posters, nothing more", () => {
     expect(optionalKeyHealth(false)).toEqual({ tone: "idle", label: "Not set" });
-    expect(optionalKeyHealth(undefined)).toEqual({ tone: "idle", label: "Not set" });
     expect(optionalKeyHealth(true)).toEqual({ tone: "ok", label: "Key set" });
   });
 });
@@ -137,8 +147,15 @@ describe("jobsHealth", () => {
     expect(jobsHealth(jobs({ runs: [run("steam-sync")] }))).toEqual({ tone: "ok", label: "All healthy" });
   });
 
-  it("admits it doesn't know when the request failed", () => {
-    expect(jobsHealth(null)).toEqual({ tone: "idle", label: "Unknown" });
+  it("counts every failure, not just the first", () => {
+    const status = jobs({
+      failures: [
+        { job: "steam-sync", message: "x", failedAt: "y" },
+        { job: "trakt-history-poll", message: "x", failedAt: "y" },
+      ],
+    });
+
+    expect(jobsHealth(status)).toEqual({ tone: "bad", label: "2 failing" });
   });
 });
 

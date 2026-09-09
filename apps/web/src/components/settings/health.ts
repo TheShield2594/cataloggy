@@ -34,6 +34,20 @@ export type SectionHealth = {
   label: string;
 };
 
+/*
+ * Every mapper below takes its own status as a *non-null* value, on purpose.
+ *
+ * "We asked, and there is no key" and "we could not ask" are different answers,
+ * and only the first belongs on a row: reporting `No key — artwork is off`
+ * because a request timed out is worse than reporting nothing. The caller drops
+ * a failed request instead of passing null down (see `useSettingsHealth`), and
+ * these signatures are what stop that from quietly regressing.
+ *
+ * `jobs` is the exception and stays nullable: the sync rows read it only for a
+ * timestamp, and a row that says "Connected" without a "synced 4m ago" is still
+ * true.
+ */
+
 /** The status-dot modifier for a tone. `idle` takes the unmodified dot. */
 export const healthDotClass = (tone: HealthTone): string =>
   tone === "ok" ? "status-dot status-dot--ok"
@@ -72,12 +86,12 @@ const failed = (jobs: JobStatus | null, job: string): JobFailure | undefined =>
  * reason history stops arriving).
  */
 export function traktHealth(
-  status: { connected: boolean; configured: boolean; expiresAt: string | null } | null,
+  status: { connected: boolean; configured: boolean; expiresAt: string | null },
   jobs: JobStatus | null,
   timeAgo: (iso: string) => string,
   now = Date.now()
 ): SectionHealth {
-  if (!status || !status.configured) return { tone: "idle", label: "Not set up" };
+  if (!status.configured) return { tone: "idle", label: "Not set up" };
   if (!status.connected) return { tone: "warn", label: "Not connected" };
 
   const expiry = status.expiresAt ? new Date(status.expiresAt).getTime() : null;
@@ -95,11 +109,11 @@ export function traktHealth(
 
 /** Stremio's watched-library sync — same shape, different job. */
 export function stremioHealth(
-  status: StremioLibraryStatus | null,
+  status: StremioLibraryStatus,
   jobs: JobStatus | null,
   timeAgo: (iso: string) => string
 ): SectionHealth {
-  if (!status?.connected) return { tone: "idle", label: "Not connected" };
+  if (!status.connected) return { tone: "idle", label: "Not connected" };
   if (failed(jobs, "stremio-library-sync")) return { tone: "bad", label: "Last sync failed" };
   const last = lastRunLabel(jobs, "stremio-library-sync", timeAgo);
   return { tone: "ok", label: last ? `Synced ${last}` : "Connected" };
@@ -111,19 +125,18 @@ export function stremioHealth(
  * app is visibly degraded. The optional keys below get `idle` for the same
  * state.
  */
-export function tmdbHealth(status: TmdbStatus | null): SectionHealth {
-  if (!status?.configured) return { tone: "warn", label: "No key — artwork is off" };
+export function tmdbHealth(status: TmdbStatus): SectionHealth {
+  if (!status.configured) return { tone: "warn", label: "No key — artwork is off" };
   return { tone: "ok", label: status.source === "env" ? "Key set (env)" : "Key set" };
 }
 
 /** OMDB, RPDB: extra ratings and prettier posters. Nice to have, never a fault. */
-export function optionalKeyHealth(configured: boolean | undefined, whenSet = "Key set"): SectionHealth {
+export function optionalKeyHealth(configured: boolean, whenSet = "Key set"): SectionHealth {
   return configured ? { tone: "ok", label: whenSet } : { tone: "idle", label: "Not set" };
 }
 
 /** The scheduled jobs as a whole, which is what the Sync Status section is. */
-export function jobsHealth(jobs: JobStatus | null): SectionHealth {
-  if (!jobs) return { tone: "idle", label: "Unknown" };
+export function jobsHealth(jobs: JobStatus): SectionHealth {
   const count = jobs.failures.length;
   if (count > 0) return { tone: "bad", label: `${count} failing` };
   const overran = (jobs.runs ?? []).filter((run) => run.overran).length;

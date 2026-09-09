@@ -19,8 +19,14 @@ import {
  * more than the page used to make, and the trade is deliberate: only one
  * section is expanded on a first visit, so the panels that would otherwise
  * answer these questions never run — which is exactly why the answers weren't
- * on screen. Each one is allowed to fail alone; a section whose status can't be
- * read simply has no dot rather than an alarming one.
+ * on screen.
+ *
+ * Each one is allowed to fail alone, and **a request that failed contributes no
+ * entry at all**. This is the difference between "we asked and TMDB has no key"
+ * and "we could not ask": both would otherwise render as `No key — artwork is
+ * off`, and telling someone their key is missing because a request timed out is
+ * worse than telling them nothing. A section with no entry shows no dot, and if
+ * every request fails the summary line has nothing to count and says nothing.
  *
  * Deliberately not cached through `useCachedState`. This is health: a value
  * from the last visit is worse than no value at all, because the whole point of
@@ -33,6 +39,8 @@ export function useSettingsHealth(): Record<string, SectionHealth> {
     let cancelled = false;
 
     void (async () => {
+      // `null` here means "the request failed", which is why every mapper below
+      // is guarded rather than being handed the null. `undefined` never occurs.
       const [jobs, trakt, tmdb, omdb, rpdb, stremio] = await Promise.all([
         api.getJobStatus().catch(() => null as JobStatus | null),
         api.getTraktStatus().catch(() => null),
@@ -43,14 +51,18 @@ export function useSettingsHealth(): Record<string, SectionHealth> {
       ]);
       if (cancelled) return;
 
-      setHealth({
-        tmdb: tmdbHealth(tmdb),
-        trakt: traktHealth(trakt, jobs, timeAgo),
-        "stremio-sync": stremioHealth(stremio, jobs, timeAgo),
-        omdb: optionalKeyHealth(omdb?.configured),
-        rpdb: optionalKeyHealth(rpdb?.configured),
-        "job-status": jobsHealth(jobs),
-      });
+      const next: Record<string, SectionHealth> = {};
+      if (tmdb) next.tmdb = tmdbHealth(tmdb);
+      if (trakt) next.trakt = traktHealth(trakt, jobs, timeAgo);
+      if (stremio) next["stremio-sync"] = stremioHealth(stremio, jobs, timeAgo);
+      if (omdb) next.omdb = optionalKeyHealth(omdb.configured);
+      if (rpdb) next.rpdb = optionalKeyHealth(rpdb.configured);
+      // The two sync rows above still read `jobs` for their timestamps, and
+      // cope with it being null — a missing "synced 4m ago" is a smaller loss
+      // than a wrong one. Only the row that is *about* the jobs needs them.
+      if (jobs) next["job-status"] = jobsHealth(jobs);
+
+      setHealth(next);
     })();
 
     return () => { cancelled = true; };

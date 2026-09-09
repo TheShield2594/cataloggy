@@ -150,6 +150,43 @@ describe("shelfEntryFromSeriesProgress", () => {
     expect(entry.meta).toBe("Show · S3 E4");
   });
 
+  /*
+   * `seasonTotalEpisodes` / `seasonWatchedEpisodes` are both about `lastSeason`,
+   * and the API moves `nextSeason` on once a season is finished. Pairing the two
+   * across that boundary read "S4 E1 of 8" — where the 8 was season three — under
+   * a ruler showing a complete 8 of 8.
+   */
+  it("stops borrowing the finished season's length once the next episode is in a new one", () => {
+    const entry = shelfEntryFromSeriesProgress(
+      series({
+        lastSeason: 3,
+        lastEpisode: 8,
+        nextSeason: 4,
+        nextEpisode: 1,
+        seasonWatchedEpisodes: 8,
+        seasonTotalEpisodes: 8,
+        watchedEpisodes: 19,
+        totalEpisodes: 24,
+      }),
+      null
+    );
+
+    expect(entry.meta).toBe("Show · S4 E1");
+    // The series-wide numbers take over, because they are the ones that still
+    // describe where the viewer is.
+    expect(entry.ruler).toMatchObject({ value: 19, total: 24 });
+    expect(entry.trailing).toBe("19/24 ep");
+  });
+
+  it("keeps the season's length while the next episode is still in that season", () => {
+    const entry = shelfEntryFromSeriesProgress(
+      series({ lastSeason: 3, lastEpisode: 3, nextSeason: 3, nextEpisode: 4, seasonWatchedEpisodes: 3, seasonTotalEpisodes: 8 }),
+      null
+    );
+
+    expect(entry.meta).toBe("Show · S3 E4 of 8");
+  });
+
   it("draws no ruler at all when TMDB knows neither total", () => {
     expect(shelfEntryFromSeriesProgress(series(), null).ruler).toBeNull();
     expect(shelfEntryFromSeriesProgress(series(), null).trailing).toBeNull();

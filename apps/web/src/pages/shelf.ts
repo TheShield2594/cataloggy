@@ -197,7 +197,19 @@ export function shelfEntryFromSeriesProgress(s: SeriesProgress, checkin: CheckIn
   const partial = isCheckedIn ? (checkinProgress(checkin, now) ?? 0) : 0;
   const minutesLeft = isCheckedIn ? checkinMinutesLeft(checkin, now) : null;
 
+  /*
+   * `seasonTotalEpisodes` and `seasonWatchedEpisodes` both describe
+   * `lastSeason` — the season the last watch was in — and the API moves
+   * `nextSeason` on once that season is finished. So the two only describe the
+   * episode you are about to watch while both are the same season.
+   *
+   * Past that boundary they are a season you have completed and left: pairing
+   * them with the next episode gives "S4 E1 of 8" where the 8 is season three's
+   * length, under a ruler showing a full 8 of 8. The series-wide totals are
+   * right there and actually answer the question, so they take over.
+   */
   const seasonKnown =
+    s.nextSeason === s.lastSeason &&
     typeof s.seasonWatchedEpisodes === "number" &&
     typeof s.seasonTotalEpisodes === "number" &&
     s.seasonTotalEpisodes > 0;

@@ -137,15 +137,53 @@ describe("ShelfPage", () => {
     expect(await screen.findByText("Understudy")).toBeInTheDocument();
   });
 
-  it("counts each kind on the filter row, so the tabs say what they would show", async () => {
+  it("counts each kind on the filter row, so the buttons say what they would show", async () => {
     getListItems.mockResolvedValue({
       items: [item("tt1", "Understudy"), item("tt2", "Cold Harbour", { type: "series" })],
     });
     listGames.mockResolvedValue([game("Terra Nine")]);
     renderShelf();
 
-    const tabs = await screen.findAllByRole("tab");
-    expect(tabs.map((tab) => tab.textContent)).toEqual(["All3", "Shows1", "Films1", "Games1"]);
+    const filters = within(await screen.findByRole("group", { name: "Filter the shelf by kind" })).getAllByRole("button");
+    expect(filters.map((button) => button.textContent)).toEqual(["All3", "Shows1", "Films1", "Games1"]);
+  });
+
+  /*
+   * The filter row is a group of toggle buttons rather than a `tablist`: it has
+   * no roving tabindex, no arrow-key navigation and no single panel to control,
+   * and the Settings page's tab strip — which has all three — is the standard
+   * this repo holds the role to.
+   */
+  it("says which filter is on with aria-pressed, not with a role it doesn't honour", async () => {
+    const user = userEvent.setup();
+    getListItems.mockResolvedValue({ items: [item("tt1", "Understudy")] });
+    listGames.mockResolvedValue([game("Terra Nine")]);
+    renderShelf();
+
+    expect(screen.queryAllByRole("tab")).toHaveLength(0);
+    expect(await screen.findByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(screen.getByRole("button", { name: /^Games/ }));
+
+    expect(screen.getByRole("button", { name: /^Games/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  /*
+   * The in-progress feed is series progress, not list membership, so a show
+   * watched through a webhook and never added to a list lives only in the block
+   * at the top. Counting the grid alone left the Shows filter reading 0 —
+   * and disabled — with shows visible above it.
+   */
+  it("counts what is on the page, including a show that is in no list", async () => {
+    getListItems.mockResolvedValue({ items: [item("tt1", "Understudy")] });
+    getSeriesProgress.mockResolvedValue([series()]);
+    renderShelf();
+
+    await screen.findByText("The Long Shore");
+    expect(screen.getByRole("button", { name: /^Shows/ })).toHaveTextContent("Shows1");
+    expect(screen.getByRole("button", { name: /^Shows/ })).toBeEnabled();
+    expect(screen.getByText("2 titles · 2 kinds")).toBeInTheDocument();
   });
 
   it("narrows the grid to one kind, and says so in the URL so the view can be linked", async () => {
@@ -154,7 +192,7 @@ describe("ShelfPage", () => {
     listGames.mockResolvedValue([game("Terra Nine")]);
     renderShelf();
 
-    await user.click(await screen.findByRole("tab", { name: /games/i }));
+    await user.click(await screen.findByRole("button", { name: /^Games/ }));
 
     expect(screen.queryByText("Understudy")).not.toBeInTheDocument();
     expect(screen.getByText("Terra Nine")).toBeInTheDocument();
@@ -173,8 +211,8 @@ describe("ShelfPage", () => {
     getListItems.mockResolvedValue({ items: [item("tt1", "Understudy")] });
     renderShelf();
 
-    expect(await screen.findByRole("tab", { name: /games/i })).toBeDisabled();
-    expect(screen.getByRole("tab", { name: /films/i })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: /^Games/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Films/ })).toBeEnabled();
   });
 
   it("measures a show in episodes — a tick each, with the watched ones filled", async () => {
@@ -252,7 +290,7 @@ describe("ShelfPage", () => {
 
     expect(await screen.findByText("Nothing on the shelf yet")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Search" })).toHaveAttribute("href", "/search");
-    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Filter the shelf by kind" })).toBeNull();
   });
 
   it("offers a retry when the shelf itself fails, rather than a blank page", async () => {
