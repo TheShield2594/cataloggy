@@ -207,6 +207,47 @@ describe("sendToChannel", () => {
     await expect(sendToChannel(channel({ name: "Phone" }), EVENT)).rejects.toThrow("Phone: HTTP 403");
   });
 
+  // The detail above is for the log and for Sync Status. What a caller may be
+  // told is the verdict on the error, which is what keeps the test endpoint
+  // from answering "is this LAN port open?" — see outbound-test.ts.
+  it("sorts a failure into a verdict the test endpoint can safely repeat", async () => {
+    const { sendToChannel, ChannelSendError } = await loadModule();
+
+    const outcomeOf = async (target: ChannelTarget) => {
+      try {
+        await sendToChannel(target, EVENT);
+        return "ok";
+      } catch (error) {
+        return error instanceof ChannelSendError ? error.outcome : "unclassified";
+      }
+    };
+
+    fetchMock.mockResolvedValue({ ok: false, status: 403 });
+    expect(await outcomeOf(channel({}))).toBe("rejected");
+
+    fetchMock.mockRejectedValue(new Error("connect ECONNREFUSED 10.0.0.5:22"));
+    expect(await outcomeOf(channel({}))).toBe("unreachable");
+
+    resolveNotificationUrl.mockResolvedValue(null);
+    expect(await outcomeOf(channel({}))).toBe("blocked");
+  });
+
+  it("keeps the socket error out of the message a caller may be shown", async () => {
+    const { sendToChannel, ChannelSendError } = await loadModule();
+    fetchMock.mockRejectedValue(new Error("connect ECONNREFUSED 10.0.0.5:22"));
+
+    const error = await sendToChannel(channel({ name: "Phone" }), EVENT).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ChannelSendError);
+    const failure = error as InstanceType<typeof ChannelSendError>;
+    // Kept for the operator...
+    expect(failure.message).toContain("ECONNREFUSED");
+    expect(failure.cause).toBeInstanceOf(Error);
+    // ...and withheld from the caller.
+    expect(failure.publicMessage).not.toContain("ECONNREFUSED");
+    expect(failure.publicMessage).not.toContain("10.0.0.5");
+  });
+
   describe("with an encrypted token", () => {
     const originalToken = process.env.API_TOKEN;
 
@@ -229,15 +270,22 @@ describe("sendToChannel", () => {
 
     it("says why rather than sending unauthenticated when the token won't decrypt", async () => {
       process.env.API_TOKEN = "channel-token-key";
-      const { sendToChannel } = await loadModule();
+      const { sendToChannel, ChannelSendError } = await loadModule();
       const { SECRET_CONTEXT, encryptSecret } = await import("./secret-box.js");
       const stored = encryptSecret(SECRET_CONTEXT.notificationChannelToken, "gotify-app-token");
       process.env.API_TOKEN = "rotated-key";
+      const target = channel({ kind: "gotify", name: "Gotify", url: "http://gotify.lan", token: stored });
 
-      await expect(
-        sendToChannel(channel({ kind: "gotify", name: "Gotify", url: "http://gotify.lan", token: stored }), EVENT)
-      ).rejects.toThrow(/Gotify: stored token could not be decrypted/);
+      const error = await sendToChannel(target, EVENT).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ChannelSendError);
+      expect((error as Error).message).toMatch(/Gotify: stored token could not be decrypted/);
       expect(fetchMock).not.toHaveBeenCalled();
+      // This one describes the install's own state rather than anything learned
+      // from the target, so it survives the collapse to a verdict intact.
+      expect((error as InstanceType<typeof ChannelSendError>).publicMessage).toMatch(
+        /API_TOKEN has changed since it was saved/
+      );
     });
   });
 });

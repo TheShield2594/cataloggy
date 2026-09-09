@@ -293,6 +293,15 @@ export type NotificationChannel = {
   createdAt: string;
 };
 
+/**
+ * How a "test this target" call failed. Both endpoints are allowed to point at
+ * the LAN, so they answer with one of these verdicts rather than a status code
+ * or a socket error, which would let a token holder scan the network by
+ * reading the replies. `error` carries the wording for the user; the detail is
+ * in the server log.
+ */
+export type OutboundFailure = "blocked" | "misconfigured" | "unreachable" | "rejected" | "failed";
+
 export type PlaySignal = {
   id: string;
   type: "movie" | "episode";
@@ -1262,7 +1271,7 @@ export const api = {
     return request<{ configured: boolean }>("/ai/config", { method: "DELETE" });
   },
   testAiConfig(config: Record<string, unknown>) {
-    return request<{ success: boolean; response?: string; error?: string }>("/ai/test", {
+    return request<{ success: boolean; response?: string; outcome?: OutboundFailure; error?: string }>("/ai/test", {
       method: "POST",
       body: JSON.stringify({ config }),
     });
@@ -1320,7 +1329,7 @@ export const api = {
     });
   },
   testNotificationChannel(id: string) {
-    return request<{ success: boolean; error?: string }>(
+    return request<{ success: boolean; outcome?: OutboundFailure; error?: string }>(
       `/notifications/channels/${encodeURIComponent(id)}/test`,
       { method: "POST", timeoutMs: 20000 }
     );

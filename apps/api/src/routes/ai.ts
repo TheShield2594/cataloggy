@@ -18,6 +18,7 @@ import { resolveProfile } from "../lib/profile.js";
 import { writeSecretKv } from "../lib/secret-store.js";
 import { loadRecommendations } from "../lib/recommendations.js";
 import { resolveAiProviderUrl, validateAiProviderUrl } from "../lib/ssrf.js";
+import { outboundFailure } from "../lib/outbound-test.js";
 import { getMetadataType } from "../lib/types.js";
 import type { StremioMetaPreview, StremioMetaType } from "../lib/types.js";
 
@@ -403,6 +404,10 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
     return { configured: false };
   });
 
+  // What comes back is a verdict, not a transcript: the status code and the
+  // socket error are as much of an internal port scan as the response body
+  // would be, since the endpoint is allowed to point at the LAN. See
+  // lib/outbound-test.ts.
   app.post<{ Body: unknown }>("/ai/test", async (request) => {
     const body = request.body as { config?: unknown } | null;
     const cfg = body?.config as Record<string, unknown> | undefined;
@@ -419,20 +424,19 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       Array.isArray(cfg.payload) ||
       typeof (cfg.payload as Record<string, unknown>).model !== "string"
     ) {
-      return {
-        success: false,
-        error:
-          "Invalid config: url (an http(s) URL not targeting the cloud-metadata/link-local range), headers, and payload.model are required",
-      };
+      return outboundFailure(
+        "misconfigured",
+        "Invalid config: url (an http(s) URL not targeting the cloud-metadata/link-local range), headers, and payload.model are required"
+      );
     }
 
     // The syntactic check above only sees the literal hostname; resolve it too,
     // so a public name pointing at the metadata service can't be tested through.
     if (!(await resolveAiProviderUrl(cfg.url))) {
-      return {
-        success: false,
-        error: "Invalid config: url resolves to an address that is not an allowed outbound target",
-      };
+      return outboundFailure(
+        "blocked",
+        "Invalid config: url resolves to an address that is not an allowed outbound target"
+      );
     }
 
     const testConfig = {
@@ -446,10 +450,10 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       },
     };
 
+    let response: Response;
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15_000);
-      let response: Response;
       try {
         response = await fetch(testConfig.url, {
           method: "POST",
@@ -463,20 +467,34 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
       } finally {
         clearTimeout(timeoutId);
       }
+    } catch (err) {
+      // `connect ECONNREFUSED 10.0.0.5:22` names the address and separates a
+      // closed port from a filtered one. It belongs in the log, not in the
+      // response.
+      request.log.warn(err, "AI provider test could not reach the endpoint");
+      return outboundFailure("unreachable");
+    }
 
-      if (!response.ok) {
-        // Don't echo the upstream body back to the caller: reflecting it would
-        // leak internal responses and turn this into an SSRF probe.
-        return { success: false, error: `HTTP ${response.status}` };
-      }
+    if (!response.ok) {
+      // Neither the body nor the status: reflecting either would leak internal
+      // responses and fingerprint what is listening.
+      request.log.warn({ status: response.status }, "AI provider test was rejected by the endpoint");
+      return outboundFailure("rejected");
+    }
 
+    try {
       const data = await response.json() as {
         choices?: Array<{ message?: { content?: string } }>;
       };
       const content = (data.choices?.[0]?.message?.content ?? "").trim().slice(0, 100);
       return { success: true, response: content };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) };
+      // A 200 that isn't the JSON an OpenAI-compatible endpoint returns: the
+      // request got somewhere, but not to a usable provider. Same verdict as a
+      // refusal, so a non-provider service on an open port is not distinguishable
+      // from one that said no.
+      request.log.warn(err, "AI provider test returned an unusable response");
+      return outboundFailure("rejected");
     }
   });
 };
