@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DetailedWatchStats, WatchStats, YearInReviewStats } from "../api";
@@ -19,7 +20,11 @@ const getYearInReview = vi.mocked(api.getYearInReview);
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-const summary: WatchStats = { totalMovies: 0, totalEpisodes: 0, totalPlays: 0, playsThisWeek: 0 };
+// A profile with history. The zeroed version below is its own case now: with
+// nothing watched the page is an empty state and never renders the panels these
+// tests are about.
+const summary: WatchStats = { totalMovies: 12, totalEpisodes: 40, totalPlays: 52, playsThisWeek: 3 };
+const noHistory: WatchStats = { totalMovies: 0, totalEpisodes: 0, totalPlays: 0, playsThisWeek: 0 };
 const detailed: DetailedWatchStats = {
   monthly: [],
   genreDistribution: [],
@@ -84,5 +89,50 @@ describe("StatsPage — Year in Review", () => {
 
     await waitFor(() => expect(getYearInReview).toHaveBeenCalledWith(CURRENT_YEAR - 1));
     expect(yearPicker().value).toBe(String(CURRENT_YEAR - 1));
+  });
+});
+
+describe("StatsPage — a profile with no history", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+    getWatchStats.mockResolvedValue(noHistory);
+    getDetailedStats.mockResolvedValue(detailed);
+    getYearInReview.mockImplementation(async (year: number) => yearReview(year));
+  });
+
+  const renderPage = () =>
+    render(
+      <MemoryRouter>
+        <StatsPage />
+      </MemoryRouter>
+    );
+
+  // Four zero tiles, a flat chart and "No badges earned yet" is a screen that
+  // reads as broken. It is the expected state for a new profile, and the page
+  // has to say so and point somewhere.
+  it("explains the emptiness and offers a way out of it", async () => {
+    renderPage();
+
+    expect(await screen.findByText(/nothing watched yet/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /find something to watch/i })).toHaveAttribute("href", "/search");
+  });
+
+  it("shows none of the zeroed panels", async () => {
+    renderPage();
+    await screen.findByText(/nothing watched yet/i);
+
+    expect(screen.queryByLabelText("Year in review: year")).not.toBeInTheDocument();
+    expect(screen.queryByText(/no badges earned yet/i)).not.toBeInTheDocument();
+  });
+
+  // The empty state is about having watched nothing, not about the request
+  // failing — a load error still has to report itself.
+  it("reports a failed load instead", async () => {
+    getWatchStats.mockRejectedValue(new Error("Stats unavailable"));
+    renderPage();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Stats unavailable");
+    expect(screen.queryByText(/nothing watched yet/i)).not.toBeInTheDocument();
   });
 });
