@@ -347,7 +347,8 @@ jobs:
 - **Library and playtime sync** needs `STEAM_API_KEY` and `STEAM_ID`.
 
 With neither, the tab has no way to populate itself. `502` from search means
-IGDB is unreachable; `500` means the credentials are missing.
+IGDB is unreachable; `503` with `"code": "igdb_not_configured"` means the
+credentials were never set, which is a configuration state rather than a fault.
 
 `STEAM_ID` is the 64-bit numeric id, not the vanity URL name. Your Steam profile
 must also be public for the API to return anything.

@@ -12,9 +12,13 @@ const prismaMock = {
 
 const searchGames = vi.fn();
 const getIgdb = vi.fn();
+const isIgdbConfigured = vi.fn();
 
 vi.mock("../lib/prisma.js", () => ({ prisma: prismaMock }));
-vi.mock("../lib/igdb-client.js", () => ({ getIgdb: () => getIgdb() }));
+vi.mock("../lib/igdb-client.js", () => ({
+  getIgdb: () => getIgdb(),
+  isIgdbConfigured: () => isIgdbConfigured(),
+}));
 vi.mock("../lib/profile.js", () => ({
   resolveProfile: async (request: { profileId?: string }) => {
     request.profileId = PROFILE_ID;
@@ -49,6 +53,7 @@ describe("games routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getIgdb.mockReturnValue({ searchGames });
+    isIgdbConfigured.mockReturnValue(true);
     searchGames.mockResolvedValue([]);
     prismaMock.game.findMany.mockResolvedValue([]);
   });
@@ -123,16 +128,32 @@ describe("games routes", () => {
       expect(getIgdb).not.toHaveBeenCalled();
     });
 
-    it("returns 500 when IGDB credentials are missing", async () => {
+    // 503 rather than 500: Games is optional, so an instance that never set
+    // the Twitch pair is unconfigured, not broken. The `code` is the part the
+    // web client branches on to offer "Connect IGDB" instead of "no games yet".
+    it("returns 503 with a branchable code when IGDB credentials are missing", async () => {
+      isIgdbConfigured.mockReturnValue(false);
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "GET", url: "/games/search?q=hollow" });
+
+      expect(res.statusCode).toBe(503);
+      expect(res.json().code).toBe("igdb_not_configured");
+      expect(getIgdb).not.toHaveBeenCalled();
+    });
+
+    // The other half of the split: with both credentials present, a client that
+    // still fails to construct is a real fault and keeps its 500.
+    it("returns 500 when the client fails to construct despite credentials", async () => {
       getIgdb.mockImplementation(() => {
-        throw new Error("TWITCH_CLIENT_ID is not set");
+        throw new Error("unexpected");
       });
       const app = await buildApp();
 
       const res = await app.inject({ method: "GET", url: "/games/search?q=hollow" });
 
       expect(res.statusCode).toBe(500);
-      expect(res.json().error).toMatch(/not configured/i);
+      expect(res.json().code).toBeUndefined();
     });
 
     it("returns 502 when IGDB itself fails", async () => {
