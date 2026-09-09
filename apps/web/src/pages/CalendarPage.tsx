@@ -11,6 +11,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useToast } from "../hooks/useToast";
 import { useCachedState } from "../hooks/useCachedState";
+import { useClockBoundary } from "../hooks/useClockBoundary";
 import { PAGE_TITLE, SECTION_TITLE, KICKER, MICRO_LABEL } from "../components/typography";
 
 type ViewMode = "agenda" | "month";
@@ -175,7 +176,10 @@ export function CalendarPage() {
   const { showToast } = useToast();
   const { selectedItem, setSelectedItem, panelHistory, setPanelHistory, panelHistoryLoading, detail: panelDetail, detailLoading: panelDetailLoading } = useDetailPanel();
 
-  const today = useMemo(() => startOfDay(new Date()), []);
+  // Re-read at midnight rather than frozen at mount: a tab left open overnight
+  // labelled tomorrow's episodes "Today" and highlighted the wrong grid cell.
+  const now = useClockBoundary();
+  const today = useMemo(() => startOfDay(now), [now]);
   // The month grid needs width the phone doesn't have, so on narrow screens
   // agenda is the only view — the toggle isn't offered either.
   const compact = useMediaQuery(COMPACT_QUERY);
