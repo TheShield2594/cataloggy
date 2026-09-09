@@ -63,6 +63,7 @@ import plexWebhookRoutes from "./routes/webhooks/plex.js";
 import jellyfinWebhookRoutes from "./routes/webhooks/jellyfin.js";
 import gamesRoutes from "./routes/games.js";
 import gamesSteamRoutes from "./routes/games-steam.js";
+import gamesIgdbRoutes from "./routes/games-igdb.js";
 
 // Every interval goes through the same validator: reading one as `Number(raw ??
 // fallback)` turns a typo into NaN, and `NaN > 0` is false, so a mistyped value
@@ -273,6 +274,7 @@ app.register(plexWebhookRoutes);
 app.register(jellyfinWebhookRoutes);
 app.register(gamesRoutes);
 app.register(gamesSteamRoutes);
+app.register(gamesIgdbRoutes);
 
 // ─── Startup ───
 

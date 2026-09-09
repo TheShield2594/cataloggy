@@ -353,6 +353,10 @@ Steam sync answers the same way — `503` with `"code": "steam_not_configured"` 
 so in both cases a `500` is a real failure worth reporting, not a missing
 setting.
 
+`GET /games/igdb/status` and `GET /games/steam/status` each report `configured`
+as a `200`, and the Games page uses both: with neither set up it offers
+**Connect IGDB or Steam** instead of claiming your library is empty.
+
 `STEAM_ID` is the 64-bit numeric id, not the vanity URL name. Your Steam profile
 must also be public for the API to return anything.
 
