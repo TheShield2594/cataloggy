@@ -11,6 +11,7 @@ import { OfflineBanner } from "./components/OfflineBanner";
 import { Sidebar, PIN_KEY } from "./components/Sidebar";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useScrolled } from "./hooks/useScrolled";
+import { SettingsHealthProvider } from "./hooks/useSettingsHealth";
 import { useTheme } from "./hooks/useTheme";
 import { ToastProvider } from "./hooks/useToast";
 import { ProfileProvider, useProfile } from "./hooks/useProfile";
@@ -157,6 +158,10 @@ export function App() {
   return (
     <ToastProvider>
     <ProfileProvider initialProfile={null}>
+      {/* One health report for the whole shell: the rail's Sources rows and the
+          Settings page's status board ask the same six questions, and they are
+          both mounted at once on /settings. */}
+      <SettingsHealthProvider>
       <AppShell
         sidebarPinned={sidebarPinned}
         setSidebarPinned={setSidebarPinned}
@@ -167,6 +172,7 @@ export function App() {
         setTheme={setTheme}
         location={location}
       />
+      </SettingsHealthProvider>
     </ProfileProvider>
     </ToastProvider>
   );
@@ -258,7 +264,22 @@ function AppShell({
       >
         Skip to main content
       </a>
+      {/*
+       * Keyed on the profile, exactly as <Routes> below is, and for the same
+       * reason — which only became a reason when the rail started holding data.
+       *
+       * `useCachedState` pins the cache scope each mount reads and writes
+       * under, and deliberately never refreshes it: an answer that lands after
+       * a profile switch belongs to whoever asked for it, and writing it under
+       * the new scope is how one profile paints another's rows. Its note says
+       * every consumer is a route page and route pages remount on a switch.
+       * The rail is the first consumer that is chrome, and chrome does not
+       * remount — so without this it would hold the previous profile's lists
+       * for the life of the tab, and lose its own on the first load too (the
+       * scope moves from empty to the real one the moment the profile lands).
+       */}
       <Sidebar
+        key={profile?.id ?? runtimeConfig.getProfileId() ?? "default"}
         pinned={sidebarPinned}
         onPinnedChange={setSidebarPinned}
         profile={profile}

@@ -32,6 +32,12 @@ export type SectionHealth = {
   tone: HealthTone;
   /** Short enough for a row: "4m ago", "Token expired", "Not set up". */
   label: string;
+  /**
+   * The same state in as few words as it can be put, for the 220px rail, where
+   * `label` would truncate mid-word. Set only where the two differ — the rail
+   * falls back to `label`, which is short enough almost everywhere.
+   */
+  short?: string;
 };
 
 /*
@@ -127,8 +133,8 @@ export function stremioHealth(
  * state.
  */
 export function tmdbHealth(status: TmdbStatus): SectionHealth {
-  if (!status.configured) return { tone: "warn", label: "No key — artwork is off" };
-  return { tone: "ok", label: status.source === "env" ? "Key set (env)" : "Key set" };
+  if (!status.configured) return { tone: "warn", label: "No key — artwork is off", short: "No key" };
+  return { tone: "ok", label: status.source === "env" ? "Key set (env)" : "Key set", short: "Key set" };
 }
 
 /** OMDB, RPDB: extra ratings and prettier posters. Nice to have, never a fault. */

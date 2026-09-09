@@ -1,9 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router";
 import { BarChart3, CalendarDays, Compass, Gamepad2, History, Library, List, Pin, PinOff, Search, Settings, User } from "lucide-react";
-import { Profile } from "../api";
+import { api, CatalogList, Profile } from "../api";
 import { BRAND_WORDMARK, BrandMark } from "./BrandMark";
+import { healthDotClass } from "./settings/health";
+import { listTint, orderListsForRail, railSources } from "./sidebar-data";
+import { useCachedState } from "../hooks/useCachedState";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useSettingsHealth } from "../hooks/useSettingsHealth";
 import { prefetchRoute } from "../utils/routePrefetch";
 
 /*
@@ -30,20 +34,49 @@ export const SIDEBAR_NAV_ITEMS = [
 ] as const;
 
 /**
- * The second group: where you go to *change* how the shelf is organised, as
+ * The last group: where you go to *change* how the shelf is organised, as
  * opposed to the six above, which are places to look at it.
  *
- * These three used to be a row of links in the Shelf's own header, which put
- * them in the middle of the page, level with a subtitle, on one screen out of
- * nine. A source list is where a desktop app keeps this kind of thing, under a
- * heading that says which kind it is — and the mobile bar already files them
- * the same way, behind "More".
+ * These used to be a row of links in the Shelf's own header, which put them in
+ * the middle of the page, level with a subtitle, on one screen out of nine. A
+ * source list is where a desktop app keeps this kind of thing, under a heading
+ * that says which kind it is — and the mobile bar already files them the same
+ * way, behind "More".
+ *
+ * The Lists page is not here: the rail lists the lists themselves now, and the
+ * row that reaches the page to manage them sits at the end of that group, where
+ * it belongs. Two rows called "Lists" in one column would be a puzzle.
  */
 export const SIDEBAR_MANAGE_ITEMS = [
-  { to: "/lists", label: "Lists", icon: List, end: false },
   { to: "/games", label: "Games", icon: Gamepad2, end: false },
   { to: "/history", label: "History", icon: History, end: false },
 ] as const;
+
+/**
+ * Every row in the rail is the same box — 30px tall, 7px radius, 13px label,
+ * a 17px leading glyph — whether it is a route, a list or a source. Written
+ * once here because a source list that draws its three kinds of row at three
+ * slightly different heights stops reading as one column.
+ */
+const RAIL_ROW =
+  "group relative flex items-center gap-2.5 rounded-[0.4375rem] px-2.5 py-[0.4375rem] text-[0.8125rem] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset";
+
+/** The label over a group. Sentence case, and it fades out with the labels it heads. */
+function RailSectionLabel({ children, expanded }: { children: string; expanded: boolean }) {
+  return (
+    <p
+      className="px-2.5 pb-1 pt-4 text-[0.6875rem] font-semibold transition-opacity"
+      // Quaternary rather than the secondary the rows take: a heading that
+      // competes with the rows under it is a row.
+      style={{ color: "var(--text-mute)", opacity: expanded ? 1 : 0 }}
+      // A heading over a column of unlabelled icons names nothing, and a
+      // screen reader should not read one out while the rail is a rail.
+      aria-hidden={!expanded}
+    >
+      {children}
+    </p>
+  );
+}
 
 export const PIN_KEY = "cataloggy:sidebar-pinned";
 const HINT_KEY = "cataloggy:sidebar-hint-seen";
@@ -78,6 +111,40 @@ export function Sidebar({
   // Matches the `hidden sm:flex` this component styles itself with.
   const railVisible = useMediaQuery("(min-width: 640px)");
   const expanded = pinned || hovered || focused;
+
+  /*
+   * The two things the rail shows that aren't routes.
+   *
+   * Lists share the Lists page's own cache key, so arriving there paints in the
+   * first frame and a list renamed or deleted on that page updates the rail
+   * without either of them knowing about the other — `useCachedState`
+   * broadcasts on write. The fetch is the rail's own because the rail is on
+   * screen long before anyone visits /lists.
+   *
+   * Health comes from the shell's provider, which the Settings page reads too;
+   * see the note there for why it is one report rather than two.
+   *
+   * Both are gated on the rail actually being on screen. Below `sm` this
+   * component is `display: none` and the tab bar navigates instead, so a phone
+   * pays for neither.
+   */
+  const [lists, setLists] = useCachedState<CatalogList[]>("lists:all", []);
+  const { sections: health } = useSettingsHealth();
+  const railLists = useMemo(() => orderListsForRail(lists), [lists]);
+  const sources = useMemo(() => railSources(health), [health]);
+
+  useEffect(() => {
+    if (!railVisible) return;
+    const controller = new AbortController();
+    // Silent on failure: the rail is chrome, and a column of lists that failed
+    // to load should be an absent section, not an error message parked beside
+    // every page in the app. The Lists page reports its own failures.
+    void api
+      .getLists(controller.signal)
+      .then((res) => setLists(res.lists))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [railVisible, setLists]);
 
   // One marker for the whole rail, moved to the active item — rather than one
   // per item, mounted and unmounted, which teleported the rail's only piece of
@@ -198,7 +265,19 @@ export function Sidebar({
           </span>
         </div>
 
-        <nav ref={navRef} aria-label="Primary" className="relative flex flex-1 flex-col gap-1 px-2.5">
+        {/* Scrolls on a short window rather than squeezing the rows: four
+            groups plus a library's worth of lists is taller than a laptop in
+            landscape, and a source list is a thing you scroll. The marker
+            inside is positioned against this element, which is what
+            `relative` is for — it stays correct at any scroll offset. */}
+        <nav
+          ref={navRef}
+          aria-label="Primary"
+          // Not `scrollbar-hide`: the carousels hide theirs because a rail of
+          // posters says "there is more" by showing half of the next one, and
+          // a column of rows clipped at the footer says nothing at all.
+          className="relative flex flex-1 flex-col gap-1 overflow-y-auto px-2.5"
+        >
           {marker && (
             <span
               aria-hidden="true"
@@ -216,11 +295,7 @@ export function Sidebar({
               key={item.to}
               to={item.to}
               end={item.end}
-              className={({ isActive }) =>
-                `group relative flex items-center gap-2.5 rounded-[0.4375rem] px-2.5 py-[0.4375rem] text-[0.8125rem] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset ${
-                  isActive ? "font-medium" : "hover:bg-[var(--surface)]"
-                }`
-              }
+              className={({ isActive }) => `${RAIL_ROW} ${isActive ? "font-medium" : "hover:bg-[var(--surface)]"}`}
               style={({ isActive }) => ({ color: isActive ? "var(--text)" : "var(--text-dim)" })}
               // Pointer-user fallback while the label is hidden: without it the
               // collapsed rail is a column of icons with nothing to hover for a name.
@@ -246,24 +321,122 @@ export function Sidebar({
             </NavLink>
           ))}
 
-          {/* Fades out with the labels rather than being replaced by a rule:
-              a heading over a column of unlabelled icons names nothing. */}
-          <p
-            className="px-2.5 pb-1 pt-4 text-[0.6875rem] font-semibold uppercase tracking-[0.04em] transition-opacity"
-            style={{ color: "var(--text-mute)", opacity: expanded ? 1 : 0 }}
+          {/*
+            * The lists themselves, not a link to the page that manages them.
+            *
+            * This is the difference between a rail and a source list: "Lists"
+            * as one row is a menu item, and it makes you open a page to find
+            * out that your watchlist has 27 things in it. The dot is identity
+            * (see `listTint`) and the count is the fact the page was hiding.
+            *
+            * Absent entirely until there is something to show, so a fresh
+            * install gets a rail of six routes rather than an empty heading.
+            */}
+          <RailSectionLabel expanded={expanded}>Lists</RailSectionLabel>
+          {railLists.map((list) => (
+              <NavLink
+                key={list.id}
+                to={`/lists?list=${encodeURIComponent(list.id)}`}
+                className={({ isActive }) => `${RAIL_ROW} ${isActive ? "font-medium" : "hover:bg-[var(--surface)]"}`}
+                style={({ isActive }) => ({ color: isActive ? "var(--text)" : "var(--text-dim)" })}
+                title={expanded ? undefined : `${list.name} — ${list.itemCount}`}
+                onPointerEnter={() => prefetchRoute("/lists")}
+                onFocus={() => prefetchRoute("/lists")}
+              >
+                {/* Sized and placed like the routes' glyphs so the two kinds
+                    of row share one text column, which is what stops the
+                    lists reading as a differently-indented list. */}
+                <span className="flex h-[1.0625rem] w-[1.0625rem] flex-none items-center justify-center">
+                  <span
+                    aria-hidden="true"
+                    className="h-2 w-2 rounded-full"
+                    style={{ background: listTint(list) }}
+                  />
+                </span>
+                <span className="min-w-0 flex-1 truncate" style={{ opacity: expanded ? 1 : 0 }}>
+                  {list.name}
+                </span>
+            <span
+              className="flex-none tabular-nums transition-opacity"
+              style={{ color: "var(--text-mute)", opacity: expanded ? 1 : 0 }}
+            >
+              {list.itemCount}
+            </span>
+            </NavLink>
+          ))}
+          {/* The page where lists are made, renamed and deleted, at the foot of
+              the group it manages rather than as a second row called "Lists"
+              further down. `end` so it is only current on the bare /lists — a
+              list row above it carries the `?list=` and would otherwise light
+              both. */}
+          <NavLink
+            to="/lists"
+            end
+            className={({ isActive }) => `${RAIL_ROW} ${isActive ? "font-medium" : "hover:bg-[var(--surface)]"}`}
+            style={({ isActive }) => ({ color: isActive ? "var(--text)" : "var(--text-mute)" })}
+            title={expanded ? undefined : "All Lists"}
+            onPointerEnter={() => prefetchRoute("/lists")}
+            onFocus={() => prefetchRoute("/lists")}
           >
-            Manage
-          </p>
+            <List
+              className="h-[1.0625rem] w-[1.0625rem] flex-none"
+              strokeWidth={2}
+              style={{ color: "rgb(var(--accent-rgb))" }}
+            />
+            <span className="whitespace-nowrap" style={{ opacity: expanded ? 1 : 0 }}>
+              All Lists
+            </span>
+          </NavLink>
+
+          {/*
+            * Sources, with whether they are working.
+            *
+            * Only the ones that are actually set up — see `railSources`. All
+            * four rows lead to the same place, which is the point: the rail
+            * answers "is anything wrong?" and Settings answers "what, and how
+            * do I fix it?".
+            *
+            * The dot is never the whole message (SC 1.4.1): the words beside
+            * it are what separate "Synced 4m ago" from "Token expired", and
+            * the row's `title` carries the unabbreviated version.
+            */}
+          {sources.length > 0 && (
+            <>
+              <RailSectionLabel expanded={expanded}>Sources</RailSectionLabel>
+              {sources.map((source) => (
+                <NavLink
+                  key={source.id}
+                  to="/settings?tab=integrations"
+                  className={`${RAIL_ROW} hover:bg-[var(--surface)]`}
+                  style={{ color: "var(--text-dim)" }}
+                  title={`${source.label} — ${source.health.label}`}
+                  onPointerEnter={() => prefetchRoute("/settings")}
+                  onFocus={() => prefetchRoute("/settings")}
+                >
+                  <span className="flex h-[1.0625rem] w-[1.0625rem] flex-none items-center justify-center">
+                    <span aria-hidden="true" className={healthDotClass(source.health.tone)} />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate" style={{ opacity: expanded ? 1 : 0 }}>
+                    {source.label}
+                  </span>
+                  <span
+                    className="max-w-[6.5rem] flex-none truncate transition-opacity"
+                    style={{ color: "var(--text-mute)", opacity: expanded ? 1 : 0 }}
+                  >
+                    {source.status}
+                  </span>
+                </NavLink>
+              ))}
+            </>
+          )}
+
+          <RailSectionLabel expanded={expanded}>Manage</RailSectionLabel>
           {SIDEBAR_MANAGE_ITEMS.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.end}
-              className={({ isActive }) =>
-                `group relative flex items-center gap-2.5 rounded-[0.4375rem] px-2.5 py-[0.4375rem] text-[0.8125rem] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset ${
-                  isActive ? "font-medium" : "hover:bg-[var(--surface)]"
-                }`
-              }
+              className={({ isActive }) => `${RAIL_ROW} ${isActive ? "font-medium" : "hover:bg-[var(--surface)]"}`}
               style={({ isActive }) => ({ color: isActive ? "var(--text)" : "var(--text-dim)" })}
               title={expanded ? undefined : item.label}
               onPointerEnter={() => prefetchRoute(item.to)}
@@ -281,7 +454,11 @@ export function Sidebar({
           ))}
         </nav>
 
-        <div className="px-2.5">
+        {/* A hairline and a little air, so the two controls at the bottom read
+            as the pane's footer rather than as two more rows of the group above
+            them — which is what they became once the nav grew tall enough to
+            reach down here. */}
+        <div className="mt-2 flex-none px-2.5 pt-2" style={{ borderTop: "0.5px solid var(--border)" }}>
           {onSwitchProfile && (
             <button
               type="button"

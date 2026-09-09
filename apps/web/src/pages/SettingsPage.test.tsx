@@ -25,11 +25,19 @@ vi.mock("../components/settings/DataSettings", () => ({ DataSettings: () => <p>d
 // elsewhere (hooks/useSettingsHealth, components/settings/health.test.ts). Held
 // empty by default here so a section header's accessible name is just its
 // title; the cases that are about the status rows set it themselves.
+//
+// The hook reads a provider now — the rail shows the same six answers, and two
+// callers on this route would otherwise ask twice — so the mock returns the
+// pair, `refresh` included: the page re-asks on mount.
 const health = vi.hoisted(() => ({ value: {} as Record<string, { tone: "ok" | "warn" | "bad" | "idle"; label: string }> }));
-vi.mock("../hooks/useSettingsHealth", () => ({ useSettingsHealth: () => health.value }));
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock("../hooks/useSettingsHealth", () => ({
+  useSettingsHealth: () => ({ sections: health.value, refresh }),
+}));
 
 beforeEach(() => {
   health.value = {};
+  refresh.mockClear();
 });
 
 const byTab = (tab: SettingsTab) => SETTINGS_SECTIONS.filter((s) => s.tab === tab);

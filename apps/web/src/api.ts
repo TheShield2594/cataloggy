@@ -145,6 +145,25 @@ export const runtimeConfig = {
   }
 };
 
+/*
+ * The cache scope starts at the identity already in storage, rather than at "".
+ *
+ * `setCacheScope` only ever ran from a *write* — setToken, setProfileId — so on
+ * a plain reload, with a token and a profile id already stored, every cached
+ * entry was written under the empty scope until something happened to move it.
+ * That something was the shell's own profile fetch: it resolves a second in,
+ * calls setProfileId with the id that was already there, and the scope steps
+ * from "" to "p1#0" — which clears the cache and tells every mounted consumer
+ * that the identity behind its value has changed.
+ *
+ * For a route page that was invisible: they refetch on mount anyway. For the
+ * rail, which holds the profile's lists and never remounts, it was the
+ * difference between a column of lists and an empty heading. Naming the scope
+ * up front makes that first write a no-op — `setCacheScope` returns early on an
+ * unchanged value — and leaves the real switches doing exactly what they did.
+ */
+applyCacheScope();
+
 export type MediaType = "movie" | "series";
 
 export type SearchResult = {

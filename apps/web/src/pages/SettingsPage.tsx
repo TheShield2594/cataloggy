@@ -1,4 +1,4 @@
-import { ReactNode, useId, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Key, Link, Database, Info, Clapperboard, Film, Image, Globe, Star, Sparkles, Bell, Users, Activity, Search, X } from "lucide-react";
 import { Section } from "../components/settings/Section";
@@ -226,7 +226,13 @@ function isSettingsTab(value: string | null): value is SettingsTab {
 }
 
 export function SettingsPage() {
-  const health = useSettingsHealth();
+  // `sections` is shared with the rail, which shows the same dots against its
+  // Sources rows — see the provider note in useSettingsHealth. It is read once
+  // for the tab and re-asked here, because this page is the status board: a
+  // reader who navigated to it deliberately is owed what is true now, not what
+  // was true when the app started.
+  const { sections: health, refresh: refreshHealth } = useSettingsHealth();
+  useEffect(() => { refreshHealth(); }, [refreshHealth]);
   const [searchParams, setSearchParams] = useSearchParams();
   const tab: SettingsTab = isSettingsTab(searchParams.get("tab")) ? (searchParams.get("tab") as SettingsTab) : "preferences";
   const [query, setQuery] = useState("");

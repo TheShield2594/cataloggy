@@ -113,12 +113,32 @@ describe("tmdbHealth", () => {
     expect(tmdbHealth({ configured: false, source: null })).toEqual({
       tone: "warn",
       label: "No key — artwork is off",
+      short: "No key",
     });
   });
 
   it("says where a configured key came from, since one of the two can't be edited here", () => {
-    expect(tmdbHealth({ configured: true, source: "env" })).toEqual({ tone: "ok", label: "Key set (env)" });
-    expect(tmdbHealth({ configured: true, source: "db" })).toEqual({ tone: "ok", label: "Key set" });
+    expect(tmdbHealth({ configured: true, source: "env" })).toEqual({
+      tone: "ok",
+      label: "Key set (env)",
+      short: "Key set",
+    });
+    expect(tmdbHealth({ configured: true, source: "db" })).toEqual({
+      tone: "ok",
+      label: "Key set",
+      short: "Key set",
+    });
+  });
+
+  /*
+   * TMDB is the only mapper that needs a `short`, and it is why the field
+   * exists: the rail is 220px wide, and "No key — artwork is off" truncates
+   * there mid-word. Every other label is already short enough to print whole,
+   * which is what the fallback in `railSources` relies on.
+   */
+  it("is the one status whose full sentence is too long for a 220px rail", () => {
+    const long = tmdbHealth({ configured: false, source: null });
+    expect(long.short!.length).toBeLessThan(long.label.length);
   });
 });
 

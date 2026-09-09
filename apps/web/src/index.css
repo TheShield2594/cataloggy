@@ -42,6 +42,16 @@
  * Light and dark restate every one of them with UIKit's own values below.
  */
 :root {
+  /* The system palette. Restated by light below; the three dark themes that
+     declare neither take these, which read on all of them. */
+  --tint-green: #30d158;
+  --tint-blue: #0a84ff;
+  --tint-indigo: #5e5ce6;
+  --tint-purple: #bf5af2;
+  --tint-pink: #ff375f;
+  --tint-cyan: #64d2ff;
+  --tint-teal: #40cbe0;
+
   /* The segmented control: a recessed track with one raised thumb in it. */
   --segment-track: color-mix(in srgb, var(--text) 12%, transparent);
   --segment-thumb: var(--bg-1);
@@ -90,6 +100,18 @@
   --accent-text: rgb(var(--accent-text-rgb));
   --focus-ring: #b25400;
 
+  /* The system palette, for identity rather than for status: the dot beside a
+     list name says *which list*, the way a calendar's colour does. Status has
+     its own trio further down (--status-ok/bad/warn) and must not borrow these.
+     Light takes the slightly deeper variants — the dark set glows on white. */
+  --tint-green: #34c759;
+  --tint-blue: #007aff;
+  --tint-indigo: #5856d6;
+  --tint-purple: #af52de;
+  --tint-pink: #ff2d55;
+  --tint-cyan: #32ade6;
+  --tint-teal: #30b0c7;
+
   --segment-track: rgba(118,118,128,0.12);
   --segment-thumb: #ffffff;
   --segment-thumb-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04);
@@ -130,6 +152,14 @@
   --accent-text-rgb: 255 159 10;
   --accent-text: rgb(var(--accent-text-rgb));
   --focus-ring: #ffb340;
+
+  --tint-green: #30d158;
+  --tint-blue: #0a84ff;
+  --tint-indigo: #5e5ce6;
+  --tint-purple: #bf5af2;
+  --tint-pink: #ff375f;
+  --tint-cyan: #64d2ff;
+  --tint-teal: #40cbe0;
 
   --segment-track: rgba(118,118,128,0.24);
   --segment-thumb: #636366;
