@@ -232,6 +232,10 @@ export function CalendarPage() {
     // later range's results under the wrong key.
   }, [setEntries]);
 
+  // `today` is a dependency for the agenda, where `daysNeeded` is the selected
+  // range and so does not change at midnight. The API answers "the next N days
+  // from now", so without it a tab left open overnight kept yesterday's window:
+  // still holding yesterday's episodes, and a day short at the far end.
   useEffect(() => {
     if (monthOutOfRange) {
       setEntries([]);
@@ -239,7 +243,7 @@ export function CalendarPage() {
       return;
     }
     void load(daysNeeded);
-  }, [daysNeeded, monthOutOfRange, load, setEntries]);
+  }, [daysNeeded, today, monthOutOfRange, load, setEntries]);
 
   const entriesByDate = useMemo(() => {
     const map = new Map<string, CalendarEntry[]>();

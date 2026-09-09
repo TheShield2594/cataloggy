@@ -17,8 +17,13 @@ const loadDotEnv = (): void => {
   let contents: string;
   try {
     contents = readFileSync(fileURLToPath(new URL("../.env", import.meta.url)), "utf8");
-  } catch {
-    return; // No .env: a from-source dev run, where the defaults below are right.
+  } catch (error) {
+    // No .env is a from-source dev run, where the defaults below are right.
+    // Anything else — a file that exists but can't be read — is worth failing
+    // on: falling back to "dev-token" would report the 401s that follow as the
+    // problem, which is the misdiagnosis this whole change exists to fix.
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
   }
 
   for (const line of contents.split("\n")) {

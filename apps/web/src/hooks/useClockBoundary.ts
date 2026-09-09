@@ -18,9 +18,13 @@ const onSameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
 /**
  * How long until the next hour in `cutoffHours` — the hours at which a
- * clock-derived label changes, in ascending order. Never returns less than a
- * minute: a DST shift can land the "next" boundary in the past, and a
- * zero-delay timeout that reschedules itself would spin.
+ * clock-derived label changes, in ascending order.
+ *
+ * A DST shift can land the "next" boundary in the past; that case waits a
+ * minute rather than scheduling a zero-delay timeout that would reschedule
+ * itself in a tight loop. A real delay is returned as it is, however short —
+ * rounding 23:59:30 up to a minute would wake at 00:00:30 and leave the label
+ * a rollover behind for the difference.
  */
 export function msUntilNextBoundary(now: Date, cutoffHours: readonly number[] = MIDNIGHT_ONLY): number {
   const next = new Date(now);
@@ -32,7 +36,8 @@ export function msUntilNextBoundary(now: Date, cutoffHours: readonly number[] = 
   } else {
     next.setHours(nextCutoff);
   }
-  return Math.max(next.getTime() - now.getTime(), 60_000);
+  const delay = next.getTime() - now.getTime();
+  return delay > 0 ? delay : 60_000;
 }
 
 /**

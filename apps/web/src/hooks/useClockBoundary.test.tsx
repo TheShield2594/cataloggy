@@ -17,12 +17,19 @@ describe("msUntilNextBoundary", () => {
     expect(msUntilNextBoundary(at(0))).toBe(24 * HOUR);
   });
 
+  it("wakes at the boundary even when it is less than a minute away", () => {
+    // Rounding this up to a minute would wake at 00:00:30 and leave "Today"
+    // pointing at yesterday for the difference.
+    expect(msUntilNextBoundary(new Date(2026, 4, 15, 23, 59, 30))).toBe(30 * 1000);
+    expect(msUntilNextBoundary(new Date(2026, 4, 15, 23, 59, 59, 500))).toBe(500);
+  });
+
   it("never schedules a spin, whatever the clock does", () => {
-    // A DST jump can put the computed boundary in the past; the floor keeps a
-    // timer that would otherwise fire in a tight loop off the event loop.
+    // A DST jump can put the computed boundary in the past; that case waits a
+    // minute rather than arming a timeout that fires in a tight loop.
     for (let hour = 0; hour < 24; hour++) {
       for (const minute of [0, 1, 30, 59]) {
-        expect(msUntilNextBoundary(at(hour, minute))).toBeGreaterThanOrEqual(MINUTE);
+        expect(msUntilNextBoundary(at(hour, minute))).toBeGreaterThan(0);
       }
     }
   });
