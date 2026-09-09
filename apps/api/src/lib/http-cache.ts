@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import { appendVary } from "./vary.js";
 
 // Every response this file touches is private to one profile of one install, so
 // nothing here is ever `public` — a shared proxy that cached one profile's
@@ -105,8 +106,9 @@ export function registerHttpCaching(app: FastifyInstance): void {
 
     // The response depends on who is asking. Without this a browser (or an
     // intermediary) could serve one profile's cached entry for another's
-    // request to the same URL.
-    reply.header("Vary", "Authorization, X-Profile-Id");
+    // request to the same URL. Appended, because the CORS hook has already put
+    // `Origin` here and `reply.header` would replace it.
+    appendVary(reply, "Authorization", "X-Profile-Id");
 
     reply.header(
       "Cache-Control",

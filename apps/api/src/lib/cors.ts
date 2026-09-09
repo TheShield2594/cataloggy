@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { appendVary } from "./vary.js";
 
 const IS_DEVELOPMENT = process.env.NODE_ENV === "development";
 const CATALOGGY_ALLOWED_ORIGINS = (process.env.CATALOGGY_ALLOWED_ORIGINS ?? "")
@@ -23,6 +24,7 @@ export const applyCorsHeaders = (request: FastifyRequest, reply: FastifyReply) =
     reply.header("Access-Control-Allow-Origin", origin ?? "*");
     reply.header("Access-Control-Allow-Methods", CORS_METHODS);
     reply.header("Access-Control-Allow-Headers", CORS_HEADERS);
+    appendVary(reply, "Origin");
     return;
   }
 
@@ -31,5 +33,8 @@ export const applyCorsHeaders = (request: FastifyRequest, reply: FastifyReply) =
   reply.header("Access-Control-Allow-Origin", origin);
   reply.header("Access-Control-Allow-Methods", CORS_METHODS);
   reply.header("Access-Control-Allow-Headers", CORS_HEADERS);
-  reply.header("Vary", "Origin");
+  // Appended rather than set: the HTTP-caching hook writes `Vary` too, later
+  // in the lifecycle, and a plain `reply.header` from either side drops the
+  // other's fields.
+  appendVary(reply, "Origin");
 };

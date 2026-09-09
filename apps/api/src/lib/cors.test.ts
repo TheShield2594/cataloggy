@@ -7,6 +7,9 @@ class FakeReply {
     this.headers[name] = value;
     return this;
   }
+  getHeader(name: string) {
+    return this.headers[name];
+  }
 }
 
 const makeRequest = (origin?: string, method = "GET"): FastifyRequest =>
@@ -36,6 +39,7 @@ describe("cors", () => {
 
       applyCorsHeaders(makeRequest("https://anything.example"), reply as unknown as FastifyReply);
       expect(reply.headers["Access-Control-Allow-Origin"]).toBe("https://anything.example");
+      expect(reply.headers["Vary"]).toBe("Origin");
     });
   });
 
@@ -54,6 +58,8 @@ describe("cors", () => {
       const allowedReply = new FakeReply();
       applyCorsHeaders(makeRequest("https://app.example.com"), allowedReply as unknown as FastifyReply);
       expect(allowedReply.headers["Access-Control-Allow-Origin"]).toBe("https://app.example.com");
+      // Without this a cache can hand one origin's allow-header to another.
+      expect(allowedReply.headers["Vary"]).toBe("Origin");
 
       const blockedReply = new FakeReply();
       applyCorsHeaders(makeRequest("https://evil.example.com"), blockedReply as unknown as FastifyReply);

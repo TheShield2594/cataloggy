@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import Fastify from "fastify";
 import compress from "@fastify/compress";
 import { cacheTierFor, ifNoneMatchSatisfied, registerHttpCaching, weakEtag } from "./http-cache.js";
+import { appendVary } from "./vary.js";
 
 describe("cacheTierFor", () => {
   it("lets the browser hold TMDB-derived facts, which nothing in the app can change", () => {
@@ -87,6 +88,20 @@ describe("conditional responses", () => {
     const app = buildApp();
     const response = await app.inject({ method: "GET", url: "/watch/history" });
     expect(response.headers.vary).toBe("Authorization, X-Profile-Id");
+  });
+
+  it("keeps the Vary the CORS hook set, instead of replacing it", async () => {
+    // `reply.header` replaces, so setting Vary here used to drop the `Origin`
+    // that cors.ts adds in onRequest — and a response cached for one origin
+    // could then be served to another.
+    const app = buildApp();
+    app.addHook("onRequest", async (_request, reply) => {
+      appendVary(reply, "Origin");
+    });
+
+    const response = await app.inject({ method: "GET", url: "/watch/history" });
+
+    expect(response.headers.vary).toBe("Origin, Authorization, X-Profile-Id");
   });
 
   it("gives metadata a max-age but never marks it public", async () => {
