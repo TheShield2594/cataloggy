@@ -5,6 +5,7 @@ import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useScrollLock } from "../../hooks/useScrollLock";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
 import { useExitAnimation } from "../../hooks/useExitAnimation";
+import { useVisualViewport } from "../../hooks/useVisualViewport";
 import { SECTION_TITLE } from "../typography";
 
 export function WatchDateModal({
@@ -22,6 +23,7 @@ export function WatchDateModal({
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useFocusTrap<HTMLDivElement>();
   const { exiting, requestClose, onExitAnimationEnd } = useExitAnimation(onClose);
+  const viewportStyle = useVisualViewport();
 
   useScrollLock();
   useEscapeKey(requestClose);
@@ -45,9 +47,22 @@ export function WatchDateModal({
 
   const releaseDate = target.kind === "movie" ? target.releaseDate : null;
 
+  /*
+   * `viewportStyle` pins this to the part of the screen the keyboard leaves
+   * behind — the season/episode number fields below open one, and without it
+   * this dialog is laid out against the full layout viewport and sits under
+   * it. Same fix ef2e068 applied to the command palette and the three search
+   * modals; these two were missed.
+   *
+   * `items-start` under `sm` for the same reason those four use it: once the
+   * visible band is shorter than the dialog, centring puts the header above
+   * the top of the scroll range, where nothing can reach it. Desktop, which
+   * has the room, keeps the centring it had.
+   */
   return (
     <div
-      className={`overlay-scrim overlay-fade fixed inset-0 z-[60] flex items-center justify-center p-4 ${exiting ? "overlay-exit" : ""}`}
+      className={`overlay-scrim overlay-fade fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto p-4 sm:items-center ${exiting ? "overlay-exit" : ""}`}
+      style={viewportStyle}
       onClick={requestClose}
     >
       <div

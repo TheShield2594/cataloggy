@@ -10,6 +10,7 @@ import { MobileTabBar } from "./components/MobileTabBar";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { Sidebar, PIN_KEY } from "./components/Sidebar";
 import { ThemeToggle } from "./components/ThemeToggle";
+import { useOfflineWriteQueue } from "./hooks/useOfflineWriteQueue";
 import { useScrolled } from "./hooks/useScrolled";
 import { SettingsHealthProvider } from "./hooks/useSettingsHealth";
 import { useTheme } from "./hooks/useTheme";
@@ -207,6 +208,12 @@ function AppShell({
   const onSearchRoute = location.pathname === "/search";
   // Drives the nav bar's material — see the header below, and useScrolled.
   const scrolled = useScrolled();
+
+  // Sends anything the service worker took while the connection was down, and
+  // says what came of it. Mounted at the shell rather than on the pages that
+  // make those writes: the tab that logs a watch offline is rarely the surface
+  // still open when the network returns.
+  useOfflineWriteQueue();
 
   // Warm the chunks a tap can reach with no hover to warn us first. Runs on
   // idle, so it queues behind the dashboard's own render and requests.

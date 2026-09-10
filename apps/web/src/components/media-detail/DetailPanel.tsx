@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Check, Film, Play, Star, X,
 } from "lucide-react";
-import { api, CheckIn, SearchResult, TrendingMeta, WatchEvent, WatchProviders } from "../../api";
+import { api, CheckIn, OfflineWriteQueuedError, SearchResult, TrendingMeta, WatchEvent, WatchProviders } from "../../api";
 import { WatchDateModal } from "./WatchDateModal";
 import { CheckInModal } from "./CheckInModal";
 import { ExternalLinks, ExternalRatings, StarRating } from "./RatingsSection";
@@ -272,18 +272,28 @@ export function DetailPanel({
 
   const handleLog = async (dateIso: string, episodeInfo?: { season: number; episode: number }, dateUnknown?: boolean) => {
     if (!watchTarget) return;
-    if (watchTarget.kind === "movie") {
-      await api.logWatch({ type: "movie", imdbId: watchTarget.imdbId, watchedAt: dateIso, dateUnknown });
-    } else {
-      await api.logWatch({
-        type: "episode",
-        imdbId: watchTarget.seriesImdbId,
-        seriesImdbId: watchTarget.seriesImdbId,
-        season: episodeInfo?.season ?? watchTarget.season,
-        episode: episodeInfo?.episode ?? watchTarget.episode,
-        watchedAt: dateIso,
-        dateUnknown,
-      });
+    try {
+      if (watchTarget.kind === "movie") {
+        await api.logWatch({ type: "movie", imdbId: watchTarget.imdbId, watchedAt: dateIso, dateUnknown });
+      } else {
+        await api.logWatch({
+          type: "episode",
+          imdbId: watchTarget.seriesImdbId,
+          seriesImdbId: watchTarget.seriesImdbId,
+          season: episodeInfo?.season ?? watchTarget.season,
+          episode: episodeInfo?.episode ?? watchTarget.episode,
+          watchedAt: dateIso,
+          dateUnknown,
+        });
+      }
+    } catch (err) {
+      // The service worker has it and will send it (see sw.js). Rethrowing here
+      // would leave the modal open under a red "failed" — for a watch that is
+      // saved, and that the row below cannot show yet only because the event has
+      // no server-minted id until it lands.
+      if (!(err instanceof OfflineWriteQueuedError)) throw err;
+      onShowToast(err.message, "info");
+      return;
     }
     onShowToast("Watch logged!", "success");
     // Refresh history via parent

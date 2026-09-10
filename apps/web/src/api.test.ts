@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, ApiContractError, ApiError, invalidatedCachePrefixes, runtimeConfig } from "./api";
+import { api, ApiContractError, ApiError, invalidatedCachePrefixes, OfflineWriteQueuedError, runtimeConfig } from "./api";
 import { readCache, resetDataCacheForTests, writeCache } from "./utils/dataCache";
 
 type FetchMock = ReturnType<typeof vi.fn>;
@@ -498,6 +498,50 @@ describe("memory cache invalidation after a mutation", () => {
     fetchMock.mockResolvedValue(routeError(500, { error: "nope" }));
 
     await expect(api.markEpisodeWatched("tt1", 2, 3)).rejects.toThrow();
+
+    expect(readCache("dash:progress")).toBeUndefined();
+  });
+});
+
+describe("writes the service worker is holding", () => {
+  /** The 202 sw.js synthesises for a write it queued rather than sent. */
+  const queued = () =>
+    new Response(JSON.stringify({ queued: true }), {
+      status: 202,
+      headers: { "content-type": "application/json", "x-cataloggy-queued": "1" },
+    });
+
+  it("tells the caller the write is saved, not that it failed", async () => {
+    // The old answer here was "You're offline – this needs a connection", which
+    // is now the wrong half of the truth: the worker has the write and will
+    // send it. A caller that knows a watch stays true can keep its optimistic
+    // state on this, which it could never do on a network error.
+    fetchMock.mockResolvedValue(queued());
+
+    await expect(api.markEpisodeWatched("tt1", 2, 3)).rejects.toThrow(OfflineWriteQueuedError);
+  });
+
+  it("does not mistake a 202 off the wire for one of its own", async () => {
+    // Nothing the API sends carries the header, which is synthesised in sw.js.
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ accepted: true }), {
+        status: 202,
+        headers: { "content-type": "application/json" },
+      })
+    );
+
+    await expect(api.markEpisodeWatched("tt1", 2, 3)).resolves.toEqual({ accepted: true });
+  });
+
+  it("still drops the pages that write will change", async () => {
+    // The write has not landed, but it will, and nothing here will be told when
+    // it does — the same over-invalidate-rather-than-serve-stale rule as a write
+    // that failed outright.
+    resetDataCacheForTests();
+    writeCache("dash:progress", [{ imdbId: "tt1" }]);
+    fetchMock.mockResolvedValue(queued());
+
+    await expect(api.markEpisodeWatched("tt1", 2, 3)).rejects.toThrow(OfflineWriteQueuedError);
 
     expect(readCache("dash:progress")).toBeUndefined();
   });

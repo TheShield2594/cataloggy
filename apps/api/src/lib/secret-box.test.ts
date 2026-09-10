@@ -87,8 +87,23 @@ describe("decryptSecret", () => {
     const stored = encryptSecret(SECRET_CONTEXT.notificationChannelToken, "gotify-token");
     const [scheme, iv, tag, ciphertext] = stored.split(".");
 
-    const flip = (part: string) =>
-      part.slice(0, -2) + (part.slice(-2) === "aa" ? "bb" : "aa");
+    /*
+     * One byte of `part` changed, via the bytes rather than the base64url text.
+     *
+     * Rewriting the last two characters — which this did — is not the same
+     * thing. These parts are base64url, and 16 bytes of GCM tag encode as 22
+     * characters carrying 132 bits, so the final character's low four bits
+     * decode to nothing. When the tag happened to end in a character pair the
+     * substitution left byte-identical (about one run in 256, since the encoder
+     * only ever emits four values in that position), the "tampered" tag was the
+     * real one, the value authenticated, and the assertion below failed on a
+     * ciphertext nobody had tampered with.
+     */
+    const flip = (part: string) => {
+      const bytes = Buffer.from(part, "base64url");
+      bytes[0] ^= 0xff;
+      return bytes.toString("base64url");
+    };
 
     expect(decryptSecret(SECRET_CONTEXT.notificationChannelToken, [scheme, iv, tag, flip(ciphertext)].join("."))).toBeNull();
     expect(decryptSecret(SECRET_CONTEXT.notificationChannelToken, [scheme, flip(iv), tag, ciphertext].join("."))).toBeNull();
