@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { api, runtimeConfig } from "../../api";
+import { useTransientFlag } from "../../hooks/useTransientFlag";
 import type { AddonCatalogOption } from "../../api";
 import { Loader2, Check, AlertCircle, Copy, ExternalLink, Sparkles } from "lucide-react";
 import { KICKER } from "../typography";
 
 function AddonManifestUrl({ profileName, multiProfile }: { profileName: string | null; multiProfile: boolean }) {
-  const [copied, setCopied] = useState(false);
-  const [copyError, setCopyError] = useState(false);
+  const [copied, setCopied] = useTransientFlag();
+  // Longer than a success: a failure the user has to do something about should
+  // not disappear at the same speed as a confirmation they can ignore.
+  const [copyError, setCopyError] = useTransientFlag(3000);
   // Stremio has no way to say who is watching, so the profile is baked into the
   // installed URL: everything Stremio requests hangs off the manifest URL's
   // base, and the addon reads the profile back out of that path. Without it,
@@ -20,10 +23,8 @@ function AddonManifestUrl({ profileName, multiProfile }: { profileName: string |
   const copy = () => {
     navigator.clipboard.writeText(manifestUrl).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     }).catch(() => {
       setCopyError(true);
-      setTimeout(() => setCopyError(false), 3000);
     });
   };
 
@@ -77,7 +78,7 @@ function AddonManifestUrl({ profileName, multiProfile }: { profileName: string |
 export function AddonSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useTransientFlag();
   const [error, setError] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<string[]>([]);
   const [available, setAvailable] = useState<AddonCatalogOption[]>([]);
@@ -122,7 +123,6 @@ export function AddonSettings() {
     try {
       await api.updateAddonConfig(enabled);
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save config");
     } finally {

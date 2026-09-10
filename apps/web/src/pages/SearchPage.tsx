@@ -87,7 +87,10 @@ export function SearchPage() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [lists, setLists] = useState<CatalogList[]>([]);
-  const [pendingAdds, setPendingAdds] = useState<Record<string, boolean>>({});
+  // Keys are deleted when an add settles, not set to `false`: a `false` entry
+  // reads the same as an absent one but keeps the `listId:imdbId` string alive
+  // for the life of the tab, so the map only ever grew.
+  const [pendingAdds, setPendingAdds] = useState<Record<string, true>>({});
   const { showToast } = useToast();
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -248,7 +251,11 @@ export function SearchPage() {
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Unable to add item", "error");
     } finally {
-      setPendingAdds((current) => ({ ...current, [key]: false }));
+      setPendingAdds((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
     }
   };
 
@@ -759,7 +766,7 @@ function ResultCard({
   eager?: boolean;
   lists: CatalogList[];
   listMap: Map<string, CatalogList>;
-  pendingAdds: Record<string, boolean>;
+  pendingAdds: Record<string, true>;
   openDropdown: string | null;
   dropdownRef: React.RefObject<HTMLDivElement | null>;
   onToggleDropdown: (id: string) => void;

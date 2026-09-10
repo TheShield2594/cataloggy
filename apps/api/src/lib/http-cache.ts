@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import { cacheTierForPath } from "@cataloggy/shared/api-cache-routes";
+import type { CacheTier } from "@cataloggy/shared/api-cache-routes";
 import { appendVary } from "./vary.js";
 
 // Every response this file touches is private to one profile of one install, so
@@ -23,38 +25,13 @@ import { appendVary } from "./vary.js";
 const METADATA_MAX_AGE_SEC = 5 * 60;
 const METADATA_STALE_WHILE_REVALIDATE_SEC = 24 * 60 * 60;
 
-// `meta/` deliberately excludes the bundle suffix, and `recommendations` is
-// pinned to the bare path. Both carry per-profile content that a 24-hour
-// stale-while-revalidate would freeze: the bundle includes the dropped flag, and
-// `/recommendations/personal` is generated from the profile's own watch history.
-// Prefix-matching them into this tier meant marking one user's private,
-// mutable answer cacheable for a day.
-const METADATA_PATH_RE =
-  /^\/(meta\/(?!.*\/bundle$)|recommendations(\?|$)|trending|popular|streaming(\/|$|\?)|anime)/;
-
-const REVALIDATE_PATH_RE = new RegExp(
-  "^/(" +
-    [
-      "watchlist",
-      "continue",
-      "recent",
-      "series/progress",
-      "watch/history",
-      "watch/stats(/detailed)?",
-      "lists(/.*)?",
-      "calendar",
-      "collection",
-      "games(/.*)?",
-      "tags",
-      // Per-profile, and changed by the user's own actions.
-      "meta/[^/]+/[^/]+/bundle",
-      "recommendations/personal",
-      "recommendations/ai",
-    ].join("|") +
-    ")$"
-);
-
-export type CacheTier = "metadata" | "revalidate";
+// Which routes are cacheable, and in which tier, is described once in
+// @cataloggy/shared/api-cache-routes — the service worker's runtime cache reads
+// the same table. It used to be written out here and again in sw.js, and the
+// two had drifted: the worker cached the `/bundle` and personal-recommendation
+// routes this tiering deliberately keeps out of `metadata`, and cached none of
+// `collection`, `games`, `tags` or `anime` at all.
+export type { CacheTier };
 
 const pathOf = (url: string): string => {
   const queryStart = url.indexOf("?");
@@ -62,10 +39,7 @@ const pathOf = (url: string): string => {
 };
 
 export function cacheTierFor(url: string): CacheTier | null {
-  const path = pathOf(url);
-  if (METADATA_PATH_RE.test(path)) return "metadata";
-  if (REVALIDATE_PATH_RE.test(path)) return "revalidate";
-  return null;
+  return cacheTierForPath(pathOf(url));
 }
 
 export function weakEtag(payload: string): string {

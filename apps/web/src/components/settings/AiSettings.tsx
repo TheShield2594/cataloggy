@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api";
+import { useTransientFlag } from "../../hooks/useTransientFlag";
 import { Loader2, Check, AlertCircle, Clock, ChevronDown } from "lucide-react";
 import { timeAgo } from "../../utils/timeAgo";
 import { StatusBadge } from "./StatusBadge";
@@ -129,7 +130,7 @@ export function AiSettings() {
   const [testMessage, setTestMessage] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useTransientFlag();
   const [removing, setRemoving] = useState(false);
   const [lastGeneratedAt, setLastGeneratedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -248,7 +249,6 @@ export function AiSettings() {
       await api.saveAiConfig(config);
       setConfigured(true);
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save config");
     } finally {

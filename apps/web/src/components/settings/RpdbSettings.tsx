@@ -1,5 +1,6 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { api } from "../../api";
+import { useTransientFlag } from "../../hooks/useTransientFlag";
 import { Eye, EyeOff, Loader2, Check, AlertCircle, Unplug } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
 
@@ -9,13 +10,8 @@ export function RpdbSettings() {
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useTransientFlag();
   const [error, setError] = useState<string | null>(null);
-  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  useEffect(() => {
-    return () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current); };
-  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -39,8 +35,6 @@ export function RpdbSettings() {
       const result = await api.setRpdbKey(trimmed);
       setConfigured(result.configured);
       setSaved(true);
-      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-      savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save RPDB key");
     } finally {

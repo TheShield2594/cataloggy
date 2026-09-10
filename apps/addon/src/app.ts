@@ -25,6 +25,7 @@ import {
   parseAddonConfigResponse,
   parseGenresResponse,
   parseListItemsResponse,
+  parseBool,
   parseListsResponse,
   parseMetasResponse,
   parsePreferencesResponse,
@@ -822,7 +823,7 @@ addonGet<{ Params: { type: string; id: string } }>("/meta/:type/:id.json", async
 // Fire-and-forget on purpose: this must never delay or fail the response a
 // client is waiting on. The API decides what to do with a signal (and drops it
 // entirely unless play detection is enabled there) — this side only observes.
-const PLAY_DETECTION = process.env.STREMIO_PLAY_DETECTION?.trim() === "true";
+const PLAY_DETECTION = parseBool(process.env.STREMIO_PLAY_DETECTION);
 
 // Bounded here rather than at the API: this string is whatever a client chose
 // to send, and it exists only to be read back in Settings.

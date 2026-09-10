@@ -1,5 +1,6 @@
 import { MetadataType, WatchEventType } from "@prisma/client";
 import type { PlaySignal } from "@prisma/client";
+import { parseBool } from "@cataloggy/shared";
 import { prisma } from "./prisma.js";
 import { recordWatchEvent } from "./watch-event.js";
 import type { FastifyBaseLogger } from "fastify";
@@ -42,7 +43,7 @@ export const PLAY_SIGNAL_SOURCE = "Stremio addon";
 export type PlaySignalResource = "stream" | "subtitles";
 
 export const isPlayDetectionEnabled = (): boolean =>
-  process.env.STREMIO_PLAY_DETECTION?.trim() === "true";
+  parseBool(process.env.STREMIO_PLAY_DETECTION);
 
 export type RecordPlaySignalParams = {
   type: WatchEventType;

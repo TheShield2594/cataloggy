@@ -263,7 +263,15 @@ export function Sidebar({
       <div
         className="glass-surface flex h-full flex-col overflow-hidden py-3 backdrop-blur-xl transition-[width] duration-base"
         style={{
-          width: expanded ? "15rem" : "4rem",
+          // In landscape on a notched phone the rail's left edge is under the
+          // sensor housing. The material runs all the way to the physical edge
+          // — a translucent pane that stops short of it would show the page
+          // through the gap — and the rows are held clear of the housing
+          // instead, with the rail widened by the same inset so the visible
+          // rail is the width it has always been. App.tsx's `sidebarPad`
+          // reserves the same widened footprint.
+          width: `calc(${expanded ? "15rem" : "4rem"} + env(safe-area-inset-left))`,
+          paddingLeft: "env(safe-area-inset-left)",
           // Translucent rather than opaque: a source list on the platform is a
           // pane the window's material shows through, and the app's own content
           // scrolls past behind it.

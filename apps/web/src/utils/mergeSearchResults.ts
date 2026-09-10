@@ -7,15 +7,15 @@ import type { SearchResult } from "../api";
 
 // How closely a result's title matches the raw query, as a coarse relevance tier.
 // Exact hit > prefix > word-start > substring > no title hit.
-function titleMatchScore(name: string, query: string): number {
+// `wordStart` is the caller's precompiled `\b<query>` matcher: building it here
+// would mean a fresh RegExp per call, and the only caller scores every row.
+function titleMatchScore(name: string, query: string, wordStart: RegExp): number {
   const n = name.trim().toLowerCase();
-  const q = query.trim().toLowerCase();
-  if (!q) return 0;
-  if (n === q) return 4;
-  if (n.startsWith(q)) return 3;
-  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  if (new RegExp(`\\b${escaped}`).test(n)) return 2;
-  if (n.includes(q)) return 1;
+  if (!query) return 0;
+  if (n === query) return 4;
+  if (n.startsWith(query)) return 3;
+  if (wordStart.test(n)) return 2;
+  if (n.includes(query)) return 1;
   return 0;
 }
 
@@ -29,13 +29,22 @@ export function mergeByRelevance(
   series: SearchResult[],
   query: string,
 ): SearchResult[] {
+  // Score every row once up front rather than inside the comparator: a
+  // comparator runs O(n log n) times, and scoring compiles nothing but still
+  // walks the title three times. The `\b<query>` matcher is compiled once here
+  // for the same reason — it used to be rebuilt on every comparison.
+  const q = query.trim().toLowerCase();
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // No /g: a stateful regex would carry `lastIndex` between rows.
+  const wordStart = new RegExp(`\\b${escaped}`);
+
   const tagged = [
     ...movies.map((r, rank) => ({ r, rank, order: 0 })),
     ...series.map((r, rank) => ({ r, rank, order: 1 })),
-  ];
+  ].map((t) => ({ ...t, score: titleMatchScore(t.r.name, q, wordStart) }));
+
   tagged.sort((a, b) => {
-    const scoreDiff = titleMatchScore(b.r.name, query) - titleMatchScore(a.r.name, query);
-    if (scoreDiff !== 0) return scoreDiff;
+    if (a.score !== b.score) return b.score - a.score;
     if (a.rank !== b.rank) return a.rank - b.rank;
     return a.order - b.order;
   });

@@ -133,6 +133,46 @@ describe("API response caching", () => {
     expect(matches(apiRequest("https://cataloggy.example/apifoo/watchlist"))).toBeFalsy();
   });
 
+  it("caches every read-only route the API declares cacheable, not a subset of them", async () => {
+    // The worker's list used to be maintained by hand alongside the API's, and
+    // had never been told about these four — so `collection`, the games
+    // library, tags and the anime catalog were all read-only routes the API
+    // tiers for caching that nonetheless did nothing offline. Both sides now
+    // read one table (@cataloggy/shared/api-cache-routes).
+    await loadWorker("https://cataloggy.example/api");
+    const matches = apiRoute();
+
+    expect(matches(apiRequest("https://cataloggy.example/api/collection"))).toBeTruthy();
+    expect(matches(apiRequest("https://cataloggy.example/api/games"))).toBeTruthy();
+    expect(matches(apiRequest("https://cataloggy.example/api/tags"))).toBeTruthy();
+    expect(matches(apiRequest("https://cataloggy.example/api/anime"))).toBeTruthy();
+  });
+
+  it("caches the per-profile routes the API keeps out of the browser's own cache", async () => {
+    // These are deliberately *not* in the API's long-lived `metadata` tier: the
+    // bundle carries the profile's dropped flag and the two recommendation
+    // feeds come from its watch history, and nothing in the app can reach into
+    // the browser's HTTP cache to invalidate them. This cache is different —
+    // INVALIDATE_API_CACHE drops it whole on any mutation and on a profile
+    // switch — so caching them here is safe, and is what makes them readable
+    // offline.
+    await loadWorker("https://cataloggy.example/api");
+    const matches = apiRoute();
+
+    expect(matches(apiRequest("https://cataloggy.example/api/meta/movie/tt1/bundle"))).toBeTruthy();
+    expect(matches(apiRequest("https://cataloggy.example/api/recommendations/personal"))).toBeTruthy();
+    expect(matches(apiRequest("https://cataloggy.example/api/recommendations/ai"))).toBeTruthy();
+  });
+
+  it("does not cache a maintenance route that merely reads like a cacheable one", async () => {
+    // `/metadata/*` rebuilds the metadata cache; `/meta/*` reads it.
+    await loadWorker("https://cataloggy.example/api");
+    const matches = apiRoute();
+
+    expect(matches(apiRequest("https://cataloggy.example/api/metadata/sync"))).toBeFalsy();
+    expect(matches(apiRequest("https://cataloggy.example/api/metadata/anime-search?q=bebop"))).toBeFalsy();
+  });
+
   it("leaves write endpoints and anything unlisted to the network", async () => {
     await loadWorker("https://cataloggy.example/api");
     const matches = apiRoute();

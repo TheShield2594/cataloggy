@@ -5,6 +5,7 @@ import {
   type TraktScrobblePayload,
   type TraktWatchlistMutationPayload,
 } from "../trakt.js";
+import { parseBool } from "@cataloggy/shared";
 import { prisma } from "./prisma.js";
 import { upsertSeriesProgressIfNewer } from "./series-progress.js";
 import { getDefaultWatchlist } from "./watchlist.js";
@@ -153,7 +154,7 @@ const TRAKT_WATCHLIST_SNAPSHOT_KEY = "trakt:watchlistSnapshot";
  * Turning this on restores the old two-way behaviour for anyone who does want
  * Trakt driving their watchlist.
  */
-const TRAKT_WATCHLIST_MIRROR_DELETES = process.env.TRAKT_WATCHLIST_MIRROR_DELETES?.trim() === "true";
+const TRAKT_WATCHLIST_MIRROR_DELETES = parseBool(process.env.TRAKT_WATCHLIST_MIRROR_DELETES);
 
 const watchlistSnapshotKey = (item: WatchlistItemRef) => `${item.type}:${item.imdbId}`;
 

@@ -169,11 +169,6 @@ function warmRouteData(path: string): void {
     .finally(() => warmersInFlight.delete(path));
 }
 
-/** Warms the detail-panel chunk — the "info page" opened from any poster. */
-export function prefetchDetailPanel(): void {
-  start(loadDetailPanel);
-}
-
 // Prefetching costs data, which is the wrong trade on a metered or slow
 // connection where the user has told the browser as much.
 function prefetchIsWelcome(): boolean {
