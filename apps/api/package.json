@@ -13,6 +13,7 @@
     "typecheck": "prisma generate && tsc -p tsconfig.json --noEmit",
     "lint": "prisma generate && eslint src",
     "test": "prisma generate && vitest run",
+    "test:int": "prisma generate && vitest run --config vitest.int.config.ts",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push"
   },

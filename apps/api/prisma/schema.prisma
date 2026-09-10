@@ -86,11 +86,12 @@ model Item {
   @@unique([type, imdbId])
 }
 
-// Partial unique indexes on kind = 'watchlist' (migration 20260617120000) and
-// kind = 'collection' (migration 20260626130001) enforce that at most one default
-// watchlist and one default collection exist. Prisma's schema DSL has no syntax for
-// partial unique indexes, so they aren't declared here — don't let `prisma migrate dev`
-// generate a migration that drops them.
+// Partial unique indexes on kind = 'watchlist' (migration 20260617120000, rescoped
+// to the profile in 20260910130000) and kind = 'collection' (migration
+// 20260626130001) enforce that each profile has at most one default watchlist and
+// one default collection. Prisma's schema DSL has no syntax for partial unique
+// indexes, so they aren't declared here — don't let `prisma migrate dev` generate a
+// migration that drops them.
 model List {
   id        String     @id @default(uuid()) @db.Uuid
   name      String

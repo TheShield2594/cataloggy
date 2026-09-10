@@ -49,6 +49,10 @@ const EXEMPT = new Map([
     "WEB_PUBLIC_BASE",
     "legacy alias read only as a fallback for CATALOGGY_WEB_PUBLIC, which compose does set",
   ],
+  [
+    "DATABASE_URL_TEST",
+    "read only by apps/api/vitest.int.config.ts, which points the integration suite at a throwaway database it truncates between tests; nothing in a container ever reads it, and a compose entry would be an invitation to set it",
+  ],
 ]);
 
 const SCANNED_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];

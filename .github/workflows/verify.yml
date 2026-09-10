@@ -85,5 +85,16 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # The unit suites mock Prisma, so the half of the schema that lives only in
+      # migration SQL — the partial unique indexes, the cascade rules, the column
+      # types — had nothing checking it. These run the same code against the
+      # Postgres above. Their own database, not the one the migration step used:
+      # the suite truncates every table between tests, and refuses to run against
+      # DATABASE_URL for that reason. It creates and migrates it itself.
+      - name: Integration tests
+        env:
+          DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5432/cataloggy_int
+        run: pnpm test:int
+
       - name: Build
         run: pnpm build
