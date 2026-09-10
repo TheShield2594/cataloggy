@@ -23,22 +23,27 @@
  * The loudest thing on a screen: page `h1`s, and the title of whatever a panel
  * or an empty state has been opened to show.
  *
- * The extra weight and the pulled-in tracking are what separate a title from a
- * merely large label — at `font-bold` and default tracking, "Watch Statistics"
- * is set the same as a button. Only one of these should be visible at a time;
- * if a screen wants two, one of them is a `SECTION_TITLE`.
+ * Size is what separates a title from a merely large label, not weight: this is
+ * the platform's large title — 34px at `sm` and up, 28px on a phone, where 34
+ * over a 375px column leaves "Watch Statistics" nowhere to break. Tracking goes
+ * *out* slightly at the large size and in at the small one, which is what the
+ * system face does across the same range.
+ *
+ * Only one of these should be visible at a time; if a screen wants two, one of
+ * them is a `SECTION_TITLE`.
  */
-export const PAGE_TITLE = "font-heading text-2xl font-extrabold tracking-tight";
+export const PAGE_TITLE =
+  "text-[1.75rem] font-bold leading-[1.15] tracking-[-0.01em] sm:text-[2.125rem] sm:leading-[1.2] sm:tracking-[0.01em]";
 
 /**
  * The header of a card, a panel, a modal or a run of content under a page title.
  *
- * A step down in size from `PAGE_TITLE` and a step down in weight, so the two
- * never compete, but still on the heading face with tracking in — a section
- * header is structure, and it should read as the same family of type as the
- * title above it rather than as bolded body copy.
+ * 22px bold — the platform's title2, and the size a section header takes above
+ * a shelf of cards. A clear step down from the large title so the two never
+ * compete, and clearly not body copy: at 17px a bold line reads as an emphatic
+ * sentence rather than as the name of what is under it.
  */
-export const SECTION_TITLE = "font-heading text-lg font-bold tracking-tight";
+export const SECTION_TITLE = "text-[1.375rem] font-bold leading-tight tracking-[-0.01em]";
 
 /**
  * The uppercase label that names a block inside a panel — "Overview", "Cast",
@@ -46,10 +51,12 @@ export const SECTION_TITLE = "font-heading text-lg font-bold tracking-tight";
  *
  * Uppercase and small rather than large and bold, because these appear several
  * to a panel: at heading size they would out-shout the title they sit under.
- * The opened-out tracking is not decoration — uppercase text at 12px is hard to
- * read set solid, and `tracking-wider` is what buys the letterforms back.
+ * The opened-out tracking is not decoration — uppercase set solid is hard to
+ * read, and this is what buys the letterforms back. It is a good deal tighter
+ * than the 0.1em these ran at while they were set in mono: that spacing was
+ * answering a face the app no longer uses.
  */
-export const KICKER = "text-xs font-semibold uppercase tracking-wider";
+export const KICKER = "text-[0.8125rem] font-semibold uppercase tracking-[0.04em]";
 
 /**
  * The same idea one notch quieter: form-field labels, table and grid column
@@ -61,7 +68,7 @@ export const KICKER = "text-xs font-semibold uppercase tracking-wider";
  * value. Reach for this when the label sits *inside* a component rather than
  * above one.
  */
-export const MICRO_LABEL = "text-2xs font-semibold uppercase tracking-wider";
+export const MICRO_LABEL = "text-2xs font-semibold uppercase tracking-[0.04em]";
 
 /*
  * Two kinds of uppercase text deliberately sit outside this file.

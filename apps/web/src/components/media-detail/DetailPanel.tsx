@@ -418,8 +418,8 @@ export function DetailPanel({
                 {hasRating && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-sm font-semibold text-warning ring-1 ring-amber-500/20" title={ratingLabel(item.rating!)}>
                     <Star className="h-3.5 w-3.5 fill-warning" />
-                    <span className="font-mono tabular-nums">{formatRating(item.rating!)}</span>
-                    <span className="font-mono text-xs font-normal" style={{ color: "var(--text-mute)" }}>/{RATING_MAX}</span>
+                    <span className="tabular-nums">{formatRating(item.rating!)}</span>
+                    <span className="text-xs font-normal tabular-nums" style={{ color: "var(--text-mute)" }}>/{RATING_MAX}</span>
                   </span>
                 )}
                 {hasRuntime && (
@@ -428,7 +428,7 @@ export function DetailPanel({
                     style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
                   >
                     <Clock className="h-3.5 w-3.5" />
-                    <span className="font-mono tabular-nums">{formatRuntime(item.runtime!)}</span>
+                    <span className="tabular-nums">{formatRuntime(item.runtime!)}</span>
                   </span>
                 )}
               </div>
@@ -436,7 +436,7 @@ export function DetailPanel({
 
             {/* Everything demoted, as one line that wraps like prose */}
             {metaLine.length > 0 && (
-              <p className="meta-caps mt-2.5" style={{ color: "var(--text-mute)" }}>
+              <p className="meta-row mt-2.5" style={{ color: "var(--text-mute)" }}>
                 {metaLine.join(" · ")}
               </p>
             )}

@@ -137,7 +137,14 @@ describe("ShelfPage", () => {
     expect(await screen.findByText("Understudy")).toBeInTheDocument();
   });
 
-  it("counts each kind on the filter row, so the buttons say what they would show", async () => {
+  /*
+   * The counts live in the announced name rather than in the label. A segmented
+   * control is a row of equal-width peers, and four labels each carrying a
+   * variable number is how that row starts wrapping on a 320px phone — but the
+   * count is the reason an empty kind can be disabled rather than hidden, so it
+   * has to still be *said*.
+   */
+  it("counts each kind in what the filter announces, so a disabled one is explained", async () => {
     getListItems.mockResolvedValue({
       items: [item("tt1", "Understudy"), item("tt2", "Cold Harbour", { type: "series" })],
     });
@@ -145,7 +152,14 @@ describe("ShelfPage", () => {
     renderShelf();
 
     const filters = within(await screen.findByRole("group", { name: "Filter the shelf by kind" })).getAllByRole("button");
-    expect(filters.map((button) => button.textContent)).toEqual(["All3", "Shows1", "Films1", "Games1"]);
+    expect(filters.map((button) => button.getAttribute("aria-label"))).toEqual([
+      "All, 3 titles",
+      "Shows, 1 title",
+      "Films, 1 title",
+      "Games, 1 title",
+    ]);
+    // The visible label leads the announced name, which is what SC 2.5.3 asks.
+    expect(filters.map((button) => button.textContent)).toEqual(["All", "Shows", "Films", "Games"]);
   });
 
   /*
@@ -181,8 +195,7 @@ describe("ShelfPage", () => {
     renderShelf();
 
     await screen.findByText("The Long Shore");
-    expect(screen.getByRole("button", { name: /^Shows/ })).toHaveTextContent("Shows1");
-    expect(screen.getByRole("button", { name: /^Shows/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Shows, 1 title" })).toBeEnabled();
     expect(screen.getByText("2 titles · 2 kinds")).toBeInTheDocument();
   });
 
@@ -220,12 +233,12 @@ describe("ShelfPage", () => {
     const { container } = renderShelf();
 
     await screen.findByText("The Long Shore");
-    // The row already writes "3/8 ep" beside the title, so the ruler is
-    // decorative here and carries no role — see ProgressRuler's `decorative`.
-    const ticks = container.querySelectorAll('[aria-hidden="true"] > span.flex-1');
+    const ticks = container.querySelectorAll('[role="progressbar"] > span.flex-1');
     expect(ticks).toHaveLength(8);
     expect([...ticks].filter((tick) => (tick as HTMLElement).style.background.includes("--accent-rgb"))).toHaveLength(3);
-    expect(screen.getByText("3/8 ep")).toBeInTheDocument();
+    // Nothing on the card writes the count out in words — the ticks are the
+    // count — so the ruler is the only thing that can say it.
+    expect(screen.getByRole("progressbar")).toHaveAccessibleName("Season 3: 3 of 8 episodes watched");
   });
 
   it("measures a game in hours and draws it no ruler, because hours have no total", async () => {
@@ -241,7 +254,7 @@ describe("ShelfPage", () => {
     getSeriesProgress.mockResolvedValue([series()]);
     renderShelf();
 
-    await screen.findByText("In progress");
+    await screen.findByText("Up Next");
     expect(screen.getAllByText("The Long Shore")).toHaveLength(1);
   });
 
@@ -261,7 +274,7 @@ describe("ShelfPage", () => {
     listGames.mockResolvedValue([game("Hollow Signal", { playtimeMinutes: 504 })]);
     renderShelf();
 
-    await screen.findByText("In progress");
+    await screen.findByText("Up Next");
     expect(screen.queryByRole("button", { name: /mark/i })).toBeNull();
   });
 
@@ -309,12 +322,16 @@ describe("ShelfPage", () => {
     expect(await screen.findByText("Understudy")).toBeInTheDocument();
   });
 
-  it("keeps a link to each surface it browses on behalf of", async () => {
+  /*
+   * Lists, Games and History used to be a row of links in this header, level
+   * with the subtitle and on one screen out of nine. They are the rail's
+   * "Manage" group now, and the tab bar's "More" sheet on a phone — see
+   * SIDEBAR_MANAGE_ITEMS. The page keeps no nav of its own.
+   */
+  it("carries no navigation of its own — the shell owns every destination", async () => {
     renderShelf();
 
-    const manage = await screen.findByRole("navigation", { name: "Manage" });
-    expect(within(manage).getByRole("link", { name: "Lists" })).toHaveAttribute("href", "/lists");
-    expect(within(manage).getByRole("link", { name: "Games" })).toHaveAttribute("href", "/games");
-    expect(within(manage).getByRole("link", { name: "History" })).toHaveAttribute("href", "/history");
+    await screen.findByRole("heading", { name: "Shelf" });
+    expect(screen.queryByRole("navigation")).toBeNull();
   });
 });

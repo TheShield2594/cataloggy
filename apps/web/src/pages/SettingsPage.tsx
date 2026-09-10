@@ -1,4 +1,4 @@
-import { ReactNode, useId, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Key, Link, Database, Info, Clapperboard, Film, Image, Globe, Star, Sparkles, Bell, Users, Activity, Search, X } from "lucide-react";
 import { Section } from "../components/settings/Section";
@@ -226,7 +226,13 @@ function isSettingsTab(value: string | null): value is SettingsTab {
 }
 
 export function SettingsPage() {
-  const health = useSettingsHealth();
+  // `sections` is shared with the rail, which shows the same dots against its
+  // Sources rows — see the provider note in useSettingsHealth. It is read once
+  // for the tab and re-asked here, because this page is the status board: a
+  // reader who navigated to it deliberately is owed what is true now, not what
+  // was true when the app started.
+  const { sections: health, refresh: refreshHealth } = useSettingsHealth();
+  useEffect(() => { refreshHealth(); }, [refreshHealth]);
   const [searchParams, setSearchParams] = useSearchParams();
   const tab: SettingsTab = isSettingsTab(searchParams.get("tab")) ? (searchParams.get("tab") as SettingsTab) : "preferences";
   const [query, setQuery] = useState("");
@@ -288,7 +294,7 @@ export function SettingsPage() {
          * silently behind it.
          */}
         {summary && (
-          <p role="status" className="meta-caps mt-1.5" style={{ color: "var(--text-mute)" }}>
+          <p role="status" className="meta-row mt-1.5" style={{ color: "var(--text-mute)" }}>
             {summary}
           </p>
         )}
@@ -333,13 +339,25 @@ export function SettingsPage() {
         // navigation and a roving tabindex, so both are implemented below —
         // announcing the role without them is the mistake ListsSection's
         // `role="menu"` made.
+        // The segmented control's shape, and this strip's own semantics. It
+        // borrows `.segmented` from index.css — the track, the raised sliding
+        // thumb, the type — but stays a real `tablist` with the roving tabindex
+        // and arrow keys the role promises, which the shared `SegmentedControl`
+        // component deliberately does not claim.
         <div
           ref={tablistRef}
           role="tablist"
           aria-label="Settings sections"
-          className="flex rounded-full p-1"
-          style={{ border: "1px solid var(--border)", backgroundColor: "var(--surface)" }}
+          className="segmented max-w-md"
         >
+          <span
+            aria-hidden="true"
+            className="segmented-thumb"
+            style={{
+              width: `calc((100% - 4px) / ${SETTINGS_TABS.length})`,
+              transform: `translateX(${SETTINGS_TABS.findIndex((t) => t.id === tab) * 100}%)`,
+            }}
+          />
           {SETTINGS_TABS.map((t) => (
             <button
               key={t.id}
@@ -357,11 +375,7 @@ export function SettingsPage() {
               // control, and only one tab is focusable at a time anyway.
               onKeyDown={onTabKeyDown}
               onClick={() => setTab(t.id)}
-              className={`flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-base focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset ${
-                tab === t.id
-                  ? "bg-claw-500 text-claw-on shadow-glow"
-                  : "text-[var(--text-dim)] hover:text-[var(--text)]"
-              }`}
+              className="segmented-option truncate focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
             >
               {t.label}
             </button>

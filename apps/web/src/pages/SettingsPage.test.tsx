@@ -25,11 +25,19 @@ vi.mock("../components/settings/DataSettings", () => ({ DataSettings: () => <p>d
 // elsewhere (hooks/useSettingsHealth, components/settings/health.test.ts). Held
 // empty by default here so a section header's accessible name is just its
 // title; the cases that are about the status rows set it themselves.
+//
+// The hook reads a provider now — the rail shows the same six answers, and two
+// callers on this route would otherwise ask twice — so the mock returns the
+// pair, `refresh` included: the page re-asks on mount.
 const health = vi.hoisted(() => ({ value: {} as Record<string, { tone: "ok" | "warn" | "bad" | "idle"; label: string }> }));
-vi.mock("../hooks/useSettingsHealth", () => ({ useSettingsHealth: () => health.value }));
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock("../hooks/useSettingsHealth", () => ({
+  useSettingsHealth: () => ({ sections: health.value, refresh }),
+}));
 
 beforeEach(() => {
   health.value = {};
+  refresh.mockClear();
 });
 
 const byTab = (tab: SettingsTab) => SETTINGS_SECTIONS.filter((s) => s.tab === tab);
@@ -103,6 +111,19 @@ const searchBox = () => screen.getByLabelText("Search settings");
 const tabBar = () => screen.queryByRole("tab", { name: SETTINGS_TABS[1].label });
 
 describe("SettingsPage", () => {
+  /*
+   * The page's half of the contract, and only its half: it asks the shared
+   * provider for a fresh read when it opens. Whether that ask reaches the
+   * network is the provider's business — it folds one asked for before its own
+   * first load has landed — and useSettingsHealth.test.tsx is where that is
+   * asserted.
+   */
+  it("asks for a fresh health read when Settings opens", () => {
+    renderPage();
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
   // The tab strip is a real tablist, which is a promise of arrow-key navigation
   // and a roving tabindex — announcing the role without implementing them is the
   // mistake the list panel's `role="menu"` made.

@@ -264,6 +264,26 @@ describe("runtimeConfig", () => {
     expect(runtimeConfig.getToken()).toBe("");
   });
 
+  /*
+   * The scope used to start empty and only move when something wrote to it —
+   * which, on a plain reload, was the shell's own profile fetch calling
+   * setProfileId with the id that was already in storage. That is not an
+   * identity change, but it stepped the scope from "" to "profile#0" a second
+   * into the session, clearing the cache and telling every mounted consumer its
+   * value belonged to someone else. Route pages refetch on mount and never
+   * noticed; the rail, which holds the profile's lists and never remounts, lost
+   * them for the life of the tab.
+   */
+  it("names the cache scope from stored identity at startup, not on the first write", async () => {
+    window.localStorage.setItem("cataloggy_profile_id", "profile-9");
+    vi.resetModules();
+
+    const { getCacheScope } = await import("./utils/dataCache");
+    await import("./api");
+
+    expect(getCacheScope()).toContain("profile-9");
+  });
+
   it("clears the profile token alongside the profile id", () => {
     runtimeConfig.setProfileId("profile-1");
     runtimeConfig.setProfileToken("signed-capability");

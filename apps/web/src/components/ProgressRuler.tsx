@@ -57,6 +57,12 @@ export type ProgressRulerProps = {
    * announcing the row's progress a second time in a different wording.
    */
   decorative?: boolean;
+  /**
+   * How heavy the ruler is drawn. `sm` (3px) is the default and what a card or
+   * a row takes; `md` (5px) is for a detail screen, where the ruler is the
+   * subject of its section rather than a caption under a title.
+   */
+  size?: "sm" | "md";
   className?: string;
 };
 
@@ -69,6 +75,7 @@ export function ProgressRuler({
   discrete = false,
   label,
   decorative = false,
+  size = "sm",
   className = "",
 }: ProgressRulerProps) {
   // Nothing to measure against. A ruler with no total is a full-width empty
@@ -96,9 +103,14 @@ export function ProgressRuler({
         "aria-valuetext": label,
       } as const);
 
+  const thickness = size === "md" ? "5px" : "3px";
+
   if (discrete && total <= TICK_CEILING) {
     return (
-      <div {...a11y} className={`flex items-center gap-[2px] ${className}`}>
+      // 3px of gap rather than 2. A tick row is read as a count before it is
+      // read as a proportion, and the gap is what makes it countable — at 2px
+      // a ten-episode season on a 300px card reads as one broken line.
+      <div {...a11y} className={`flex items-center gap-[3px] ${className}`}>
         {Array.from({ length: total }, (_, i) => {
           // `i` counts from 0, `whole` counts units: tick 0 is the first
           // episode, so it is filled once one episode is watched.
@@ -107,8 +119,11 @@ export function ProgressRuler({
           return (
             <span
               key={i}
-              className="h-[3px] flex-1 overflow-hidden rounded-full"
-              style={{ background: filled ? "rgb(var(--accent-rgb))" : "var(--border-strong)" }}
+              className="flex-1 overflow-hidden rounded-[2px]"
+              style={{
+                height: thickness,
+                background: filled ? "rgb(var(--accent-rgb))" : "var(--border-strong)",
+              }}
             >
               {/* The tick in flight. Drawn as a child fill rather than as a
                   third background colour so it uses the same accent as the
@@ -116,7 +131,7 @@ export function ProgressRuler({
                   watched one, just less of it. */}
               {current && (
                 <span
-                  className="block h-full rounded-full transition-[width] duration-slow ease-out"
+                  className="block h-full rounded-[2px] transition-[width] duration-slow ease-out"
                   style={{ width: `${part * 100}%`, background: "rgb(var(--accent-rgb))" }}
                 />
               )}
@@ -130,8 +145,8 @@ export function ProgressRuler({
   return (
     <div
       {...a11y}
-      className={`h-[3px] w-full overflow-hidden rounded-full ${className}`}
-      style={{ background: "var(--border-strong)" }}
+      className={`w-full overflow-hidden rounded-full ${className}`}
+      style={{ height: thickness, background: "var(--border-strong)" }}
     >
       <div
         className="h-full rounded-full transition-[width] duration-slow ease-out"

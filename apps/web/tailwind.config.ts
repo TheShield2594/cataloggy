@@ -68,13 +68,18 @@ export default {
           900: "#78350f",
         },
       },
+      // One interface face, and a mono face for content that is genuinely code.
+      // Both point at the variable rather than restating a stack, so a utility
+      // class and a component class can't end up on two different fonts — see
+      // the --font-ui note in src/index.css for why the webfont went away.
+      //
+      // `heading` is kept as an alias rather than removed: a heading is set in
+      // the same face as everything else now (the type scale is what separates
+      // the ranks), and the twelve call sites that name it are a rank, not a
+      // font choice.
       fontFamily: {
-        heading: ['"Plus Jakarta Sans Variable"', "system-ui", "sans-serif"],
-        sans: ['"Plus Jakarta Sans Variable"', "system-ui", "-apple-system", "BlinkMacSystemFont", '"Segoe UI"', "sans-serif"],
-        // Every numeral, date and source name in the app — see the `.meta` note
-        // in src/index.css, which is also where the stack itself lives. Pointed
-        // at the variable rather than restating it so `font-mono` and the
-        // `.meta` component class can't end up on two different faces.
+        heading: "var(--font-ui)",
+        sans: "var(--font-ui)",
         mono: "var(--font-mono)",
       },
       fontSize: {
@@ -95,20 +100,27 @@ export default {
         "poster-card": "var(--poster-card-w)",
       },
       // Three ranks of surface, three radii — see the "Radius ranks" note in
-      // src/index.css for which surface takes which.
+      // src/index.css for which surface takes which. The values are the
+      // platform's continuous-corner sizes: 10 for poster art, 14 for a
+      // grouped list or a button that fills a row, 22 for anything over a
+      // scrim.
       borderRadius: {
-        "2xl": "1rem",
-        "3xl": "1.5rem",
+        xl: "0.625rem",
+        "2xl": "0.875rem",
+        "3xl": "1.375rem",
       },
       // Elevation. Three tiers, themed — the values live on :root in
       // src/index.css so the dark themes can trade warm-black for real black
-      // instead of casting a shadow nobody can see. `glow` is the accent halo
-      // under a primary button, not an elevation.
+      // instead of casting a shadow nobody can see.
       boxShadow: {
         e1: "var(--elevation-1)",
         e2: "var(--elevation-2)",
         e3: "var(--elevation-3)",
-        glow: "var(--elevation-glow)",
+      },
+      // The one curve anything that travels a distance eases on — see the
+      // --ease-ios note in src/index.css.
+      transitionTimingFunction: {
+        ios: "var(--ease-ios)",
       },
       // Three tiers of motion, same source of truth as the CSS below. `base`
       // matches the 200ms the base layer gives every button, link and input,

@@ -134,7 +134,7 @@ export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
       <p className="mt-2.5 truncate text-sm font-semibold text-[var(--text)] transition-colors group-hover:text-claw-text">
         {item.name}
       </p>
-      <p className="meta-caps truncate" style={{ color: "var(--text-dim)" }}>
+      <p className="meta-row truncate" style={{ color: "var(--text-dim)" }}>
         {item.year ?? ""}
         {item.type ? ` · ${item.type === "movie" ? "Movie" : "Series"}` : ""}
         {item.genres && item.genres.length > 0 ? ` · ${item.genres.slice(0, 2).join(", ")}` : ""}
@@ -258,7 +258,7 @@ export function ContinueWatchingCard({
                 <div className="h-full rounded-full bg-claw-500 transition-all duration-slow" style={{ width: `${progressPct}%` }} />
               </div>
             )}
-            <p className="meta-caps text-white/75">
+            <p className="meta-row text-white/75">
               S{s.lastSeason}:E{s.lastEpisode}
               {seasonCountSuffix(s.totalSeasons)}
             </p>
@@ -288,7 +288,7 @@ export function ContinueWatchingCard({
         {s.name}
       </p>
       {progressPct !== null && (
-        <p className="meta-caps" style={{ color: "var(--text-dim)" }}>
+        <p className="meta-row" style={{ color: "var(--text-dim)" }}>
           {s.watchedEpisodes} of {s.totalEpisodes} episodes
         </p>
       )}
@@ -352,13 +352,13 @@ export function ContinueWatchingHero({
       <div className="relative z-10 min-w-0 flex-1">
         <p className={`${MICRO_LABEL} text-claw-text`}>Series &middot; In Progress</p>
         <p className="mt-1 truncate font-heading text-xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{s.name}</p>
-        <p className="meta-caps mt-1" style={{ color: "var(--text-dim)" }}>
+        <p className="meta-row mt-1" style={{ color: "var(--text-dim)" }}>
           S{s.lastSeason}:E{s.lastEpisode}
           {seasonCountSuffix(s.totalSeasons)}
         </p>
         {progress && (
           <div className="mt-3 max-w-xs">
-            <div className="meta-caps mb-1.5 flex items-center justify-between" style={{ color: "var(--text-mute)" }}>
+            <div className="meta-row mb-1.5 flex items-center justify-between" style={{ color: "var(--text-mute)" }}>
               <span>{progress.label}</span>
               <span className="font-semibold text-claw-text">{progress.watched} / {progress.total} episodes</span>
             </div>
@@ -640,7 +640,7 @@ function StatChip({ icon: Icon, label, value, accent }: { icon: React.ElementTyp
     <span className="flex items-center gap-1.5 text-sm" style={{ color: accent ? undefined : "var(--text-dim)" }}>
       <Icon className={`h-3.5 w-3.5 ${accent ? "text-claw-text" : ""}`} style={accent ? undefined : { color: "var(--text-mute)" }} />
       {/* Tabular figures so a ticking count doesn't shuffle the label beside it. */}
-      <span className={`font-mono tabular-nums ${accent ? "font-semibold text-claw-text" : ""}`}>
+      <span className={`tabular-nums ${accent ? "font-semibold text-claw-text" : ""}`}>
         {typeof value === "number" ? value.toLocaleString() : value}
       </span>
       <span className="hidden sm:inline" style={{ color: "var(--text-mute)" }}>{label}</span>
@@ -1220,7 +1220,7 @@ export function DashboardPage() {
                     />
                   </div>
                 </div>
-                <span className="meta-caps flex-none" style={{ color: "var(--text-mute)" }}>
+                <span className="meta-row flex-none" style={{ color: "var(--text-mute)" }}>
                   {session.status}
                 </span>
               </div>
@@ -1383,12 +1383,12 @@ export function DashboardPage() {
                         <p className="truncate text-xs font-semibold" style={{ color: "var(--text)" }}>
                           {entry.seriesName}
                         </p>
-                        <p className="meta-caps mt-0.5 truncate" style={{ color: "var(--text-dim)" }}>
+                        <p className="meta-row mt-0.5 truncate" style={{ color: "var(--text-dim)" }}>
                           S{entry.season}:E{entry.episode}
                         </p>
                       </div>
                       <span
-                        className={`meta-caps flex-none rounded-full px-2 py-1 font-semibold ${
+                        className={`meta-row flex-none rounded-full px-2 py-1 font-semibold ${
                           isToday
                             ? "bg-claw-500/15 text-claw-text"
                             : isTomorrow
@@ -1512,7 +1512,7 @@ export function DashboardPage() {
                 <p className="mt-2.5 truncate text-sm font-semibold text-[var(--text)] transition-colors group-hover:text-claw-text">
                   {event.name}
                 </p>
-                <p className="meta-caps" style={{ color: "var(--text-dim)" }}>
+                <p className="meta-row" style={{ color: "var(--text-dim)" }}>
                   {timeAgo(event.watchedAt)}
                 </p>
               </div>

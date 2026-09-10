@@ -12,9 +12,12 @@ export const THEMES: { id: Theme; label: string }[] = [
 
 const STORAGE_KEY = "cataloggy:theme";
 
+// The colour the browser paints its own chrome with — the address bar on
+// Android, the status bar in an installed app. It has to be each theme's
+// --bg-0 exactly: a near-match reads as a seam between the app and the phone.
 const THEME_BG: Record<Theme, string> = {
-  light: "#faf6ef",
-  dark: "#0d0b0a",
+  light: "#f2f2f7",
+  dark: "#000000",
   glass: "#0b0d12",
   midnight: "#07080d",
   letterboxd: "#14181c",

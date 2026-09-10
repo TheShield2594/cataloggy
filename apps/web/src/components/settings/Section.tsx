@@ -107,7 +107,7 @@ export function Section({
       {health && (
         <span className="sr-only flex-none sm:not-sr-only sm:flex sm:items-center sm:gap-2">
           <span aria-hidden="true" className={healthDotClass(health.tone)} />
-          <span className="meta-caps" style={{ color: "var(--text-mute)" }}>{health.label}</span>
+          <span className="meta-row" style={{ color: "var(--text-mute)" }}>{health.label}</span>
         </span>
       )}
       {!alwaysOpen && (

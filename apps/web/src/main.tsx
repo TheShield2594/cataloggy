@@ -8,7 +8,6 @@ import { UpdatePrompt } from "./components/UpdatePrompt";
 import { watchDisplayMode } from "./utils/displayMode";
 import { preconnectToApi } from "./utils/preconnect";
 import { runtimeConfig } from "./api";
-import "@fontsource-variable/plus-jakarta-sans";
 import "./index.css";
 
 // Before the first paint, so an installed app never renders a frame in which

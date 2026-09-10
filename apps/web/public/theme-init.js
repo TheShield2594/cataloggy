@@ -1,8 +1,8 @@
 (function () {
   // Keep in sync with THEMES/THEME_BG in apps/web/src/hooks/useTheme.ts
   var themeBg = {
-    light: "#faf6ef",
-    dark: "#0d0b0a",
+    light: "#f2f2f7",
+    dark: "#000000",
     glass: "#0b0d12",
     midnight: "#07080d",
     letterboxd: "#14181c",
@@ -14,8 +14,8 @@
   // blue and red themes, on the one frame a visitor sees first. Keep in sync
   // with the --accent declarations in apps/web/src/index.css.
   var themeAccent = {
-    light: "#d97742",
-    dark: "#e89163",
+    light: "#ff9500",
+    dark: "#ff9f0a",
     glass: "#0a84ff",
     midnight: "#e02f44",
     letterboxd: "#ff8000",

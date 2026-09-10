@@ -1,9 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { Link, Route, Routes, useLocation } from "react-router";
+import { Route, Routes, useLocation } from "react-router";
 import { Search, User } from "lucide-react";
 import { api, Profile, runtimeConfig } from "./api";
 import { useCommandPalette } from "./hooks/useCommandPalette";
-import { BRAND_WORDMARK, BrandMark } from "./components/BrandMark";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { GhostLoader } from "./components/GhostLoader";
 import { InstallButton } from "./components/InstallButton";
@@ -11,6 +10,8 @@ import { MobileTabBar } from "./components/MobileTabBar";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { Sidebar, PIN_KEY } from "./components/Sidebar";
 import { ThemeToggle } from "./components/ThemeToggle";
+import { useScrolled } from "./hooks/useScrolled";
+import { SettingsHealthProvider } from "./hooks/useSettingsHealth";
 import { useTheme } from "./hooks/useTheme";
 import { ToastProvider } from "./hooks/useToast";
 import { ProfileProvider, useProfile } from "./hooks/useProfile";
@@ -157,6 +158,10 @@ export function App() {
   return (
     <ToastProvider>
     <ProfileProvider initialProfile={null}>
+      {/* One health report for the whole shell: the rail's Sources rows and the
+          Settings page's status board ask the same six questions, and they are
+          both mounted at once on /settings. */}
+      <SettingsHealthProvider>
       <AppShell
         sidebarPinned={sidebarPinned}
         setSidebarPinned={setSidebarPinned}
@@ -167,6 +172,7 @@ export function App() {
         setTheme={setTheme}
         location={location}
       />
+      </SettingsHealthProvider>
     </ProfileProvider>
     </ToastProvider>
   );
@@ -194,6 +200,8 @@ function AppShell({
   const { profile, setProfile, switcherOpen, openSwitcher, closeSwitcher } = useProfile();
   const mainRef = useRef<HTMLElement>(null);
   const onSearchRoute = location.pathname === "/search";
+  // Drives the nav bar's material — see the header below, and useScrolled.
+  const scrolled = useScrolled();
 
   // Warm the chunks a tap can reach with no hover to warn us first. Runs on
   // idle, so it queues behind the dashboard's own render and requests.
@@ -256,7 +264,22 @@ function AppShell({
       >
         Skip to main content
       </a>
+      {/*
+       * Keyed on the profile, exactly as <Routes> below is, and for the same
+       * reason — which only became a reason when the rail started holding data.
+       *
+       * `useCachedState` pins the cache scope each mount reads and writes
+       * under, and deliberately never refreshes it: an answer that lands after
+       * a profile switch belongs to whoever asked for it, and writing it under
+       * the new scope is how one profile paints another's rows. Its note says
+       * every consumer is a route page and route pages remount on a switch.
+       * The rail is the first consumer that is chrome, and chrome does not
+       * remount — so without this it would hold the previous profile's lists
+       * for the life of the tab, and lose its own on the first load too (the
+       * scope moves from empty to the real one the moment the profile lands).
+       */}
       <Sidebar
+        key={profile?.id ?? runtimeConfig.getProfileId() ?? "default"}
         pinned={sidebarPinned}
         onPinnedChange={setSidebarPinned}
         profile={profile}
@@ -273,55 +296,84 @@ function AppShell({
         </Suspense>
       )}
 
-      {/* Slim top bar */}
+      {/*
+       * The nav bar.
+       *
+       * Transparent while the page is at the top and materialising once
+       * anything has scrolled under it — tint, blur, and a hairline — which is
+       * what a large-title bar does on the platform. At rest the page's own
+       * title is the top of the screen and there is no chrome above it at all;
+       * the bar exists to separate the controls from content only once there is
+       * content to separate them from.
+       *
+       * `backdrop-filter` is declared unconditionally rather than toggled with
+       * the tint: switching it on and off promotes and demotes a compositor
+       * layer mid-scroll, which is a visible hitch on a phone. It is a blur of
+       * nothing while the bar is transparent.
+       */}
       <header
-        className={`fixed top-0 left-0 right-0 z-30 backdrop-blur-xl transition-[padding] duration-base ${sidebarPad}`}
-        style={{ borderBottom: "1px solid var(--border)", backgroundColor: "color-mix(in srgb, var(--bg-0) 90%, transparent)" }}
+        className={`fixed top-0 left-0 right-0 z-30 backdrop-blur-xl transition-[padding,background-color,border-color] duration-base ${sidebarPad}`}
+        style={{
+          borderBottom: `0.5px solid ${scrolled ? "var(--border)" : "transparent"}`,
+          backgroundColor: scrolled ? "var(--bar-tint)" : "transparent",
+        }}
       >
-        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-6 py-3">
-          <Link to="/" className={`flex items-center gap-2.5 text-lg sm:hidden ${BRAND_WORDMARK}`} style={{ color: "var(--text)" }}>
-            <BrandMark className="h-8 w-8 flex-none" />
-            <span>Cataloggy</span>
-          </Link>
-
+        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-2 sm:px-6 sm:py-2.5">
           {/* The search page puts its own field at the top of the content, so the
               header trigger would be a second search box that quietly does
               something else — it opens the palette rather than filling the page.
               Stand it down there and leave a spacer, so the controls on the right
               sit in the same place on every route. ⌘K still reaches the palette. */}
-          {onSearchRoute ? (
-            <div className="flex-1" aria-hidden="true" />
-          ) : (
-            <button
-              type="button"
-              onClick={() => setPaletteOpen(true)}
-              aria-label="Search (⌘K)"
-              className="flex h-11 w-11 flex-none items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] sm:h-auto sm:w-auto sm:flex-1 sm:max-w-sm sm:justify-start sm:gap-2.5 sm:px-4 sm:py-2 sm:text-sm"
-              style={{ border: "1px solid var(--border-strong)", color: "var(--text-mute)", background: "var(--surface)" }}
-            >
-              <Search className="h-4 w-4" />
-              <span className="hidden sm:inline">Search</span>
-              <kbd
-                className="ml-auto hidden rounded px-1.5 py-0.5 text-2xs font-medium sm:inline"
-                style={{ background: "var(--surface-strong)", color: "var(--text-mute)" }}
+          {/* The toolbar's search field — desktop only. The phone reaches the
+              same place through the circle beside the tab bar, and a field up
+              here as well would be a second search box that quietly does
+              something else (this one opens the palette; that one opens the
+              page).
+
+              Stood down on the search route itself, where the page puts its own
+              field at the top of the content, with a spacer in its place so the
+              controls on the right sit still between routes. ⌘K still reaches
+              the palette from anywhere. */}
+          <div className="flex-1" aria-hidden={onSearchRoute ? "true" : undefined}>
+            {!onSearchRoute && (
+              <button
+                type="button"
+                onClick={() => setPaletteOpen(true)}
+                aria-label="Search (⌘K)"
+                className="hidden h-7 w-full max-w-[13.75rem] items-center gap-2 rounded-lg px-2.5 text-[0.8125rem] transition-colors hover:bg-[var(--surface-strong)] sm:flex"
+                style={{ border: "0.5px solid var(--border)", color: "var(--text-mute)", background: "var(--surface)" }}
               >
-                ⌘K
-              </kbd>
-            </button>
-          )}
+                <Search className="h-3.5 w-3.5 flex-none" />
+                <span>Search</span>
+                <kbd className="ml-auto text-2xs font-medium tabular-nums" style={{ color: "var(--text-mute)" }}>
+                  ⌘K
+                </kbd>
+              </button>
+            )}
+          </div>
 
           <div className="flex min-w-0 items-center gap-3">
             <ThemeToggle theme={theme} onChange={setTheme} />
             <InstallButton />
+            {/* The profile, as the platform draws it: a filled circle in the
+                trailing corner carrying the initial, not an outline of a
+                person. Below `sm` only — the rail's footer is the same control
+                on a desktop, and two of them on one screen is two answers to
+                "who is this". */}
             <button
               type="button"
               onClick={openSwitcher}
               aria-label={profile ? `Switch profile (currently ${profile.name})` : "Switch profile"}
               title={profile?.name}
-              className="flex h-11 w-11 flex-none items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset sm:hidden"
-              style={{ color: "var(--text-mute)" }}
+              className="tap-target flex h-[2.125rem] w-[2.125rem] flex-none items-center justify-center rounded-full text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset sm:hidden"
+              style={{
+                background: "linear-gradient(145deg, rgb(var(--accent-2-rgb)), rgb(var(--accent-rgb)))",
+                color: "var(--on-accent)",
+              }}
             >
-              <User className="h-5 w-5" />
+              {/* A dot rather than a blank circle while the profile is still in
+                  flight — an empty avatar reads as a broken one. */}
+              {profile?.name?.trim().charAt(0).toUpperCase() ?? <User className="h-4 w-4" />}
             </button>
           </div>
         </div>
@@ -335,7 +387,9 @@ function AppShell({
         // link and for the focus move on route change.
         tabIndex={-1}
         aria-label="Main content"
-        className={`mx-auto max-w-[1400px] px-6 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[76px] focus:outline-none sm:pb-10 transition-[padding] duration-base ${sidebarPad}`}
+        // Bottom padding clears the floating tab bar (64px) and the gap it sits
+        // in, so the last row of a grid isn't parked behind glass.
+        className={`mx-auto max-w-[1400px] px-5 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-[60px] focus:outline-none sm:px-6 sm:pb-10 sm:pt-[68px] transition-[padding] duration-base ${sidebarPad}`}
       >
         <OfflineBanner />
         {/* Keyed on the pathname so the entrance replays once per navigation.
