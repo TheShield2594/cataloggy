@@ -9,7 +9,7 @@ import {
   redactUrl,
   redactedRequestSerializer,
 } from "@cataloggy/shared";
-import { prisma } from "./lib/prisma.js";
+import { attachDatabaseLogging, prisma } from "./lib/prisma.js";
 import { applyCorsHeaders } from "./lib/cors.js";
 import { registerHttpCaching } from "./lib/http-cache.js";
 import { verifyToken } from "./lib/auth.js";
@@ -119,6 +119,11 @@ const app = Fastify({
 
 // Schema-validated routes phrase their 400s like the hand-written checks do.
 registerRequestSchemas(app);
+
+// Here rather than in `start()` because `ensureDefaultWatchlist` and the
+// startup credential sweep both query before the server listens, and a warning
+// Prisma raises during those is exactly the kind worth having.
+attachDatabaseLogging(app.log);
 
 // ─── Rate limiting ───
 //
@@ -298,7 +303,9 @@ const start = async () => {
     const startupConfigIssues = [
       !process.env.API_TOKEN && "API_TOKEN is not set",
       process.env.API_TOKEN === "dev-token" && "API_TOKEN is set to the development default \"dev-token\"",
-      !process.env.DATABASE_URL && "DATABASE_URL is not set",
+      // A missing DATABASE_URL is not checked here: `lib/prisma.ts` refuses at
+      // import time, which is long before this runs, and in every environment
+      // rather than production alone.
       (process.env.DATABASE_URL ?? "").includes(":postgres@") && "DATABASE_URL uses the development default Postgres password",
     ].filter((message): message is string => Boolean(message));
 

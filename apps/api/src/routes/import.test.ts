@@ -4,6 +4,12 @@ import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 
+// These cases are all rejected on the row count before anything is written, so
+// nothing here needs a query to answer — but `./import.js` pulls in `./export.js`,
+// which imports the real client, and that now refuses to load without a
+// DATABASE_URL rather than quietly building a pool aimed at a local socket.
+vi.mock("../lib/prisma.js", () => ({ prisma: {} }));
+
 vi.mock("../lib/profile.js", () => ({
   resolveProfile: async (request: { profileId?: string }) => {
     request.profileId = PROFILE_ID;
