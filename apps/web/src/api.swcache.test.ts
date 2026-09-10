@@ -199,6 +199,38 @@ describe("onQueuedWritesReplayed", () => {
     expect(readCache("dash:progress")).toBeUndefined();
   });
 
+  it("raises the stale-watch-state event when a queued write was refused", async () => {
+    // Dropping the in-memory cache does nothing for an optimistic tick held in
+    // a component's own state — SeasonsSection is the one that holds them — so
+    // a refusal has to say so out loud. Without this the user gets a toast
+    // saying the change was dropped while the screen behind it still shows it.
+    const worker = listeningController();
+    const { onQueuedWritesReplayed, WATCH_STATE_STALE_EVENT } = await loadApi();
+    const stale = vi.fn();
+    window.addEventListener(WATCH_STATE_STALE_EVENT, stale);
+
+    onQueuedWritesReplayed(vi.fn());
+    worker.send({ type: "QUEUED_WRITES_REPLAYED", replayed: 1, rejected: 1 });
+
+    expect(stale).toHaveBeenCalledTimes(1);
+    window.removeEventListener(WATCH_STATE_STALE_EVENT, stale);
+  });
+
+  it("does not raise it when everything it was holding went through", async () => {
+    // Every consumer of that event refetches on it, so firing it on the happy
+    // path would put a request per open surface behind every reconnect.
+    const worker = listeningController();
+    const { onQueuedWritesReplayed, WATCH_STATE_STALE_EVENT } = await loadApi();
+    const stale = vi.fn();
+    window.addEventListener(WATCH_STATE_STALE_EVENT, stale);
+
+    onQueuedWritesReplayed(vi.fn());
+    worker.send({ type: "QUEUED_WRITES_REPLAYED", replayed: 3, rejected: 0 });
+
+    expect(stale).not.toHaveBeenCalled();
+    window.removeEventListener(WATCH_STATE_STALE_EVENT, stale);
+  });
+
   it("ignores the other messages a worker sends the page", async () => {
     const worker = listeningController();
     const { onQueuedWritesReplayed } = await loadApi();

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Tv } from "lucide-react";
-import { api, EpisodeInfo, OfflineWriteQueuedError } from "../../api";
+import { api, EpisodeInfo, OfflineWriteQueuedError, WATCH_STATE_STALE_EVENT } from "../../api";
 import { ProgressRuler } from "../ProgressRuler";
 import { StarPicker } from "../StarPicker";
 import { KICKER } from "../typography";
@@ -123,6 +123,36 @@ export function SeasonsSection({
   }, [imdbId]);
 
   /*
+   * Re-read the watched set when a queued write turns out to have been refused.
+   *
+   * The ticks put on optimistically for an offline write live in this
+   * component's own state, so dropping the API cache does nothing for them — a
+   * write the user was told was saved would keep reading as saved until the
+   * panel was closed and reopened. This asks the server what is actually true.
+   *
+   * Only the watched set, not the whole load above: that one also collapses
+   * every open season and clears the ratings, which would be a strange thing to
+   * do to someone who is mid-scroll through season four.
+   */
+  useEffect(() => {
+    const revalidate = () => {
+      const requestImdbId = imdbId;
+      api.getWatchedEpisodes(requestImdbId)
+        .then((res) => {
+          if (imdbIdRef.current !== requestImdbId) return;
+          setWatched(new Set(res.episodes.map((e) => episodeKey(e.season, e.episode))));
+        })
+        .catch(() => {
+          // Best-effort, and deliberately not falling back to an empty set the
+          // way the initial load does: there we have no answer at all, here we
+          // have the last one, and it is closer to the truth than nothing.
+        });
+    };
+    window.addEventListener(WATCH_STATE_STALE_EVENT, revalidate);
+    return () => window.removeEventListener(WATCH_STATE_STALE_EVENT, revalidate);
+  }, [imdbId]);
+
+  /*
    * How many of each season are watched — from the set fetched for the whole
    * show on mount, not from the episode lists.
    *
@@ -199,14 +229,21 @@ export function SeasonsSection({
   const toggleEpisode = async (seasonNumber: number, episodeNumber: number) => {
     const k = episodeKey(seasonNumber, episodeNumber);
     if (pendingEpisode[k]) return;
+    // This is the guard `imdbIdRef` exists for, and the only response below that
+    // was not honouring it: a tick applied after the panel has been swapped to
+    // another show writes the previous show's episode key into this one's
+    // watched set, and the set is keyed by season and episode alone.
+    const requestImdbId = imdbId;
     setPendingEpisode((p) => ({ ...p, [k]: true }));
     const isWatched = watchedSet.has(k);
     try {
       if (isWatched) {
         await api.unmarkEpisodeWatched(imdbId, seasonNumber, episodeNumber);
+        if (imdbIdRef.current !== requestImdbId) return;
         setWatched((prev) => { const next = new Set(prev ?? []); next.delete(k); return next; });
       } else {
         await api.markEpisodeWatched(imdbId, seasonNumber, episodeNumber);
+        if (imdbIdRef.current !== requestImdbId) return;
         setWatched((prev) => new Set(prev ?? []).add(k));
       }
     } catch (err) {
@@ -215,6 +252,7 @@ export function SeasonsSection({
       // Ticking it is what the user just asked for and what will be true; the
       // toast is the whole of the difference from an online tap.
       if (err instanceof OfflineWriteQueuedError && !isWatched) {
+        if (imdbIdRef.current !== requestImdbId) return;
         setWatched((prev) => new Set(prev ?? []).add(k));
         onToast?.(err.message, "info");
       } else {

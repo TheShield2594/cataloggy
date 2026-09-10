@@ -24,11 +24,19 @@ export function UpdatePrompt() {
 
   useEffect(() => {
     let updateCheck: ReturnType<typeof setInterval> | undefined;
+    // Registration resolves on its own schedule, so `onRegisteredSW` can fire
+    // after this effect has been torn down — a StrictMode double-mount is the
+    // reliable way to see it. `clearInterval` in the cleanup has nothing to
+    // clear at that point, and the callback then arms an hourly
+    // `registration.update()` that outlives the component that owns it.
+    let disposed = false;
 
     const update = registerSW({
       immediate: true,
       onNeedRefresh: () => setNeedRefresh(true),
       onRegisteredSW: (_swUrl, registration) => {
+        if (disposed) return;
+
         // The worker can only cache API responses it can recognise, and the API
         // base it compares against is a runtime value this page resolves — the
         // container's config.js, or a per-device override the worker cannot read.
@@ -71,7 +79,10 @@ export function UpdatePrompt() {
       }
     });
     setUpdateSW(() => update);
-    return () => clearInterval(updateCheck);
+    return () => {
+      disposed = true;
+      clearInterval(updateCheck);
+    };
   }, []);
 
   // A later update can raise the prompt again after a dismissal; clear the

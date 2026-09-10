@@ -334,10 +334,47 @@ const tellClients = async (message) => {
  * isn't there: the request reached the API and the API said no, and re-sending
  * it on every future sync would never produce a different answer. Those are
  * dropped and counted, so the page can tell the user rather than losing it in
- * silence. A 5xx is neither — the API is there and having a bad time — so those
- * go back in the queue like an outage rather than being thrown away.
+ * silence.
+ *
+ * `RETRYABLE_STATUSES` is the other case — "not now" rather than "no" — and it
+ * matters most for the one this drain earns on its own: a reconnect sends the
+ * whole queue as a burst, the API is globally rate-limited (200 requests a
+ * minute per IP, `index.ts`), and a 429 landing on the twentieth write must not
+ * delete a watch the user was told was saved. Kept as a list rather than
+ * `>= 500` for the same reason `lib/http.ts` does: 408 and 425 are the peer
+ * asking us to come back, which no status-class test catches.
  */
-const replayQueuedWrites = async ({ queue }) => {
+/**
+ * Statuses that mean "ask again later" rather than "no".
+ *
+ * The same set `apps/api/src/lib/http.ts` retries on, restated rather than
+ * shared because the two are not one table: that one governs the API's own
+ * outbound calls to TMDB and Trakt, this one governs replaying a write back
+ * into the API. They agree today because HTTP says what these codes mean, not
+ * because one is derived from the other.
+ */
+const RETRYABLE_REPLAY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+/**
+ * The drain currently in flight, if any.
+ *
+ * Both the `sync` event and the page's REPLAY_QUEUED_WRITES message can arrive
+ * while a drain is already running — and on a browser with no Background Sync,
+ * workbox's startup replay is a third caller. Two drains interleaving their
+ * `shiftRequest`/`unshiftRequest` pairs is how a queue that exists to preserve
+ * order stops preserving it, so a second caller joins the first instead.
+ */
+let drainInFlight = null;
+
+const replayQueuedWrites = ({ queue }) => {
+  if (drainInFlight) return drainInFlight;
+  drainInFlight = drainQueuedWrites({ queue }).finally(() => {
+    drainInFlight = null;
+  });
+  return drainInFlight;
+};
+
+const drainQueuedWrites = async ({ queue }) => {
   let replayed = 0;
   let rejected = 0;
 
@@ -353,9 +390,10 @@ const replayQueuedWrites = async ({ queue }) => {
     }
     if (response.ok) {
       replayed += 1;
-    } else if (response.status >= 500) {
-      // The API is reachable and failing. Nothing about this write is wrong, so
-      // treat it like the outage above and try again on the next drain.
+    } else if (RETRYABLE_REPLAY_STATUSES.has(response.status)) {
+      // The API is reachable and saying "not now". Nothing about this write is
+      // wrong, so treat it like the outage above: put it back and stop, which
+      // also stops the burst that earned a 429 in the first place.
       await queue.unshiftRequest(entry);
       break;
     } else {

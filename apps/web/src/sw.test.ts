@@ -548,6 +548,71 @@ describe("writes made with no network", () => {
     expect(notifiedClients).toHaveLength(0);
   });
 
+  it("keeps a write the API rate-limited, which is the burst's own doing", async () => {
+    // A reconnect sends the whole queue at once and the API is globally rate
+    // limited, so a 429 on a later entry is this drain's most likely non-ok
+    // answer. Dropping it would delete a watch the user was told was saved.
+    await loadWorker("https://cataloggy.example/api");
+    const request = new Request("https://cataloggy.example/api/watch", { method: "POST", body: "{}" });
+    writeQueue().entries.push({ request });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("slow down", { status: 429 })));
+
+    await sendToWorker({ type: "REPLAY_QUEUED_WRITES" });
+
+    expect(writeQueue().entries).toEqual([{ request }]);
+    expect(notifiedClients).toHaveLength(0);
+  });
+
+  it("keeps a write the peer asked us to send again later", async () => {
+    // 408 and 425 are the two that no status-class test catches.
+    await loadWorker("https://cataloggy.example/api");
+    for (const status of [408, 425]) {
+      writeQueue().entries.push({
+        request: new Request("https://cataloggy.example/api/watch", { method: "POST", body: "{}" }),
+      });
+      vi.stubGlobal("fetch", vi.fn(async () => new Response("later", { status })));
+
+      await sendToWorker({ type: "REPLAY_QUEUED_WRITES" });
+
+      expect(writeQueue().entries, `status ${status}`).toHaveLength(1);
+      writeQueue().entries.length = 0;
+    }
+  });
+
+  it("runs one drain at a time, however many callers ask for one", async () => {
+    // The sync event, this message and workbox's startup replay are three
+    // callers. Two interleaving their shift/unshift pairs is how a queue that
+    // exists to preserve order stops preserving it.
+    await loadWorker("https://cataloggy.example/api");
+    for (const n of [1, 2, 3]) {
+      writeQueue().entries.push({
+        request: new Request("https://cataloggy.example/api/watch", { method: "POST", body: `{"n":${n}}` }),
+      });
+    }
+    let inFlight = 0;
+    let overlapped = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        inFlight += 1;
+        if (inFlight > 1) overlapped = true;
+        await Promise.resolve();
+        inFlight -= 1;
+        return new Response("{}", { status: 201 });
+      })
+    );
+
+    await Promise.all([
+      sendToWorker({ type: "REPLAY_QUEUED_WRITES" }),
+      sendToWorker({ type: "REPLAY_QUEUED_WRITES" }),
+    ]);
+
+    expect(overlapped).toBe(false);
+    expect(writeQueue().entries).toHaveLength(0);
+    // One announcement for the one drain, not one per caller.
+    expect(notifiedClients).toEqual([{ type: "QUEUED_WRITES_REPLAYED", replayed: 3, rejected: 0 }]);
+  });
+
   it("drops a write the server refused rather than replaying it forever", async () => {
     // The request reached the API and the API said no. Re-sending it on every
     // future sync would never produce a different answer — but the user was

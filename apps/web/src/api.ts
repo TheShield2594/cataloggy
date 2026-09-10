@@ -713,6 +713,22 @@ export async function replayQueuedWrites(): Promise<void> {
   await postToServiceWorker({ type: "REPLAY_QUEUED_WRITES" });
 }
 
+/**
+ * Dispatched on `window` when a queued write turned out to be refused.
+ *
+ * The in-memory cache being dropped is not enough on its own: a component that
+ * ticked an episode optimistically holds that tick in its own state, which no
+ * cache invalidation reaches. So the surfaces that show watch state listen for
+ * this and re-read it from the server — otherwise a write the user was told was
+ * saved stays on screen as saved until the panel is closed and reopened, which
+ * is the one outcome worse than saying nothing.
+ *
+ * Same shape as `cataloggy:unauthorized` and `cataloggy:profile-locked` above:
+ * a bare window event, because the surfaces that care are scattered and none of
+ * them is an ancestor of the others.
+ */
+export const WATCH_STATE_STALE_EVENT = "cataloggy:watch-state-stale";
+
 /** What the worker reports back once it has drained the queue (see sw.js). */
 export type QueuedWritesReplayed = {
   /** Writes the API accepted. */
@@ -727,7 +743,11 @@ export type QueuedWritesReplayed = {
  * The rows those writes changed are rows the app is very likely rendering from
  * its own in-memory cache, so that cache is dropped here rather than in the
  * caller: every subscriber wants it, and forgetting it would leave the user
- * looking at a history that still doesn't have the watch they logged.
+ * looking at a history that still doesn't have the watch they logged. A refusal
+ * additionally raises `WATCH_STATE_STALE_EVENT`, for the optimistic ticks that
+ * live in component state where no cache invalidation can reach them. Both are
+ * here rather than in the callback for the same reason: nothing that subscribes
+ * should be able to forget them.
  *
  * Returns an unsubscribe function.
  */
@@ -739,10 +759,12 @@ export function onQueuedWritesReplayed(onReplayed: (summary: QueuedWritesReplaye
     const data = event.data as { type?: unknown; replayed?: unknown; rejected?: unknown } | null;
     if (data?.type !== "QUEUED_WRITES_REPLAYED") return;
     invalidateMemoryCache();
-    onReplayed({
+    const summary = {
       replayed: typeof data.replayed === "number" ? data.replayed : 0,
       rejected: typeof data.rejected === "number" ? data.rejected : 0,
-    });
+    };
+    if (summary.rejected > 0) window.dispatchEvent(new Event(WATCH_STATE_STALE_EVENT));
+    onReplayed(summary);
   };
 
   container.addEventListener("message", listener);
