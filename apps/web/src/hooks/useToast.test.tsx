@@ -20,6 +20,15 @@ function Harness() {
   return null;
 }
 
+// Counts what a real consumer pays: every `useToast()` caller re-renders when
+// the context value changes identity, and the provider re-renders on each add,
+// exit-flag flip and removal.
+function CountingConsumer({ onRender }: { onRender: () => void }) {
+  useToast();
+  onRender();
+  return null;
+}
+
 const renderToasts = () =>
   render(
     <ToastProvider>
@@ -285,5 +294,28 @@ describe("ToastProvider", () => {
       // opts out, or an action taken inside a dialog reports nothing.
       expect(screen.getByRole("status").closest("[data-overlay-exempt]")).not.toBeNull();
     });
+  });
+
+  // The consumers here are the dashboard, the search grid, lists, history, the
+  // calendar, the command palette and the detail panel. A fresh `{ showToast }`
+  // on every provider render re-rendered all of them three or four times per
+  // toast — re-laying out a 20-card search grid because an unrelated "Saved"
+  // appeared somewhere else.
+  it("holds one context identity across a toast's whole lifecycle", () => {
+    const onRender = vi.fn();
+    render(
+      <ToastProvider>
+        <Harness />
+        <CountingConsumer onRender={onRender} />
+      </ToastProvider>
+    );
+    expect(onRender).toHaveBeenCalledTimes(1);
+
+    act(() => show("Saved"));
+    advance(3000);
+    finishExit();
+
+    expect(screen.queryByText("Saved")).not.toBeInTheDocument();
+    expect(onRender).toHaveBeenCalledTimes(1);
   });
 });

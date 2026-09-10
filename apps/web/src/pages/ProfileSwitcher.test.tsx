@@ -210,16 +210,23 @@ describe("ProfileSwitcher", () => {
   });
 
   describe("as a modal switcher", () => {
-    it("closes on the close button and on Escape", async () => {
+    // Both routes now go through the exit animation, so the close lands on the
+    // animationend — or, in jsdom, on the hook's fallback timer — rather than
+    // on the click itself. One render each: closing is idempotent afterwards,
+    // so a second route in the same render has nothing left to close.
+    it.each([
+      ["the close button", async () => { await userEvent.click(screen.getByRole("button", { name: /close/i })); }],
+      ["Escape", async () => { await userEvent.keyboard("{Escape}"); }],
+    ])("closes on %s, once its exit has played", async (_label, close) => {
       const onClose = vi.fn();
       renderSwitcher({ onClose });
       await screen.findByRole("button", { name: /ben/i });
 
-      await userEvent.click(screen.getByRole("button", { name: /close/i }));
-      expect(onClose).toHaveBeenCalledOnce();
+      await close();
 
-      await userEvent.keyboard("{Escape}");
-      expect(onClose).toHaveBeenCalledTimes(2);
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.getByRole("dialog")).toHaveClass("overlay-exit");
+      await waitFor(() => expect(onClose).toHaveBeenCalledOnce(), { timeout: 1000 });
     });
 
     // 32×32 as drawn; `.tap-target` is what takes the tappable area to 44 on a

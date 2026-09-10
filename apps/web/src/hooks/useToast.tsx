@@ -1,5 +1,5 @@
 import { Check, Heart, Undo2, X } from "lucide-react";
-import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 export type ToastAction = { label: string; onAction: () => void };
 
@@ -313,8 +313,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // A fresh object here would re-render every `useToast()` consumer — the
+  // dashboard, search grid, lists, history, calendar, command palette, detail
+  // panel — three or four times per toast, as this provider re-renders on each
+  // add, exit-flag flip and removal. `showToast` is already callback-stable, so
+  // the memo holds one identity for the life of the provider.
+  const value = useMemo(() => ({ showToast }), [showToast]);
+
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={value}>
       {children}
       <ToastContainer
         toasts={toasts}

@@ -6,6 +6,7 @@ import { GameDetailPanel } from "../components/GameDetailPanel";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import { useExitAnimation } from "../hooks/useExitAnimation";
 import { useVisualViewport } from "../hooks/useVisualViewport";
 import { useToast } from "../hooks/useToast";
 import { preconnectToGameArtwork } from "../utils/preconnect";
@@ -106,6 +107,7 @@ function AddGameModal({
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useFocusTrap<HTMLDivElement>();
+  const { exiting, requestClose, onExitAnimationEnd } = useExitAnimation(onClose);
   const abortRef = useRef<AbortController | null>(null);
   const viewportStyle = useVisualViewport();
 
@@ -114,7 +116,7 @@ function AddGameModal({
   }, []);
 
   useScrollLock();
-  useEscapeKey(onClose);
+  useEscapeKey(requestClose);
 
   // Cancel any still-in-flight search when the modal unmounts, so its response
   // can't land after the fact.
@@ -188,9 +190,9 @@ function AddGameModal({
 
   return (
     <div
-      className="overlay-scrim overlay-fade fixed inset-0 z-50 flex items-start justify-center p-4 sm:pt-[10vh]"
+      className={`overlay-scrim overlay-fade fixed inset-0 z-50 flex items-start justify-center p-4 sm:pt-[10vh] ${exiting ? "overlay-exit" : ""}`}
       style={viewportStyle}
-      onClick={onClose}
+      onClick={requestClose}
     >
       <div
         ref={dialogRef}
@@ -198,13 +200,14 @@ function AddGameModal({
         aria-modal="true"
         aria-labelledby="add-game-modal-title"
         tabIndex={-1}
-        className="glass-surface overlay-dialog flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-3xl border shadow-e3"
+        className={`glass-surface overlay-dialog flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-3xl border shadow-e3 ${exiting ? "overlay-exit" : ""}`}
         style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}
+        onAnimationEnd={onExitAnimationEnd}
       >
         <div className="flex flex-none items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <h3 id="add-game-modal-title" className={SECTION_TITLE} style={{ color: "var(--text)" }}>Add a game</h3>
-          <button onClick={onClose} aria-label="Close dialog" className="rounded-lg p-1.5 hover:bg-[var(--surface)] hover:text-[var(--text)]" style={{ color: "var(--text-mute)" }}>
+          <button onClick={requestClose} aria-label="Close dialog" className="rounded-lg p-1.5 hover:bg-[var(--surface)] hover:text-[var(--text)]" style={{ color: "var(--text-mute)" }}>
             <X className="h-5 w-5" />
           </button>
         </div>

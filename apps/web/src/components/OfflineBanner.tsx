@@ -32,7 +32,11 @@ export function OfflineBanner() {
     <div role="status" aria-live="polite">
       {!online && (
         <div
-          className="glass-surface overlay-dialog sticky top-[76px] z-20 mb-5 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm shadow-e2"
+          // `.overlay-fade`, not `.overlay-dialog`: the pop is the modal tier's
+          // entrance — a surface that arrives over a scrim and takes the focus
+          // with it. This is an in-flow sticky notice that nothing is waiting
+          // on, so it fades in at the scrim's own rate instead of popping.
+          className="glass-surface overlay-fade sticky top-[76px] z-20 mb-5 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm shadow-e2"
           style={{
             background: "var(--surface-strong)",
             border: "1px solid var(--border-strong)",

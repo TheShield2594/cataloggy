@@ -217,6 +217,18 @@ describe("ListsPage add-item modal", () => {
     addToList.mockResolvedValue(undefined as never);
   });
 
+  it("plays its exit before it leaves, on Escape as on the close button", async () => {
+    const user = userEvent.setup();
+    await openModal(user);
+
+    await user.keyboard("{Escape}");
+
+    // The dialog marks itself exiting and unmounts on the animationend, which
+    // jsdom never raises — so this rides the hook's fallback timer.
+    expect(screen.getByRole("dialog")).toHaveClass("overlay-exit");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 1000 });
+  });
+
   it("searches both types at once, because the filter starts on All", async () => {
     const user = userEvent.setup();
     await openModal(user);
@@ -312,6 +324,9 @@ describe("ListsPage add-item modal", () => {
     await waitFor(() => expect(getListItems).toHaveBeenCalledTimes(2));
 
     await user.click(screen.getByRole("button", { name: "Close dialog" }));
+    // The dialog plays its exit before unmounting, so its search results are
+    // still in the document for a beat after the click.
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 1000 });
     await user.click(screen.getByRole("button", { name: /^watchlist/i }));
     expect(await screen.findByText("Alien")).toBeInTheDocument();
 
