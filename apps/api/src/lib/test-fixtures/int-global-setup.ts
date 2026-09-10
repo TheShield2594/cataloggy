@@ -36,7 +36,21 @@ const ensureDatabaseExists = async (connectionString: string): Promise<void> => 
   const { database, maintenanceUrl } = parseTarget(connectionString);
   const client = new Client({ connectionString: maintenanceUrl });
 
-  await client.connect();
+  try {
+    await client.connect();
+  } catch (error) {
+    // Vitest reports a global-setup failure as "No test files found" with the
+    // underlying error printed separately, so a database that simply isn't
+    // running reads as a broken test config. Say which server was not there —
+    // without the password, which is in the connection string.
+    const { hostname, port } = new URL(maintenanceUrl);
+    throw new Error(
+      `Could not reach Postgres at ${hostname}:${port || 5432} to prepare the integration database. ` +
+        "Start it (docker compose up db) and check DATABASE_URL_TEST.",
+      { cause: error }
+    );
+  }
+
   try {
     const { rowCount } = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [database]);
     if (rowCount === 0) {
