@@ -55,12 +55,20 @@ describe("mergeByRelevance", () => {
   });
 
   it("matches a query whose characters are regex syntax literally", () => {
-    // The word-start tier is a regex, so an unescaped `.` or `+` here would
-    // match titles that share nothing with the query.
-    const movies = [result("Wall-E", "movie"), result("Walk Hard", "movie")];
+    // The word-start tier is a regex, so an unescaped `.` here would match any
+    // character — and the assertion has to be able to tell. Two rows, not one:
+    // against a single result the merge returns it whatever it scored, so the
+    // test would pass with the escaping removed.
+    //
+    // Escaped, `\bs\.7en` matches only "The S.7en" (word-start, tier 2) and
+    // "Se7en" scores nothing. Unescaped, `\bs.7en` matches "se7en" too, both
+    // score 2, and the rank tie-break puts "Se7en" first — so the order is the
+    // thing that distinguishes the two behaviours.
+    const dotted = [result("Se7en", "movie"), result("The S.7en", "movie")];
+    expect(names(mergeByRelevance(dotted, [], "s.7en"))).toEqual(["The S.7en", "Se7en"]);
 
+    const movies = [result("Wall-E", "movie"), result("Walk Hard", "movie")];
     expect(names(mergeByRelevance(movies, [], "wall-e"))).toEqual(["Wall-E", "Walk Hard"]);
-    expect(names(mergeByRelevance([result("Se7en", "movie")], [], "s.7en"))).toEqual(["Se7en"]);
   });
 
   it("scores each row independently of how many rows precede it", () => {

@@ -1,4 +1,5 @@
 import { act, render, screen } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTransientFlag } from "./useTransientFlag";
 
@@ -71,6 +72,31 @@ describe("useTransientFlag", () => {
 
     act(() => { vi.advanceTimersByTime(1000); });
     expect(flag()).toBe("off");
+  });
+
+  it("ignores a raise from an async continuation that lands after unmount", async () => {
+    // The shape every caller has: `await api.save(...)` and then `setSaved(true)`.
+    // Closing the settings sheet while that request is in flight runs the
+    // continuation against a component that no longer exists — and without the
+    // mounted guard it would start a two-second timer that nothing is left to
+    // clear, since the cleanup has already run.
+    // The setter is handed out from an effect rather than captured during
+    // render — assigning to an outer variable mid-render is the same impurity
+    // this hook's own guard is about, and a test that models the hazard should
+    // not commit it.
+    let raise!: (v: boolean) => void;
+    function Late({ onReady }: { onReady: (set: (v: boolean) => void) => void }) {
+      const [saved, setSaved] = useTransientFlag();
+      useEffect(() => { onReady(setSaved); }, [onReady, setSaved]);
+      return <span data-testid="flag">{saved ? "on" : "off"}</span>;
+    }
+
+    const { unmount } = render(<Late onReady={(set) => { raise = set; }} />);
+    unmount();
+
+    const before = vi.getTimerCount();
+    act(() => { raise(true); });
+    expect(vi.getTimerCount()).toBe(before);
   });
 
   it("does not set state after the component is gone", () => {

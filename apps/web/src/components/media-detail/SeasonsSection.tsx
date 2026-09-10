@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Tv } from "lucide-react";
 import { api, EpisodeInfo } from "../../api";
 import { ProgressRuler } from "../ProgressRuler";
@@ -50,14 +50,31 @@ export function SeasonsSection({
   const [seasonRatings, setSeasonRatings] = useState<Record<number, number>>({});
   const [episodeRatings, setEpisodeRatings] = useState<Record<string, number>>({});
   const [pendingRating, setPendingRating] = useState<Record<string, boolean>>({});
-  // Guards every late-arriving response below against a show that has since
-  // been swapped underneath it. Assigned during render rather than from an
-  // effect: an effect runs *after* the commit, so a response that resolved in
-  // between compared itself against the previous show's id and was either
-  // dropped or applied to the wrong one. React 19 allows the direct assignment,
-  // and DetailPanel.tsx and ListsPage.tsx already rely on it.
+  /*
+   * Guards every late-arriving response below against a show that has since
+   * been swapped underneath it.
+   *
+   * `useLayoutEffect`, not `useEffect` and not an assignment during render.
+   * The original bug was the plain `useEffect`: passive effects run after the
+   * paint, in their own task, so a response that resolved between the commit
+   * and that task compared itself against the previous show's id. A layout
+   * effect runs synchronously inside the commit, and JavaScript is
+   * single-threaded — no promise continuation can interleave between the two —
+   * so the window is closed.
+   *
+   * Assigning during render would close it too, and DetailPanel.tsx and
+   * ListsPage.tsx do exactly that. The difference is what reads the ref: theirs
+   * is read from an event handler, which cannot run until something is
+   * committed, so a render React discards costs them nothing. This one is read
+   * from a promise continuation, and it gates the `episodesLoading` cleanup
+   * below — a ref left holding a discarded render's id strands that flag `true`,
+   * and `loadEpisodes` then refuses to retry the season for as long as the
+   * panel stays on this title.
+   */
   const imdbIdRef = useRef(imdbId);
-  imdbIdRef.current = imdbId;
+  useLayoutEffect(() => {
+    imdbIdRef.current = imdbId;
+  }, [imdbId]);
   /*
    * What the rest of the component reads: the answer, or an empty set while
    * there isn't one. Only the auto-expand effect cares about the difference.

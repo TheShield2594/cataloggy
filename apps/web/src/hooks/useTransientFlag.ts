@@ -29,15 +29,25 @@ export function useTransientFlag(
 ): [boolean, (next: boolean) => void] {
   const [on, setOn] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Every caller raises this flag *after* an await — a save, a clipboard write
+  // — so the continuation can land on a component that is already gone.
+  // Clearing the timer on unmount does not cover that case: there is no timer
+  // yet at unmount, and the late call would start one nothing will ever clear.
+  // Set in the effect rather than initialised `true`, because StrictMode's
+  // simulated remount runs the cleanup once before the real mount.
+  const mountedRef = useRef(false);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
 
   const set = useCallback(
     (next: boolean) => {
+      if (!mountedRef.current) return;
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = undefined;
       setOn(next);
