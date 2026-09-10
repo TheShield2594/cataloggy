@@ -42,6 +42,10 @@ const PACKAGE_SERVICES = {
 const EXEMPT = new Map([
   ["NODE_ENV", "set by every app's Dockerfile (ENV NODE_ENV=production)"],
   [
+    "ALLOWED_HOSTS",
+    "read only by apps/web/vite.config.ts for the Vite dev/preview servers; the production web image serves the built bundle with `serve`, which has no host allowlist",
+  ],
+  [
     "WEB_PUBLIC_BASE",
     "legacy alias read only as a fallback for CATALOGGY_WEB_PUBLIC, which compose does set",
   ],

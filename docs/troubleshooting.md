@@ -107,12 +107,16 @@ both.
 
 ### Blank page behind a reverse proxy
 
-Add the hostname to `ALLOWED_HOSTS` on the `web` service. Without it, the web
-server only answers to IPs and localhost.
+The page itself is static and the web container does not filter by hostname, so
+a blank page means the app loaded and then could not reach the API. Check the
+browser console for which of the two it is:
 
-If the API is reachable at a different address than `VITE_API_BASE` — a
-per-browser override under Settings, say — add that origin to
-`CSP_CONNECT_SRC_EXTRA` too, or the Content-Security-Policy blocks the request.
+- A **Content-Security-Policy** violation — the API is reachable at a different
+  address than `VITE_API_BASE`, a per-browser override under Settings, say. Add
+  that origin to `CSP_CONNECT_SRC_EXTRA` on the `web` service.
+- A **CORS** error — add the origin the browser is using to
+  `CATALOGGY_ALLOWED_ORIGINS` on the `api` service, domain included, not just
+  the LAN IP.
 
 ### 401 on every request
 
