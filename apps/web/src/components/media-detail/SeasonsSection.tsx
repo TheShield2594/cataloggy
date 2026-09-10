@@ -15,6 +15,9 @@ export interface SeasonInfo {
 
 const episodeKey = (season: number, episode: number) => `${season}:${episode}`;
 
+/** Shared so `watched ?? EMPTY_WATCHED` is a stable reference across renders. */
+const EMPTY_WATCHED: ReadonlySet<string> = new Set<string>();
+
 export function SeasonsSection({
   imdbId, seasons, loading, onError, onToast,
 }: {
@@ -24,7 +27,19 @@ export function SeasonsSection({
   onError?: (message: string) => void;
   onToast?: (message: string, type: "success" | "info") => void;
 }) {
-  const [watched, setWatched] = useState<Set<string>>(new Set());
+  /*
+   * The episodes of this show that have been watched — or `null`, meaning the
+   * read has not answered yet.
+   *
+   * The distinction is in the type rather than in a flag beside it, because an
+   * empty set means two very different things before and after the answer
+   * lands, and the auto-expand effect below has to tell them apart. A parallel
+   * boolean would have needed the failure path to set it *and* to cause a
+   * render, which is the bug a ref version of it had: nothing else changes on
+   * that path, so the effect never ran again and a show whose history could not
+   * be read left every season collapsed.
+   */
+  const [watched, setWatched] = useState<Set<string> | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [episodesBySeason, setEpisodesBySeason] = useState<Record<number, EpisodeInfo[]>>({});
   const [episodesLoading, setEpisodesLoading] = useState<Record<number, boolean>>({});
@@ -36,9 +51,11 @@ export function SeasonsSection({
   const [episodeRatings, setEpisodeRatings] = useState<Record<string, number>>({});
   const [pendingRating, setPendingRating] = useState<Record<string, boolean>>({});
   const imdbIdRef = useRef(imdbId);
-  // Whether the watched-episode read has answered. An empty set means two very
-  // different things before and after it does — see the auto-expand effect.
-  const watchedFetchedRef = useRef(false);
+  /*
+   * What the rest of the component reads: the answer, or an empty set while
+   * there isn't one. Only the auto-expand effect cares about the difference.
+   */
+  const watchedSet = watched ?? EMPTY_WATCHED;
 
   useEffect(() => {
     imdbIdRef.current = imdbId;
@@ -46,25 +63,21 @@ export function SeasonsSection({
 
   useEffect(() => {
     let cancelled = false;
-    setWatched(new Set());
+    setWatched(null);
     setExpanded(null);
     setEpisodesBySeason({});
     setEpisodesLoading({});
     setSeasonRatings({});
     setEpisodeRatings({});
-    watchedFetchedRef.current = false;
     api.getWatchedEpisodes(imdbId)
       .then((res) => {
-        if (cancelled) return;
-        // Set before the state, so the auto-expand effect that runs on the
-        // resulting render can tell "nothing watched" from "not asked yet".
-        watchedFetchedRef.current = true;
-        setWatched(new Set(res.episodes.map((e) => episodeKey(e.season, e.episode))));
+        if (!cancelled) setWatched(new Set(res.episodes.map((e) => episodeKey(e.season, e.episode))));
       })
       .catch(() => {
         // Best-effort — but a failed read is still an answer as far as opening
         // a season goes, or a show whose history won't load never opens one.
-        if (!cancelled) watchedFetchedRef.current = true;
+        // An empty set, not `null`: nothing watched is what we will act on.
+        if (!cancelled) setWatched(new Set());
       });
     // Every rating for this show in one request — the series' own, its seasons'
     // and its episodes' — rather than one per row as they come into view.
@@ -102,12 +115,12 @@ export function SeasonsSection({
    */
   const watchedBySeason = useMemo(() => {
     const counts: Record<number, number> = {};
-    for (const key of watched) {
+    for (const key of watchedSet) {
       const season = Number(key.slice(0, key.indexOf(":")));
       if (Number.isFinite(season)) counts[season] = (counts[season] ?? 0) + 1;
     }
     return counts;
-  }, [watched]);
+  }, [watchedSet]);
 
   const loadEpisodes = (seasonNumber: number) => {
     if (episodesBySeason[seasonNumber] || episodesLoading[seasonNumber]) return;
@@ -141,9 +154,9 @@ export function SeasonsSection({
   const autoExpandedRef = useRef<string | null>(null);
   useEffect(() => {
     if (seasons.length === 0 || autoExpandedRef.current === imdbId) return;
-    // Nothing to go on yet: `watched` lands a moment after the seasons do, and
-    // choosing before it arrives would always pick the first season.
-    if (watched.size === 0 && !watchedFetchedRef.current) return;
+    // Nothing to go on yet: the watched read lands a moment after the seasons
+    // do, and choosing before it answers would always pick the first season.
+    if (watched === null) return;
     autoExpandedRef.current = imdbId;
 
     const inProgress = seasons.find((s) => {
@@ -167,14 +180,14 @@ export function SeasonsSection({
     const k = episodeKey(seasonNumber, episodeNumber);
     if (pendingEpisode[k]) return;
     setPendingEpisode((p) => ({ ...p, [k]: true }));
-    const isWatched = watched.has(k);
+    const isWatched = watchedSet.has(k);
     try {
       if (isWatched) {
         await api.unmarkEpisodeWatched(imdbId, seasonNumber, episodeNumber);
-        setWatched((prev) => { const next = new Set(prev); next.delete(k); return next; });
+        setWatched((prev) => { const next = new Set(prev ?? []); next.delete(k); return next; });
       } else {
         await api.markEpisodeWatched(imdbId, seasonNumber, episodeNumber);
-        setWatched((prev) => new Set(prev).add(k));
+        setWatched((prev) => new Set(prev ?? []).add(k));
       }
     } catch (err) {
       onError?.(err instanceof Error ? err.message : "Failed to update episode");
@@ -264,7 +277,7 @@ export function SeasonsSection({
       const res = await api.markSeasonWatched(imdbId, season.seasonNumber, episodeNumbers);
       if (imdbIdRef.current !== requestImdbId) return;
       setWatched((prev) => {
-        const next = new Set(prev);
+        const next = new Set(prev ?? []);
         for (const n of episodeNumbers) next.add(episodeKey(season.seasonNumber, n));
         return next;
       });
@@ -303,7 +316,7 @@ export function SeasonsSection({
           const episodes = episodesBySeason[s.seasonNumber];
           const watchedCount = watchedBySeason[s.seasonNumber] ?? 0;
           const currentEpisode = episodes?.find(
-            (ep) => !watched.has(episodeKey(s.seasonNumber, ep.episodeNumber))
+            (ep) => !watchedSet.has(episodeKey(s.seasonNumber, ep.episodeNumber))
           )?.episodeNumber;
 
           return (
@@ -322,7 +335,13 @@ export function SeasonsSection({
                     onClick={() => toggleExpand(s.seasonNumber)}
                     className="flex min-w-0 flex-1 items-baseline gap-2 text-left"
                     aria-expanded={isExpanded}
-                    aria-label={`${isExpanded ? "Collapse" : "Expand"} ${s.name}`}
+                    // The count is rendered inside this button, and an
+                    // aria-label replaces the name computed from its contents —
+                    // so without it here, the progress reaches assistive tech
+                    // nowhere in the list. The ruler cannot cover for it: it is
+                    // `decorative`, which is exactly the trade this label was
+                    // silently breaking.
+                    aria-label={`${isExpanded ? "Collapse" : "Expand"} ${s.name}, ${watchedCount} of ${s.episodeCount} episodes watched`}
                   >
                     {isExpanded ? (
                       <ChevronDown className="h-3.5 w-3.5 flex-none self-center" style={{ color: "var(--text-mute)" }} />
@@ -398,7 +417,7 @@ export function SeasonsSection({
                   ) : (
                     episodes!.map((ep) => {
                       const k = episodeKey(s.seasonNumber, ep.episodeNumber);
-                      const isWatched = watched.has(k);
+                      const isWatched = watchedSet.has(k);
                       // The one you are up to: the first unwatched episode of
                       // the season. It is the row the screen was opened for,
                       // and without it a part-watched season is a list of
@@ -452,12 +471,15 @@ export function SeasonsSection({
                               <p className="mt-0.5 truncate text-[0.8125rem]" style={{ color: "var(--text-mute)" }}>
                                 {[
                                   ep.runtime ? `${ep.runtime} min` : null,
+                                  // `2025-02-14` parses as UTC midnight, which
+                                  // is the 13th anywhere west of Greenwich. An
+                                  // air date is a calendar date, not an
+                                  // instant, so it is read in local time.
                                   ep.airDate
-                                    ? new Date(ep.airDate).toLocaleDateString(undefined, {
-                                        month: "short",
-                                        day: "numeric",
-                                        year: "numeric",
-                                      })
+                                    ? new Date(`${ep.airDate.slice(0, 10)}T00:00:00`).toLocaleDateString(
+                                        undefined,
+                                        { month: "short", day: "numeric", year: "numeric" }
+                                      )
                                     : null,
                                 ]
                                   .filter(Boolean)
@@ -465,7 +487,8 @@ export function SeasonsSection({
                               </p>
                             )}
                             {/*
-                              * Only on an episode you have seen.
+                              * On an episode you have seen — or one you have
+                              * already rated.
                               *
                               * The picker is ten pointer targets and 240px
                               * wide, so on a phone it wrapped onto a line of
@@ -473,8 +496,15 @@ export function SeasonsSection({
                               * twice as tall as the design's. Rating an episode
                               * you have not watched is not a thing anyone does,
                               * so the rows that don't need it don't pay for it.
+                              *
+                              * The second half of the condition is not
+                              * symmetry: unmarking an episode deletes the watch
+                              * event and leaves the rating, and this is the
+                              * only control in the app that can clear one — so
+                              * hiding it on an unwatched row would strand a
+                              * score with no way to take it back.
                               */}
-                            {isWatched && (
+                            {(isWatched || episodeRatings[k] != null) && (
                               <StarPicker
                                 value={episodeRatings[k] ?? null}
                                 onRate={(value) => void rateEpisode(s.seasonNumber, ep.episodeNumber, value)}

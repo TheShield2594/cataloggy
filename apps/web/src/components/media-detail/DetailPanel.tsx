@@ -129,6 +129,17 @@ export function DetailPanel({
   // Key art if the record carries it, the poster cropped to the frame if not.
   // See the hero's own note.
   const heroArt = item.background ?? item.poster ?? null;
+  /*
+   * Whether the hero is showing a stand-in rather than key art.
+   *
+   * A still is meant to fill the frame — cropping one to 16:9 is what it was
+   * shot for. A poster is not: `object-cover` on a 2:3 image in a landscape
+   * frame keeps its middle third, which for most posters is an actor's torso
+   * and no title. So the fallback is contained inside the frame at its own
+   * ratio, with the blurred copy behind it filling the sides — while real key
+   * art still goes edge to edge.
+   */
+  const heroArtIsPoster = !item.background && !!item.poster;
 
   // Dropped state (series only) — seeded from the bundle, then owned here, since
   // toggling it has to show immediately rather than wait for a refetch.
@@ -298,16 +309,43 @@ export function DetailPanel({
     });
   };
 
-  // What the primary action means, computed once so the button's label and the
-  // modal it opens cannot name two different episodes. See `nextEpisodeUp`.
-  const nextUp = item.type === "series" ? nextEpisodeUp(history, seasons) : null;
+  /*
+   * What the primary action means, computed once so the button's label and the
+   * modal it opens cannot name two different episodes. See `nextEpisodeUp`.
+   *
+   * Gated on both of its inputs having arrived. `history` and `seasons` are
+   * empty while their requests are in flight, and `nextEpisodeUp` cannot tell
+   * "this show has never been watched" from "we have not been told yet" — so
+   * for the first moment of every series the button read `Continue · S1 E1`,
+   * and pressing it in that moment opened the log modal on episode one of a
+   * show you are forty episodes into. A default that wrong is worse than a
+   * disabled button, because the modal accepts it.
+   *
+   * A film has nothing to wait for: its target is the film.
+   */
+  const progressionReady = item.type === "movie" || (!historyLoading && !detailLoading);
+  const nextUp = item.type === "series" && progressionReady ? nextEpisodeUp(history, seasons) : null;
 
   const openWatchModal = () => {
+    if (!progressionReady) return;
     if (item.type === "movie" || !nextUp) {
       setWatchTarget({ kind: "movie", imdbId: item.imdbId, releaseDate: item.releaseDate });
     } else {
       setWatchTarget({ kind: "episode", seriesImdbId: item.imdbId, season: nextUp.season, episode: nextUp.episode });
     }
+  };
+
+  /*
+   * Check-in, for the callers that cannot wait on it.
+   *
+   * `handleCheckin` deliberately does not catch: `CheckInModal` awaits it and
+   * keeps itself open with its own error when it rejects. The two callers that
+   * fire and forget — the button in the hero and `CheckInBlock` — were dropping
+   * that rejection on the floor with `void`, so a failed check-in was a button
+   * that did nothing at all.
+   */
+  const checkInAndReport = (season?: number, episode?: number) => {
+    void handleCheckin(season, episode).catch(() => onShowToast("Could not check in", "error"));
   };
 
   return (
@@ -389,7 +427,11 @@ export function DetailPanel({
                   src={heroArt}
                   alt=""
                   aria-hidden="true"
-                  className="relative mx-auto h-full w-full object-cover"
+                  className={
+                    heroArtIsPoster
+                      ? "relative mx-auto h-full w-auto max-w-full object-contain"
+                      : "relative h-full w-full object-cover"
+                  }
                 />
               </>
             ) : (
@@ -516,14 +558,22 @@ export function DetailPanel({
             <button
               type="button"
               onClick={openWatchModal}
+              disabled={!progressionReady}
               className="btn-primary h-[3.125rem] flex-1 rounded-2xl text-[1.0625rem]"
             >
               <Play className="h-4 w-4 translate-x-[1px] fill-current" />
-              {nextUp ? `Continue · S${nextUp.season} E${nextUp.episode}` : "Log a watch"}
+              {/* Named only once the episode is known — see `progressionReady`.
+                  "Continue" alone is true while we are still finding out; a
+                  number would not be. */}
+              {item.type === "movie"
+                ? "Log a watch"
+                : nextUp
+                  ? `Continue · S${nextUp.season} E${nextUp.episode}`
+                  : "Continue"}
             </button>
             <button
               type="button"
-              onClick={() => (item.type === "series" ? setShowCheckinModal(true) : void handleCheckin())}
+              onClick={() => (item.type === "series" ? setShowCheckinModal(true) : checkInAndReport())}
               disabled={checkinLoading || !!activeCheckin}
               // Named for what it does rather than for its glyph, and titled as
               // well — it is a 50px square with no label under it.
@@ -573,7 +623,7 @@ export function DetailPanel({
             loading={checkinLoading}
             activeCheckin={activeCheckin}
             isSeries={item.type === "series"}
-            onStartCheckin={() => void handleCheckin()}
+            onStartCheckin={() => checkInAndReport()}
             onStartSeriesCheckin={() => setShowCheckinModal(true)}
             onCheckout={(logWatch) => void handleCheckout(logWatch)}
           />
