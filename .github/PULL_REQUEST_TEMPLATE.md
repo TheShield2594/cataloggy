@@ -10,16 +10,20 @@ Closes #
 
 ## Checks
 
-The five CI runs, in one line:
+The six CI runs, in one line:
 
 ```bash
-pnpm check:env && pnpm lint && pnpm typecheck && pnpm test && pnpm build
+pnpm check:env && pnpm lint && pnpm typecheck && pnpm test && \
+  DATABASE_URL_TEST=postgresql://postgres:postgres@127.0.0.1:5432/cataloggy_int pnpm test:int && \
+  pnpm build
 ```
 
 - [ ] `pnpm check:env`
 - [ ] `pnpm lint`
 - [ ] `pnpm typecheck`
 - [ ] `pnpm test`
+- [ ] `pnpm test:int` — needs a Postgres and its own `DATABASE_URL_TEST`, because
+      it truncates every table between tests. See CONTRIBUTING.md.
 - [ ] `pnpm build`
 
 ## Manually exercised
