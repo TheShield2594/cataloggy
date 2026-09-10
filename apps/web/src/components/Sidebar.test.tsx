@@ -65,9 +65,14 @@ const currentRows = () =>
 // The rail's width is the only thing that says "expanded" — the labels stay in
 // the DOM either way, which is exactly why hover-only expansion was invisible
 // to a keyboard user rather than merely inconvenient.
-// jsdom resolves the inline rem widths against its 16px root font size.
-const COLLAPSED_WIDTH = "64px";
-const EXPANDED_WIDTH = "240px";
+//
+// Compared as the authored `calc()` rather than a pixel count: the rail adds
+// `env(safe-area-inset-left)` so its material can run under a landscape notch
+// while its rows stay clear of one, and jsdom neither resolves `env()` nor
+// evaluates `calc()`. The two states are still distinguishable, which is all
+// these assertions need.
+const COLLAPSED_WIDTH = "calc(4rem + env(safe-area-inset-left))";
+const EXPANDED_WIDTH = "calc(15rem + env(safe-area-inset-left))";
 
 const rail = () => screen.getByRole("navigation", { name: "Primary" }).parentElement as HTMLElement;
 

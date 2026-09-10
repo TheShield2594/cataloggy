@@ -113,7 +113,12 @@ export function App() {
   const { theme, setTheme } = useTheme();
   const { open: paletteOpen, setOpen: setPaletteOpen } = useCommandPalette();
   const [sidebarPinned, setSidebarPinned] = useState(() => localStorage.getItem(PIN_KEY) === "1");
-  const sidebarPad = sidebarPinned ? "sm:pl-[15rem]" : "sm:pl-16";
+  // The rail bleeds under the left notch and insets its own contents (see
+  // Sidebar.tsx), so the space the shell reserves for it has to grow by the
+  // same inset or the header and the page slide back under the housing.
+  const sidebarPad = sidebarPinned
+    ? "sm:pl-[calc(15rem_+_env(safe-area-inset-left))]"
+    : "sm:pl-[calc(4rem_+_env(safe-area-inset-left))]";
 
   useEffect(() => {
     const handleUnauthorized = () => setNeedsSetup(true);
@@ -318,7 +323,7 @@ function AppShell({
           backgroundColor: scrolled ? "var(--bar-tint)" : "transparent",
         }}
       >
-        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-2 sm:px-6 sm:py-2.5">
+        <div className="safe-pr mx-auto flex max-w-[1400px] items-center justify-between gap-4 pl-4 py-2 [--gutter-r:1rem] sm:pl-6 sm:py-2.5 sm:[--gutter-r:1.5rem]">
           {/* The search page puts its own field at the top of the content, so the
               header trigger would be a second search box that quietly does
               something else — it opens the palette rather than filling the page.
@@ -389,7 +394,7 @@ function AppShell({
         aria-label="Main content"
         // Bottom padding clears the floating tab bar (64px) and the gap it sits
         // in, so the last row of a grid isn't parked behind glass.
-        className={`mx-auto max-w-[1400px] px-5 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-[60px] focus:outline-none sm:px-6 sm:pb-10 sm:pt-[68px] transition-[padding] duration-base ${sidebarPad}`}
+        className={`safe-pl safe-pr mx-auto max-w-[1400px] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-[60px] focus:outline-none [--gutter-l:1.25rem] [--gutter-r:1.25rem] sm:pb-10 sm:pt-[68px] sm:[--gutter-l:1.5rem] sm:[--gutter-r:1.5rem] transition-[padding] duration-base ${sidebarPad}`}
       >
         <OfflineBanner />
         {/* Keyed on the pathname so the entrance replays once per navigation.

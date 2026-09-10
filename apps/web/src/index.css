@@ -1284,6 +1284,34 @@ body {
   }
 
   /*
+   * Horizontal safe-area insets.
+   *
+   * index.html sets `viewport-fit=cover`, so in landscape on a notched phone
+   * the viewport runs under the sensor housing on one side and the rounded
+   * corner on the other. There is no matching `-top` rule and there should not
+   * be: `apple-mobile-web-app-status-bar-style` is `default`, which already
+   * keeps the web view below the status bar.
+   *
+   * `max()` against the element's own gutter rather than an addition, so the
+   * padding is exactly the gutter everywhere the inset is zero — portrait,
+   * desktop, every device without a notch — and only grows where the housing
+   * actually eats into the page. Each caller declares the gutter it would
+   * otherwise have used with `[--gutter-l:…]` / `[--gutter-r:…]`, which can
+   * carry a `sm:` variant the way a padding utility would.
+   *
+   * These live in `components` so a Tailwind padding utility on the same
+   * element still wins — that is what lets the shell's sidebar offset override
+   * `.safe-pl` at `sm`, where the rail is what holds content off the edge.
+   */
+  .safe-pl {
+    padding-left: max(var(--gutter-l, 0px), env(safe-area-inset-left));
+  }
+
+  .safe-pr {
+    padding-right: max(var(--gutter-r, 0px), env(safe-area-inset-right));
+  }
+
+  /*
    * Grows a small control's *touch* target to 44×44 without growing the
    * control.
    *

@@ -126,11 +126,20 @@ export function MobileTabBar({ pathname }: { pathname: string }) {
 
       <nav
         aria-label="Mobile navigation"
-        className="fixed inset-x-3 z-40 flex items-center gap-2.5 sm:hidden"
+        className="fixed z-40 flex items-center gap-2.5 sm:hidden"
         // 0.75rem clear of the safe area, which on a phone with a home
         // indicator is the gap the platform leaves under a floating bar and on
         // one without it is simply a margin.
-        style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+        //
+        // The side insets are `max()` rather than an addition: they are zero in
+        // portrait, which is the only orientation this bar is shown in today,
+        // so the bar keeps its 0.75rem margin and the rule only does something
+        // if the breakpoint ever lets the bar meet a notch.
+        style={{
+          bottom: "calc(0.75rem + env(safe-area-inset-bottom))",
+          left: "max(0.75rem, env(safe-area-inset-left))",
+          right: "max(0.75rem, env(safe-area-inset-right))",
+        }}
       >
         <div className="bar-glass flex h-16 min-w-0 flex-1 items-stretch rounded-[2rem] px-1.5">
           {PRIMARY_NAV_ITEMS.map((item) => {
