@@ -306,6 +306,18 @@ export const parseSeriesProgressResponse = (value: unknown): SeriesProgressRespo
 // keeps working. The types are also what the API's own handlers are annotated
 // with, so a rename fails `pnpm typecheck` rather than production.
 
+/**
+ * The array under `key`, defaulting to empty only when the key is *absent*.
+ *
+ * `body.history ?? []` looks equivalent and is not: it also swallows an
+ * explicit `{ "history": null }`, which is a contract violation wearing an
+ * empty state. The page would render "nothing watched yet" and be believed. An
+ * omitted key is the honest case — a route that has nothing to send may leave
+ * it out — so that one still defaults.
+ */
+const collection = (body: Record<string, unknown>, key: string): unknown =>
+  key in body ? body[key] : [];
+
 const asBoolean = (value: unknown, what: string): boolean =>
   typeof value === "boolean" ? value : fail(`${what} must be a boolean`);
 
@@ -338,19 +350,32 @@ export type CalendarEntry = {
 export type CalendarResponse = { calendar: CalendarEntry[] };
 
 /**
- * `airDate` is checked for shape, not just type: every consumer splits it on
- * "-" and feeds the three parts to `new Date(y, m - 1, d)`, and a string that
- * is a string but not a date produces `Invalid Date` — which formats as
- * "Invalid Date" on the screen rather than throwing anywhere near the cause.
+ * `airDate` is checked for shape *and* for being a day that exists: every
+ * consumer splits it on "-" and feeds the three parts to `new Date(y, m - 1,
+ * d)`, and that constructor rolls a nonsense day forward rather than refusing
+ * it — "2026-02-30" silently becomes March 2nd, so the episode lands on the
+ * wrong row of the calendar with nothing anywhere saying why. A string that is
+ * a string but not a date at all is the same failure one step earlier: it
+ * produces `Invalid Date`, which formats as the literal text "Invalid Date" on
+ * the screen, days from the build that caused it.
+ *
+ * The round-trip is the check: `Date.UTC` normalises, so a date that survives
+ * with its own three numbers intact is one that really exists.
  */
 const asAirDate = (value: unknown, what: string): string => {
   const date = asString(value, what);
-  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : fail(`${what} must be a YYYY-MM-DD date, got "${date}"`);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) return fail(`${what} must be a YYYY-MM-DD date, got "${date}"`);
+  const [year, month, day] = match.slice(1).map(Number) as [number, number, number];
+  const utc = new Date(Date.UTC(year, month - 1, day));
+  const real =
+    utc.getUTCFullYear() === year && utc.getUTCMonth() === month - 1 && utc.getUTCDate() === day;
+  return real ? date : fail(`${what} must be a day that exists, got "${date}"`);
 };
 
 export const parseCalendarResponse = (value: unknown): CalendarResponse => {
   const body = asObject(value, "response");
-  const calendar = asArray(body.calendar ?? [], "calendar").map((entry, index) => {
+  const calendar = asArray(collection(body, "calendar"), "calendar").map((entry, index) => {
     const at = `calendar[${index}]`;
     const episode = asObject(entry, at);
     return {
@@ -401,7 +426,7 @@ export type SeriesProgressListResponse = { progress: SeriesProgress[] };
 
 export const parseSeriesProgressListResponse = (value: unknown): SeriesProgressListResponse => {
   const body = asObject(value, "response");
-  const progress = asArray(body.progress ?? [], "progress").map((entry, index) => {
+  const progress = asArray(collection(body, "progress"), "progress").map((entry, index) => {
     const at = `progress[${index}]`;
     const row = asObject(entry, at);
     return {
@@ -456,7 +481,7 @@ const asWatchType = (value: unknown, what: string): "movie" | "episode" =>
 
 export const parseWatchHistoryResponse = (value: unknown): WatchHistoryResponse => {
   const body = asObject(value, "response");
-  const history = asArray(body.history ?? [], "history").map((entry, index) => {
+  const history = asArray(collection(body, "history"), "history").map((entry, index) => {
     const at = `history[${index}]`;
     const event = asObject(entry, at);
     return {

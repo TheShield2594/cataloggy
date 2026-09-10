@@ -226,6 +226,9 @@ describe("ListsPage add-item modal", () => {
     // The dialog marks itself exiting and unmounts on the animationend, which
     // jsdom never raises — so this rides the hook's fallback timer.
     expect(screen.getByRole("dialog")).toHaveClass("overlay-exit");
+    // Inert as well as pointer-events:none — a focused result button would
+    // otherwise still add its title on an Enter pressed during the exit.
+    expect(screen.getByRole("dialog")).toHaveAttribute("inert");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 1000 });
   });
 

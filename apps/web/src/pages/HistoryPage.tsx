@@ -416,7 +416,7 @@ export function HistoryPage() {
 
                   <div className="pointer-events-none relative min-w-0 flex-1">
                     <p className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>
-                      {event.name}
+                      {watchEventTitle(event)}
                       {event.type === "episode" && event.season != null && event.episode != null && (
                         <span className="meta-row" style={{ color: "var(--text-mute)" }}>
                           {" "}S{event.season}E{event.episode}

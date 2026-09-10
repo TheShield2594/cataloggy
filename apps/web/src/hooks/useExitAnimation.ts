@@ -46,6 +46,17 @@ export function useExitAnimation(onClosed: () => void) {
 
   const requestClose = useCallback(() => {
     exitingRef.current = true;
+    // `.overlay-exit` sets `pointer-events: none`, which stops the mouse and
+    // nothing else: a button still holding focus when the exit begins will act
+    // on an Enter pressed during it — selecting a profile, submitting a form,
+    // adding a title to a list that is on its way off the screen. Marking the
+    // surface `inert` reads like the fix and is not one on its own: Chromium
+    // does not blur a descendant that already had focus when the attribute
+    // arrives, so the keypress still lands. Dropping focus here is what closes
+    // the window. Nothing is lost by it — useFocusTrap restores focus to
+    // whatever opened the surface when it finally unmounts.
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && focused !== document.body) focused.blur();
     setExiting(true);
   }, []);
 

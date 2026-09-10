@@ -138,6 +138,7 @@ function DayEntriesModal({
         aria-modal="true"
         aria-labelledby="calendar-day-modal-title"
         tabIndex={-1}
+        inert={exiting}
         className={`glass-surface overlay-dialog flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-3xl shadow-e3 ${exiting ? "overlay-exit" : ""}`}
         style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}

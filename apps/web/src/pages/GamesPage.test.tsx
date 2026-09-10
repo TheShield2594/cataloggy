@@ -390,6 +390,7 @@ describe("GamesPage add-game modal", () => {
     // Not gone yet: the dialog marks itself exiting and unmounts on the
     // animationend, which jsdom never raises — so this rides the fallback.
     expect(screen.getByRole("dialog")).toHaveClass("overlay-exit");
+    expect(screen.getByRole("dialog")).toHaveAttribute("inert");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 1000 });
   });
 });

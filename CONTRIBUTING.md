@@ -51,6 +51,7 @@ Run the same checks CI runs:
 ```bash
 pnpm check:env
 pnpm check:actions
+pnpm check:audit
 pnpm lint
 pnpm typecheck
 pnpm test

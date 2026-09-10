@@ -30,6 +30,22 @@ function Overlay({ onClosed }: { onClosed: () => void }) {
 }
 
 describe("useExitAnimation", () => {
+  // `.overlay-exit` sets `pointer-events: none`, which stops the mouse and not
+  // the keyboard. A button still focused when the exit starts would otherwise
+  // act on an Enter pressed during it — and `inert` on the surface does not fix
+  // that on its own, because Chromium leaves an already-focused descendant
+  // focused when the attribute arrives.
+  it("drops focus when the exit starts, so a stray Enter cannot act", () => {
+    render(<Overlay onClosed={vi.fn()} />);
+    const close = screen.getByRole("button", { name: "close" });
+    close.focus();
+    expect(document.activeElement).toBe(close);
+
+    fireEvent.click(close);
+
+    expect(document.activeElement).not.toBe(close);
+  });
+
   it("marks the surface as exiting instead of closing outright", () => {
     const onClosed = vi.fn();
     render(<Overlay onClosed={onClosed} />);

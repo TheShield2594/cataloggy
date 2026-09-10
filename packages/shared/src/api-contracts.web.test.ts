@@ -42,6 +42,15 @@ describe("parseCalendarResponse", () => {
     expect(parseCalendarResponse({ calendar: [] })).toEqual({ calendar: [] });
   });
 
+  // An explicit null is not the same as an omitted key: it is a contract
+  // violation wearing an empty state, and the page would render "nothing
+  // upcoming" and be believed.
+  it("rejects an explicit null collection rather than reading it as empty", () => {
+    expect(() => parseCalendarResponse({ calendar: null })).toThrow(/calendar must be an array/);
+    expect(() => parseSeriesProgressListResponse({ progress: null })).toThrow(/progress must be an array/);
+    expect(() => parseWatchHistoryResponse({ history: null })).toThrow(/history must be an array/);
+  });
+
   // The case in the issue: `entry.airDate.split("-")` on an entry that has no
   // airDate is a TypeError inside a `.map`, which the app's single global
   // ErrorBoundary turns into a blank page for every route, not just this one.
@@ -58,6 +67,22 @@ describe("parseCalendarResponse", () => {
     for (const airDate of ["", "soon", "14/09/2026", "2026-09-14T00:00:00Z"]) {
       expect(() => parseCalendarResponse({ calendar: [{ ...entry(), airDate }] })).toThrow(ApiContractError);
     }
+  });
+
+  // `new Date(2026, 1, 30)` is March 2nd, not a throw — so a day that does not
+  // exist puts the episode on the wrong row rather than failing anywhere near
+  // the cause.
+  it("rejects a date-shaped string naming a day that does not exist", () => {
+    for (const airDate of ["2026-02-30", "2026-13-01", "2026-00-10", "2026-04-31", "2025-02-29"]) {
+      expect(() => parseCalendarResponse({ calendar: [{ ...entry(), airDate }] })).toThrow(
+        /must be a day that exists|must be a YYYY-MM-DD date/
+      );
+    }
+  });
+
+  it("keeps the leap day in a year that has one", () => {
+    const leap = { ...entry(), airDate: "2028-02-29" };
+    expect(parseCalendarResponse({ calendar: [leap] }).calendar[0]?.airDate).toBe("2028-02-29");
   });
 
   it("names the entry that is wrong, not just the field", () => {

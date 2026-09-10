@@ -226,6 +226,9 @@ describe("ProfileSwitcher", () => {
 
       expect(onClose).not.toHaveBeenCalled();
       expect(screen.getByRole("dialog")).toHaveClass("overlay-exit");
+      // The exit window is still keyboard-reachable without this: a focused
+      // profile button would act on an Enter pressed while the dialog leaves.
+      expect(screen.getByRole("dialog").querySelector(".overlay-dialog")).toHaveAttribute("inert");
       await waitFor(() => expect(onClose).toHaveBeenCalledOnce(), { timeout: 1000 });
     });
 

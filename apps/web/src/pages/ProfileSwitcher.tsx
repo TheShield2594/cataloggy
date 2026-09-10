@@ -35,6 +35,7 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
         <div
           ref={dialogRef}
           tabIndex={-1}
+          inert={exiting}
           className={`overlay-dialog w-full max-w-md space-y-6 ${exiting ? "overlay-exit" : ""}`}
           onClick={(e) => e.stopPropagation()}
           onAnimationEnd={onExitAnimationEnd}

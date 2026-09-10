@@ -95,6 +95,7 @@ describe("CalendarPage month view", () => {
     // hook's fallback timer.
     await user.click(within(dialog).getByRole("button", { name: /close dialog/i }));
     expect(dialog).toHaveClass("overlay-exit");
+    expect(dialog).toHaveAttribute("inert");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 1000 });
   });
 

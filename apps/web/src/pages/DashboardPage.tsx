@@ -1497,7 +1497,7 @@ export function DashboardPage() {
                 <div
                   className="poster-frame relative aspect-poster overflow-hidden rounded-xl group-hover:scale-[1.03]"
                 >
-                  <Poster src={event.poster} alt={event.name} className="h-full w-full" sizes={POSTER_CARD_SIZES} />
+                  <Poster src={event.poster} alt={watchEventTitle(event)} className="h-full w-full" sizes={POSTER_CARD_SIZES} />
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent px-3 pb-3 pt-12">
                     {event.type === "episode" && event.season != null && event.episode != null ? (
                       <span className="inline-block rounded px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm" style={{ background: "var(--surface-strong)" }}>

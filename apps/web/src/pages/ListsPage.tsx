@@ -194,6 +194,7 @@ function AddItemModal({
         aria-modal="true"
         aria-labelledby="add-item-modal-title"
         tabIndex={-1}
+        inert={exiting}
         className={`glass-surface overlay-dialog flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-3xl border shadow-e3 ${exiting ? "overlay-exit" : ""}`}
         style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}

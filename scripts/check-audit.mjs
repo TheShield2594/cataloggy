@@ -108,9 +108,15 @@ for (const [index, waiver] of waivers.entries()) {
     problems.push(`${at}: "expires" must be a YYYY-MM-DD date, not "${waiver.expires}".`);
     continue;
   }
-  const expires = new Date(waiver.expires);
-  if (Number.isNaN(expires.getTime())) {
-    problems.push(`${at}: "${waiver.expires}" is not a real date.`);
+  // `new Date("2026-02-31")` is March 3rd rather than an error, so a typo in a
+  // waiver would be enforced against a date nobody wrote while the file went on
+  // displaying the one they did. The round-trip through UTC is the check.
+  const [year, month, day] = waiver.expires.split("-").map(Number);
+  const expires = new Date(Date.UTC(year, month - 1, day));
+  const real =
+    expires.getUTCFullYear() === year && expires.getUTCMonth() === month - 1 && expires.getUTCDate() === day;
+  if (!real) {
+    problems.push(`${at}: "${waiver.expires}" is not a day that exists.`);
     continue;
   }
   const remaining = daysUntil(expires);
@@ -149,6 +155,16 @@ for (const advisory of blocking) {
     );
   } else {
     notes.push(`${id} (${where}) waived for another ${waiver.remaining} day(s): ${waiver.reason}`);
+    // pnpm sends `patched_versions: null` when nothing upstream fixes it yet,
+    // which is the case this whole escape hatch is for. A named range is worth
+    // saying out loud rather than refusing outright: sometimes the fix exists
+    // and this workspace still cannot take it — the TypeScript floor held below
+    // 6.1 by typescript-eslint's peer range is the standing example — and
+    // refusing the waiver there would re-create the merge freeze it prevents.
+    // So the reviewer reading the allowlist diff gets told, and decides.
+    if (advisory.patched_versions) {
+      notes.push(`  ^ a fix exists (${advisory.patched_versions}) — prefer upgrading or an override over renewing this.`);
+    }
     if (waiver.remaining <= EXPIRING_SOON_DAYS) {
       notes.push(`  ^ lapses ${waiver.expires}; after that it blocks merges again.`);
     }
