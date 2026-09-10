@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Clock, Film, Star, Tv, X,
+  Check, Film, Play, Star, X,
 } from "lucide-react";
 import { api, CheckIn, SearchResult, TrendingMeta, WatchEvent, WatchProviders } from "../../api";
 import { WatchDateModal } from "./WatchDateModal";
@@ -15,7 +15,7 @@ import { CheckInBlock } from "./CheckInBlock";
 import { WatchHistorySection } from "./WatchHistorySection";
 import { DropShowButton } from "./DropShowButton";
 import { RecommendationsSection } from "./RecommendationsSection";
-import { buildMetaLine, formatRuntime, statusColor, WatchLogTarget } from "./detailPanelUtils";
+import { buildMetaLine, formatRuntime, nextEpisodeUp, statusColor, WatchLogTarget } from "./detailPanelUtils";
 import { formatRating, ratingLabel, RATING_MAX } from "../../utils/rating";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useScrollLock } from "../../hooks/useScrollLock";
@@ -110,7 +110,25 @@ export function DetailPanel({
   // The header's hierarchy — see the note on it below, and on `buildMetaLine`.
   const hasRating = item.rating != null && item.rating > 0;
   const hasRuntime = item.runtime != null && item.runtime > 0;
-  const metaLine = buildMetaLine(item);
+  /*
+   * The facts under the title, and the two values that used to be chips above
+   * them.
+   *
+   * The runtime was a pill with a clock in it and the score a pill with a star,
+   * on their own row between the title and the metadata — two more boxes on a
+   * header the last redesign had already spent a paragraph cutting boxes from.
+   * A runtime is the same kind of fact as a year, so it joins the run; the
+   * score is a judgement rather than a fact, so it stays in the row but keeps
+   * its colour and its star. Neither loses its place as the thing the panel is
+   * usually opened to check — the row is directly under the title.
+   */
+  const factLine = [
+    ...buildMetaLine(item),
+    ...(hasRuntime ? [formatRuntime(item.runtime!)] : []),
+  ];
+  // Key art if the record carries it, the poster cropped to the frame if not.
+  // See the hero's own note.
+  const heroArt = item.background ?? item.poster ?? null;
 
   // Dropped state (series only) — seeded from the bundle, then owned here, since
   // toggling it has to show immediately rather than wait for a refetch.
@@ -280,31 +298,15 @@ export function DetailPanel({
     });
   };
 
+  // What the primary action means, computed once so the button's label and the
+  // modal it opens cannot name two different episodes. See `nextEpisodeUp`.
+  const nextUp = item.type === "series" ? nextEpisodeUp(history, seasons) : null;
+
   const openWatchModal = () => {
-    if (item.type === "movie") {
+    if (item.type === "movie" || !nextUp) {
       setWatchTarget({ kind: "movie", imdbId: item.imdbId, releaseDate: item.releaseDate });
     } else {
-      // Default to next episode after last watched, or S01E01
-      const lastEvent = history.find((e) => e.season != null && e.episode != null);
-      let nextSeason = lastEvent?.season ?? 1;
-      let nextEpisode = lastEvent ? (lastEvent.episode ?? 0) + 1 : 1;
-      if (lastEvent) {
-        const currentSeason = seasons.find((s) => s.seasonNumber === lastEvent.season);
-        if (currentSeason && (lastEvent.episode ?? 0) >= currentSeason.episodeCount) {
-          const upcoming = seasons
-            .filter((s) => s.seasonNumber > (lastEvent.season ?? 0) && s.episodeCount > 0)
-            .sort((a, b) => a.seasonNumber - b.seasonNumber)[0];
-          if (upcoming) {
-            nextSeason = upcoming.seasonNumber;
-            nextEpisode = 1;
-          } else {
-            // Fully watched, no further season — don't suggest a nonexistent episode.
-            nextSeason = currentSeason.seasonNumber;
-            nextEpisode = currentSeason.episodeCount;
-          }
-        }
-      }
-      setWatchTarget({ kind: "episode", seriesImdbId: item.imdbId, season: nextSeason, episode: nextEpisode });
+      setWatchTarget({ kind: "episode", seriesImdbId: item.imdbId, season: nextUp.season, episode: nextUp.episode });
     }
   };
 
@@ -330,44 +332,64 @@ export function DetailPanel({
           tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
           onAnimationEnd={onExitAnimationEnd}
-          className={`glass-surface overlay-panel relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-e3 sm:h-auto sm:max-h-[85vh] sm:max-w-4xl sm:flex-row sm:rounded-3xl sm:border lg:max-w-5xl ${exiting ? "overlay-exit" : ""}`}
+          // A column at every size now, where it used to become a side-by-side
+          // row on `sm`. The hero *is* the top of this screen — a full-bleed
+          // still with the title over it, the way a product page opens on the
+          // platform — and a poster in a 38% left column is a different design
+          // that happens to contain the same facts.
+          className={`glass-surface overlay-panel relative flex h-full w-full max-h-screen flex-col overflow-hidden shadow-e3 sm:h-auto sm:max-h-[88vh] sm:max-w-2xl sm:rounded-3xl sm:border ${exiting ? "overlay-exit" : ""}`}
           style={{ background: "var(--bg-0)", borderColor: "var(--border)" }}
         >
-          {/* Close */}
+          {/* Close — the 36px glass circle the platform floats over artwork,
+              rather than a chip borrowed from the page behind it. Hovers to
+              --text, not white: the light theme's circle is translucent, and
+              white-on-it made the X disappear under the pointer on the one
+              theme where it mattered most. */}
           <button
             type="button" onClick={requestClose}
-            // Hovers to --text, not white: the light theme's circle is a
-            // translucent cream, and white-on-cream made the X disappear under
-            // the pointer on the one theme where it mattered most.
-            className="tap-target absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full shadow-e2 backdrop-blur transition-colors hover:text-[var(--text)]"
-            style={{ background: "color-mix(in srgb, var(--bg-0) 80%, transparent)", color: "var(--text-dim)" }}
+            className="tap-target bar-glass absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:text-[var(--text)]"
+            style={{ color: "var(--text-dim)" }}
             aria-label="Close detail panel"
           >
             <X className="h-4 w-4" />
           </button>
 
-          {/* Poster.
-              The declared 2:3 box only holds if nothing else sets the height:
-              in the desktop flex row the default `align-items: stretch` sized
-              it from the row (388x805, a 0.48 ratio) and `object-cover` took
-              ~28% off each side of the artwork, so `self-start` lets the ratio
-              apply. On mobile the column is a deliberately shallow band, which
-              cropped the poster to a strip through its middle — the whole
-              poster is drawn inside the band instead, over a blurred copy of
-              itself so the band still fills the width. */}
-          <div className="relative z-0 h-[38vh] w-full flex-none overflow-hidden sm:h-auto sm:max-h-[85vh] sm:aspect-[2/3] sm:w-[38%] sm:self-start">
-            {item.poster ? (
+          {/*
+            * The hero.
+            *
+            * Was a poster: a 2:3 column beside the content on a desktop, and a
+            * shallow band with the whole poster letterboxed inside it on a
+            * phone. Both were the artwork shown *next to* the title. A product
+            * page on the platform opens on the still, full-bleed, with the
+            * title set over the bottom of it — the picture is the top of the
+            * screen rather than an illustration on it.
+            *
+            * Key art if the record has it, the poster cropped to the frame if
+            * not. A poster in a 16:9 crop is its middle third, which is a worse
+            * picture than the still and a much better one than a grey box; the
+            * blurred copy behind it fills the width for the many titles whose
+            * art is portrait.
+            */}
+          <div ref={contentRef} className="relative z-20 min-h-0 flex-1 overflow-y-auto">
+          {/* Inside the scroller, not pinned above it. A hero that stays put
+              spends 42vh of every screen on a picture you have already looked
+              at — and the episode list, which is what the rest of the scroll is
+              for, would never get more than half the panel. It scrolls away
+              like the top of a page, which is what it is. */}
+          <div className="relative z-0 h-[42vh] max-h-[26rem] min-h-[15rem] w-full overflow-hidden sm:h-[22rem]">
+            {heroArt ? (
               <>
                 <img
-                  src={item.poster}
+                  src={heroArt}
                   alt=""
                   aria-hidden="true"
-                  className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl"
+                  className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl"
                 />
                 <img
-                  src={item.poster}
-                  alt={item.name}
-                  className="relative mx-auto h-full w-auto max-w-full object-contain"
+                  src={heroArt}
+                  alt=""
+                  aria-hidden="true"
+                  className="relative mx-auto h-full w-full object-cover"
                 />
               </>
             ) : (
@@ -375,78 +397,142 @@ export function DetailPanel({
                 <Film className="h-20 w-20" style={{ color: "var(--border-strong)" }} />
               </div>
             )}
-            <div className="absolute inset-0 sm:hidden" style={{ background: "linear-gradient(to top, var(--bg-0), color-mix(in srgb, var(--bg-0) 20%, transparent), transparent)" }} />
+            {/*
+              * The scrim fades to --bg-0 rather than to black.
+              *
+              * The design is drawn on a black page, where a scrim to #000 and a
+              * white title are the same decision. This app has five themes, two
+              * of which are light, and a hero whose bottom is always black
+              * would end in a hard edge against a #f2f2f7 panel — and a white
+              * title over it would be the only white text on the screen.
+              *
+              * Fading to the panel's own background instead means the picture
+              * dissolves into the page on every theme, and the title can take
+              * --text: by the time it starts, the scrim is near-opaque, so it
+              * is reading against the page colour rather than against whatever
+              * the artwork happens to be.
+              */}
+            <div
+              aria-hidden="true"
+              className="absolute inset-0"
+              style={{
+                background:
+                  "linear-gradient(180deg, color-mix(in srgb, var(--bg-0) 22%, transparent) 0%, transparent 26%, transparent 46%, color-mix(in srgb, var(--bg-0) 86%, transparent) 80%, var(--bg-0) 100%)",
+              }}
+            />
+
+            <div className="absolute inset-x-5 bottom-0 sm:inset-x-8">
+              {/*
+                * No "MOVIE"/"SERIES" chip over the artwork.
+                *
+                * It was the loudest thing in the hero — a filled pill in a
+                * colour that means nothing, above the title, saying what the
+                * row under the title says quietly and what the rest of the
+                * panel makes obvious: a film has a runtime and no seasons, a
+                * series has an episode list. It is the same badge the Shelf's
+                * grid dropped for the same reason.
+                *
+                * The status stays. "Returning" and "Ended" are the one thing
+                * here a reader cannot infer, and `.status-chip` carries it in
+                * words as well as in colour — so it joins the fact row rather
+                * than floating above the title on its own.
+                */}
+              <h2 className={PAGE_TITLE} style={{ color: "var(--text)" }}>{item.name}</h2>
+
+              {/* One line of facts, and the certification as a badge at the end
+                  of it — see `buildMetaLine` for why that one leaves the run. */}
+              {(factLine.length > 0 || item.certification || hasRating || item.status) && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.8125rem]" style={{ color: "var(--text-dim)" }}>
+                  {factLine.map((part, index) => (
+                    <span key={part} className="flex items-center gap-2">
+                      {index > 0 && <span aria-hidden="true" style={{ color: "var(--text-mute)" }}>·</span>}
+                      {part}
+                    </span>
+                  ))}
+                  {/* The score keeps its colour — it is the one value in the
+                      row that is a judgement rather than a fact, and it is
+                      half of what the panel gets opened to check. */}
+                  {hasRating && (
+                    <span
+                      className="inline-flex items-center gap-1 font-semibold text-warning"
+                      title={ratingLabel(item.rating!)}
+                    >
+                      <Star className="h-3 w-3 fill-warning" />
+                      <span className="tabular-nums">{formatRating(item.rating!)}</span>
+                      <span className="font-normal tabular-nums" style={{ color: "var(--text-mute)" }}>
+                        /{RATING_MAX}
+                      </span>
+                    </span>
+                  )}
+                  {item.certification?.trim() && (
+                    <span
+                      className="rounded-[3px] px-1 text-[0.625rem] font-bold leading-[1.4]"
+                      style={{ border: "1px solid var(--border-strong)", color: "var(--text-dim)" }}
+                    >
+                      {item.certification.trim()}
+                    </span>
+                  )}
+                  {/* No `ring-1` on the chip: .status-chip draws its own
+                      hairline from the same token as its text, and a utility
+                      ring would outrank it. */}
+                  {item.status && (
+                    <span className={`rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold ${statusColor(item.status)}`}>
+                      {item.status}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Its own line rather than another segment of the row above: a
+                  person is not the same kind of fact as a year or a genre, and
+                  it is the one line here that names someone. */}
+              {director && (
+                <p className="mt-1 truncate text-[0.8125rem]" style={{ color: "var(--text-mute)" }}>
+                  {item.type === "movie" ? "Directed by " : "Created by "}
+                  <span style={{ color: "var(--text-dim)" }}>{director}</span>
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Content */}
-          <div ref={contentRef} className="-mt-10 relative z-20 min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-10 sm:mt-0 sm:max-w-2xl sm:p-8">
+          <div className="space-y-6 px-5 pb-10 pt-4 sm:px-8">
 
-          {/* Title + badges
-
-              The header used to ask the reader to parse nine chips in five
-              colour treatments before reaching the overview — type, year,
-              certification and status on one row; score, runtime, network and
-              up to three genres on the next — with nothing in the arrangement
-              saying which value mattered, and a lone genre chip stranded on its
-              own line once the row wrapped on mobile.
-
-              Two chips carry what a title *is* (its medium, and whether it is
-              still running). Two values are promoted because they are what the
-              panel is usually opened to check: the score and the runtime.
-              Everything else is a fact about the title rather than a signal, so
-              it reads as one dim line of text that wraps like text. */}
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide ${item.type === "movie" ? "bg-claw-500 text-claw-on" : "bg-plum-500/90 text-white"}`}>
-                {item.type === "movie" ? <Film className="h-3 w-3" /> : <Tv className="h-3 w-3" />}
-                {item.type === "movie" ? "Movie" : "Series"}
-              </span>
-              {/* No `ring-1` on the chip: .status-chip draws its own hairline
-                  from the same token as its text, and a utility ring would
-                  outrank it. */}
-              {item.status && (
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusColor(item.status)}`}>
-                  {item.status}
-                </span>
-              )}
-            </div>
-            <h2 className={`mt-3 ${PAGE_TITLE}`} style={{ color: "var(--text)" }}>{item.name}</h2>
-
-            {/* The two promoted values */}
-            {(hasRating || hasRuntime) && (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                {hasRating && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-sm font-semibold text-warning ring-1 ring-amber-500/20" title={ratingLabel(item.rating!)}>
-                    <Star className="h-3.5 w-3.5 fill-warning" />
-                    <span className="tabular-nums">{formatRating(item.rating!)}</span>
-                    <span className="text-xs font-normal tabular-nums" style={{ color: "var(--text-mute)" }}>/{RATING_MAX}</span>
-                  </span>
-                )}
-                {hasRuntime && (
-                  <span
-                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm"
-                    style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
-                  >
-                    <Clock className="h-3.5 w-3.5" />
-                    <span className="tabular-nums">{formatRuntime(item.runtime!)}</span>
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Everything demoted, as one line that wraps like prose */}
-            {metaLine.length > 0 && (
-              <p className="meta-row mt-2.5" style={{ color: "var(--text-mute)" }}>
-                {metaLine.join(" · ")}
-              </p>
-            )}
-
-            {director && (
-              <p className="mt-1.5 text-sm" style={{ color: "var(--text-dim)" }}>
-                {item.type === "movie" ? "Directed by " : "Created by "}
-                <span style={{ color: "var(--text)" }}>{director}</span>
-              </p>
-            )}
+          {/*
+            * One primary action, and one beside it.
+            *
+            * The panel's two verbs were buried: "Log a Watch" sat inside the
+            * watch-history section near the bottom, and the check-in was a
+            * block below the tracking divider. They are what the screen is
+            * *for* — a wide filled button and a square secondary is how the
+            * platform says so, directly under the title.
+            *
+            * Two buttons rather than the design's three: it draws a tick and a
+            * plus beside the primary, and this app has no third verb that
+            * isn't already a control further down. Inventing one to fill the
+            * slot would be drawing the design rather than building it.
+            */}
+          <div className="flex items-stretch gap-2.5">
+            <button
+              type="button"
+              onClick={openWatchModal}
+              className="btn-primary h-[3.125rem] flex-1 rounded-2xl text-[1.0625rem]"
+            >
+              <Play className="h-4 w-4 translate-x-[1px] fill-current" />
+              {nextUp ? `Continue · S${nextUp.season} E${nextUp.episode}` : "Log a watch"}
+            </button>
+            <button
+              type="button"
+              onClick={() => (item.type === "series" ? setShowCheckinModal(true) : void handleCheckin())}
+              disabled={checkinLoading || !!activeCheckin}
+              // Named for what it does rather than for its glyph, and titled as
+              // well — it is a 50px square with no label under it.
+              aria-label={activeCheckin ? "Already checked in" : `Check in to ${item.name}`}
+              title={activeCheckin ? "Already checked in" : "Check in"}
+              className="btn-secondary h-[3.125rem] w-[3.125rem] flex-none rounded-2xl px-0"
+            >
+              <Check className="h-[1.125rem] w-[1.125rem]" />
+            </button>
           </div>
 
           {/* ─── What it is ───────────────────────────────────────
@@ -546,6 +632,7 @@ export function DetailPanel({
             onSelect={handleSelectRecommendation}
           />
 
+          </div>
           </div>
         </div>
       </div>

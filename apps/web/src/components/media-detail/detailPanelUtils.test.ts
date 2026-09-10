@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMetaLine, formatRuntime, statusColor } from "./detailPanelUtils";
+import { buildMetaLine, nextEpisodeUp, formatRuntime, statusColor } from "./detailPanelUtils";
 
 describe("formatRuntime", () => {
   it("keeps sub-hour runtimes in minutes", () => {
@@ -59,18 +59,28 @@ describe("statusColor", () => {
 describe("buildMetaLine", () => {
   const full = {
     year: 2021,
-    certification: "TV-MA",
     network: "Netflix",
     genres: ["Animation", "Action", "Adventure"],
   };
 
   it("orders the facts from most to least identifying", () => {
-    expect(buildMetaLine(full)).toEqual(["2021", "TV-MA", "Netflix", "Animation, Action, Adventure"]);
+    expect(buildMetaLine(full)).toEqual(["2021", "Netflix", "Animation, Action, Adventure"]);
+  });
+
+  /*
+   * The certification is not one of these. It is a classification awarded to
+   * the work rather than a fact about it, and it is what a reader scans this
+   * row for when they are deciding whether to put something on in a room with
+   * other people — so the hero draws it as a bordered badge at the end of the
+   * row instead of setting it as running text between the year and the network.
+   */
+  it("leaves the certification to the badge beside it", () => {
+    expect(buildMetaLine({ ...full, certification: "TV-MA" } as typeof full)).not.toContain("TV-MA");
   });
 
   it("collapses genres into one segment rather than one each", () => {
     // Three genre chips read as three more unrelated facts beside the year and
-    // the certification; a comma-separated group reads as one.
+    // the network; a comma-separated group reads as one.
     expect(buildMetaLine({ genres: ["Drama", "Crime"] })).toEqual(["Drama, Crime"]);
   });
 
@@ -79,15 +89,68 @@ describe("buildMetaLine", () => {
   });
 
   it("drops what a title doesn't have instead of leaving gaps", () => {
-    expect(buildMetaLine({ year: 1999, certification: null, network: null, genres: [] })).toEqual(["1999"]);
+    expect(buildMetaLine({ year: 1999, network: null, genres: [] })).toEqual(["1999"]);
     expect(buildMetaLine({})).toEqual([]);
   });
 
   it("treats blank strings as absent, so the line never opens on a separator", () => {
-    expect(buildMetaLine({ certification: "   ", network: "", genres: ["  "] })).toEqual([]);
+    expect(buildMetaLine({ network: "", genres: ["  "] })).toEqual([]);
   });
 
   it("keeps a year of 0 out rather than printing it", () => {
     expect(buildMetaLine({ year: 0 })).toEqual([]);
+  });
+});
+
+describe("nextEpisodeUp", () => {
+  const seasons = [
+    { seasonNumber: 1, episodeCount: 8 },
+    { seasonNumber: 2, episodeCount: 10 },
+  ];
+
+  it("starts a show nobody has watched at the beginning", () => {
+    expect(nextEpisodeUp([], seasons)).toEqual({ season: 1, episode: 1 });
+  });
+
+  it("offers the next episode up, mid-season", () => {
+    expect(nextEpisodeUp([{ season: 2, episode: 4 }], seasons)).toEqual({ season: 2, episode: 5 });
+  });
+
+  it("rolls into the next season at the end of one", () => {
+    expect(nextEpisodeUp([{ season: 1, episode: 8 }], seasons)).toEqual({ season: 2, episode: 1 });
+  });
+
+  /*
+   * Episode N+1 of a season that doesn't exist is a label naming something
+   * unwatchable. The finale again is a rewatch, which is a thing people do.
+   */
+  it("stops at the finale rather than inventing an episode past it", () => {
+    expect(nextEpisodeUp([{ season: 2, episode: 10 }], seasons)).toEqual({ season: 2, episode: 10 });
+  });
+
+  /*
+   * The bundle can fail, or a season can arrive with no length. Rolling over on
+   * a count we were never told is how a show lands on an episode that isn't
+   * there; counting up is right whenever the season is unfinished and harmless
+   * when it isn't.
+   */
+  it("counts up when it does not know how long the season is", () => {
+    expect(nextEpisodeUp([{ season: 3, episode: 2 }], seasons)).toEqual({ season: 3, episode: 3 });
+    expect(nextEpisodeUp([{ season: 1, episode: 4 }], [])).toEqual({ season: 1, episode: 5 });
+  });
+
+  // History arrives newest-first, so the first dated row is the last watch.
+  it("reads the most recent watch, not the oldest", () => {
+    const history = [
+      { season: 2, episode: 3 },
+      { season: 1, episode: 1 },
+    ];
+    expect(nextEpisodeUp(history, seasons)).toEqual({ season: 2, episode: 4 });
+  });
+
+  // A film logged against a series, or a row the API left blank.
+  it("skips history rows that name no episode", () => {
+    const history = [{ season: null, episode: null }, { season: 1, episode: 2 }];
+    expect(nextEpisodeUp(history, seasons)).toEqual({ season: 1, episode: 3 });
   });
 });
