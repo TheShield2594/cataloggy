@@ -4,6 +4,15 @@ import { RefreshCw, X } from "lucide-react";
 import { tellServiceWorkerWhereTheApiIs } from "../api";
 import { useExitAnimation } from "../hooks/useExitAnimation";
 
+/**
+ * How often an installed app asks whether there is a newer build.
+ *
+ * An hour is short enough that an update lands the same evening it is published
+ * and long enough to be invisible: 24 conditional requests a day against a
+ * server the user owns.
+ */
+const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+
 // registerType is "prompt" (see vite.config.ts) rather than "autoUpdate" —
 // a new service worker install/reload is surfaced here instead of silently
 // taking over, since an unannounced reload can drop in-progress state (e.g.
@@ -14,13 +23,34 @@ export function UpdatePrompt() {
   const { exiting, requestClose, onExitAnimationEnd, reset } = useExitAnimation(() => setNeedRefresh(false));
 
   useEffect(() => {
+    let updateCheck: ReturnType<typeof setInterval> | undefined;
+
     const update = registerSW({
       immediate: true,
       onNeedRefresh: () => setNeedRefresh(true),
-      // The worker can only cache API responses it can recognise, and the API
-      // base it compares against is a runtime value this page resolves — the
-      // container's config.js, or a per-device override the worker cannot read.
-      onRegisteredSW: () => void tellServiceWorkerWhereTheApiIs(),
+      onRegisteredSW: (_swUrl, registration) => {
+        // The worker can only cache API responses it can recognise, and the API
+        // base it compares against is a runtime value this page resolves — the
+        // container's config.js, or a per-device override the worker cannot read.
+        void tellServiceWorkerWhereTheApiIs();
+
+        // The browser looks for a new worker on navigation, and an installed PWA
+        // is the one thing that may never navigate: a household leaves it
+        // resident for weeks, which is the entire point of installing it, and it
+        // sits on whatever build it was launched with. `prompt` updates cannot
+        // be prompted for if nothing ever checks.
+        //
+        // Nothing happens on a check that finds no update — a conditional
+        // request for one script — so the cost of asking hourly is one 304.
+        if (!registration) return;
+        updateCheck = setInterval(() => {
+          // An update check while the device is offline is a fetch that can only
+          // fail, and a failed one puts a console error in front of a
+          // self-hoster whose install is working perfectly.
+          if (navigator.onLine === false) return;
+          void registration.update();
+        }, UPDATE_CHECK_INTERVAL_MS);
+      },
       // Registration fails outright on an insecure origin, which is exactly
       // what the README's `http://192.168.x.x:7002` quickstart is — and with no
       // handler here it failed silently, taking offline caching, install and
@@ -41,6 +71,7 @@ export function UpdatePrompt() {
       }
     });
     setUpdateSW(() => update);
+    return () => clearInterval(updateCheck);
   }, []);
 
   // A later update can raise the prompt again after a dismissal; clear the

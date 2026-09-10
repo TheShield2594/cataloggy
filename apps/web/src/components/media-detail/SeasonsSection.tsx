@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Tv } from "lucide-react";
-import { api, EpisodeInfo } from "../../api";
+import { api, EpisodeInfo, OfflineWriteQueuedError } from "../../api";
 import { ProgressRuler } from "../ProgressRuler";
 import { StarPicker } from "../StarPicker";
 import { KICKER } from "../typography";
@@ -210,7 +210,16 @@ export function SeasonsSection({
         setWatched((prev) => new Set(prev ?? []).add(k));
       }
     } catch (err) {
-      onError?.(err instanceof Error ? err.message : "Failed to update episode");
+      // Held by the service worker until the connection is back — only the mark
+      // is queued, never the unmark, so this is the episode becoming watched.
+      // Ticking it is what the user just asked for and what will be true; the
+      // toast is the whole of the difference from an online tap.
+      if (err instanceof OfflineWriteQueuedError && !isWatched) {
+        setWatched((prev) => new Set(prev ?? []).add(k));
+        onToast?.(err.message, "info");
+      } else {
+        onError?.(err instanceof Error ? err.message : "Failed to update episode");
+      }
     } finally {
       setPendingEpisode((p) => ({ ...p, [k]: false }));
     }
@@ -285,6 +294,10 @@ export function SeasonsSection({
     if (pendingSeason[season.seasonNumber]) return;
     const requestImdbId = imdbId;
     setPendingSeason((p) => ({ ...p, [season.seasonNumber]: true }));
+    // Declared out here so the catch below can tick the same episodes the write
+    // was for: a season loaded by this very call is not in `episodesBySeason`
+    // yet, and won't be until React has re-rendered.
+    let episodeNumbers: number[] = [];
     try {
       let episodes = episodesBySeason[season.seasonNumber];
       if (!episodes) {
@@ -293,7 +306,7 @@ export function SeasonsSection({
         episodes = res.episodes;
         setEpisodesBySeason((c) => ({ ...c, [season.seasonNumber]: episodes! }));
       }
-      const episodeNumbers = episodes.map((e) => e.episodeNumber);
+      episodeNumbers = episodes.map((e) => e.episodeNumber);
       const res = await api.markSeasonWatched(imdbId, season.seasonNumber, episodeNumbers);
       if (imdbIdRef.current !== requestImdbId) return;
       setWatched((prev) => {
@@ -306,7 +319,19 @@ export function SeasonsSection({
         "success"
       );
     } catch (err) {
-      onError?.(err instanceof Error ? err.message : "Failed to mark season watched");
+      // As in `toggleEpisode`: queued is saved, so the ticks go on. How many of
+      // them were already ticked is the server's count, which nobody has yet —
+      // the message says what happened instead of guessing at a number.
+      if (err instanceof OfflineWriteQueuedError && imdbIdRef.current === requestImdbId) {
+        setWatched((prev) => {
+          const next = new Set(prev ?? []);
+          for (const n of episodeNumbers) next.add(episodeKey(season.seasonNumber, n));
+          return next;
+        });
+        onToast?.(err.message, "info");
+      } else {
+        onError?.(err instanceof Error ? err.message : "Failed to mark season watched");
+      }
     } finally {
       setPendingSeason((p) => ({ ...p, [season.seasonNumber]: false }));
     }

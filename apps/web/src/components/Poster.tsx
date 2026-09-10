@@ -1,14 +1,6 @@
 import { useRef, useState } from "react";
 import { getGradient, getInitials } from "./carousel-utils";
-
-// TMDB serves the same image at fixed widths under /t/p/<size>/<path>.
-// Swapping the size segment lets us request a smaller file for small
-// layouts instead of always downloading the original w500 the API stores.
-const TMDB_IMAGE_RE = /^(https:\/\/image\.tmdb\.org\/t\/p\/)w\d+(\/.+)$/;
-// TMDB's actual poster steps. The list starts at w92 because several surfaces
-// render posters around 112px wide — at 1x those were being served a w185 and
-// downscaled, which is roughly four times the bytes for no visible difference.
-const TMDB_SRCSET_WIDTHS = [92, 154, 185, 342, 500, 780];
+import { parseSizedTmdbImage, tmdbImageAtWidth, TMDB_SRCSET_WIDTHS } from "../poster-widths";
 
 /** Default `sizes` for the poster grids, which share a layout across pages. */
 export const POSTER_GRID_SIZES = "(min-width: 640px) 220px, 45vw";
@@ -29,12 +21,15 @@ export const POSTER_CARD_FILL_SIZES = "(min-width: 640px) 192px, 45vw";
  * component — their placeholder markup differs, but the bytes on the wire
  * shouldn't. Without a srcset they pull whatever width the API stored (usually
  * w500) into a slot around 180px wide.
+ *
+ * The ladder it offers lives in poster-widths.ts rather than here, because the
+ * service worker's poster cache has to recognise the URLs this produces as
+ * renditions of one picture — see the note there.
  */
 export function buildTmdbSrcSet(src: string): string | undefined {
-  const match = src.match(TMDB_IMAGE_RE);
-  if (!match) return undefined;
-  const [, base, rest] = match;
-  return TMDB_SRCSET_WIDTHS.map((w) => `${base}w${w}${rest} ${w}w`).join(", ");
+  const image = parseSizedTmdbImage(src);
+  if (!image) return undefined;
+  return TMDB_SRCSET_WIDTHS.map((w) => `${tmdbImageAtWidth(image, w)} ${w}w`).join(", ");
 }
 
 export function Poster({

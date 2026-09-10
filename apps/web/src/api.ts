@@ -36,6 +36,26 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * A write the service worker is holding until the connection is back.
+ *
+ * Thrown rather than returned because there is nothing truthful to return: the
+ * server has not seen this write, so it has no id, no play count and no view of
+ * how it merged with what was already there. A caller that knows the write is
+ * worth showing anyway — a watch is a fact about the past, and stays true —
+ * catches this and keeps its optimistic state; one that doesn't shows the
+ * message, which says what actually happened rather than "this needs a
+ * connection".
+ *
+ * Only the worker can raise it: see the 202 it answers with in sw.js.
+ */
+export class OfflineWriteQueuedError extends Error {
+  constructor() {
+    super("Saved offline — Cataloggy will send this as soon as you're back online.");
+    this.name = "OfflineWriteQueuedError";
+  }
+}
+
 declare global {
   interface Window {
     __CATALOGGY_API_BASE__?: string;
@@ -662,17 +682,71 @@ export async function purgeApiCache(): Promise<void> {
  * first run either way, and a later call — the override changing, the next page
  * load — reaches it once it is active.
  */
-export async function tellServiceWorkerWhereTheApiIs(): Promise<void> {
+async function postToServiceWorker(message: unknown): Promise<void> {
   if (!navigator.serviceWorker) return;
   try {
     const registration = await navigator.serviceWorker.getRegistration();
     const worker = navigator.serviceWorker.controller ?? registration?.active;
     if (!worker) return;
-    worker.postMessage({ type: "SET_API_BASE", apiBase: runtimeConfig.getApiBase() });
+    worker.postMessage(message);
   } catch {
     // Nothing to tell (unsupported, or a non-secure origin where the registration
     // lookup itself throws).
   }
+}
+
+export async function tellServiceWorkerWhereTheApiIs(): Promise<void> {
+  await postToServiceWorker({ type: "SET_API_BASE", apiBase: runtimeConfig.getApiBase() });
+}
+
+/**
+ * Asks the worker to send any writes it took while the connection was down.
+ *
+ * Chromium fires a Background Sync event for this on its own, with the app
+ * closed and everything. Nothing else does — Safari has no Background Sync at
+ * all — so on iOS this call, made when the browser says the network is back, is
+ * what actually drains the queue. Harmless where the sync event also fires:
+ * the queue is drained oldest-first under one worker, so the second attempt
+ * finds it empty.
+ */
+export async function replayQueuedWrites(): Promise<void> {
+  await postToServiceWorker({ type: "REPLAY_QUEUED_WRITES" });
+}
+
+/** What the worker reports back once it has drained the queue (see sw.js). */
+export type QueuedWritesReplayed = {
+  /** Writes the API accepted. */
+  replayed: number;
+  /** Writes that reached the API and were refused — those are not retried. */
+  rejected: number;
+};
+
+/**
+ * Calls `onReplayed` whenever the worker finishes sending queued writes.
+ *
+ * The rows those writes changed are rows the app is very likely rendering from
+ * its own in-memory cache, so that cache is dropped here rather than in the
+ * caller: every subscriber wants it, and forgetting it would leave the user
+ * looking at a history that still doesn't have the watch they logged.
+ *
+ * Returns an unsubscribe function.
+ */
+export function onQueuedWritesReplayed(onReplayed: (summary: QueuedWritesReplayed) => void): () => void {
+  const container = navigator.serviceWorker;
+  if (!container) return () => {};
+
+  const listener = (event: MessageEvent) => {
+    const data = event.data as { type?: unknown; replayed?: unknown; rejected?: unknown } | null;
+    if (data?.type !== "QUEUED_WRITES_REPLAYED") return;
+    invalidateMemoryCache();
+    onReplayed({
+      replayed: typeof data.replayed === "number" ? data.replayed : 0,
+      rejected: typeof data.rejected === "number" ? data.rejected : 0,
+    });
+  };
+
+  container.addEventListener("message", listener);
+  return () => container.removeEventListener("message", listener);
 }
 
 /**
@@ -901,6 +975,14 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
       else for (const prefix of prefixes) invalidateCachePrefix(prefix);
       await notifyServiceWorkerToInvalidateApiCache();
     }
+  }
+
+  // Not the API answering: the service worker took this write when the network
+  // wasn't there and will send it later. A 202 the API itself could return is
+  // not confusable with this one — the header is synthesised in sw.js and no
+  // response off the wire carries it.
+  if (response.status === 202 && response.headers.get("x-cataloggy-queued") === "1") {
+    throw new OfflineWriteQueuedError();
   }
 
   if (!response.ok) {

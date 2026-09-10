@@ -16,6 +16,12 @@ import { useOnline } from "../hooks/useOnline";
  * on an insecure origin — which is what the README's `http://192.168.x.x:7002`
  * quickstart is. Promising "saved data" there points at a cache that was never
  * allowed to exist, so the copy switches to what is actually true.
+ *
+ * The same worker now holds watch writes and sends them when the connection is
+ * back (see sw.js), so the line about nothing being saved is no longer true of
+ * the one thing people most want to do offline. It still is of everything else,
+ * and saying which is which is the difference between a banner someone can act
+ * on and one they learn to ignore.
  */
 export function OfflineBanner() {
   const online = useOnline();
@@ -49,7 +55,7 @@ export function OfflineBanner() {
             <span style={{ color: "var(--text-dim)" }}>
               {" "}
               {cached
-                ? "— showing saved data. Anything you change now won’t be saved."
+                ? "— showing saved data. You can still mark things watched; anything else has to wait."
                 : "— nothing is saved for offline use on this address, so pages will be empty until you’re back."}
             </span>
           </p>

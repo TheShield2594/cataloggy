@@ -153,3 +153,71 @@ describe("notifyServiceWorkerToInvalidateApiCache", () => {
     expect(marking.settled).toBe(true);
   });
 });
+
+describe("onQueuedWritesReplayed", () => {
+  /** A worker that hands the page whatever it postMessages back. */
+  const listeningController = () => {
+    const listeners = new Set<(event: MessageEvent) => void>();
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: {
+        controller: { postMessage: vi.fn() },
+        getRegistration: vi.fn(),
+        addEventListener: (_type: string, listener: (event: MessageEvent) => void) => listeners.add(listener),
+        removeEventListener: (_type: string, listener: (event: MessageEvent) => void) => listeners.delete(listener),
+      },
+    });
+    return {
+      size: () => listeners.size,
+      send: (data: unknown) => listeners.forEach((l) => l({ data } as MessageEvent)),
+    };
+  };
+
+  it("passes on what the worker managed to send", async () => {
+    const worker = listeningController();
+    const { onQueuedWritesReplayed } = await loadApi();
+    const heard = vi.fn();
+
+    onQueuedWritesReplayed(heard);
+    worker.send({ type: "QUEUED_WRITES_REPLAYED", replayed: 2, rejected: 1 });
+
+    expect(heard).toHaveBeenCalledWith({ replayed: 2, rejected: 1 });
+  });
+
+  it("drops the in-memory cache, because those writes changed rows it is holding", async () => {
+    // Every subscriber wants this, and forgetting it would leave the user
+    // looking at a history that still doesn't have the watch they logged.
+    const worker = listeningController();
+    const { onQueuedWritesReplayed } = await loadApi();
+    const { readCache, resetDataCacheForTests, writeCache } = await import("./utils/dataCache");
+    resetDataCacheForTests();
+    writeCache("dash:progress", [{ imdbId: "tt1" }]);
+
+    onQueuedWritesReplayed(vi.fn());
+    worker.send({ type: "QUEUED_WRITES_REPLAYED", replayed: 1, rejected: 0 });
+
+    expect(readCache("dash:progress")).toBeUndefined();
+  });
+
+  it("ignores the other messages a worker sends the page", async () => {
+    const worker = listeningController();
+    const { onQueuedWritesReplayed } = await loadApi();
+    const heard = vi.fn();
+
+    onQueuedWritesReplayed(heard);
+    worker.send({ type: "SOMETHING_ELSE" });
+
+    expect(heard).not.toHaveBeenCalled();
+  });
+
+  it("unsubscribes", async () => {
+    const worker = listeningController();
+    const { onQueuedWritesReplayed } = await loadApi();
+
+    const stop = onQueuedWritesReplayed(vi.fn());
+    expect(worker.size()).toBe(1);
+    stop();
+
+    expect(worker.size()).toBe(0);
+  });
+});
