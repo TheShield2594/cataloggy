@@ -84,4 +84,6 @@ Open a GitHub issue. For bugs, include: what you expected, what happened instead
 
 ## Security issues
 
-Please don't open a public issue for a security vulnerability. See the [Security section of the README](README.md#security) for Cataloggy's threat model (it's designed for trusted-LAN self-hosting, not public internet exposure) — if you've found something outside that model, reach out to [the maintainer](https://github.com/TheShield2594) privately first (e.g. via a GitHub private security advisory on this repo) rather than filing a public issue.
+Please don't open a public issue for a security vulnerability. **[SECURITY.md](.github/SECURITY.md)** is the policy: where to report privately, which versions get fixes, and — the part worth reading before you write anything — what's in and out of the threat model. Cataloggy is designed for trusted-LAN self-hosting rather than public internet exposure, so a few things that look like findings are documented trade-offs, and the [Security section of the README](README.md#security) says why.
+
+Report via [a private advisory](https://github.com/TheShield2594/cataloggy/security/advisories/new), which is visible only to you and [the maintainer](https://github.com/TheShield2594).
