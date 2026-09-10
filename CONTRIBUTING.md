@@ -29,9 +29,20 @@ cataloggy/
     web/        # React + Vite PWA frontend
   packages/
     shared/     # shared types/utilities
+    migrate/    # Prisma CLI only, for the migration image
 ```
 
 Each app is its own pnpm workspace package with its own `package.json` scripts (`dev`, `build`, `typecheck`, `lint`, `test` where applicable). Run them from the repo root with `pnpm --filter @cataloggy/<app> <script>`, or use the root-level scripts (`pnpm dev`, `pnpm build`, `pnpm typecheck`, `pnpm lint`, `pnpm test`) to run across every workspace at once.
+
+`packages/migrate` is the odd one out — no source, no build, no tests. It holds
+a pinned `prisma` dependency and nothing else, so the migration image can be
+built from a tree containing the Prisma CLI without the API's test and build
+toolchain: 226 MB against 470 MB, and it is also why the CLI is not a
+dependency of the API image. The schema and migrations still live with
+`@cataloggy/api`. See
+[packages/migrate/README.md](packages/migrate/README.md) — it is one of the
+four images `.github/workflows/dockerpublish.yml` builds, and all four have to
+stay on the same `CATALOGGY_IMAGE_TAG`.
 
 ## Before opening a PR
 

@@ -39,6 +39,7 @@ cataloggy/
     web/        # React + Vite PWA frontend
   packages/
     shared/     # shared types/utilities
+    migrate/    # Prisma CLI only, for the migration image
   docker-compose.yml
   README.md
 ```
