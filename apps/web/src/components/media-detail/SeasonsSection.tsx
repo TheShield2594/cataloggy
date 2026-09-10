@@ -50,16 +50,19 @@ export function SeasonsSection({
   const [seasonRatings, setSeasonRatings] = useState<Record<number, number>>({});
   const [episodeRatings, setEpisodeRatings] = useState<Record<string, number>>({});
   const [pendingRating, setPendingRating] = useState<Record<string, boolean>>({});
+  // Guards every late-arriving response below against a show that has since
+  // been swapped underneath it. Assigned during render rather than from an
+  // effect: an effect runs *after* the commit, so a response that resolved in
+  // between compared itself against the previous show's id and was either
+  // dropped or applied to the wrong one. React 19 allows the direct assignment,
+  // and DetailPanel.tsx and ListsPage.tsx already rely on it.
   const imdbIdRef = useRef(imdbId);
+  imdbIdRef.current = imdbId;
   /*
    * What the rest of the component reads: the answer, or an empty set while
    * there isn't one. Only the auto-expand effect cares about the difference.
    */
   const watchedSet = watched ?? EMPTY_WATCHED;
-
-  useEffect(() => {
-    imdbIdRef.current = imdbId;
-  }, [imdbId]);
 
   useEffect(() => {
     let cancelled = false;

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../api";
+import { useTransientFlag } from "../../hooks/useTransientFlag";
 import { Loader2, Check, AlertCircle, Shield } from "lucide-react";
 import { SelectField } from "../SelectField";
 
@@ -34,17 +35,11 @@ const COMMON_REGIONS = [
 export function PreferencesSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useTransientFlag();
   const [error, setError] = useState<string | null>(null);
   const [language, setLanguage] = useState("en-US");
   const [region, setRegion] = useState("US");
   const [spoilerProtection, setSpoilerProtection] = useState(false);
-  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  // Cleanup saved timer on unmount
-  useEffect(() => {
-    return () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current); };
-  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -80,8 +75,6 @@ export function PreferencesSettings() {
       setRegion(updated.region);
       setSpoilerProtection(updated.spoilerProtection);
       setSaved(true);
-      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-      savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save preferences");
       // Nothing local to roll back to — the inputs already show the attempted

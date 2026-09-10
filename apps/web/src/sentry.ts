@@ -10,8 +10,6 @@ declare global {
 
 const dsn = (window.__CATALOGGY_SENTRY_DSN__ || import.meta.env.VITE_SENTRY_DSN || "").trim();
 
-export const sentryEnabled = Boolean(dsn);
-
 // @sentry/react is ~28 kB gzipped — close to a quarter of the entry bundle — and
 // the DSN is an opt-in that most self-hosted installs never set. Imported
 // statically, every visit downloaded and parsed an error reporter that would
