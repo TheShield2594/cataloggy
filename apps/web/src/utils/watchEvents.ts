@@ -1,6 +1,20 @@
 import { api, WatchEvent } from "../api";
 
 /**
+ * What to call the title a watch is of.
+ *
+ * `name` comes from the metadata row rather than from the event, so it is null
+ * for anything nothing has been fetched for yet — a Trakt import that ran ahead
+ * of the metadata backfill is the usual way to end up with a screenful of them.
+ * The imdb id is what the API itself falls back to in the same situation, and
+ * it beats an empty row: it is the one thing on screen that still says which
+ * title this was.
+ */
+export function watchEventTitle(event: WatchEvent): string {
+  return event.name || event.seriesImdbId || event.imdbId;
+}
+
+/**
  * What a row's controls call the thing they act on.
  *
  * The visible row says the title once and the episode number beside it, in two

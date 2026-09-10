@@ -4,6 +4,13 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
+    // Every pipeline here transpiles file-by-file — Vite/esbuild for the web
+    // bundle, tsx for the api and addon dev loops — and each of them assumes
+    // this without asking for it. Setting it makes tsc refuse the constructs
+    // that only a whole-program compile can resolve (a re-exported type with
+    // no `type` marker, a `const enum`) rather than leaving them to fail, or
+    // silently mis-emit, somewhere with no type checker present.
+    "isolatedModules": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,

@@ -1,8 +1,25 @@
+import type { WatchEvent } from "@cataloggy/shared/contracts";
+import {
+  ApiContractError,
+  parseCalendarResponse,
+  parseSeriesProgressListResponse,
+  parseWatchHistoryResponse,
+} from "@cataloggy/shared/contracts";
 import {
   invalidate as invalidateCachePrefix,
   invalidateAll as invalidateMemoryCache,
   setCacheScope,
 } from "./utils/dataCache";
+import { captureException } from "./sentry";
+
+/**
+ * The three response shapes this client validates rather than asserts, defined
+ * once in `@cataloggy/shared` and annotated onto the API's own handlers — see
+ * the "web client's boundary" section of `packages/shared/src/api-contracts.ts`
+ * for why these three and not the other ~87.
+ */
+export type { CalendarEntry, SeriesProgress, WatchEvent } from "@cataloggy/shared/contracts";
+export { ApiContractError } from "@cataloggy/shared/contracts";
 
 export class ApiError extends Error {
   /**
@@ -221,39 +238,6 @@ export type CatalogMeta = {
   description?: string;
 };
 
-export type SeriesProgress = {
-  imdbId: string;
-  name: string;
-  poster?: string;
-  background?: string | null;
-  lastSeason: number;
-  lastEpisode: number;
-  nextSeason: number;
-  nextEpisode: number;
-  totalSeasons?: number | null;
-  totalEpisodes?: number | null;
-  watchedEpisodes?: number | null;
-  /** Episodes in `lastSeason`, null when TMDB has no season data for the show. */
-  seasonTotalEpisodes?: number | null;
-  /** Episodes watched within `lastSeason`. */
-  seasonWatchedEpisodes?: number | null;
-};
-
-export type WatchEvent = {
-  id: string;
-  imdbId: string;
-  seriesImdbId?: string;
-  type: "movie" | "episode";
-  name: string;
-  poster?: string;
-  season?: number;
-  episode?: number;
-  watchedAt: string;
-  dateUnknown: boolean;
-  /** Free text attached to this watch. Trakt imports carry theirs across. */
-  note?: string | null;
-};
-
 export type WatchStats = {
   totalMovies: number;
   totalEpisodes: number;
@@ -409,17 +393,6 @@ export type CheckIn = {
   episode?: number;
   startedAt: string;
   expiresAt?: string;
-};
-
-export type CalendarEntry = {
-  seriesImdbId: string;
-  seriesName: string;
-  poster: string | null;
-  season: number;
-  episode: number;
-  episodeName: string;
-  airDate: string;
-  overview: string | null;
 };
 
 export type WatchProvider = {
@@ -984,6 +957,31 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
   return response.json() as Promise<T>;
 }
 
+/**
+ * Runs a response through its contract parser.
+ *
+ * The message a parser raises names a field path — `calendar[3].airDate must be
+ * a YYYY-MM-DD date` — which is what a maintainer needs and not what anyone
+ * should read off a page, so it becomes the `cause` and Sentry's payload, and
+ * the caller gets a sentence that says what actually happened: the two halves
+ * of a staggered upgrade disagree. The section that asked for it shows its own
+ * error state; nothing else on the screen is affected.
+ */
+function validated<T>(path: string, parse: (value: unknown) => T, body: unknown): T {
+  try {
+    return parse(body);
+  } catch (err) {
+    if (!(err instanceof ApiContractError)) throw err;
+    captureException(err, { tags: { boundary: "api-contract" }, extra: { path } });
+    throw new Error(
+      `The API's answer for ${path} isn't the shape this version of Cataloggy expects. ` +
+        `That usually means the web and api containers are on different image tags — ` +
+        `check that CATALOGGY_IMAGE_TAG matches for both.`,
+      { cause: err }
+    );
+  }
+}
+
 export const api = {
   search(type: MediaType, query: string, signal?: AbortSignal) {
     return request<SearchResult[]>(`/search?type=${type}&query=${encodeURIComponent(query)}`, { signal, timeoutMs: 15000 });
@@ -1036,8 +1034,8 @@ export const api = {
     ]);
   },
   async getSeriesProgress(signal?: AbortSignal) {
-    const res = await request<{ progress: SeriesProgress[] }>("/series/progress", { signal });
-    return res.progress;
+    const res = await request<unknown>("/series/progress", { signal });
+    return validated("/series/progress", parseSeriesProgressListResponse, res).progress;
   },
   async getWatchHistory(
     limit = 10,
@@ -1047,8 +1045,8 @@ export const api = {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (opts?.imdbId) params.set("imdbId", opts.imdbId);
     if (opts?.type) params.set("type", opts.type);
-    const res = await request<{ history: WatchEvent[] }>(`/watch/history?${params}`, { signal: opts?.signal });
-    return res.history;
+    const res = await request<unknown>(`/watch/history?${params}`, { signal: opts?.signal });
+    return validated("/watch/history", parseWatchHistoryResponse, res).history;
   },
   getWatchStats(signal?: AbortSignal) {
     return request<WatchStats>("/watch/stats", { signal });
@@ -1201,8 +1199,8 @@ export const api = {
     return request<{ metas: TrendingMeta[] }>(`/recommendations/personal?type=${type}&limit=${limit}`);
   },
   // Calendar
-  getCalendar(days = 30) {
-    return request<{ calendar: CalendarEntry[] }>(`/calendar?days=${days}`);
+  async getCalendar(days = 30) {
+    return validated("/calendar", parseCalendarResponse, await request<unknown>(`/calendar?days=${days}`));
   },
   // Streaming
   getStreamingCatalog(type: MediaType, provider: string) {

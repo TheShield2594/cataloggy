@@ -1,3 +1,4 @@
+import type { CalendarEntry } from "@cataloggy/shared";
 import { prisma } from "./prisma.js";
 import { getTmdb } from "./tmdb-client.js";
 import { showDetailsCache } from "./cache.js";
@@ -19,16 +20,16 @@ async function getCachedShowDetails(
   return details;
 }
 
-export type UpcomingEpisode = {
-  seriesImdbId: string;
-  seriesName: string;
-  poster: string | null;
-  season: number;
-  episode: number;
-  episodeName: string;
-  airDate: string;
-  overview: string | null;
-};
+/**
+ * One upcoming episode.
+ *
+ * The shape itself lives in `@cataloggy/shared`, because `apps/web` validates
+ * this response at its own boundary and the two definitions had been
+ * hand-copied duplicates. Aliased rather than renamed at the call sites: within
+ * the API this is an episode that has not aired, and "calendar" is what the one
+ * route that serves them happens to be called.
+ */
+export type UpcomingEpisode = CalendarEntry;
 
 export const getUpcomingEpisodes = async (
   profileId: string,

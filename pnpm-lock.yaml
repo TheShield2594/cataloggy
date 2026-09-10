@@ -115,6 +115,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@cataloggy/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@sentry/react':
         specifier: ^10.69.0
         version: 10.69.0(react@19.2.8)
