@@ -77,7 +77,7 @@ cataloggy/
 2. Start everything:
 
    ```bash
-   docker compose up --build
+   docker compose up -d
    ```
 
    **Pinning the version you run.** All four app images (`api`, `addon`, `web`, `migrate`) take their tag from `CATALOGGY_IMAGE_TAG` in your `.env`. Unset, it means `latest`, which always follows the most recent build from `main`: `docker compose pull` can move you onto an untested build, and there's no earlier version to fall back to. Once the stack works, pin it — every build is also published as `sha-<short-sha>`, and tagged releases as `vX.Y.Z`:
