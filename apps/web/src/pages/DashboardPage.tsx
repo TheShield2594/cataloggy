@@ -1511,7 +1511,7 @@ export function DashboardPage() {
                   </div>
                 </div>
                 <p className="mt-2.5 truncate text-sm font-semibold text-[var(--text)] transition-colors group-hover:text-claw-text">
-                  {event.name}
+                  {watchEventTitle(event)}
                 </p>
                 <p className="meta-row" style={{ color: "var(--text-dim)" }}>
                   {timeAgo(event.watchedAt)}
