@@ -63,6 +63,15 @@ jobs:
       - name: Check every env var reaches its container
         run: pnpm check:env
 
+      # The SHA in a `uses:` pin is what GitHub enforces; the version comment
+      # beside it is what a reviewer reads, and the two had already drifted
+      # apart. Runs here for the same reason as the check above — it reads
+      # files, not dependencies. `--verify-tags` resolves each pin against the
+      # action's own tags, which needs the network but does not fail the build
+      # if it is unavailable.
+      - name: Check action pins say what they are
+        run: pnpm check:actions --verify-tags
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
