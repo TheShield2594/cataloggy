@@ -48,8 +48,14 @@ const navShortcuts = () =>
   }));
 
 // Extra hostnames (beyond IPs/localhost, which Vite always allows) that may
-// reach this dev/preview server — e.g. a domain proxied via Nginx Proxy
-// Manager. Comma-separated, set via the ALLOWED_HOSTS env var.
+// reach this dev/preview server. Comma-separated, set via the ALLOWED_HOSTS env
+// var.
+//
+// Dev and preview only, and deliberately not documented as a deployment
+// setting: the production `web` image serves the built bundle with `serve`,
+// which has no host allowlist to hand this to, so a variable plumbed through
+// compose would have been a control that isn't there. Host filtering in a
+// deployment belongs to whatever reverse proxy terminates the request.
 const allowedHosts = (process.env.ALLOWED_HOSTS ?? "")
   .split(",")
   .map((host) => host.trim())

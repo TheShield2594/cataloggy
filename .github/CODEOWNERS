@@ -1,0 +1,8 @@
+# Every path has the same owner, which is the point of writing it down: reviews
+# and questions get routed automatically rather than depending on someone
+# thinking to ask.
+#
+# On its own this only requests a review. It becomes a gate when branch
+# protection on `main` requires review from Code Owners.
+
+*   @TheShield2594

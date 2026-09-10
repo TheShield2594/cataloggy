@@ -84,10 +84,14 @@ VITE_ADDON_BASE=http://192.168.1.25:7001
 CATALOGGY_ALLOWED_ORIGINS=http://192.168.1.25:7002
 ```
 
-`VITE_*` are baked in at build time, so rebuild after changing them:
+None of them need a rebuild. `api` and `addon` read theirs at startup, and the
+`web` container writes `VITE_API_BASE`/`VITE_ADDON_BASE` into `dist/config.js`
+when it starts — the page prefers that over whatever was baked into the bundle.
+So one command applies all six, recreating whichever containers now have a
+different environment:
 
 ```bash
-docker compose up -d --build web
+docker compose up -d
 ```
 
 The internal ones (`CATALOGGY_API_BASE`, pointing at `http://api:7000`) stay as
@@ -103,12 +107,16 @@ both.
 
 ### Blank page behind a reverse proxy
 
-Add the hostname to `ALLOWED_HOSTS` on the `web` service. Without it, the web
-server only answers to IPs and localhost.
+The page itself is static and the web container does not filter by hostname, so
+a blank page means the app loaded and then could not reach the API. Check the
+browser console for which of the two it is:
 
-If the API is reachable at a different address than `VITE_API_BASE` — a
-per-browser override under Settings, say — add that origin to
-`CSP_CONNECT_SRC_EXTRA` too, or the Content-Security-Policy blocks the request.
+- A **Content-Security-Policy** violation — the API is reachable at a different
+  address than `VITE_API_BASE`, a per-browser override under Settings, say. Add
+  that origin to `CSP_CONNECT_SRC_EXTRA` on the `web` service.
+- A **CORS** error — add the origin the browser is using to
+  `CATALOGGY_ALLOWED_ORIGINS` on the `api` service, domain included, not just
+  the LAN IP.
 
 ### 401 on every request
 
@@ -433,7 +441,7 @@ Destroys all data:
 
 ```bash
 docker compose down -v
-docker compose up --build
+docker compose up -d
 ```
 
 ## Still stuck

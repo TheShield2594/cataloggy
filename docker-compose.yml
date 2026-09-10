@@ -228,10 +228,6 @@ services:
       # Stremio addon (meta/subtitles/search/genre support). Used to build
       # the manifest URL shown in Settings.
       VITE_ADDON_BASE: ${VITE_ADDON_BASE:-http://192.168.1.25:7001}
-      # Comma-separated hostnames allowed to reach the web server, beyond
-      # IPs/localhost (which are always allowed) — e.g. a domain proxied via
-      # Nginx Proxy Manager. Leave unset for LAN-IP-only access.
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
       # Extra origins the browser may connect to, on top of VITE_API_BASE,
       # VITE_ADDON_BASE and SENTRY_DSN (already allowed by the page's
       # Content-Security-Policy). Only needed when some browsers reach the API

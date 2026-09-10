@@ -29,9 +29,20 @@ cataloggy/
     web/        # React + Vite PWA frontend
   packages/
     shared/     # shared types/utilities
+    migrate/    # Prisma CLI only, for the migration image
 ```
 
 Each app is its own pnpm workspace package with its own `package.json` scripts (`dev`, `build`, `typecheck`, `lint`, `test` where applicable). Run them from the repo root with `pnpm --filter @cataloggy/<app> <script>`, or use the root-level scripts (`pnpm dev`, `pnpm build`, `pnpm typecheck`, `pnpm lint`, `pnpm test`) to run across every workspace at once.
+
+`packages/migrate` is the odd one out — no source, no build, no tests. It holds
+a pinned `prisma` dependency and nothing else, so the migration image can be
+built from a tree containing the Prisma CLI without the API's test and build
+toolchain: 226 MB against 470 MB, and it is also why the CLI is not a
+dependency of the API image. The schema and migrations still live with
+`@cataloggy/api`. See
+[packages/migrate/README.md](packages/migrate/README.md) — it is one of the
+four images `.github/workflows/dockerpublish.yml` builds, and all four have to
+stay on the same `CATALOGGY_IMAGE_TAG`.
 
 ## Before opening a PR
 
@@ -73,4 +84,6 @@ Open a GitHub issue. For bugs, include: what you expected, what happened instead
 
 ## Security issues
 
-Please don't open a public issue for a security vulnerability. See the [Security section of the README](README.md#security) for Cataloggy's threat model (it's designed for trusted-LAN self-hosting, not public internet exposure) — if you've found something outside that model, reach out to [the maintainer](https://github.com/TheShield2594) privately first (e.g. via a GitHub private security advisory on this repo) rather than filing a public issue.
+Please don't open a public issue for a security vulnerability. **[SECURITY.md](.github/SECURITY.md)** is the policy: where to report privately, which versions get fixes, and — the part worth reading before you write anything — what's in and out of the threat model. Cataloggy is designed for trusted-LAN self-hosting rather than public internet exposure, so a few things that look like findings are documented trade-offs, and the [Security section of the README](README.md#security) says why.
+
+Report via [a private advisory](https://github.com/TheShield2594/cataloggy/security/advisories/new), which is visible only to you and [the maintainer](https://github.com/TheShield2594).
