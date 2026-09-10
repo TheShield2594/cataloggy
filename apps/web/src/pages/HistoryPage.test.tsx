@@ -223,8 +223,23 @@ describe("HistoryPage caching and pagination", () => {
    * Returns the trigger, which always fires the newest observer — the effect
    * builds a fresh one each time the list it is watching changes.
    */
+  /*
+   * Stubs IntersectionObserver and hands back a trigger for the scroll sentinel.
+   *
+   * The trigger waits for the page to have constructed its observer, and that
+   * wait is the whole point. `fire` is assigned from the constructor, and the
+   * page only constructs an observer from an effect that runs once the first
+   * page has landed and reported more to come — which is a later commit than
+   * the one `findByText` resolves on. Firing before it is a lost edge: the call
+   * reaches the placeholder, nothing retries it, and the `waitFor` that follows
+   * then polls an assertion that can never come true. It fails as a timeout, so
+   * it reads like slowness and is not — a longer timeout would not have helped.
+   *
+   * That was an intermittent failure of the in-flight-page test below, which
+   * only showed under full-suite load and never in the file on its own.
+   */
   function observeScrollSentinel() {
-    let fire: () => void = () => {};
+    let fire: (() => void) | null = null;
     vi.stubGlobal(
       "IntersectionObserver",
       class {
@@ -236,7 +251,12 @@ describe("HistoryPage caching and pagination", () => {
         disconnect() {}
       }
     );
-    return () => fire();
+    return async () => {
+      await waitFor(() => expect(fire).not.toBeNull());
+      await act(async () => {
+        fire!();
+      });
+    };
   }
 
   // An episode row writes its title and its S2E7 in separate elements, so the
@@ -293,9 +313,7 @@ describe("HistoryPage caching and pagination", () => {
     renderPage();
     await screen.findByText("Feature 0");
 
-    await act(async () => {
-      intersect();
-    });
+    await intersect();
     await waitFor(() => expect(getWatchHistory).toHaveBeenLastCalledWith(25, 25, expect.anything()));
     await user.click(screen.getByRole("button", { name: "Episodes" }));
     await findEpisode();
@@ -340,9 +358,7 @@ describe("HistoryPage caching and pagination", () => {
     renderPage();
     await screen.findByText("Feature 0");
 
-    await act(async () => {
-      intersect();
-    });
+    await intersect();
     await user.click(screen.getAllByRole("button", { name: /delete watch of feature 0/i })[0]);
     await waitFor(() => expect(screen.queryByText("Feature 0")).not.toBeInTheDocument());
     await act(async () => {
@@ -350,9 +366,7 @@ describe("HistoryPage caching and pagination", () => {
     });
     // The scroll sentinel is still at the bottom of a list that is one row
     // shorter than it was, so the page it asks for next is the one that counts.
-    await act(async () => {
-      intersect();
-    });
+    await intersect();
     await act(async () => {
       releasePage();
     });
