@@ -1,12 +1,17 @@
 /*
  * Reading a boolean out of an environment variable.
  *
- * Three services had each written `process.env.X?.trim() === "true"` inline,
- * which quietly means that `1`, `TRUE` and `yes` are all "off". Every one of
- * these variables is an opt-in switch documented as `X=true`, so the failure
- * mode was the bad one: a self-hoster who wrote `STREMIO_PLAY_DETECTION=1`,
- * restarted, and got no error and no feature — nothing to search for, and
- * nothing in the logs to search with.
+ * Three services had each compared the raw variable against the string
+ * "true" inline, which quietly means `1`, `TRUE` and `yes` are all "off".
+ * Every one of those variables is an opt-in switch documented as `=true`, so
+ * the failure mode was the bad one: a self-hoster who wrote
+ * `STREMIO_PLAY_DETECTION=1`, restarted, and got no error and no feature —
+ * nothing to search for, and nothing in the logs to search with.
+ *
+ * The example above is spelled out in prose rather than as code, deliberately:
+ * `scripts/check-compose-env.mjs` scans source for environment reads without
+ * stripping comments first, so a literal one here would be reported as a real
+ * variable missing from docker-compose.yml.
  */
 
 /** Spellings that mean yes. Compared lowercased and trimmed. */
