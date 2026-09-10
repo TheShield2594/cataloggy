@@ -55,7 +55,7 @@ model Profile {
   id        String   @id @default(uuid()) @db.Uuid
   name      String
   pinHash   String?
-  createdAt DateTime @default(now()) @db.Timestamp(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
 
   lists             List[]
   watchEvents       WatchEvent[]
@@ -80,22 +80,23 @@ model Item {
   season       Int?
   episode      Int?
   title        String?
-  createdAt    DateTime @default(now()) @db.Timestamp(6)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([imdbId])
   @@unique([type, imdbId])
 }
 
-// Partial unique indexes on kind = 'watchlist' (migration 20260617120000) and
-// kind = 'collection' (migration 20260626130001) enforce that at most one default
-// watchlist and one default collection exist. Prisma's schema DSL has no syntax for
-// partial unique indexes, so they aren't declared here — don't let `prisma migrate dev`
-// generate a migration that drops them.
+// Partial unique indexes on kind = 'watchlist' (migration 20260617120000, rescoped
+// to the profile in 20260910130000) and kind = 'collection' (migration
+// 20260626130001) enforce that each profile has at most one default watchlist and
+// one default collection. Prisma's schema DSL has no syntax for partial unique
+// indexes, so they aren't declared here — don't let `prisma migrate dev` generate a
+// migration that drops them.
 model List {
   id        String     @id @default(uuid()) @db.Uuid
   name      String
   kind      ListKind
-  createdAt DateTime   @default(now()) @db.Timestamp(6)
+  createdAt DateTime   @default(now()) @db.Timestamptz(6)
   items     ListItem[]
 
   profileId String  @db.Uuid
@@ -108,12 +109,18 @@ model ListItem {
   listId  String       @db.Uuid
   type    ListItemType
   imdbId  String
-  addedAt DateTime     @default(now()) @db.Timestamp(6)
+  addedAt DateTime     @default(now()) @db.Timestamptz(6)
 
   list List @relation(fields: [listId], references: [id], onDelete: Cascade)
 
-  @@unique([listId, type, imdbId])
-  @@index([listId])
+  // These three columns are what identifies a list item, so they are the primary
+  // key rather than a unique constraint over a table that had none — a table with
+  // no primary key has no default replica identity, which puts it outside logical
+  // replication and outside several managed-Postgres tools. The compound-key
+  // argument Prisma generates (`listId_type_imdbId`) is spelled the same either
+  // way, so queries and cursors are unaffected. A separate `@@index([listId])`
+  // used to sit alongside; this index leads with `listId` and covers it.
+  @@id([listId, type, imdbId])
 }
 
 // A partial unique index, `watchevent_dedup_key` (migration 20260814120000), enforces
@@ -162,7 +169,7 @@ model SeriesProgress {
 model KV {
   key       String   @id
   value     String
-  updatedAt DateTime @db.Timestamp(6)
+  updatedAt DateTime @db.Timestamptz(6)
 }
 
 model Rating {
@@ -178,8 +185,9 @@ model Rating {
   profileId String  @db.Uuid
   profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
+  // No `@@index([profileId])`: the primary key above already leads with it, so a
+  // second btree on the same prefix only cost writes.
   @@id([profileId, type, imdbId, season, episode])
-  @@index([profileId])
 }
 
 // A single active check-in per profile — starting a new one replaces it,
@@ -338,12 +346,17 @@ model ScrobbleSession {
   profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([profileId, imdbId, season, episode, status])
+  // What `cleanupStaleSessions` (routes/scrobble.ts) filters on, hourly. The
+  // index above leads with `profileId` and cannot serve it, so that job was a
+  // sequential scan of a table nothing bounds — stopped sessions are never
+  // deleted, so it grows with every play.
+  @@index([status, updatedAt])
 }
 
 model Tag {
   id        String   @id @default(uuid()) @db.Uuid
   name      String
-  createdAt DateTime @default(now()) @db.Timestamp(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
   items     ItemTag[]
 
   profileId String  @db.Uuid
@@ -357,7 +370,7 @@ model ItemTag {
   tagId     String   @db.Uuid
   type      ItemType
   imdbId    String
-  createdAt DateTime @default(now()) @db.Timestamp(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
 
   tag Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
@@ -385,8 +398,8 @@ model Game {
   notes           String?   @db.Text
   finished        Boolean   @default(false)
   finishedAt      DateTime? @db.Date
-  createdAt       DateTime  @default(now()) @db.Timestamp(6)
-  updatedAt       DateTime  @updatedAt @db.Timestamp(6)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(6)
 
   profileId String  @db.Uuid
   profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
@@ -418,5 +431,8 @@ model Metadata {
   releaseDate   String?
   updatedAt     DateTime     @updatedAt @db.Timestamptz(6)
 
-  @@unique([imdbId, type])
+  // A primary key rather than a unique constraint, for the reason given on
+  // ListItem: without one the table has no default replica identity. The
+  // compound-key argument (`imdbId_type`) is unchanged.
+  @@id([imdbId, type])
 }

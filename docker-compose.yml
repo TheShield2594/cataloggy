@@ -80,6 +80,18 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in a .env file next to docker-compose.yml — see README.md}@db:5432/${POSTGRES_DB:-cataloggy}
       PORT: "7000"
+      # Connections the API keeps to Postgres (1–100, default 10). Postgres
+      # itself allows 100 by default, shared with the migrate container and any
+      # psql session, so raising this past ~80 needs the database raised too.
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX}
+      # How long one statement may run before Postgres cancels it, in ms
+      # (1000–600000, default 30000; 0 removes the limit). Raise it only if a
+      # genuinely large library trips it — the limit is what stops one runaway
+      # query from holding a pooled connection indefinitely.
+      DATABASE_STATEMENT_TIMEOUT_MS: ${DATABASE_STATEMENT_TIMEOUT_MS}
+      # Queries at or above this many ms are logged with their SQL (never their
+      # parameters). 1–60000, default 1000; 0 turns the logging off.
+      DATABASE_SLOW_QUERY_MS: ${DATABASE_SLOW_QUERY_MS}
       API_TOKEN: ${API_TOKEN:?Set API_TOKEN in a .env file next to docker-compose.yml — see README.md}
       CATALOGGY_ALLOWED_ORIGINS: ${CATALOGGY_ALLOWED_ORIGINS:-http://192.168.1.25:7002,http://localhost:7002,http://127.0.0.1:7002}
       CATALOGGY_API_PUBLIC: ${CATALOGGY_API_PUBLIC:-http://192.168.1.25:7000}

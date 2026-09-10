@@ -53,12 +53,25 @@ pnpm check:env
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:int   # needs DATABASE_URL_TEST — see "Integration tests" below
 pnpm build
 ```
 
 `apps/api` tests need `@cataloggy/shared` built first if you haven't run `pnpm typecheck`/`pnpm build` yet — `pnpm --filter @cataloggy/shared build` handles that.
 
 Tests live next to the code they cover as `*.test.ts`/`*.test.tsx`. `apps/api` and `apps/addon` run in a Node environment; `apps/web` runs in jsdom with Testing Library, with shared setup (jest-dom matchers, cleanup, and stubs for the browser APIs jsdom lacks) in `apps/web/src/test/setup.ts`.
+
+### Integration tests
+
+`pnpm test` mocks Prisma everywhere, which leaves out the part of the schema that only exists in migration SQL: the partial unique indexes (the default watchlist and collection singletons, the watch-event dedup key), the `onDelete: Cascade` rules, the check constraints, and the column types. `apps/api/src/**/*.int.test.ts` covers those against a real Postgres:
+
+```bash
+DATABASE_URL_TEST=postgresql://postgres:postgres@127.0.0.1:5432/cataloggy_int pnpm test:int
+```
+
+The database is created and migrated for you; it just has to be a database you don't mind losing, because **every table is truncated between tests**. That is why the suite takes its own variable and refuses to run against `DATABASE_URL` — the one the README has you point at your own library. It is a separate command from `pnpm test` for the same reason, and CI runs it as its own step.
+
+Reach for an integration test when the thing you would be asserting is Postgres's answer rather than your code's question — a constraint holding, a cascade reaching, a query returning the row you meant. Everything else belongs in a unit test, which is faster and needs no database.
 
 For changes that touch a running feature (not just types/tests), actually exercise it — start the stack with `pnpm dev` (or `docker compose up`) and click through the affected flow. Type checks and unit tests catch a lot, but not everything.
 

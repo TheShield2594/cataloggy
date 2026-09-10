@@ -9,22 +9,40 @@ export const parseProxyPathPrefixes = (raw: string | undefined, fallback: readon
   return parsed.length > 0 ? parsed : [...fallback];
 };
 
+/**
+ * `url` with `prefix` removed, or null when the prefix doesn't apply.
+ *
+ * What comes after the prefix has to be a boundary, not just any character, or
+ * a prefix of `/api` would also claim `/apiary`. The boundaries are the three a
+ * request target can actually have: nothing at all (`/api`), a path separator
+ * (`/api/health`), or the start of the query or fragment (`/api?debug=1`).
+ *
+ * That last case is the one worth stating: it used to be rejected, because the
+ * check was a bare `startsWith(prefix + "/")` and `/api?x=1` has no slash after
+ * the prefix. The URL was then passed through unmodified, so it reached routing
+ * as `/api?x=1` and 404'd — a bare-prefix request with a query string was the
+ * one shape a proxy mount didn't normalize.
+ */
 export const stripProxyPrefix = (url: string, prefix: string) => {
-  if (url === prefix) {
-    return "/";
-  }
-
-  if (!url.startsWith(`${prefix}/`)) {
+  if (!url.startsWith(prefix)) {
     return null;
   }
 
-  return url.slice(prefix.length) || "/";
+  const rest = url.slice(prefix.length);
+
+  if (rest === "") return "/";
+  if (rest.startsWith("/")) return rest;
+  if (rest.startsWith("?") || rest.startsWith("#")) return `/${rest}`;
+
+  return null;
 };
 
 export const normalizeProxyPath = (rawUrl: string, prefixes: readonly string[]) => {
   for (const prefix of prefixes) {
     const stripped = stripProxyPrefix(rawUrl, prefix);
-    if (stripped) {
+    // Against null, not falsiness: "/" is the correct answer for a bare prefix
+    // and would fail a truthiness check on the day someone returns "" instead.
+    if (stripped !== null) {
       return stripped;
     }
   }
