@@ -3,6 +3,10 @@ import { registerRoute } from "workbox-routing";
 import { CacheFirst, NetworkOnly, StaleWhileRevalidate } from "workbox-strategies";
 import { CacheableResponsePlugin } from "workbox-cacheable-response";
 import { ExpirationPlugin } from "workbox-expiration";
+import {
+  API_CACHE_PATH_ALTERNATION,
+  API_CACHE_PATH_RE,
+} from "@cataloggy/shared/api-cache-routes";
 import { IMAGE_CDN_HOSTS } from "./image-cdn-hosts.mjs";
 
 precacheAndRoute(self.__WB_MANIFEST);
@@ -60,33 +64,32 @@ registerRoute(
 // override exists, and from config.js at install, for the first load before any
 // page has had the chance to say. Cache Storage carries it across the stops and
 // starts a service worker's lifetime is made of.
-const CACHEABLE_API_PATHS = [
-  "watchlist",
-  "continue",
-  "recent",
-  "series/progress",
-  "watch/history",
-  "watch/stats(/detailed)?",
-  "trending",
-  "popular",
-  "recommendations(/.*)?",
-  "lists(/.*)?",
-  "meta(/.*)?",
-  "calendar",
-  "streaming(/.*)?",
-];
 
+// ─── Which of its endpoints are cacheable ───
+//
 // Read-only catalog/list/history/stats endpoints, safe to serve stale-while-
-// revalidate offline. Anything not listed here (and all non-GET requests) goes
+// revalidate offline. Anything not on the list (and all non-GET requests) goes
 // straight to the network.
-const CACHEABLE_API_PATH_RE = new RegExp("^/(" + CACHEABLE_API_PATHS.join("|") + ")$");
+//
+// The list is the API's own, imported rather than restated: the same table
+// decides which `Cache-Control` the API sends for each of these routes. Kept
+// here by hand it had drifted both ways — it caught `meta/.../bundle` and the
+// personal recommendation feeds through blanket `(/.*)?` prefixes, and had
+// never heard of `collection`, `games`, `tags` or `anime`, so four sets of
+// read-only routes the API declares cacheable did not work offline.
+//
+// This worker ignores the tier and caches every route in the table. The tier
+// exists to keep per-profile, mutable answers out of the *browser's* HTTP
+// cache, which nothing here can reach into to invalidate; this cache is dropped
+// whole on any mutation and on a profile switch (INVALIDATE_API_CACHE below),
+// so it is not exposed to that hazard.
 
 // Used until the API base is known — the same endpoint names under any prefix.
 // Both documented deployments land on the right answer either way; what it
 // can't rule out is some unrelated same-origin fetch whose path happens to end
-// in one of these names, which is why it gives way to the exact test above as
-// soon as there is a base to compare against.
-const CACHEABLE_API_TAIL_RE = new RegExp("(?:^|/)(" + CACHEABLE_API_PATHS.join("|") + ")$");
+// in one of these names, which is why `isCacheableApiUrl` gives way to the exact
+// test as soon as there is a base to compare against.
+const CACHEABLE_API_TAIL_RE = new RegExp("(?:^|/)(?:" + API_CACHE_PATH_ALTERNATION + ")$");
 
 const CONFIG_CACHE_NAME = "sw-config-v1";
 const API_BASE_CACHE_KEY = "/__cataloggy-sw/api-base";
@@ -146,7 +149,7 @@ self.addEventListener("install", (event) => event.waitUntil(apiBaseReady));
 const isCacheableApiUrl = (url) => {
   if (!apiBase) return CACHEABLE_API_TAIL_RE.test(url.pathname);
   if (!url.href.startsWith(apiBase)) return false;
-  return CACHEABLE_API_PATH_RE.test(url.href.slice(apiBase.length).split(/[?#]/)[0]);
+  return API_CACHE_PATH_RE.test(url.href.slice(apiBase.length).split(/[?#]/)[0]);
 };
 
 // A same-origin API sits under a path on this origin, so opening one of its URLs
