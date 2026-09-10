@@ -1,7 +1,7 @@
 import { Calendar, Clock, Film, Trash2, Tv } from "lucide-react";
 import { Poster } from "../Poster";
 import { WatchEvent } from "../../api";
-import { watchEventLabel } from "../../utils/watchEvents";
+import { watchEventLabel, watchEventTitle } from "../../utils/watchEvents";
 import { KICKER } from "../typography";
 
 export function WatchHistorySection({
@@ -49,7 +49,7 @@ export function WatchHistorySection({
             >
               <div className="h-10 w-7 shrink-0 overflow-hidden rounded-md" style={{ background: "var(--surface-strong)" }}>
                 {event.poster ? (
-                  <Poster src={event.poster} alt={event.name} className="h-full w-full" sizes="28px" />
+                  <Poster src={event.poster} alt={watchEventTitle(event)} className="h-full w-full" sizes="28px" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center">
                     {event.type === "episode" ? (
@@ -63,13 +63,13 @@ export function WatchHistorySection({
               <div className="min-w-0 flex-1">
                 {event.type === "episode" && event.season != null && event.episode != null ? (
                   <>
-                    <p className="truncate text-sm" style={{ color: "var(--text)" }}>{event.name}</p>
+                    <p className="truncate text-sm" style={{ color: "var(--text)" }}>{watchEventTitle(event)}</p>
                     <p className="meta-row" style={{ color: "var(--text-mute)" }}>
                       S{String(event.season).padStart(2, "0")}:E{String(event.episode).padStart(2, "0")}
                     </p>
                   </>
                 ) : (
-                  <p className="truncate text-sm" style={{ color: "var(--text)" }}>{event.name || "Watched"}</p>
+                  <p className="truncate text-sm" style={{ color: "var(--text)" }}>{watchEventTitle(event)}</p>
                 )}
               </div>
               <time className="meta-row shrink-0" style={{ color: "var(--text-mute)" }}>

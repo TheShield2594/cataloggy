@@ -50,6 +50,8 @@ Run the same checks CI runs:
 
 ```bash
 pnpm check:env
+pnpm check:actions
+pnpm check:audit
 pnpm lint
 pnpm typecheck
 pnpm test
@@ -57,7 +59,7 @@ pnpm test:int   # needs DATABASE_URL_TEST — see "Integration tests" below
 pnpm build
 ```
 
-`apps/api` tests need `@cataloggy/shared` built first if you haven't run `pnpm typecheck`/`pnpm build` yet — `pnpm --filter @cataloggy/shared build` handles that.
+`apps/api`, `apps/addon` and `apps/web` tests all need `@cataloggy/shared` built first if you haven't run `pnpm typecheck`/`pnpm build` yet — `pnpm --filter @cataloggy/shared build` handles that. (`pnpm lint` and `pnpm typecheck` build it themselves, and `pnpm build` and CI reach it in dependency order.)
 
 Tests live next to the code they cover as `*.test.ts`/`*.test.tsx`. `apps/api` and `apps/addon` run in a Node environment; `apps/web` runs in jsdom with Testing Library, with shared setup (jest-dom matchers, cleanup, and stubs for the browser APIs jsdom lacks) in `apps/web/src/test/setup.ts`.
 
@@ -76,6 +78,12 @@ Reach for an integration test when the thing you would be asserting is Postgres'
 For changes that touch a running feature (not just types/tests), actually exercise it — start the stack with `pnpm dev` (or `docker compose up`) and click through the affected flow. Type checks and unit tests catch a lot, but not everything.
 
 If your change reads a new environment variable, add it to the `environment:` block of every `docker-compose.yml` service that runs the code — compose substitutes `.env` into the compose file, it does not forward the file into containers, so a variable that is only in `.env.example` reaches nothing. `pnpm check:env` compares the two sides and is what CI runs.
+
+The web client asserts its response types rather than checking them (`response.json() as Promise<T>`), which is fine for the ~87 shapes whose worst case is a blank field. Three are parsed instead — `GET /calendar`, `GET /series/progress` and `GET /watch/history` — because each is destructured without a guard on a hot path, and a self-hosted install can legitimately run a `web` image against an `api` image from another build. Those contracts live in `packages/shared/src/api-contracts.ts` alongside the api↔addon ones, in the same hand-written style (no schema library); if you change one of those three responses on either side, change the parser with it. Reach for a new contract when a missing field would throw rather than render blank — not for every endpoint.
+
+If your change touches `.github/workflows/`, every third-party action stays pinned to a 40-character commit SHA with the release in a trailing comment (`# v6.0.10`). The SHA is what GitHub enforces and the comment is the only part a reviewer reads, so `pnpm check:actions` holds them together: it fails on an unpinned or uncommented `uses:`, and on one SHA carrying two different version comments across files — which is how a Dependabot bump had already left the repo claiming one commit was both v6.0.9 and v6.0.10. CI adds `--verify-tags`, which resolves each pin against the action's own tags with `git ls-remote` and so also catches a comment that is wrong everywhere; an unreachable remote warns rather than failing the build.
+
+If a `pnpm audit` advisory has no fix to upgrade to, it can be waived in [.github/audit-allowlist.json](.github/audit-allowlist.json) with the GHSA id, a reason and an expiry date no more than 90 days out. Prefer an override in `pnpm-workspace.yaml` whenever one reaches the vulnerable package — the waiver is for the case where nothing upstream exists yet, so that a single new disclosure cannot freeze every merge including its own fix. `pnpm check:audit` enforces the expiry, and fails on a waiver that no longer matches anything so the file stays a description of the present.
 
 If your change adds a Prisma migration, make sure it applies cleanly against a fresh database (`pnpm --filter @cataloggy/api exec prisma migrate deploy`) — CI runs every migration against a real Postgres instance and will fail if it doesn't.
 

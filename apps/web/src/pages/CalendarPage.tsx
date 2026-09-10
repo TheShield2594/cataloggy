@@ -5,6 +5,7 @@ import { api, CalendarEntry, SearchResult } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { Poster } from "../components/Poster";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import { useExitAnimation } from "../hooks/useExitAnimation";
 import { useVisualViewport } from "../hooks/useVisualViewport";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -118,17 +119,18 @@ function DayEntriesModal({
   onClose: () => void;
 }) {
   const dialogRef = useFocusTrap<HTMLDivElement>();
+  const { exiting, requestClose, onExitAnimationEnd } = useExitAnimation(onClose);
   useScrollLock();
-  useEscapeKey(onClose);
+  useEscapeKey(requestClose);
   const viewportStyle = useVisualViewport();
 
   const heading = date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   return (
     <div
-      className="overlay-scrim overlay-fade fixed inset-0 z-50 flex items-start justify-center p-4 sm:pt-[10vh]"
+      className={`overlay-scrim overlay-fade fixed inset-0 z-50 flex items-start justify-center p-4 sm:pt-[10vh] ${exiting ? "overlay-exit" : ""}`}
       style={viewportStyle}
-      onClick={onClose}
+      onClick={requestClose}
     >
       <div
         ref={dialogRef}
@@ -136,9 +138,11 @@ function DayEntriesModal({
         aria-modal="true"
         aria-labelledby="calendar-day-modal-title"
         tabIndex={-1}
-        className="glass-surface overlay-dialog flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-3xl shadow-e3"
+        inert={exiting}
+        className={`glass-surface overlay-dialog flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-3xl shadow-e3 ${exiting ? "overlay-exit" : ""}`}
         style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
         onClick={(e) => e.stopPropagation()}
+        onAnimationEnd={onExitAnimationEnd}
       >
         <div className="flex flex-none items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <div className="min-w-0">
@@ -149,7 +153,7 @@ function DayEntriesModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             aria-label="Close dialog"
             className="ml-3 rounded-lg p-1.5 hover:bg-[var(--surface)] hover:text-[var(--text)]"
             style={{ color: "var(--text-mute)" }}

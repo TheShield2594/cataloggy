@@ -1,0 +1,4 @@
+{
+  "//": "Advisories that pnpm audit reports at high severity or above and that this repo cannot fix yet — no upstream release, and no override that reaches the vulnerable package. Every entry needs a GHSA id, a reason, and an expiry date no more than 90 days out; once that date passes the advisory blocks merges again. scripts/check-audit.mjs enforces all of it, including deleting entries that no longer match anything. Prefer an override in pnpm-workspace.yaml over a waiver whenever one exists.",
+  "allow": []
+}

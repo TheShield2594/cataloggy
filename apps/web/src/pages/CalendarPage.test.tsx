@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CalendarEntry } from "../api";
@@ -90,8 +90,13 @@ describe("CalendarPage month view", () => {
       expect(within(dialog).getByText(entry.seriesName)).toBeInTheDocument();
     }
 
+    // Closing is a two-step now: the dialog marks itself exiting and unmounts
+    // on the animationend — which jsdom never raises, so the wait rides the
+    // hook's fallback timer.
     await user.click(within(dialog).getByRole("button", { name: /close dialog/i }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(dialog).toHaveClass("overlay-exit");
+    expect(dialog).toHaveAttribute("inert");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 1000 });
   });
 
   it("closes the day list when the month changes under it", async () => {

@@ -3,6 +3,7 @@ import { AlertCircle, ArrowRight, Loader2, Lock, Plus, X } from "lucide-react";
 import { api, ApiError, Profile, runtimeConfig } from "../api";
 import { BRAND_WORDMARK, BrandLockup, BrandMark } from "../components/BrandMark";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import { useExitAnimation } from "../hooks/useExitAnimation";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { SECTION_TITLE } from "../components/typography";
@@ -18,19 +19,27 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
   // swallow Escape.
   const isModal = !!onClose;
   const dialogRef = useFocusTrap<HTMLDivElement>(isModal);
+  const { exiting, requestClose, onExitAnimationEnd } = useExitAnimation(() => onClose?.());
   useScrollLock(isModal);
-  useEscapeKey(() => onClose?.(), isModal);
+  useEscapeKey(requestClose, isModal);
 
   if (onClose) {
     return (
       <div
-        className="overlay-scrim overlay-fade fixed inset-0 z-[200] flex items-center justify-center px-6 py-12"
-        onClick={onClose}
+        className={`overlay-scrim overlay-fade fixed inset-0 z-[200] flex items-center justify-center px-6 py-12 ${exiting ? "overlay-exit" : ""}`}
+        onClick={requestClose}
         role="dialog"
         aria-modal="true"
         aria-label="Switch profile"
       >
-        <div ref={dialogRef} tabIndex={-1} className="overlay-dialog w-full max-w-md space-y-6" onClick={(e) => e.stopPropagation()}>
+        <div
+          ref={dialogRef}
+          tabIndex={-1}
+          inert={exiting}
+          className={`overlay-dialog w-full max-w-md space-y-6 ${exiting ? "overlay-exit" : ""}`}
+          onClick={(e) => e.stopPropagation()}
+          onAnimationEnd={onExitAnimationEnd}
+        >
           <div className="flex items-center justify-center gap-2.5">
             <BrandMark className="h-10 w-10 flex-none" />
             <span className={`text-2xl ${BRAND_WORDMARK}`} style={{ color: "var(--text)" }}>Cataloggy</span>
@@ -39,7 +48,7 @@ function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () 
           <div className="glass-surface relative rounded-3xl border p-6 shadow-e3" style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}>
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               aria-label="Close"
               className="tap-target absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
               style={{ color: "var(--text-mute)" }}

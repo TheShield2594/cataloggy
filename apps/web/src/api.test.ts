@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, invalidatedCachePrefixes, runtimeConfig } from "./api";
+import { api, ApiContractError, ApiError, invalidatedCachePrefixes, runtimeConfig } from "./api";
 import { readCache, resetDataCacheForTests, writeCache } from "./utils/dataCache";
 
 type FetchMock = ReturnType<typeof vi.fn>;
@@ -196,6 +196,74 @@ describe("request error reporting", () => {
     });
 
     await expect(api.search("movie", "dune", controller.signal)).rejects.toBe(abortError);
+  });
+});
+
+describe("validated responses", () => {
+  // The whole point of parsing these three: an older API's answer takes down
+  // the one request that asked for it, not the app. Everything below asserts
+  // the failure is a rejected promise the caller can catch — which is what the
+  // calendar, the shelf and the history page each already do to show their own
+  // error state.
+  it("rejects a calendar entry with no airDate instead of handing it to a .split", async () => {
+    fetchMock.mockResolvedValue(
+      json({ calendar: [{ seriesImdbId: "tt1", seriesName: "Show", poster: null, season: 1, episode: 1, episodeName: "Pilot", overview: null }] })
+    );
+
+    await expect(api.getCalendar()).rejects.toThrow(/CATALOGGY_IMAGE_TAG/);
+  });
+
+  it("keeps the parser's field path as the cause, and off the screen", async () => {
+    fetchMock.mockResolvedValue(json({ calendar: [{ seriesImdbId: 1 }] }));
+
+    const error = await api.getCalendar().catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(Error);
+    // What the user reads names the likely cause — two containers on different
+    // image tags — rather than a field path.
+    expect((error as Error).message).not.toMatch(/calendar\[0\]/);
+    expect((error as Error).cause).toBeInstanceOf(ApiContractError);
+    expect(((error as Error).cause as Error).message).toMatch(/calendar\[0\]\.seriesImdbId/);
+  });
+
+  it("rejects a progress row that cannot say which episode is next", async () => {
+    fetchMock.mockResolvedValue(
+      json({ progress: [{ imdbId: "tt1", name: "Show", lastSeason: 1, lastEpisode: 2 }] })
+    );
+
+    await expect(api.getSeriesProgress()).rejects.toThrow(Error);
+  });
+
+  it("rejects a history event with no id, which every row's controls act on", async () => {
+    fetchMock.mockResolvedValue(
+      json({ history: [{ imdbId: "tt1", type: "movie", name: "Film", watchedAt: "2026-01-01T00:00:00.000Z", dateUnknown: false }] })
+    );
+
+    await expect(api.getWatchHistory()).rejects.toThrow(Error);
+  });
+
+  it("passes a well-formed response straight through", async () => {
+    const entry = {
+      seriesImdbId: "tt0903747",
+      seriesName: "Breaking Bad",
+      poster: null,
+      season: 5,
+      episode: 14,
+      episodeName: "Ozymandias",
+      airDate: "2026-09-14",
+      overview: null,
+    };
+    fetchMock.mockResolvedValue(json({ calendar: [entry] }));
+
+    await expect(api.getCalendar()).resolves.toEqual({ calendar: [entry] });
+  });
+
+  // A network or auth failure is not a contract failure, and must not be
+  // reported as one — the message would send a self-hoster to check image tags
+  // over an expired token.
+  it("leaves a non-contract failure alone", async () => {
+    fetchMock.mockResolvedValue(routeError(503, { error: "TMDB unavailable" }));
+
+    await expect(api.getCalendar()).rejects.toThrow(ApiError);
   });
 });
 

@@ -6,7 +6,7 @@ import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useToast } from "../hooks/useToast";
 import { useCachedState } from "../hooks/useCachedState";
 import { useClockBoundary } from "../hooks/useClockBoundary";
-import { relogWatchEvent, watchEventLabel } from "../utils/watchEvents";
+import { relogWatchEvent, watchEventLabel, watchEventTitle } from "../utils/watchEvents";
 import { PAGE_TITLE, SECTION_TITLE, KICKER } from "../components/typography";
 
 /** Rows per request. Exported so the route prefetcher's warm-up can match it. */
@@ -36,7 +36,7 @@ function toSearchResult(event: WatchEvent): SearchResult {
   return {
     imdbId: isEpisode ? (event.seriesImdbId ?? event.imdbId) : event.imdbId,
     type: isEpisode ? "series" : "movie",
-    name: event.name,
+    name: watchEventTitle(event),
     year: null,
     poster: event.poster ?? null,
     description: null,
@@ -406,7 +406,7 @@ export function HistoryPage() {
                     style={{ background: "var(--surface-strong)" }}
                   >
                     {event.poster ? (
-                      <img src={event.poster} alt={event.name} className="h-full w-full object-cover" loading="lazy" />
+                      <img src={event.poster} alt={watchEventTitle(event)} className="h-full w-full object-cover" loading="lazy" />
                     ) : event.type === "movie" ? (
                       <Film className="h-5 w-5" style={{ color: "var(--text-mute)" }} />
                     ) : (
@@ -416,7 +416,7 @@ export function HistoryPage() {
 
                   <div className="pointer-events-none relative min-w-0 flex-1">
                     <p className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>
-                      {event.name}
+                      {watchEventTitle(event)}
                       {event.type === "episode" && event.season != null && event.episode != null && (
                         <span className="meta-row" style={{ color: "var(--text-mute)" }}>
                           {" "}S{event.season}E{event.episode}

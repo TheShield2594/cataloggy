@@ -10,15 +10,17 @@ Closes #
 
 ## Checks
 
-The six CI runs, in one line:
+The eight CI runs, in one line:
 
 ```bash
-pnpm check:env && pnpm lint && pnpm typecheck && pnpm test && \
+pnpm check:env && pnpm check:actions && pnpm check:audit && pnpm lint && pnpm typecheck && pnpm test && \
   DATABASE_URL_TEST=postgresql://postgres:postgres@127.0.0.1:5432/cataloggy_int pnpm test:int && \
   pnpm build
 ```
 
 - [ ] `pnpm check:env`
+- [ ] `pnpm check:actions`
+- [ ] `pnpm check:audit` — needs network; the `Security` workflow runs it on every PR
 - [ ] `pnpm lint`
 - [ ] `pnpm typecheck`
 - [ ] `pnpm test`

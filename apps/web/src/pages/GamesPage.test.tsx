@@ -381,12 +381,16 @@ describe("GamesPage add-game modal", () => {
     expect(await dialog.findByText(/no results found/i)).toBeInTheDocument();
   });
 
-  it("closes on Escape", async () => {
+  it("closes on Escape, once its exit has played", async () => {
     const user = userEvent.setup();
     await openModal(user);
 
     await user.keyboard("{Escape}");
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    // Not gone yet: the dialog marks itself exiting and unmounts on the
+    // animationend, which jsdom never raises — so this rides the fallback.
+    expect(screen.getByRole("dialog")).toHaveClass("overlay-exit");
+    expect(screen.getByRole("dialog")).toHaveAttribute("inert");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 1000 });
   });
 });

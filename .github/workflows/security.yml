@@ -46,7 +46,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.9
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
       # Kept in step with verify.yml and the `node:26-alpine` runtime images.
       - name: Set up Node.js
@@ -62,5 +62,11 @@ jobs:
       # dependencies generally up to date, but this catches actively
       # exploited CVEs in between its weekly bumps and flags anything it
       # can't auto-resolve (e.g. no non-breaking fix available yet).
+      #
+      # `pnpm audit --audit-level=high` with one addition: an advisory with no
+      # fix to upgrade to can be waived in .github/audit-allowlist.json, with a
+      # reason and an expiry date, so a merge freeze is not the only way past a
+      # disclosure this project meets before the ecosystem has patched it. The
+      # expiry is enforced — see scripts/check-audit.mjs.
       - name: Audit dependencies
-        run: pnpm audit --audit-level=high
+        run: pnpm check:audit

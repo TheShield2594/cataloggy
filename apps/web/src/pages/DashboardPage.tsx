@@ -32,6 +32,7 @@ import { useHorizontalScroll } from "../components/carousel-utils";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { Poster, POSTER_CARD_SIZES, POSTER_CARD_FILL_SIZES } from "../components/Poster";
 import { useToast } from "../hooks/useToast";
+import { watchEventTitle } from "../utils/watchEvents";
 import { timeAgo, timeUntil } from "../utils/timeAgo";
 import { formatRating, ratingLabel } from "../utils/rating";
 import { useCachedState } from "../hooks/useCachedState";
@@ -1490,13 +1491,13 @@ export function DashboardPage() {
                 <button
                   type="button"
                   className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
-                  onClick={() => setSelectedItem(toSearchResult(historyItemImdbId(event), event.type === "movie" ? "movie" : "series", event.name, { poster: event.poster }))}
-                  aria-label={`View details for ${event.name}`}
+                  onClick={() => setSelectedItem(toSearchResult(historyItemImdbId(event), event.type === "movie" ? "movie" : "series", watchEventTitle(event), { poster: event.poster }))}
+                  aria-label={`View details for ${watchEventTitle(event)}`}
                 />
                 <div
                   className="poster-frame relative aspect-poster overflow-hidden rounded-xl group-hover:scale-[1.03]"
                 >
-                  <Poster src={event.poster} alt={event.name} className="h-full w-full" sizes={POSTER_CARD_SIZES} />
+                  <Poster src={event.poster} alt={watchEventTitle(event)} className="h-full w-full" sizes={POSTER_CARD_SIZES} />
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent px-3 pb-3 pt-12">
                     {event.type === "episode" && event.season != null && event.episode != null ? (
                       <span className="inline-block rounded px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm" style={{ background: "var(--surface-strong)" }}>
@@ -1510,7 +1511,7 @@ export function DashboardPage() {
                   </div>
                 </div>
                 <p className="mt-2.5 truncate text-sm font-semibold text-[var(--text)] transition-colors group-hover:text-claw-text">
-                  {event.name}
+                  {watchEventTitle(event)}
                 </p>
                 <p className="meta-row" style={{ color: "var(--text-dim)" }}>
                   {timeAgo(event.watchedAt)}
