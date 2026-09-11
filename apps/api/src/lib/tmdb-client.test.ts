@@ -5,10 +5,14 @@ vi.mock("./prisma.js", () => ({ prisma: prismaMock }));
 vi.mock("./settings.js", () => ({ getLanguageSetting: vi.fn(async () => "fr-FR") }));
 
 const { getTmdbApiKey, getTmdb, TMDB_API_KEY_KV } = await import("./tmdb-client.js");
+const { kvCacheClear } = await import("./cache.js");
 
 const ORIGINAL_ENV_KEY = process.env.TMDB_API_KEY;
 
 beforeEach(() => {
+  // The KV read cache lives for the process, so one test's saved key would
+  // otherwise still be there for the next one.
+  kvCacheClear();
   prismaMock.kV.findUnique.mockReset().mockResolvedValue(null);
   delete process.env.TMDB_API_KEY;
 });

@@ -19,7 +19,8 @@ vi.mock("../lib/rpdb.js", () => ({
   applyRpdbToMetaList: (metas: unknown[], key: string | null) =>
     key ? metas.map((m) => ({ ...(m as object), poster: "rpdb" })) : metas,
 }));
-vi.mock("../lib/cache.js", () => ({
+vi.mock("../lib/cache.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/cache.js")>()),
   trendingCacheGet: (...a: unknown[]) => trendingCacheGet(...a),
   trendingCacheSet: (...a: unknown[]) => trendingCacheSet(...a),
 }));

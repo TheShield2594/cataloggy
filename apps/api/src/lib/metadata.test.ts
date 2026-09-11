@@ -19,7 +19,8 @@ vi.mock("./omdb.js", () => omdbMock);
 // The real cooldown is an LRU with a 6h TTL; a plain Set gives the same
 // has/set surface while staying inspectable and resettable per test.
 const cooldownKeys = new Set<string>();
-vi.mock("./cache.js", () => ({
+vi.mock("./cache.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./cache.js")>()),
   metadataBackfillCooldownCache: {
     has: (key: string) => cooldownKeys.has(key),
     set: (key: string) => cooldownKeys.add(key),

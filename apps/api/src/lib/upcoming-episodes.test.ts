@@ -14,7 +14,8 @@ const getTmdb = vi.fn();
 vi.mock("./tmdb-client.js", () => ({ getTmdb: () => getTmdb() }));
 
 const showDetailsCache = new Map<string, unknown>();
-vi.mock("./cache.js", () => ({
+vi.mock("./cache.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./cache.js")>()),
   showDetailsCache: {
     get: (key: string) => showDetailsCache.get(key),
     set: (key: string, value: unknown) => showDetailsCache.set(key, value),
@@ -190,6 +191,65 @@ describe("getUpcomingEpisodes", () => {
     await getUpcomingEpisodes(PROFILE, 7, null);
 
     expect(prismaMock.seriesProgress.findMany.mock.calls[0][0]).not.toHaveProperty("take");
+  });
+
+  // The notification job passes no cap, so without this the per-tick TMDB
+  // fan-out is the size of the library rather than the part of it still airing.
+  it("asks TMDB only about series that can still have another episode", async () => {
+    prismaMock.seriesProgress.findMany.mockResolvedValue([
+      { seriesImdbId: SOPRANOS, lastWatchedAt: new Date("2026-05-02T20:00:00Z") },
+      { seriesImdbId: WIRE, lastWatchedAt: new Date("2026-05-01T20:00:00Z") },
+    ]);
+    // The Wire is filtered out by the query, so it never comes back here.
+    prismaMock.metadata.findMany.mockResolvedValue([
+      { imdbId: SOPRANOS, tmdbId: 1398, name: "The Sopranos", poster: "/poster.jpg" },
+    ]);
+
+    await getUpcomingEpisodes(PROFILE, 7, null);
+
+    expect(prismaMock.metadata.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          tmdbId: { not: null },
+          OR: [{ status: null }, { status: { notIn: ["Ended", "Canceled"] } }],
+        }),
+      })
+    );
+    expect(getShowDetails).toHaveBeenCalledTimes(1);
+    expect(getShowDetails).toHaveBeenCalledWith(1398);
+  });
+
+  // A show whose status has not been filled in yet must not be dropped: the
+  // cost of being wrong that way is an episode that silently never notifies.
+  it("keeps a series whose status is unknown", async () => {
+    await getUpcomingEpisodes(PROFILE, 7, null);
+
+    expect(prismaMock.metadata.findMany.mock.calls[0][0].where.OR).toContainEqual({ status: null });
+  });
+
+  // Ordered by the progress rows, not by whatever order Postgres returned the
+  // metadata in, so the most recently watched shows are still fetched first.
+  it("asks about series in most-recently-watched order", async () => {
+    prismaMock.seriesProgress.findMany.mockResolvedValue([
+      { seriesImdbId: SOPRANOS, lastWatchedAt: new Date("2026-05-02T20:00:00Z") },
+      { seriesImdbId: WIRE, lastWatchedAt: new Date("2026-05-01T20:00:00Z") },
+    ]);
+    prismaMock.metadata.findMany.mockResolvedValue([
+      { imdbId: WIRE, tmdbId: 1438, name: "The Wire", poster: null },
+      { imdbId: SOPRANOS, tmdbId: 1398, name: "The Sopranos", poster: "/poster.jpg" },
+    ]);
+    getShowDetails.mockResolvedValue({ nextEpisodeToAir: null });
+
+    await getUpcomingEpisodes(PROFILE, 7, null);
+
+    expect(getShowDetails.mock.calls.map((call) => call[0])).toEqual([1398, 1438]);
+  });
+
+  it("does not reach TMDB at all when no tracked series can still air", async () => {
+    prismaMock.metadata.findMany.mockResolvedValue([]);
+
+    expect(await getUpcomingEpisodes(PROFILE, 7, null)).toEqual([]);
+    expect(getShowDetails).not.toHaveBeenCalled();
   });
 });
 

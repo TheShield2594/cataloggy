@@ -8,10 +8,14 @@ vi.mock("./prisma.js", () => ({ prisma: prismaMock }));
 
 const { readSecretKv, writeSecretKv } = await import("./secret-store.js");
 const { decryptSecret, encryptSecret, kvSecretContext } = await import("./secret-box.js");
+const { kvCacheClear } = await import("./cache.js");
 
 const originalToken = process.env.API_TOKEN;
 
 beforeEach(() => {
+  // The KV read cache lives for the process, so one test's row would otherwise
+  // still be there for the next one.
+  kvCacheClear();
   vi.clearAllMocks();
   prismaMock.kV.upsert.mockResolvedValue({});
   process.env.API_TOKEN = "secret-store-token";

@@ -41,7 +41,8 @@ vi.mock("../lib/rpdb.js", () => ({
   getRpdbApiKey: () => getRpdbApiKey(),
   applyRpdbToMetaList: (metas: unknown[]) => metas,
 }));
-vi.mock("../lib/cache.js", () => ({
+vi.mock("../lib/cache.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/cache.js")>()),
   trendingCacheGet: (...a: unknown[]) => trendingCacheGet(...a),
   trendingCacheSet: (...a: unknown[]) => trendingCacheSet(...a),
   trendingCacheDeletePrefix: (...a: unknown[]) => trendingCacheDeletePrefix(...a),

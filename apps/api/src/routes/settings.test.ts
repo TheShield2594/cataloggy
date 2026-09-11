@@ -16,6 +16,9 @@ const prismaMock = {
 const getLanguageSetting = vi.fn();
 const getRegionSetting = vi.fn();
 const getSpoilerProtection = vi.fn();
+const setLanguageSetting = vi.fn();
+const setRegionSetting = vi.fn();
+const setSpoilerProtection = vi.fn();
 const getOmdbApiKey = vi.fn();
 const getTmdbApiKey = vi.fn();
 const getRpdbApiKey = vi.fn();
@@ -30,6 +33,9 @@ vi.mock("../lib/settings.js", () => ({
   getLanguageSetting: () => getLanguageSetting(),
   getRegionSetting: () => getRegionSetting(),
   getSpoilerProtection: () => getSpoilerProtection(),
+  setLanguageSetting: (...a: unknown[]) => setLanguageSetting(...a),
+  setRegionSetting: (...a: unknown[]) => setRegionSetting(...a),
+  setSpoilerProtection: (...a: unknown[]) => setSpoilerProtection(...a),
 }));
 vi.mock("../lib/omdb.js", () => ({
   OMDB_API_KEY_KV: "omdb:apiKey",
@@ -43,7 +49,10 @@ vi.mock("../lib/rpdb.js", () => ({
   RPDB_API_KEY_KV: "rpdb:apiKey",
   getRpdbApiKey: () => getRpdbApiKey(),
 }));
-vi.mock("../lib/cache.js", () => ({ trendingCache: { clear: () => trendingCacheClear() } }));
+vi.mock("../lib/cache.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/cache.js")>()),
+  trendingCache: { clear: () => trendingCacheClear() },
+}));
 // `failuresFrom` is a pure projection over whatever `getJobRuns` returned, so
 // the route is tested against the real one rather than a second copy of it.
 vi.mock("../lib/job-status.js", async (importOriginal) => ({
@@ -66,6 +75,9 @@ describe("settings routes", () => {
     getJobRuns.mockResolvedValue([]);
     prismaMock.kV.upsert.mockResolvedValue({});
     prismaMock.kV.deleteMany.mockResolvedValue({ count: 1 });
+    setLanguageSetting.mockResolvedValue(undefined);
+    setRegionSetting.mockResolvedValue(undefined);
+    setSpoilerProtection.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -98,12 +110,7 @@ describe("settings routes", () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(prismaMock.kV.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { key: "settings:language" },
-          update: expect.objectContaining({ value: "en-US" }),
-        })
-      );
+      expect(setLanguageSetting).toHaveBeenCalledWith("en-US");
     });
 
     it("accepts a bare language without a region subtag", async () => {
@@ -116,9 +123,7 @@ describe("settings routes", () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(prismaMock.kV.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({ update: expect.objectContaining({ value: "fr" }) })
-      );
+      expect(setLanguageSetting).toHaveBeenCalledWith("fr");
     });
 
     it("rejects a malformed language tag", async () => {
@@ -131,7 +136,7 @@ describe("settings routes", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      expect(prismaMock.kV.upsert).not.toHaveBeenCalled();
+      expect(setLanguageSetting).not.toHaveBeenCalled();
     });
 
     it("uppercases a region code", async () => {
@@ -144,12 +149,7 @@ describe("settings routes", () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(prismaMock.kV.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { key: "settings:region" },
-          update: expect.objectContaining({ value: "GB" }),
-        })
-      );
+      expect(setRegionSetting).toHaveBeenCalledWith("GB");
     });
 
     it("rejects a region that is not two letters", async () => {
@@ -176,12 +176,7 @@ describe("settings routes", () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(prismaMock.kV.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { key: "settings:spoilerProtection" },
-          update: expect.objectContaining({ value: "false" }),
-        })
-      );
+      expect(setSpoilerProtection).toHaveBeenCalledWith(false);
     });
 
     it("clears the trending cache so cached rows pick up the new region", async () => {
