@@ -15,6 +15,7 @@ import { formatPlaytime } from "../utils/playtime";
 import { formatRating, ratingLabel, RATING_MAX } from "../utils/rating";
 import { PAGE_TITLE, SECTION_TITLE } from "../components/typography";
 import { PosterGrid } from "../components/PosterGrid";
+import { PosterCard } from "../components/PosterCard";
 
 const SORT_OPTIONS: { value: GameSort; label: string }[] = [
   { value: "recent", label: "Recently Played" },
@@ -280,56 +281,24 @@ function AddGameModal({
 
 function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => void }) {
   return (
-    <div className="group flex flex-col">
-      <div
-        // `ring-black/5` was invisible on the four dark themes, so cards of the
-        // same rank carried two different edge treatments — this one and the
-        // Dashboard's themed hairline. --border matches the Dashboard. It stays
-        // a ring rather than an inline inset shadow so .card-lift's hover
-        // shadow can still replace it; an inline style would outrank that.
-        className="card-lift relative rounded-xl ring-1 ring-[var(--border)]"
-        style={{ aspectRatio: "var(--poster-ratio)" }}
-      >
-        {/* A real button rather than a `role="button"` div, matching the
-            Dashboard card and the search result beside it: it inherits Enter and
-            Space, the disabled/active semantics and the announcement assistive
-            tech expects, instead of re-implementing the first and forgoing the
-            rest. `overflow-hidden` moved to the frame below so the cover's hover
-            scale is still clipped while this button's offset focus ring is not. */}
-        <button
-          type="button"
-          onClick={() => onSelect(game)}
-          aria-label={`View details for ${game.title}`}
-          className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
-        />
-
-        <div className="absolute inset-0 overflow-hidden rounded-xl">
-          {game.coverUrl ? (
-            <img
-              src={game.coverUrl}
-              alt={game.title}
-              className="h-full w-full object-cover transition-transform duration-slow group-hover:scale-105"
-              loading="lazy"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br" style={{ "--tw-gradient-from": "var(--surface)", "--tw-gradient-to": "var(--surface-strong)" } as React.CSSProperties}>
-              <Gamepad2 className="h-12 w-12" style={{ color: "var(--text-mute)" }} />
-            </div>
-          )}
-
-          {/* Fixed green rather than --success-text, for the same reason
-              .btn-danger's rose is fixed: this badge sits on cover art, not on a
-              theme surface, so it has to carry its own contrast. The pale
-              emerald-500 it used measured 2.30:1 against the white on top of it;
-              this pairing is 6.8:1 and reads as the same green. */}
-          {game.finished && (
-            <span className="absolute left-2.5 top-2.5 flex items-center gap-1 rounded-md bg-[#00693e] px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-white shadow-e1">
-              <Check aria-hidden="true" className="h-3 w-3" /> Finished
-            </span>
-          )}
-        </div>
-      </div>
-
+    <PosterCard
+      poster={game.coverUrl}
+      name={game.title}
+      onOpen={() => onSelect(game)}
+      className="flex flex-col"
+      overlay={
+        /* Fixed green rather than --success-text, for the same reason
+           .btn-danger's rose is fixed: this badge sits on cover art, not on a
+           theme surface, so it has to carry its own contrast. The pale
+           emerald-500 it used measured 2.30:1 against the white on top of it;
+           this pairing is 6.8:1 and reads as the same green. */
+        game.finished && (
+          <span className="absolute left-2.5 top-2.5 flex items-center gap-1 rounded-md bg-[#00693e] px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-white shadow-e1">
+            <Check aria-hidden="true" className="h-3 w-3" /> Finished
+          </span>
+        )
+      }
+    >
       <div className="mt-3">
         <p className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>{game.title}</p>
         <div className="mt-0.5 flex items-center gap-2">
@@ -345,7 +314,7 @@ function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => vo
           )}
         </div>
       </div>
-    </div>
+    </PosterCard>
   );
 }
 

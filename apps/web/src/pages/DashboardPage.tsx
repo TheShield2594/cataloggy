@@ -42,6 +42,7 @@ import { ScrollArrows } from "../components/ScrollArrows";
 import { SectionHeader } from "../components/SectionHeader";
 import { SectionError } from "../components/SectionError";
 import { PosterCard } from "../components/PosterCard";
+import { useDashboardSection } from "../hooks/useDashboardSection";
 
 /* ─── Skeleton placeholders ─── */
 
@@ -79,6 +80,9 @@ function RecentlyWatchedSkeleton() {
 // already optional, and a missing prop and an undefined one are the same thing
 // to React and to everything below. The distinction the flag exists for is
 // made where it is real — a Prisma `data`, a `fetch` init, a Fastify option.
+/** What `GET /recommendations/ai` answers with. */
+type AiRecommendationsResponse = { metas: TrendingMeta[]; reasons?: Record<string, string> | undefined };
+
 type DiscoveryItem = {
   id: string;
   name: string;
@@ -642,26 +646,71 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(!progressMeta.hadCachedValue && !historyMeta.hadCachedValue);
   const [error, setError] = useState<string | null>(null);
 
-  const [detailedStats, setDetailedStats, detailedMeta] = useCachedState<DetailedWatchStats | null>("dash:detailed-stats", null);
-  const [detailedLoading, setDetailedLoading] = useState(!detailedMeta.hadCachedValue);
-  const [detailedFailed, setDetailedFailed] = useState(false);
-
-  const [trendingMovies, setTrendingMovies, trendingMeta] = useCachedState<TrendingMeta[]>("dash:trending", []);
-  const [trendingLoading, setTrendingLoading] = useState(!trendingMeta.hadCachedValue);
   const [trendingNeedsTmdb, setTrendingNeedsTmdb] = useState(false);
-  const [recommendations, setRecommendations, recsMeta] = useCachedState<TrendingMeta[]>("dash:recs:movie", []);
-  const [recsLoading, setRecsLoading] = useState(!recsMeta.hadCachedValue);
-  const [recsFailed, setRecsFailed] = useState(false);
-  const [seriesRecs, setSeriesRecs, seriesRecsMeta] = useCachedState<TrendingMeta[]>("dash:recs:series", []);
-  const [seriesRecsLoading, setSeriesRecsLoading] = useState(!seriesRecsMeta.hadCachedValue);
-  const [seriesRecsFailed, setSeriesRecsFailed] = useState(false);
   const [aiActive, setAiActive] = useState(false);
   const [aiLastGeneratedAt, setAiLastGeneratedAt] = useState<string | null>(null);
   const [movieReasons, setMovieReasons] = useState<Record<string, string>>({});
   const [seriesReasons, setSeriesReasons] = useState<Record<string, string>>({});
-  const [calendarEntries, setCalendarEntries, calendarMeta] = useCachedState<CalendarEntry[]>("dash:calendar", []);
-  const [calendarLoading, setCalendarLoading] = useState(!calendarMeta.hadCachedValue);
-  const [calendarFailed, setCalendarFailed] = useState(false);
+
+  // Each rail loads, fails and retries on its own, so each gets its own
+  // section — which is what keeps a Retry on one from invalidating a request
+  // still in flight beside it. See `useDashboardSection` for the guard.
+  const detailed = useDashboardSection<DetailedWatchStats | null>(
+    "dash:detailed-stats",
+    null,
+    useCallback(() => api.getDetailedStats(), []),
+  );
+
+  const trending = useDashboardSection<TrendingMeta[], { metas: TrendingMeta[] }>(
+    "dash:trending",
+    [],
+    useCallback(() => api.getTrending("movie", "week"), []),
+    {
+      apply: (res, set) => set(res.metas ?? []),
+      // An unconfigured TMDB key is the one failure worth naming: the rail then
+      // says what to go and set rather than offering a Retry that cannot work.
+      onError: useCallback((err: unknown) => {
+        setTrendingNeedsTmdb(err instanceof Error && /tmdb/i.test(err.message));
+      }, []),
+    },
+  );
+
+  const movieRecs = useDashboardSection<TrendingMeta[], AiRecommendationsResponse>(
+    "dash:recs:movie",
+    [],
+    useCallback(() => api.getAiRecommendations("movie", 20), []),
+    {
+      apply: useCallback((res: AiRecommendationsResponse, set: (v: TrendingMeta[]) => void) => {
+        set(res.metas ?? []);
+        setMovieReasons(res.reasons ?? {});
+      }, []),
+    },
+  );
+
+  const seriesRecsSection = useDashboardSection<TrendingMeta[], AiRecommendationsResponse>(
+    "dash:recs:series",
+    [],
+    useCallback(() => api.getAiRecommendations("series", 20), []),
+    {
+      apply: useCallback((res: AiRecommendationsResponse, set: (v: TrendingMeta[]) => void) => {
+        set(res.metas ?? []);
+        setSeriesReasons(res.reasons ?? {});
+      }, []),
+    },
+  );
+
+  const calendar = useDashboardSection<CalendarEntry[], { calendar: CalendarEntry[] }>(
+    "dash:calendar",
+    [],
+    useCallback(() => api.getCalendar(14), []),
+    { apply: (res, set) => set(res.calendar ?? []) },
+  );
+
+  const detailedStats = detailed.value;
+  const trendingMovies = trending.value;
+  const recommendations = movieRecs.value;
+  const seriesRecs = seriesRecsSection.value;
+  const calendarEntries = calendar.value;
 
   const [markingNext, setMarkingNext] = useState<Set<string>>(new Set());
   const [markedDone, setMarkedDone] = useState<Set<string>>(new Set());
@@ -737,96 +786,38 @@ export function DashboardPage() {
 
   const profileId = runtimeConfig.getProfileId();
 
-  // Each section loader is callable on its own so its error state can offer a
-  // retry. The token guard keeps the newest call's result: a retry, or a
-  // profile switch, must not be overwritten by the slower request it replaced.
-  const detailedToken = useRef(0);
-  const loadDetailedStats = useCallback(async () => {
-    const token = ++detailedToken.current;
-    setDetailedLoading(true);
-    setDetailedFailed(false);
-    try {
-      const res = await api.getDetailedStats();
-      if (detailedToken.current === token) setDetailedStats(res);
-    } catch (err) {
-      console.error("Failed to fetch detailed stats:", err);
-      if (detailedToken.current === token) setDetailedFailed(true);
-    } finally {
-      if (detailedToken.current === token) setDetailedLoading(false);
-    }
-  }, [setDetailedStats]);
-
-  const trendingToken = useRef(0);
-  const loadTrending = useCallback(async () => {
-    const token = ++trendingToken.current;
-    setTrendingLoading(true);
-    setTrendingNeedsTmdb(false);
-    try {
-      const res = await api.getTrending("movie", "week");
-      if (trendingToken.current === token) setTrendingMovies(res.metas ?? []);
-    } catch (err) {
-      console.error("Failed to fetch trending:", err);
-      if (trendingToken.current === token) {
-        setTrendingMovies([]);
-        setTrendingNeedsTmdb(err instanceof Error && /tmdb/i.test(err.message));
-      }
-    } finally {
-      if (trendingToken.current === token) setTrendingLoading(false);
-    }
-  }, [setTrendingMovies]);
-
-  // One counter per rail rather than one for both. The rails have separate
-  // Retry buttons and load independently, so retrying movies must not
-  // invalidate the series request that is still in flight beside it — and
-  // `loadAiSection` starts both, so a shared counter would have its second
-  // `loadRecs` call discard the first's answer.
-  const recsToken = useRef<Record<"movie" | "series", number>>({ movie: 0, series: 0 });
-  const loadRecs = useCallback(async (kind: "movie" | "series") => {
-    const isMovie = kind === "movie";
-    const setLoadingFor = isMovie ? setRecsLoading : setSeriesRecsLoading;
-    const setFailedFor = isMovie ? setRecsFailed : setSeriesRecsFailed;
-    // Incremented, like every other loader here. Reading the counter without
-    // advancing it made this no guard at all in the direction that matters: a
-    // request never invalidated the one it replaced, so a Retry and the request
-    // it was retrying both passed the check below, and whichever finished last
-    // won — including a failure landing after good recommendations, which
-    // replaces them with an error offering to fetch them again.
-    const token = ++recsToken.current[kind];
-    setLoadingFor(true);
-    setFailedFor(false);
-    try {
-      const res = await api.getAiRecommendations(kind, 20);
-      if (recsToken.current[kind] !== token) return;
-      if (isMovie) {
-        setRecommendations(res.metas ?? []);
-        setMovieReasons(res.reasons ?? {});
-      } else {
-        setSeriesRecs(res.metas ?? []);
-        setSeriesReasons(res.reasons ?? {});
-      }
-    } catch (err) {
-      console.error(`Failed to fetch ${kind} recommendations:`, err);
-      if (recsToken.current[kind] === token) setFailedFor(true);
-    } finally {
-      if (recsToken.current[kind] === token) setLoadingFor(false);
-    }
-  }, [setRecommendations, setSeriesRecs]);
-
   // AI config gates both rails: a failure here means neither can be fetched, so
   // it surfaces as a failure on both rather than as two empty rows.
+  //
+  // Destructured rather than closing over the two section objects: those are
+  // rebuilt on every render, so depending on them would make this callback new
+  // on every render too — and the effect that calls it runs on its identity.
+  // Everything below is stable for the life of the section.
+  const {
+    claim: claimMovieRecs,
+    isCurrent: movieRecsIsCurrent,
+    load: loadMovieRecs,
+    setLoading: setMovieRecsLoading,
+    setFailed: setMovieRecsFailed,
+  } = movieRecs;
+  const {
+    claim: claimSeriesRecs,
+    isCurrent: seriesRecsIsCurrent,
+    load: loadSeriesRecs,
+    setLoading: setSeriesRecsLoading,
+    setFailed: setSeriesRecsFailed,
+  } = seriesRecsSection;
+
   const loadAiSection = useCallback(async () => {
-    // Both rails restart from here, so both tokens move — an answer from a
-    // request either rail had in flight belongs to the previous run of this
-    // section and is no longer the one on screen.
-    const tokens = {
-      movie: ++recsToken.current.movie,
-      series: ++recsToken.current.series,
-    };
-    const superseded = () =>
-      recsToken.current.movie !== tokens.movie || recsToken.current.series !== tokens.series;
-    setRecsLoading(true);
+    // Both rails restart from here, so both tokens move — an answer either rail
+    // had in flight belongs to the previous run of this section and is no
+    // longer the one on screen.
+    const movieToken = claimMovieRecs();
+    const seriesToken = claimSeriesRecs();
+    const superseded = () => !movieRecsIsCurrent(movieToken) || !seriesRecsIsCurrent(seriesToken);
+    setMovieRecsLoading(true);
     setSeriesRecsLoading(true);
-    setRecsFailed(false);
+    setMovieRecsFailed(false);
     setSeriesRecsFailed(false);
     try {
       const configRes = await api.getAiConfig();
@@ -835,45 +826,43 @@ export function DashboardPage() {
       setAiLastGeneratedAt(configRes.lastGeneratedAt ?? null);
 
       if (!configRes.configured) {
-        setRecsLoading(false);
+        setMovieRecsLoading(false);
         setSeriesRecsLoading(false);
         return;
       }
 
-      void loadRecs("movie");
-      void loadRecs("series");
+      void loadMovieRecs();
+      void loadSeriesRecs();
     } catch (err) {
       console.error("Failed to fetch AI config:", err);
       if (superseded()) return;
-      setRecsFailed(true);
+      setMovieRecsFailed(true);
       setSeriesRecsFailed(true);
-      setRecsLoading(false);
+      setMovieRecsLoading(false);
       setSeriesRecsLoading(false);
     }
-  }, [loadRecs]);
+  }, [
+    claimMovieRecs,
+    claimSeriesRecs,
+    movieRecsIsCurrent,
+    seriesRecsIsCurrent,
+    loadMovieRecs,
+    loadSeriesRecs,
+    setMovieRecsLoading,
+    setSeriesRecsLoading,
+    setMovieRecsFailed,
+    setSeriesRecsFailed,
+  ]);
 
-  const calendarToken = useRef(0);
-  const loadCalendar = useCallback(async () => {
-    const token = ++calendarToken.current;
-    setCalendarLoading(true);
-    setCalendarFailed(false);
-    try {
-      const res = await api.getCalendar(14);
-      if (calendarToken.current === token) setCalendarEntries(res.calendar ?? []);
-    } catch (err) {
-      console.error("Failed to fetch calendar:", err);
-      if (calendarToken.current === token) setCalendarFailed(true);
-    } finally {
-      if (calendarToken.current === token) setCalendarLoading(false);
-    }
-  }, [setCalendarEntries]);
-
+  const loadDetailed = detailed.load;
+  const loadTrending = trending.load;
+  const loadCalendar = calendar.load;
   useEffect(() => {
-    void loadDetailedStats();
+    void loadDetailed();
     void loadTrending();
     void loadAiSection();
     void loadCalendar();
-  }, [profileId, loadDetailedStats, loadTrending, loadAiSection, loadCalendar]);
+  }, [profileId, loadDetailed, loadTrending, loadAiSection, loadCalendar]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -923,7 +912,7 @@ export function DashboardPage() {
       checkSeriesRecsScroll();
     }, 50);
     return () => clearTimeout(timer);
-  }, [loading, trendingLoading, recsLoading, seriesRecsLoading, progress.length, history.length,
+  }, [loading, trending.loading, movieRecs.loading, seriesRecsSection.loading, progress.length, history.length,
     checkContinueScroll, checkRecentScroll, checkRecsScroll, checkSeriesRecsScroll]);
 
   const handleMarkNext = async (imdbId: string) => {
@@ -993,7 +982,7 @@ export function DashboardPage() {
 
   // Includes the failure case so the column — and the two-column grid with it —
   // stays put and reports the problem instead of quietly reflowing to one column.
-  const hasUpcoming = calendarLoading || calendarEntries.length > 0 || calendarFailed;
+  const hasUpcoming = calendar.loading || calendarEntries.length > 0 || calendar.failed;
 
   // The check-in hero and the Continue Watching hero can end up showing the same series
   // (e.g. actively checked into the episode that's also furthest along in progress).
@@ -1014,9 +1003,9 @@ export function DashboardPage() {
         totalEpisodes={stats?.totalEpisodes ?? 0}
         topGenre={detailedStats?.genreDistribution[0]?.genre}
         loading={loading}
-        statsLoading={detailedLoading}
-        statsFailed={detailedFailed}
-        onRetryStats={() => void loadDetailedStats()}
+        statsLoading={detailed.loading}
+        statsFailed={detailed.failed}
+        onRetryStats={() => void loadDetailed()}
       />
 
       {/* ── Hero: Now Watching ── */}
@@ -1211,7 +1200,7 @@ export function DashboardPage() {
               Search &rarr;
             </Link>
           </SectionHeader>
-          {trendingLoading ? (
+          {trending.loading ? (
             <div className="grid grid-cols-2 gap-3 sm:[grid-template-columns:repeat(auto-fit,var(--poster-card-w))]">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="skeleton aspect-poster rounded-xl" />
@@ -1266,13 +1255,13 @@ export function DashboardPage() {
                 Full calendar &rarr;
               </Link>
             </SectionHeader>
-            {calendarLoading ? (
+            {calendar.loading ? (
               <div className="space-y-2">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="skeleton h-16 rounded-xl" />
                 ))}
               </div>
-            ) : calendarFailed ? (
+            ) : calendar.failed ? (
               <SectionError message="Couldn't load upcoming episodes." onRetry={() => void loadCalendar()} />
             ) : (
               <div className="space-y-2">
@@ -1326,7 +1315,7 @@ export function DashboardPage() {
       </div>
 
       {/* ── Discover: shared section for both recommendation rails ── */}
-      {(recsLoading || recommendations.length > 0 || recsFailed || seriesRecsLoading || seriesRecs.length > 0 || seriesRecsFailed) && (
+      {(movieRecs.loading || recommendations.length > 0 || movieRecs.failed || seriesRecsSection.loading || seriesRecs.length > 0 || seriesRecsSection.failed) && (
         <section>
           <SectionHeader title={aiActive ? "AI Picks" : "Discover"}>
             {aiActive && aiLastGeneratedAt && (() => {
@@ -1343,9 +1332,9 @@ export function DashboardPage() {
           <div className="space-y-5">
             <DiscoverSubRow
               label="Movies"
-              loading={recsLoading}
-              failed={recsFailed}
-              onRetry={() => void (aiActive ? loadRecs("movie") : loadAiSection())}
+              loading={movieRecs.loading}
+              failed={movieRecs.failed}
+              onRetry={() => void (aiActive ? loadMovieRecs() : loadAiSection())}
               items={recommendations}
               reasons={movieReasons}
               aiActive={aiActive}
@@ -1354,9 +1343,9 @@ export function DashboardPage() {
             />
             <DiscoverSubRow
               label="Series"
-              loading={seriesRecsLoading}
-              failed={seriesRecsFailed}
-              onRetry={() => void (aiActive ? loadRecs("series") : loadAiSection())}
+              loading={seriesRecsSection.loading}
+              failed={seriesRecsSection.failed}
+              onRetry={() => void (aiActive ? loadSeriesRecs() : loadAiSection())}
               items={seriesRecs}
               reasons={seriesReasons}
               aiActive={aiActive}
