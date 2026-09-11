@@ -1,4 +1,5 @@
 import { getCacheScope, isFresh, writeCacheForScope } from "./dataCache";
+import { PAGE_SIZE as HISTORY_PAGE_SIZE } from "../pages/history-paging";
 
 // Every route but the dashboard is code-split, so the first visit to one spends
 // a network round trip fetching its chunk *before* the page mounts and can even
@@ -81,15 +82,13 @@ const ROUTE_DATA_WARMERS: Record<string, (scope: string) => Promise<void>> = {
   // that happens to be near it: the page counts its next offset from the rows
   // it is holding, so warming it with more than a page seeded a first page no
   // request would ever have returned — and one that visibly shrank to 25 rows
-  // the moment the page's own load landed. Reaching into the route's module for
-  // it costs nothing here, because `prefetchRoute` has already started that
-  // very chunk by the time this runs; the import resolves off the same promise.
+  // the moment the page's own load landed. The constant lives in a module of its
+  // own so reading it costs nothing: taken off `HistoryPage`, the request could
+  // not leave until that chunk had arrived and run, which is the wait this
+  // warm-up is supposed to overlap rather than stand behind.
   "/history": async (scope) => {
-    const [{ api }, { PAGE_SIZE }] = await Promise.all([
-      import("../api"),
-      import("../pages/HistoryPage"),
-    ]);
-    writeCacheForScope(scope, "history:events:all", await api.getWatchHistory(PAGE_SIZE));
+    const { api } = await import("../api");
+    writeCacheForScope(scope, "history:events:all", await api.getWatchHistory(HISTORY_PAGE_SIZE));
   },
   "/stats": async (scope) => {
     const { api } = await import("../api");
