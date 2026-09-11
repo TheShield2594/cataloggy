@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
+import { first } from "../lib/test-fixtures/present.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -438,7 +439,7 @@ describe("ai routes", () => {
       });
 
       expect(res.statusCode).toBe(200);
-      const saved = JSON.parse(prismaMock.kV.upsert.mock.calls[0][0].create.value);
+      const saved = JSON.parse(first(prismaMock.kV.upsert.mock.calls, "prismaMock.kV.upsert call")[0].create.value);
       expect(saved.payload.max_tokens).toBe(await minAiConfigMaxTokens());
     });
 
@@ -451,7 +452,7 @@ describe("ai routes", () => {
         payload: { config: { ...validConfig, payload: { model: "m", max_tokens: 8000 } } },
       });
 
-      const saved = JSON.parse(prismaMock.kV.upsert.mock.calls[0][0].create.value);
+      const saved = JSON.parse(first(prismaMock.kV.upsert.mock.calls, "prismaMock.kV.upsert call")[0].create.value);
       expect(saved.payload.max_tokens).toBe(8000);
     });
 
@@ -505,7 +506,7 @@ describe("ai routes", () => {
 
       await app.inject({ method: "POST", url: "/ai/test", payload: { config: validConfig } });
 
-      expect(fetchMock.mock.calls[0][1]).toMatchObject({ redirect: "error" });
+      expect(first(fetchMock.mock.calls, "fetchMock call")[1]).toMatchObject({ redirect: "error" });
     });
 
     it("reports neither the upstream body nor its status code", async () => {

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyBaseLogger } from "fastify";
+import { first } from "./test-fixtures/present.js";
 
 const makeLogger = (): FastifyBaseLogger =>
   ({
@@ -94,7 +95,7 @@ describe("play-signal", () => {
     const result = await recordPlaySignal(episodeSignal(2, 7));
 
     expect(result.status).toBe("opened");
-    const created = prismaMock.playSignal.create.mock.calls[0][0].data;
+    const created = first(prismaMock.playSignal.create.mock.calls, "prismaMock.playSignal.create call")[0].data;
     expect(created.key).toBe("episode:tt0903747:2:7");
     // 50 minutes of runtime × 0.8 = 40 minutes out.
     expect(created.dueAt.getTime() - before).toBeGreaterThanOrEqual(40 * MINUTE - 1000);
@@ -259,7 +260,7 @@ describe("play-signal", () => {
     const before = Date.now();
     await recordPlaySignal({ ...episodeSignal(0, 0), type: "movie", imdbId: "tt0111161", seriesImdbId: null });
 
-    const created = prismaMock.playSignal.create.mock.calls[0][0].data;
+    const created = first(prismaMock.playSignal.create.mock.calls, "prismaMock.playSignal.create call")[0].data;
     // 100-minute movie default × 0.8 = 80 minutes.
     expect(created.dueAt.getTime() - before).toBeGreaterThanOrEqual(80 * MINUTE - 1000);
   });

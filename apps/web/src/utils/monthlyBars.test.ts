@@ -22,7 +22,8 @@ describe("monthlyBarGeometry", () => {
   it("keeps the two segments summing to the stack height", () => {
     // The label is positioned at `height`, so a stack whose segments drifted
     // from it would leave the number floating off the top of its own bar.
-    for (const [movies, episodes] of [[1, 2], [7, 0], [0, 3], [13, 29]]) {
+    const cases: [number, number][] = [[1, 2], [7, 0], [0, 3], [13, 29]];
+    for (const [movies, episodes] of cases) {
       const bar = monthlyBarGeometry(movies, episodes, 30);
       expect(bar.movieHeight + bar.episodeHeight).toBeCloseTo(bar.height);
     }

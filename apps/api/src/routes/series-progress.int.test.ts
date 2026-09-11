@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { buildIntApp, createProfile } from "../lib/test-fixtures/int-db.js";
+import { at } from "../lib/test-fixtures/present.js";
 
 // Rewinding progress when an episode is un-watched is a read-then-write inside a
 // transaction: delete the event, find whatever is now the latest episode event
@@ -166,7 +167,7 @@ describe("DELETE /series/:imdbId/season/:s/episode/:e/watch", () => {
 describe("DELETE /watch/:eventId", () => {
   it("rewinds progress to the next-latest episode", async () => {
     const { events } = await seedThreeEpisodes();
-    const latest = events[2];
+    const latest = at(events, 2, "seeded episode");
 
     const response = await watchApp.inject({ method: "DELETE", url: `/watch/${latest.id}` });
 
@@ -176,7 +177,7 @@ describe("DELETE /watch/:eventId", () => {
 
   it("leaves progress where it is when an older event goes", async () => {
     const { events } = await seedThreeEpisodes();
-    const middle = events[1];
+    const middle = at(events, 1, "seeded episode");
 
     await watchApp.inject({ method: "DELETE", url: `/watch/${middle.id}` });
 
@@ -199,7 +200,7 @@ describe("DELETE /watch/:eventId", () => {
     const bob = await createProfile("Bob");
 
     profileId = bob.id;
-    const response = await watchApp.inject({ method: "DELETE", url: `/watch/${events[2].id}` });
+    const response = await watchApp.inject({ method: "DELETE", url: `/watch/${at(events, 2, "seeded episode").id}` });
 
     expect(response.statusCode).toBe(404);
     expect(await prisma.watchEvent.count()).toBe(3);

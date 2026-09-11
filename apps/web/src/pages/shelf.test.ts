@@ -15,6 +15,7 @@ import {
   shelfEntryFromSeriesProgress,
   shelfSummary,
 } from "./shelf";
+import { first } from "../test/present";
 
 const listItem = (over: Partial<ListItemWithMeta> = {}): ListItemWithMeta => ({
   listId: "list-1",
@@ -264,7 +265,7 @@ describe("buildShelf", () => {
 
     expect(shelf).toHaveLength(1);
     // The earliest add is when it actually arrived, whatever a later list says.
-    expect(shelf[0].addedAt).toBe(new Date("2026-03-01T00:00:00.000Z").getTime());
+    expect(first(shelf, "shelf entry").addedAt).toBe(new Date("2026-03-01T00:00:00.000Z").getTime());
   });
 
   it("keeps a film and a series with the same id apart", () => {

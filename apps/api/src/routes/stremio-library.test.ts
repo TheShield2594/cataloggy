@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { deriveServiceToken, SERVICE_TOKEN_HEADER } from "@cataloggy/shared";
 import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
+import { first } from "../lib/test-fixtures/present.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 const DEFAULT_PROFILE_ID = "99999999-9999-4999-8999-999999999999";
@@ -309,7 +310,7 @@ describe("Stremio library routes", () => {
         payload: playSignal({ client: "x".repeat(500) }),
       });
 
-      expect(recordPlaySignal.mock.calls[0][0].client).toHaveLength(200);
+      expect(first(recordPlaySignal.mock.calls, "recordPlaySignal call")[0].client).toHaveLength(200);
     });
 
     it("falls back to the request user-agent when no client is sent", async () => {
@@ -322,7 +323,7 @@ describe("Stremio library routes", () => {
         payload: playSignal(),
       });
 
-      expect(recordPlaySignal.mock.calls[0][0].client).toBe("Stremio/5.0");
+      expect(first(recordPlaySignal.mock.calls, "recordPlaySignal call")[0].client).toBe("Stremio/5.0");
     });
 
     it("rejects an unknown resource", async () => {

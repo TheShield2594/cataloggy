@@ -176,9 +176,11 @@ export function StatsPage() {
   const maxGenreCount = detailed?.genreDistribution[0]?.count ?? 1;
 
   const momComparison = (() => {
-    if (!detailed || detailed.monthly.length < 2) return null;
-    const current = detailed.monthly[detailed.monthly.length - 1];
-    const previous = detailed.monthly[detailed.monthly.length - 2];
+    // Two months is the minimum a month-on-month comparison has anything to
+    // say about, and having both of these is that same condition.
+    const current = detailed?.monthly.at(-1);
+    const previous = detailed?.monthly.at(-2);
+    if (!current || !previous) return null;
     const currentTotal = current.movies + current.episodes;
     const previousTotal = previous.movies + previous.episodes;
     const diff = currentTotal - previousTotal;
@@ -451,7 +453,7 @@ export function StatsPage() {
               <TicketTile icon={Film} label="Movies Watched" value={yearReview.totalMovies} />
               <TicketTile icon={BarChart3} label="Episodes Watched" value={yearReview.totalEpisodes} />
               <TicketTile icon={Clock} label="Hours Watched" value={Math.round(yearReview.totalRuntimeMinutes / 60)} />
-              <TicketTile icon={Calendar} label="Busiest Month" value={yearReview.busiestMonth !== null ? MONTH_NAMES[yearReview.busiestMonth] : "—"} />
+              <TicketTile icon={Calendar} label="Busiest Month" value={(yearReview.busiestMonth !== null ? MONTH_NAMES[yearReview.busiestMonth] : null) ?? "—"} />
             </div>
 
             {yearReview.topGenres.length > 0 && (

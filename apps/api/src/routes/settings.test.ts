@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { deriveServiceToken, SERVICE_TOKEN_HEADER } from "@cataloggy/shared";
 import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 import { decryptSecret, kvSecretContext } from "../lib/secret-box.js";
+import { first } from "../lib/test-fixtures/present.js";
 
 const API_TOKEN = "settings-route-token";
 const originalApiToken = process.env.API_TOKEN;
@@ -215,7 +216,7 @@ describe("settings routes", () => {
 
         await app.inject({ method: "POST", url: "/tmdb/key", payload: { apiKey: "abc123" } });
 
-        const stored = prismaMock.kV.upsert.mock.calls[0][0].update.value as string;
+        const stored = first(prismaMock.kV.upsert.mock.calls, "prismaMock.kV.upsert call")[0].update.value as string;
         expect(stored).not.toContain("abc123");
         expect(decryptSecret(kvSecretContext("tmdb:apiKey"), stored)).toBe("abc123");
       } finally {

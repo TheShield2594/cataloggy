@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiContractError, ApiError, invalidatedCachePrefixes, OfflineWriteQueuedError, runtimeConfig } from "./api";
 import { readCache, resetDataCacheForTests, writeCache } from "./utils/dataCache";
+import { first } from "./test/present";
 
 type FetchMock = ReturnType<typeof vi.fn>;
 
@@ -35,7 +36,7 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-const lastRequestInit = () => fetchMock.mock.calls[0][1] as RequestInit;
+const lastRequestInit = () => first(fetchMock.mock.calls, "fetch call")[1] as RequestInit;
 const lastHeaders = () => lastRequestInit().headers as Record<string, string>;
 
 describe("request auth headers", () => {
@@ -44,7 +45,7 @@ describe("request auth headers", () => {
 
     await api.getLists();
 
-    expect(fetchMock.mock.calls[0][0]).toBe(`${runtimeConfig.getApiBase()}/lists`);
+    expect(first(fetchMock.mock.calls, "fetch call")[0]).toBe(`${runtimeConfig.getApiBase()}/lists`);
     expect(lastHeaders().Authorization).toBe("Bearer stored-token");
   });
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CatalogList } from "../api";
 import type { SectionHealth } from "./settings/health";
 import { LIST_TINTS, listTint, orderListsForRail, RAIL_SOURCES, railSources } from "./sidebar-data";
+import { at } from "../test/present";
 
 const list = (over: Partial<CatalogList> = {}): CatalogList => ({
   id: "l1",
@@ -96,7 +97,7 @@ describe("railSources", () => {
 
     expect(rows.map((r) => r.status)).toEqual(["Synced 4m ago", "No key"]);
     // The unabbreviated sentence survives on the row, for its `title`.
-    expect(rows[1].health.label).toBe("No key — artwork is off");
+    expect(at(rows, 1, "source row").health.label).toBe("No key — artwork is off");
   });
 
   /*

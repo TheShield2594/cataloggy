@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { StarPicker } from "./StarPicker";
 import { fromStars, toStars } from "../utils/rating";
+import { first } from "../test/present";
 
 describe("StarPicker", () => {
   it("offers ten half-star values across five stars", () => {
@@ -53,9 +54,10 @@ describe("StarPicker", () => {
       .getAllByRole("button")
       .filter((button) => button.getAttribute("tabindex") !== "-1");
     expect(tabbable).toHaveLength(1);
-    expect(tabbable[0]).toHaveAccessibleName("Your rating: 4.5 out of 5. Activate to remove it");
+    const onlyTabbable = first(tabbable, "tabbable star");
+    expect(onlyTabbable).toHaveAccessibleName("Your rating: 4.5 out of 5. Activate to remove it");
 
-    tabbable[0].focus();
+    onlyTabbable.focus();
     await userEvent.keyboard("{ArrowRight}");
     expect(screen.getByRole("button", { name: "Rate 5 out of 5" })).toHaveFocus();
     await userEvent.keyboard("{ArrowLeft}{ArrowLeft}");

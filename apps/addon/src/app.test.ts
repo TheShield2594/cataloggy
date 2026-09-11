@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { first, present } from "./test-fixtures/present.js";
 
 const API_TOKEN = "test-api-token";
 const API_BASE = "http://api.test";
@@ -317,7 +318,7 @@ describe("catalog routes serve only what the manifest advertised", () => {
     try {
       await fresh.inject({ method: "GET", url: `/catalog/series/cataloggy-${CUSTOM_LIST_ID}-series.json` });
 
-      const [call] = callsTo(`/lists/${CUSTOM_LIST_ID}/items`);
+      const call = first(callsTo(`/lists/${CUSTOM_LIST_ID}/items`), "request to the list's items");
       expect(new URL(call.url).searchParams.get("type")).toBe("series");
     } finally {
       await fresh.close();
@@ -434,8 +435,7 @@ describe("profile scoping", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain("Marked as watched");
 
-    const [watchCall] = callsTo("/watch");
-    expect(watchCall).toBeDefined();
+    const watchCall = first(callsTo("/watch"), "request to /watch");
     expect(watchCall.headers["x-profile-id"]).toBe(OTHER_PROFILE_ID);
     expect(watchCall.body).toEqual({ type: "movie", imdbId: "tt0111161" });
   });
@@ -451,7 +451,7 @@ describe("profile scoping", () => {
 
     expect(response.body).toContain("Marked as watched");
 
-    const [watchCall] = callsTo("/watch");
+    const watchCall = first(callsTo("/watch"), "request to /watch");
     expect(watchCall.headers["x-profile-id"]).toBe(OTHER_PROFILE_ID);
     expect(watchCall.body).toMatchObject({ type: "episode", seriesImdbId: "tt0903747", season: 2, episode: 5 });
   });
@@ -462,7 +462,7 @@ describe("profile scoping", () => {
       url: `/mark-watched/movie/tt0111161.srt?token=${capability({ type: "movie", imdbId: "tt0111161" }, null)}`,
     });
 
-    const [watchCall] = callsTo("/watch");
+    const watchCall = first(callsTo("/watch"), "request to /watch");
     expect(watchCall.headers["x-profile-id"]).toBe(DEFAULT_PROFILE_ID);
   });
 
@@ -484,7 +484,7 @@ describe("profile scoping", () => {
   it("scopes catalog reads to the profile in the addon URL", async () => {
     await app.inject({ method: "GET", url: `/p/${OTHER_PROFILE_ID}/manifest.json` });
 
-    const [listsCall] = callsTo("/lists");
+    const listsCall = first(callsTo("/lists"), "request to /lists");
     expect(listsCall.headers["x-profile-id"]).toBe(OTHER_PROFILE_ID);
   });
 
@@ -497,7 +497,7 @@ describe("profile scoping", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const [scrobbleCall] = callsTo("/scrobble/start");
+    const scrobbleCall = first(callsTo("/scrobble/start"), "request to /scrobble/start");
     expect(scrobbleCall.headers["x-profile-id"]).toBe(OTHER_PROFILE_ID);
   });
 
@@ -508,11 +508,12 @@ describe("profile scoping", () => {
     });
 
     const { subtitles } = response.json() as { subtitles: { url: string }[] };
-    expect(subtitles[0].url).toContain(
+    const { url: subtitleUrl } = first(subtitles, "mark-watched subtitle row");
+    expect(subtitleUrl).toContain(
       `${ADDON_BASE}/p/${OTHER_PROFILE_ID}/mark-watched/episode/tt0903747/2/5.srt?token=`
     );
     expect(
-      capabilityMatches(subtitles[0].url, { type: "episode", imdbId: "tt0903747", season: 2, episode: 5 }, OTHER_PROFILE_ID)
+      capabilityMatches(subtitleUrl, { type: "episode", imdbId: "tt0903747", season: 2, episode: 5 }, OTHER_PROFILE_ID)
     ).toBe(true);
   });
 
@@ -520,10 +521,11 @@ describe("profile scoping", () => {
     const response = await app.inject({ method: "GET", url: "/subtitles/movie/tt0111161.json" });
 
     const { subtitles } = response.json() as { subtitles: { url: string }[] };
-    expect(subtitles[0].url).toContain(
+    const { url: subtitleUrl } = first(subtitles, "mark-watched subtitle row");
+    expect(subtitleUrl).toContain(
       `${ADDON_BASE}/p/${DEFAULT_PROFILE_ID}/mark-watched/movie/tt0111161.srt?token=`
     );
-    expect(capabilityMatches(subtitles[0].url, { type: "movie", imdbId: "tt0111161" }, DEFAULT_PROFILE_ID)).toBe(true);
+    expect(capabilityMatches(subtitleUrl, { type: "movie", imdbId: "tt0111161" }, DEFAULT_PROFILE_ID)).toBe(true);
   });
 
   it("refuses a malformed profile id rather than writing to the default profile", async () => {
@@ -668,8 +670,9 @@ describe("mark-watched capabilities", () => {
     const serializers = (app.log as unknown as Record<symbol, Record<string, (req: unknown) => unknown>>)[
       serializersSymbol as symbol
     ];
+    const serializeReq = present(serializers?.req, "the request serializer");
     const token = capability({ type: "movie", imdbId: "tt0111161" }, OTHER_PROFILE_ID);
-    const logged = serializers.req({
+    const logged = serializeReq({
       method: "GET",
       url: `/p/${OTHER_PROFILE_ID}/mark-watched/movie/tt0111161.srt?token=${token}`,
     });
@@ -716,14 +719,14 @@ describe("play detection", () => {
       expect(response.statusCode).toBe(200);
       expect(JSON.parse(response.body)).toEqual({ streams: [] });
 
-      const [signal] = await waitForSignals(1);
+      const signal = first(await waitForSignals(1), "forwarded play signal");
       expect(signal.body).toMatchObject({ type: "movie", imdbId: "tt0111161", resource: "stream" });
     });
 
     it("forwards an episode signal with its season and episode", async () => {
       await app.inject({ method: "GET", url: "/stream/series/tt0903747:2:7.json" });
 
-      const [signal] = await waitForSignals(1);
+      const signal = first(await waitForSignals(1), "forwarded play signal");
       expect(signal.body).toMatchObject({
         type: "episode",
         seriesImdbId: "tt0903747",
@@ -736,7 +739,7 @@ describe("play detection", () => {
     it("forwards the profile pinned in the addon URL", async () => {
       await app.inject({ method: "GET", url: `/p/${OTHER_PROFILE_ID}/stream/movie/tt0111161.json` });
 
-      const [signal] = await waitForSignals(1);
+      const signal = first(await waitForSignals(1), "forwarded play signal");
       expect(signal.headers["x-profile-id"]).toBe(OTHER_PROFILE_ID);
     });
 
@@ -749,21 +752,21 @@ describe("play detection", () => {
         headers: { "user-agent": "Vidi/2.1 (Apple TV)" },
       });
 
-      const [signal] = await waitForSignals(1);
+      const signal = first(await waitForSignals(1), "forwarded play signal");
       expect((signal.body as { client?: string }).client).toBe("Vidi/2.1 (Apple TV)");
     });
 
     it("sends no client at all rather than an empty one when the request carries no user-agent", async () => {
       await app.inject({ method: "GET", url: "/stream/movie/tt0111161.json", headers: { "user-agent": "" } });
 
-      const [signal] = await waitForSignals(1);
+      const signal = first(await waitForSignals(1), "forwarded play signal");
       expect(signal.body).not.toHaveProperty("client");
     });
 
     it("forwards a signal from the subtitles request too", async () => {
       await app.inject({ method: "GET", url: "/subtitles/series/tt0903747:2:7.json" });
 
-      const [signal] = await waitForSignals(1);
+      const signal = first(await waitForSignals(1), "forwarded play signal");
       expect(signal.body).toMatchObject({ resource: "subtitles", season: 2, episode: 7 });
     });
 

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FastifyRequest } from "fastify";
+import { first } from "./test-fixtures/present.js";
 
 const makeRequest = (options: {
   query?: Record<string, unknown>;
@@ -116,7 +117,7 @@ describe("verifyWebhookSecret", () => {
     // A scrobbling media server hits this on every play; the advice only needs
     // saying once, and the line must never carry the secret itself.
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0][0])).not.toContain("shh-secret");
+    expect(String(first(warn.mock.calls, "warn call")[0])).not.toContain("shh-secret");
   });
 });
 

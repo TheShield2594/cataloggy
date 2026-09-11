@@ -38,6 +38,7 @@ import { formatRating, ratingLabel } from "../utils/rating";
 import { useCachedState } from "../hooks/useCachedState";
 import { useClockBoundary } from "../hooks/useClockBoundary";
 import { PAGE_TITLE, SECTION_TITLE, KICKER, MICRO_LABEL } from "../components/typography";
+import { localDateFromIsoDate } from "../utils/calendarDate";
 
 /* ─── Skeleton placeholders ─── */
 
@@ -1362,8 +1363,9 @@ export function DashboardPage() {
             ) : (
               <div className="space-y-2">
                 {calendarEntries.map((entry) => {
-                  const [y, m, d] = entry.airDate.split("-").map(Number);
-                  const airDate = new Date(y, m - 1, d);
+                  // Unreadable stays an Invalid Date, which matches neither
+                  // today nor tomorrow and falls through to the dated label.
+                  const airDate = localDateFromIsoDate(entry.airDate) ?? new Date(NaN);
                   const isToday = airDate.toDateString() === new Date().toDateString();
                   const tomorrow = new Date();
                   tomorrow.setDate(tomorrow.getDate() + 1);

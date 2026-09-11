@@ -24,6 +24,7 @@ import {
   selectDiscoveryCatalogs,
   ApiContractError,
 } from "@cataloggy/shared";
+import { first } from "./test-fixtures/present.js";
 
 describe("catalog registry", () => {
   it("declares every catalog exactly once", () => {
@@ -164,14 +165,15 @@ describe("response parsers", () => {
         },
       ],
     });
-    expect(parsed.items[0].metadata).toEqual({
+    const item = first(parsed.items, "parsed list item");
+    expect(item.metadata).toEqual({
       name: "A",
       poster: null,
       year: null,
       genres: ["Drama"],
       rating: 8.1,
     });
-    expect(parsed.items[0].title).toBeNull();
+    expect(item.title).toBeNull();
   });
 
   it("reads the paging cursor, and reports none for an unpaged response", () => {

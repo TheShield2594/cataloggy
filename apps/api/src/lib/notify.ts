@@ -75,15 +75,24 @@ export const deliverNotification = async (
     }
   }
 
-  const results = await Promise.allSettled(channels.map((channel) => sendToChannel(channel, event)));
-  results.forEach((result, index) => {
+  // Each channel carries its own outcome rather than being matched back up by
+  // position against a second array — `Promise.allSettled` kept the order, but
+  // nothing said so, and the label on a failure is what names the dead channel.
+  const attempts = await Promise.all(
+    channels.map(async (channel) => {
+      try {
+        await sendToChannel(channel, event);
+        return null;
+      } catch (error) {
+        return asError(error, `${channel.kind} channel`);
+      }
+    })
+  );
+  for (const failure of attempts) {
     attempted += 1;
-    if (result.status === "fulfilled") {
-      delivered += 1;
-    } else {
-      failures.push(asError(result.reason, `${channels[index].kind} channel`));
-    }
-  });
+    if (failure) failures.push(failure);
+    else delivered += 1;
+  }
 
   return { attempted, delivered, failures };
 };

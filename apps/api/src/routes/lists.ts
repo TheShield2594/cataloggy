@@ -303,14 +303,14 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
         }
         where.type = request.query.type as ListItemType;
       } else {
-        const matches = await prisma.listItem.findMany({ where });
-        if (matches.length === 0) return reply.code(404).send({ error: "List item not found" });
-        if (matches.length > 1) {
+        const [onlyMatch, ...otherMatches] = await prisma.listItem.findMany({ where });
+        if (!onlyMatch) return reply.code(404).send({ error: "List item not found" });
+        if (otherMatches.length > 0) {
           return reply.code(400).send({
             error: "Multiple items match this imdbId; provide ?type=movie or ?type=series to disambiguate",
           });
         }
-        where.type = matches[0].type;
+        where.type = onlyMatch.type;
       }
 
       const removed = await prisma.listItem.deleteMany({ where });

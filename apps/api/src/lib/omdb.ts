@@ -38,7 +38,8 @@ export const fetchOmdbRatings = async (imdbId: string, apiKey: string): Promise<
   const rtScore = isNaN(rawRt) ? null : rawRt;
 
   const mcValue = data.Ratings?.find((r) => r.Source === "Metacritic")?.Value;
-  const rawMc = mcValue ? parseInt(mcValue.split("/")[0], 10) : NaN;
+  // "75/100" — parseInt stops at the slash, so there is no denominator to strip.
+  const rawMc = mcValue ? parseInt(mcValue, 10) : NaN;
   const mcScore = isNaN(rawMc) ? null : rawMc;
 
   return { imdbRating, rtScore, mcScore };

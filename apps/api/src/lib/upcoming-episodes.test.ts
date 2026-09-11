@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { first } from "./test-fixtures/present.js";
 
 // What this returns is what a notification says and what the calendar shows, so
 // being wrong here is invisible: the app names an episode with total confidence
@@ -190,7 +191,7 @@ describe("getUpcomingEpisodes", () => {
 
     await getUpcomingEpisodes(PROFILE, 7, null);
 
-    expect(prismaMock.seriesProgress.findMany.mock.calls[0][0]).not.toHaveProperty("take");
+    expect(first(prismaMock.seriesProgress.findMany.mock.calls, "prismaMock.seriesProgress.findMany call")[0]).not.toHaveProperty("take");
   });
 
   // The notification job passes no cap, so without this the per-tick TMDB
@@ -224,7 +225,7 @@ describe("getUpcomingEpisodes", () => {
   it("keeps a series whose status is unknown", async () => {
     await getUpcomingEpisodes(PROFILE, 7, null);
 
-    expect(prismaMock.metadata.findMany.mock.calls[0][0].where.OR).toContainEqual({ status: null });
+    expect(first(prismaMock.metadata.findMany.mock.calls, "prismaMock.metadata.findMany call")[0].where.OR).toContainEqual({ status: null });
   });
 
   // Ordered by the progress rows, not by whatever order Postgres returned the

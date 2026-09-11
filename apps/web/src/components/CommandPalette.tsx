@@ -98,8 +98,10 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           const merged: SearchResult[] = [];
           const maxLen = Math.max(movies.length, series.length);
           for (let i = 0; i < maxLen && merged.length < 8; i++) {
-            if (i < movies.length) merged.push(movies[i]);
-            if (i < series.length) merged.push(series[i]);
+            const movie = movies[i];
+            const show = series[i];
+            if (movie) merged.push(movie);
+            if (show) merged.push(show);
           }
           setResults(merged.slice(0, 8));
         } catch (err) {

@@ -11,6 +11,14 @@
     // no `type` marker, a `const enum`) rather than leaving them to fail, or
     // silently mis-emit, somewhere with no type checker present.
     "isolatedModules": true,
+    // `arr[i]` and `record[key]` are typed as if the lookup always succeeds,
+    // which is the one unsoundness in `strict` that reads as ordinary code:
+    // `const [y, m, d] = airDate.split("-").map(Number)` binds three `number`s
+    // from a string that may hold one. This makes the checker say `| undefined`
+    // and the guard say otherwise — so where an index genuinely cannot miss,
+    // prefer restructuring until the checker can see that over a `!` that only
+    // hides the question.
+    "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,

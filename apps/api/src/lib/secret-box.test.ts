@@ -8,6 +8,7 @@ import {
   isSecretEncryptionAvailable,
   kvSecretContext,
 } from "./secret-box.js";
+import { present } from "./test-fixtures/present.js";
 
 const originalToken = process.env.API_TOKEN;
 
@@ -99,15 +100,16 @@ describe("decryptSecret", () => {
      * real one, the value authenticated, and the assertion below failed on a
      * ciphertext nobody had tampered with.
      */
-    const flip = (part: string) => {
-      const bytes = Buffer.from(part, "base64url");
-      bytes[0] ^= 0xff;
+    const flip = (part: string | undefined) => {
+      const bytes = Buffer.from(present(part, "ciphertext part"), "base64url");
+      bytes.writeUInt8(bytes.readUInt8(0) ^ 0xff, 0);
       return bytes.toString("base64url");
     };
+    const keep = (part: string | undefined) => present(part, "ciphertext part");
 
-    expect(decryptSecret(SECRET_CONTEXT.notificationChannelToken, [scheme, iv, tag, flip(ciphertext)].join("."))).toBeNull();
-    expect(decryptSecret(SECRET_CONTEXT.notificationChannelToken, [scheme, flip(iv), tag, ciphertext].join("."))).toBeNull();
-    expect(decryptSecret(SECRET_CONTEXT.notificationChannelToken, [scheme, iv, flip(tag), ciphertext].join("."))).toBeNull();
+    expect(decryptSecret(SECRET_CONTEXT.notificationChannelToken, [keep(scheme), keep(iv), keep(tag), flip(ciphertext)].join("."))).toBeNull();
+    expect(decryptSecret(SECRET_CONTEXT.notificationChannelToken, [keep(scheme), flip(iv), keep(tag), keep(ciphertext)].join("."))).toBeNull();
+    expect(decryptSecret(SECRET_CONTEXT.notificationChannelToken, [keep(scheme), keep(iv), flip(tag), keep(ciphertext)].join("."))).toBeNull();
   });
 
   it("returns null rather than throwing on a value it can't parse at all", () => {

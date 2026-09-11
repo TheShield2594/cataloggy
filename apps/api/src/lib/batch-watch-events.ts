@@ -89,8 +89,9 @@ export async function batchUpsertWatchEvents(
     const candidates = bucket.get(key) ?? [];
     const match = candidates.find((c) => c.watchedAt >= start && c.watchedAt <= end);
 
-    if (match?.id.startsWith("new:")) {
-      creates[Number(match.id.slice(4))].plays += weight;
+    const pending = match?.id.startsWith("new:") ? creates[Number(match.id.slice(4))] : undefined;
+    if (pending) {
+      pending.plays += weight;
     } else if (match) {
       updates.set(match.id, (updates.get(match.id) ?? 0) + weight);
     } else {

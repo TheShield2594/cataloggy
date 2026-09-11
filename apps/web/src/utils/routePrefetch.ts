@@ -154,7 +154,9 @@ function warmRouteData(path: string): void {
   const warmer = ROUTE_DATA_WARMERS[path];
   if (!warmer) return;
   if (warmersInFlight.has(path)) return;
-  if (isFresh(PRIMARY_DATA_KEY[path])) return;
+  // A route with no primary key has nothing to call fresh, so it is warmed.
+  const dataKey = PRIMARY_DATA_KEY[path];
+  if (dataKey !== undefined && isFresh(dataKey)) return;
   // A hover shouldn't spend a request on a metered connection any more than the
   // idle pass should.
   if (!prefetchIsWelcome()) return;

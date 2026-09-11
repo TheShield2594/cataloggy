@@ -369,8 +369,8 @@ Return ONLY a JSON array, no other text, no markdown:
       if (metas.length >= limit) break;
       try {
         const results = await tmdb.search(metaType, rec.title);
-        if (!results || results.length === 0) continue;
-        const first = results[0];
+        const [first] = results ?? [];
+        if (!first) continue;
         if (profile.watchedImdbIds.has(first.imdbId)) continue;
         await upsertMetadata(first);
         metas.push({

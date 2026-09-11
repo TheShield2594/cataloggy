@@ -7,6 +7,7 @@ import { useEscapeKey } from "../../hooks/useEscapeKey";
 import { useExitAnimation } from "../../hooks/useExitAnimation";
 import { useVisualViewport } from "../../hooks/useVisualViewport";
 import { SECTION_TITLE } from "../typography";
+import { utcNoonIsoFromIsoDate } from "../../utils/calendarDate";
 
 export function WatchDateModal({
   target,
@@ -129,8 +130,11 @@ export function WatchDateModal({
                 type="button"
                 disabled={saving}
                 onClick={() => {
-                  const [y, m, d] = releaseDate.split("-").map(Number);
-                  void submit(new Date(Date.UTC(y, m - 1, d, 12)).toISOString());
+                  // A partial release date ("2019", "") names no day to log, so
+                  // the button does nothing rather than throwing a RangeError
+                  // out of the handler.
+                  const iso = utcNoonIsoFromIsoDate(releaseDate);
+                  if (iso) void submit(iso);
                 }}
                 className="btn-secondary py-3"
               >
@@ -178,8 +182,8 @@ export function WatchDateModal({
                 type="button"
                 disabled={saving || !customDate}
                 onClick={() => {
-                  const [y, m, d] = customDate.split("-").map(Number);
-                  void submit(new Date(Date.UTC(y, m - 1, d, 12)).toISOString());
+                  const iso = utcNoonIsoFromIsoDate(customDate);
+                  if (iso) void submit(iso);
                 }}
                 className="btn-primary flex-1"
               >

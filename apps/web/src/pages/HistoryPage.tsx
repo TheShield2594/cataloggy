@@ -265,7 +265,9 @@ export function HistoryPage() {
   };
 
   const groups = useMemo(() => {
-    const result: { label: string; events: WatchEvent[] }[] = [];
+    // A group is created around its first event and never emptied, so the type
+    // says non-empty and `events[0]` — the React key below — is an event.
+    const result: { label: string; events: [WatchEvent, ...WatchEvent[]] }[] = [];
     for (const event of events) {
       const label = groupLabel(new Date(event.watchedAt), now);
       const last = result[result.length - 1];

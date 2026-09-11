@@ -1,4 +1,4 @@
-const htmlEscapeMap: Record<string, string> = {
+const htmlEscapeMap: Record<string, string | undefined> = {
   "&": "&amp;",
   "<": "&lt;",
   ">": "&gt;",
@@ -7,7 +7,10 @@ const htmlEscapeMap: Record<string, string> = {
 };
 
 export const escapeHtml = (str: string): string =>
-  str.replace(/[&<>"']/g, (ch) => htmlEscapeMap[ch]);
+  // Only the five characters in the map can match, so the fallback is the
+  // checker's question rather than a reachable branch — and escaping to the
+  // character itself is the safe way to answer it.
+  str.replace(/[&<>"']/g, (ch) => htmlEscapeMap[ch] ?? ch);
 
 export const renderOAuthHtml = (detail: string, title = "Trakt Connection Failed"): string =>
   `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head><body style="background:#0f172a;color:#e2e8f0;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">

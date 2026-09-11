@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
+import { first } from "../lib/test-fixtures/present.js";
 
 const prismaMock = {
   kV: { create: vi.fn(), deleteMany: vi.fn() },
@@ -120,7 +121,7 @@ describe("trakt OAuth — the callback is bound to the flow that started it", ()
 
     await app.inject({ method: "GET", url: `/trakt/oauth/callback?code=real-code&state=${STATE}` });
 
-    const { accessToken, refreshToken } = prismaMock.traktToken.upsert.mock.calls[0][0].update;
+    const { accessToken, refreshToken } = first(prismaMock.traktToken.upsert.mock.calls, "prismaMock.traktToken.upsert call")[0].update;
     expect(accessToken).not.toBe("access");
     expect(refreshToken).not.toBe("refresh");
     // Each half is bound to its own column, so the pair can't be swapped.

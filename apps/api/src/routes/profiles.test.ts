@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
+import { at } from "../lib/test-fixtures/present.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_PROFILE_ID = "22222222-2222-4222-8222-222222222222";
@@ -284,8 +285,9 @@ describe("profiles routes", () => {
         kvState = { ...kvState!, lockedUntil: new Date(Date.now() - 1000).toISOString() };
       }
 
-      expect(lockoutDurations[1]).toBeGreaterThan(lockoutDurations[0] * 1.5);
-      expect(lockoutDurations[2]).toBeGreaterThan(lockoutDurations[1] * 1.5);
+      const lockout = (n: number) => at(lockoutDurations, n, "recorded lockout");
+      expect(lockout(1)).toBeGreaterThan(lockout(0) * 1.5);
+      expect(lockout(2)).toBeGreaterThan(lockout(1) * 1.5);
       expect(kvState!.lockouts).toBe(3);
     });
   });

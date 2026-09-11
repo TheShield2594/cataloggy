@@ -27,9 +27,10 @@ export const mintProfileToken = (profileId: string): string => {
 export const verifyProfileToken = (token: string | undefined, profileId: string): boolean => {
   if (!token) return false;
 
-  const parts = token.split(".");
-  if (parts.length !== 3) return false;
-  const [version, expiresRaw, providedSig] = parts;
+  const [version, expiresRaw, providedSig, ...rest] = token.split(".");
+  // Exactly three parts — the same check as the old `parts.length !== 3`, said
+  // so that the three below are strings rather than maybes.
+  if (expiresRaw === undefined || providedSig === undefined || rest.length > 0) return false;
   if (version !== TOKEN_VERSION) return false;
 
   const expiresAt = Number(expiresRaw);

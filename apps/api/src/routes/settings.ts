@@ -43,12 +43,13 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
     const REGION_PATTERN = /^[A-Z]{2}$/;
 
     if (typeof body.language === "string" && body.language.trim()) {
-      const raw = body.language.trim();
-      const parts = raw.split("-");
+      const [lang = "", region, ...rest] = body.language.trim().split("-");
+      // Two parts is `fr-FR`, one is `fr`; anything else fails the pattern
+      // below, which is what it did before too.
       const normalizedLang =
-        parts.length === 2
-          ? `${parts[0].toLowerCase()}-${parts[1].toUpperCase()}`
-          : parts[0].toLowerCase();
+        region !== undefined && rest.length === 0
+          ? `${lang.toLowerCase()}-${region.toUpperCase()}`
+          : lang.toLowerCase();
       if (!LANGUAGE_PATTERN.test(normalizedLang)) {
         return reply.code(400).send({
           error: "language must be a valid language code (e.g., 'en-US', 'fr')",

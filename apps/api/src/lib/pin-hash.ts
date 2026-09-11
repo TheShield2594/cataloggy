@@ -70,7 +70,8 @@ const scryptMatches = async (pin: string, pinHash: string): Promise<boolean> => 
   const r = Number(rawR);
   const p = Number(rawP);
   if (!Number.isInteger(N) || !Number.isInteger(r) || !Number.isInteger(p)) return false;
-  if (!/^[0-9a-f]+$/.test(saltHex ?? "") || !/^[0-9a-f]+$/.test(keyHex ?? "")) return false;
+  if (saltHex === undefined || keyHex === undefined) return false;
+  if (!/^[0-9a-f]+$/.test(saltHex) || !/^[0-9a-f]+$/.test(keyHex)) return false;
 
   const expected = Buffer.from(keyHex, "hex");
   const key = await scryptAsync(pin, Buffer.from(saltHex, "hex"), expected.length, {

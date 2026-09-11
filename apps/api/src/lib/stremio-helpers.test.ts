@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { first } from "./test-fixtures/present.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 const WATCHLIST_ID = "99999999-9999-4999-8999-999999999999";
@@ -55,7 +56,7 @@ describe("list catalog helpers", () => {
 
     await getWatchlistMetas("movie", 2, PROFILE_ID);
 
-    const args = prismaMock.listItem.findMany.mock.calls[0][0];
+    const args = first(prismaMock.listItem.findMany.mock.calls, "prismaMock.listItem.findMany call")[0];
     expect(args.where).toEqual({ listId: WATCHLIST_ID, type: "movie" });
     expect(args.take).toBe(1000);
     expect(args.orderBy).toEqual({ addedAt: "desc" });
@@ -76,7 +77,7 @@ describe("list catalog helpers", () => {
 
     const metas = await getCustomListMetas("list-1", "series", 10);
 
-    const args = prismaMock.listItem.findMany.mock.calls[0][0];
+    const args = first(prismaMock.listItem.findMany.mock.calls, "prismaMock.listItem.findMany call")[0];
     expect(args.where).toEqual({ listId: "list-1", type: "series" });
     expect(args.take).toBe(1000);
     expect(metas.map((m) => m.name)).toEqual(["Alpha", "Bravo"]);

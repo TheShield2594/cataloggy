@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { MemoryRouter } from "react-router";
 import { MORE_NAV_ITEMS, MobileTabBar, PRIMARY_NAV_ITEMS, SEARCH_ITEM } from "./MobileTabBar";
+import { first, present } from "../test/present";
 
 // Closing the sheet plays its exit animation before it leaves the DOM. jsdom
 // never fires animationend on its own, so these tests ride useExitAnimation's
@@ -111,7 +112,7 @@ describe("MobileTabBar", () => {
 
     expect(moreTab).toHaveAttribute("aria-expanded", "true");
     const sheet = screen.getByRole("dialog", { name: "More destinations" });
-    expect(within(sheet).getByRole("link", { name: MORE_NAV_ITEMS[0].label })).toHaveFocus();
+    expect(within(sheet).getByRole("link", { name: first(MORE_NAV_ITEMS, "More destination").label })).toHaveFocus();
   });
 
   it("closes on Escape and returns focus to the More tab", async () => {
@@ -154,7 +155,7 @@ describe("MobileTabBar", () => {
       const links = within(sheet).getAllByRole("link");
 
       // From the last item, Tab wraps to the first rather than reaching the nav.
-      links[links.length - 1].focus();
+      present(links.at(-1), "last More link").focus();
       await userEvent.tab();
 
       expect(sheet.contains(document.activeElement)).toBe(true);

@@ -14,7 +14,9 @@ type KindSpec = {
   help: string;
 };
 
-const KINDS: KindSpec[] = [
+// Non-empty by type: `kindSpec` falls back to the first entry for a kind the
+// server sent that this build does not know about.
+const KINDS: [KindSpec, ...KindSpec[]] = [
   {
     id: "ntfy",
     label: "ntfy",

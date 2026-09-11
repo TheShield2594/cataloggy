@@ -443,8 +443,9 @@ export function ListsPage() {
   // Landing on /lists with no list named picks the first one, replacing rather
   // than pushing so Back still leaves the page.
   useEffect(() => {
-    if (listsLoaded && !selectedListId && lists.length > 0) {
-      selectList(lists[0].id, { replace: true });
+    const [firstList] = lists;
+    if (listsLoaded && !selectedListId && firstList) {
+      selectList(firstList.id, { replace: true });
     }
   }, [listsLoaded, selectedListId, lists, selectList]);
 

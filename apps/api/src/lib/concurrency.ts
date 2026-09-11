@@ -4,11 +4,14 @@ export async function mapWithConcurrency<T, R>(
   fn: (item: T) => Promise<R>
 ): Promise<R[]> {
   const results: R[] = new Array(items.length);
-  let next = 0;
+  const queue = items.entries();
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await fn(items[i]);
+    // One shared iterator is the same hand-out-the-next-index loop as before,
+    // and it yields the item alongside its index rather than leaving the lookup
+    // to be repeated. `next()` on an array iterator is synchronous, so two
+    // workers cannot be handed the same one.
+    for (const [i, item] of queue) {
+      results[i] = await fn(item);
     }
   });
   await Promise.all(workers);

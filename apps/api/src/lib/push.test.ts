@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { first } from "./test-fixtures/present.js";
 
 const prismaMock = {
   kV: { findUnique: vi.fn(), create: vi.fn() },
@@ -42,7 +43,7 @@ describe("getPushPublicKey", () => {
 
     expect(await getPushPublicKey()).toBe("vapid-public");
 
-    const { value } = prismaMock.kV.create.mock.calls[0][0].data;
+    const { value } = first(prismaMock.kV.create.mock.calls, "prismaMock.kV.create call")[0].data;
     // The private half is the one that matters: it signs every push this
     // server sends, and it is the reason this row is a credential.
     expect(value).not.toContain("vapid-private");

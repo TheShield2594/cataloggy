@@ -849,7 +849,8 @@ export function notifyServiceWorkerToInvalidateApiCache(): Promise<void> {
  */
 export function invalidatedCachePrefixes(path: string): string[] | null {
   // The route, without the query string a few of these carry (`/checkin?log=1`).
-  const route = path.split(/[?#]/)[0];
+  const queryAt = path.search(/[?#]/);
+  const route = queryAt === -1 ? path : path.slice(0, queryAt);
   const under = (prefix: string) => route === prefix || route.startsWith(`${prefix}/`);
 
   // Nothing outside the games library reads a game: the watch stats, the
