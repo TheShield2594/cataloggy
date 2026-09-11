@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { BarChart3, CalendarDays, Compass, Film, Gamepad2, History, Library, List, Search, Settings, Tv } from "lucide-react";
-import { api, SearchResult } from "../api";
+import { api, type SearchResult } from "../api";
 import { Poster } from "./Poster";
 import { DetailPanel, useDetailPanel } from "./MediaDetailPanel";
 import { useEscapeKey } from "../hooks/useEscapeKey";

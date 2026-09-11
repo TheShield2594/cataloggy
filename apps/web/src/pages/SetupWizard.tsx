@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { Check, Eye, EyeOff, Loader2, AlertCircle, ArrowLeft, ArrowRight } from "lucide-react";
 import { api, ApiError, runtimeConfig } from "../api";
 import { BrandLockup } from "../components/BrandMark";

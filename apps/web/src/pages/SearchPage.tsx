@@ -1,7 +1,7 @@
-import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { Check, ChevronDown, ChevronUp, Film, Filter, Heart, MonitorPlay, Plus, Search, SlidersHorizontal, Star, Tv, X } from "lucide-react";
-import { api, CatalogList, SearchResult, WatchProvider } from "../api";
+import { api, type CatalogList, type SearchResult, type WatchProvider } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useToast } from "../hooks/useToast";
 import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
@@ -11,8 +11,8 @@ import { getCacheScope } from "../utils/dataCache";
 import { createScopedMemoCache } from "../utils/scopedMemoCache";
 import {
   useSearchFilters,
-  FilterType,
-  SortOption,
+  type FilterType,
+  type SortOption,
   GENRE_OPTIONS,
   SORT_LABELS,
 } from "../hooks/useSearchFilters";

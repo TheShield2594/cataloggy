@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { AlertCircle, Calendar, Film, NotebookPen, Trash2, Tv } from "lucide-react";
-import { api, SearchResult, WatchEvent } from "../api";
+import { api, type SearchResult, type WatchEvent } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useToast } from "../hooks/useToast";
 import { useCachedState } from "../hooks/useCachedState";

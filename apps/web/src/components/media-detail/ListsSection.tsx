@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Check, Heart, ListPlus, Plus, X } from "lucide-react";
-import { api, CatalogList, MediaType } from "../../api";
+import { api, type CatalogList, type MediaType } from "../../api";
 
 export function ListsSection({
   imdbId, type, name, initialListIds, onError, onToast,

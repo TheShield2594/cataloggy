@@ -15,16 +15,16 @@ import {
 } from "lucide-react";
 import {
   api,
-  CalendarEntry,
-  CheckIn,
-  DetailedWatchStats,
+  type CalendarEntry,
+  type CheckIn,
+  type DetailedWatchStats,
   runtimeConfig,
-  ScrobbleSession,
-  SearchResult,
-  SeriesProgress,
-  TrendingMeta,
-  WatchEvent,
-  WatchStats,
+  type ScrobbleSession,
+  type SearchResult,
+  type SeriesProgress,
+  type TrendingMeta,
+  type WatchEvent,
+  type WatchStats,
 } from "../api";
 import { Link } from "react-router";
 import { CarouselTrack } from "../components/CarouselTrack";

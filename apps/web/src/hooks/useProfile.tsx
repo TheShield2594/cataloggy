@@ -1,5 +1,5 @@
-import { createContext, ReactNode, useCallback, useContext, useMemo, useState } from "react";
-import { Profile, runtimeConfig, notifyServiceWorkerToInvalidateApiCache } from "../api";
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
+import { type Profile, runtimeConfig, notifyServiceWorkerToInvalidateApiCache } from "../api";
 
 type ProfileContextValue = {
   profile: Profile | null;

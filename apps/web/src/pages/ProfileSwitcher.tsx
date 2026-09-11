@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { AlertCircle, ArrowRight, Loader2, Lock, Plus, X } from "lucide-react";
-import { api, ApiError, Profile, runtimeConfig } from "../api";
+import { api, ApiError, type Profile, runtimeConfig } from "../api";
 import { BRAND_WORDMARK, BrandLockup, BrandMark } from "../components/BrandMark";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useExitAnimation } from "../hooks/useExitAnimation";

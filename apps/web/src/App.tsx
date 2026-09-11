@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Route, Routes, useLocation } from "react-router";
 import { Search, User } from "lucide-react";
-import { api, Profile, runtimeConfig } from "./api";
+import { api, type Profile, runtimeConfig } from "./api";
 import { useCommandPalette } from "./hooks/useCommandPalette";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { GhostLoader } from "./components/GhostLoader";

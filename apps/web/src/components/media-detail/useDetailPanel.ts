@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type DetailBundle, SearchResult, WatchEvent } from "../../api";
+import { api, type DetailBundle, type SearchResult, type WatchEvent } from "../../api";
 import { getCacheScope } from "../../utils/dataCache";
 import { createScopedMemoCache } from "../../utils/scopedMemoCache";
 

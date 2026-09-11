@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Tv } from "lucide-react";
-import { api, EpisodeInfo, OfflineWriteQueuedError, WATCH_STATE_STALE_EVENT } from "../../api";
+import { api, type EpisodeInfo, OfflineWriteQueuedError, WATCH_STATE_STALE_EVENT } from "../../api";
 import { ProgressRuler } from "../ProgressRuler";
 import { StarPicker } from "../StarPicker";
 import { KICKER } from "../typography";

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Palette } from "lucide-react";
-import { Theme, THEMES } from "../hooks/useTheme";
+import { type Theme, THEMES } from "../hooks/useTheme";
 import { useExitAnimation } from "../hooks/useExitAnimation";
 
 export function ThemeToggle({ theme, onChange }: { theme: Theme; onChange: (next: Theme) => void }) {

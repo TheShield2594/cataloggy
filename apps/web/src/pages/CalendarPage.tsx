@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { CalendarDays, ChevronLeft, ChevronRight, List, LayoutGrid, X } from "lucide-react";
-import { api, CalendarEntry, SearchResult } from "../api";
+import { api, type CalendarEntry, type SearchResult } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { Poster } from "../components/Poster";
 import { useEscapeKey } from "../hooks/useEscapeKey";

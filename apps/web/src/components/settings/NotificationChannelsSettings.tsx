@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { AlertCircle, Check, Loader2, Plus, Send, Trash2 } from "lucide-react";
-import { api, NotificationChannel, NotificationChannelKind } from "../../api";
+import { api, type NotificationChannel, type NotificationChannelKind } from "../../api";
 import { SelectField } from "../SelectField";
 import { StatusBadge } from "./StatusBadge";
 

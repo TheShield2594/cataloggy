@@ -1,5 +1,5 @@
-import { FormEvent, useEffect, useState } from "react";
-import { api, TmdbStatus } from "../../api";
+import { type FormEvent, useEffect, useState } from "react";
+import { api, type TmdbStatus } from "../../api";
 import { useTransientFlag } from "../../hooks/useTransientFlag";
 import { Eye, EyeOff, Loader2, Check, AlertCircle, Unplug } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";

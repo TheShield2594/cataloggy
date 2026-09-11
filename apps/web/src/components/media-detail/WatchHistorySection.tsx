@@ -1,6 +1,6 @@
 import { Calendar, Clock, Film, Trash2, Tv } from "lucide-react";
 import { Poster } from "../Poster";
-import { WatchEvent } from "../../api";
+import type { WatchEvent } from "../../api";
 import { watchEventLabel, watchEventTitle } from "../../utils/watchEvents";
 import { KICKER } from "../typography";
 

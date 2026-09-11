@@ -1,4 +1,4 @@
-import { api, WatchEvent } from "../api";
+import { api, type WatchEvent } from "../api";
 
 /**
  * What to call the title a watch is of.

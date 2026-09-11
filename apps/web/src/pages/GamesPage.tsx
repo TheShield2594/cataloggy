@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { Check, Clock, Gamepad2, Plus, RefreshCw, Search, Star, X } from "lucide-react";
-import { api, ApiError, Game, GameSearchResult, GameSort, SteamStatus } from "../api";
+import { api, ApiError, type Game, type GameSearchResult, type GameSort, type SteamStatus } from "../api";
 import { GameDetailPanel } from "../components/GameDetailPanel";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useScrollLock } from "../hooks/useScrollLock";

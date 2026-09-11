@@ -3,11 +3,11 @@ import { Link, useSearchParams } from "react-router";
 import { Play, RotateCw } from "lucide-react";
 import {
   api,
-  CheckIn,
-  Game,
-  ListItemWithMeta,
-  SeriesProgress,
-  WatchEvent,
+  type CheckIn,
+  type Game,
+  type ListItemWithMeta,
+  type SeriesProgress,
+  type WatchEvent,
 } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { GameDetailPanel } from "../components/GameDetailPanel";

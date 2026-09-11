@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { AlertCircle, Check, Loader2, RefreshCw, Unplug } from "lucide-react";
-import { api, StremioLibraryStatus, StremioSyncSummary } from "../../api";
+import { api, type StremioLibraryStatus, type StremioSyncSummary } from "../../api";
 import { StatusBadge } from "./StatusBadge";
 
 const summaryText = (summary: StremioSyncSummary): string =>

@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { SECTION_TITLE } from "../typography";
 import { healthDotClass, type SectionHealth } from "./health";

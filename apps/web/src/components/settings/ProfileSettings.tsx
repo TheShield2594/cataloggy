@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { AlertCircle, Check, Loader2, Lock, Pencil, Trash2, Unlock, Users, X } from "lucide-react";
-import { api, ApiError, Profile } from "../../api";
+import { api, ApiError, type Profile } from "../../api";
 import { useProfile } from "../../hooks/useProfile";
 import { useToast } from "../../hooks/useToast";
 

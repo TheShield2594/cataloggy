@@ -1,5 +1,5 @@
 import { MonitorPlay } from "lucide-react";
-import { WatchProviders } from "../../api";
+import type { WatchProviders } from "../../api";
 import { KICKER } from "../typography";
 
 export function ProvidersSection({ providers, loading }: { providers: WatchProviders | null; loading: boolean }) {

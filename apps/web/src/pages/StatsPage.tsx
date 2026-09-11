@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { AlertCircle, Award, BarChart3, Calendar, Clock, Film, Flame, Minus, Star, Trophy, TrendingDown, TrendingUp } from "lucide-react";
-import { api, DetailedWatchStats, WatchStats, YearInReviewStats } from "../api";
+import { api, type DetailedWatchStats, type WatchStats, type YearInReviewStats } from "../api";
 import { TicketTile } from "../components/TicketTile";
 import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
 import { useCachedState } from "../hooks/useCachedState";

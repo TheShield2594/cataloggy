@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
-import { api, PlaySignal } from "../../api";
+import { api, type PlaySignal } from "../../api";
 import { StatusBadge } from "./StatusBadge";
 import { timeAgo } from "../../utils/timeAgo";
 

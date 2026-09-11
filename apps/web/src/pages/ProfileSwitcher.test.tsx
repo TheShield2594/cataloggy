@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, Profile, runtimeConfig } from "../api";
+import { ApiError, type Profile, runtimeConfig } from "../api";
 import { ProfileSwitcher } from "./ProfileSwitcher";
 
 vi.mock("../api", async (importOriginal) => {

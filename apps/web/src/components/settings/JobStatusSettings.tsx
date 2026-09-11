@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Loader2, Timer } from "lucide-react";
-import { api, JobFailure, JobRun } from "../../api";
+import { api, type JobFailure, type JobRun } from "../../api";
 import { StatusBadge } from "./StatusBadge";
 import { timeAgo } from "../../utils/timeAgo";
 
