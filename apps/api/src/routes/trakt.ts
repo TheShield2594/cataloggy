@@ -21,6 +21,7 @@ import {
 import { renderOAuthHtml } from "../lib/html.js";
 import { SECRET_CONTEXT, encryptSecret } from "../lib/secret-box.js";
 import { consumeOAuthState, createOAuthState } from "../lib/trakt-oauth-state.js";
+import { traktRedirectUri } from "../lib/trakt-redirect-uri.js";
 import { getDefaultProfileId, resolveProfile } from "../lib/profile.js";
 import type { SeriesProgressCandidate } from "../lib/types.js";
 
@@ -60,9 +61,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
   app.get("/trakt/status", async (_request, reply) => {
     const token = await prisma.traktToken.findUnique({ where: { id: "default" } });
     const configured = !!(process.env.TRAKT_CLIENT_ID && process.env.TRAKT_CLIENT_SECRET);
-    const redirectUri =
-      process.env.TRAKT_REDIRECT_URI ??
-      `${process.env.CATALOGGY_API_PUBLIC ?? "http://localhost:7000"}/trakt/oauth/callback`;
+    const redirectUri = traktRedirectUri();
     return reply.send({
       connected: !!token,
       configured,
@@ -73,9 +72,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/trakt/oauth/authorize", OAUTH_RATE_LIMIT, async (_request, reply) => {
     const clientId = process.env.TRAKT_CLIENT_ID;
-    const redirectUri =
-      process.env.TRAKT_REDIRECT_URI ??
-      `${process.env.CATALOGGY_API_PUBLIC ?? "http://localhost:7000"}/trakt/oauth/callback`;
+    const redirectUri = traktRedirectUri();
     if (!clientId) {
       return reply.code(500).send({ error: "TRAKT_CLIENT_ID is not configured" });
     }
@@ -121,9 +118,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
 
     const clientId = process.env.TRAKT_CLIENT_ID;
     const clientSecret = process.env.TRAKT_CLIENT_SECRET;
-    const redirectUri =
-      process.env.TRAKT_REDIRECT_URI ??
-      `${process.env.CATALOGGY_API_PUBLIC ?? "http://localhost:7000"}/trakt/oauth/callback`;
+    const redirectUri = traktRedirectUri();
 
     if (!clientId || !clientSecret) {
       return reply.code(500).send({ error: "Trakt credentials are not configured" });
