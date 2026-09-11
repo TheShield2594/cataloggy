@@ -12,8 +12,7 @@ import {
 import { attachDatabaseLogging, prisma } from "./lib/prisma.js";
 import { applyCorsHeaders } from "./lib/cors.js";
 import { registerHttpCaching } from "./lib/http-cache.js";
-import { verifyToken } from "./lib/auth.js";
-import { isStremioSecretPath } from "./lib/stremio-secret.js";
+import { registerAuthGate } from "./lib/auth-gate.js";
 import { getAiRecommendations, isAiConfigured } from "./lib/ai.js";
 import { trendingCacheDeletePrefix } from "./lib/cache.js";
 import { pollTraktHistory, syncTraktWatchlist } from "./lib/trakt-client.js";
@@ -200,26 +199,11 @@ app.addHook("onResponse", async (request, reply) => {
   });
 });
 
-// Routes that cannot carry a bearer token by construction: the health probes,
-// Stremio's addon URLs (the protocol sends no credentials — an unguessable
-// per-profile secret in the path stands in, verified by the route handler), the
-// Trakt OAuth callback (a browser redirect from trakt.tv, bound to the flow that
-// started it by its `state`), and the Plex/Jellyfin webhooks (their own shared
-// secret). Everything else needs `API_TOKEN`.
-app.addHook("onRequest", async (request, reply) => {
-  const url = request.url;
-  if (
-    url === "/health" ||
-    url === "/health/ready" ||
-    isStremioSecretPath(url) ||
-    url === "/addon" ||
-    url.startsWith("/trakt/oauth/callback") ||
-    url.startsWith("/webhooks/")
-  ) {
-    return;
-  }
-  await verifyToken(request, reply);
-});
+// Gates everything that is not public on `API_TOKEN`. The allowlist and the
+// lifecycle phase it hooks — `preParsing`, so the rate limiter counts a bad
+// token before it is rejected — both live in `lib/auth-gate.ts`, which explains
+// why at length.
+registerAuthGate(app);
 
 // ─── Error handling ───
 

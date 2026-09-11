@@ -311,10 +311,20 @@ describe("HistoryPage caching and pagination", () => {
       return offset === 0 ? firstPage : secondPage;
     }) as never);
     renderPage();
-    await screen.findByText("Feature 0");
+    // The last row of the first page, not the first: the sentinel is only
+    // observed once the whole page has committed and reported more to come, so
+    // waiting for row 0 would leave the fire below racing the commit that makes
+    // it land somewhere.
+    await screen.findByText("Feature 24");
 
     await intersect();
-    await waitFor(() => expect(getWatchHistory).toHaveBeenLastCalledWith(25, 25, expect.anything()));
+    // `toHaveBeenCalledWith`, not `toHaveBeenLastCalledWith`: what this test is
+    // about is a filter change dropping the page that was in flight, and the
+    // precondition for that is only ever "the offset-25 page was asked for".
+    // Pinning it as the *last* call asks a question the test does not mean —
+    // and one whose answer another render can change — so it failed
+    // intermittently under full-suite load while the behaviour was fine.
+    await waitFor(() => expect(getWatchHistory).toHaveBeenCalledWith(25, 25, expect.anything()));
     await user.click(screen.getByRole("button", { name: "Episodes" }));
     await findEpisode();
 
@@ -356,7 +366,9 @@ describe("HistoryPage caching and pagination", () => {
       server.splice(server.findIndex((e) => e.id === id), 1);
     }) as never);
     renderPage();
-    await screen.findByText("Feature 0");
+    // Row 24, for the same reason as the test above: the sentinel is not
+    // observed until the whole first page has committed.
+    await screen.findByText("Feature 24");
 
     await intersect();
     await user.click(screen.getAllByRole("button", { name: /delete watch of feature 0/i })[0]);

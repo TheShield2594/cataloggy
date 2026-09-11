@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 import { App } from "./App";
@@ -20,7 +21,18 @@ vi.mock("./utils/routePrefetch", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./utils/routePrefetch")>();
   return {
     ...actual,
-    loadSearchPage: () => Promise.resolve({ SearchPage: () => <p>search page</p> }),
+    // Stands in for the real page's query field, which carries `autoFocus` —
+    // the one bit of SearchPage the shell's focus move has to reckon with.
+    loadSearchPage: () =>
+      Promise.resolve({
+        SearchPage: () => (
+          <>
+            <p>search page</p>
+            {/* eslint-disable-next-line jsx-a11y/no-autofocus -- the point of the stand-in is that it claims focus, as the real field does */}
+            <input aria-label="Search movies and TV shows" autoFocus />
+          </>
+        ),
+      }),
     schedulePrefetchOnIdle: () => {},
   };
 });
@@ -55,5 +67,67 @@ describe("top bar search", () => {
 
     expect(await screen.findByText("search page")).toBeInTheDocument();
     expect(headerSearch()).not.toBeInTheDocument();
+  });
+});
+
+/*
+ * Client-side navigation leaves focus on whatever was clicked, so the shell
+ * moves it into `<main>` to give a screen reader somewhere to start reading.
+ * The exception is a route that focuses its own content — SearchPage's query
+ * field — which used to race the shell and lose or win depending on whether its
+ * chunk was warm.
+ */
+describe("focus on route change", () => {
+  const mainEl = () => screen.getByRole("main", { name: "Main content" });
+  const goToSearch = async (user: ReturnType<typeof userEvent.setup>) => {
+    // The sidebar's own link, so focus starts where a real navigation leaves it.
+    await user.click(screen.getAllByRole("link", { name: "Search" })[0]);
+  };
+
+  it("moves focus into main on a route that claims none", async () => {
+    const user = userEvent.setup();
+    renderAt("/search");
+    await screen.findByText("search page");
+
+    await user.click(screen.getAllByRole("link", { name: "Shelf" })[0]);
+
+    await waitFor(() => expect(mainEl()).toHaveFocus());
+  });
+
+  it("leaves the landing route's focus alone on first render", async () => {
+    renderAt("/");
+    await screen.findByText("shelf");
+
+    expect(mainEl()).not.toHaveFocus();
+    expect(document.body).toHaveFocus();
+  });
+
+  it("yields to a route that focuses its own content", async () => {
+    const user = userEvent.setup();
+    renderAt("/");
+    await screen.findByText("shelf");
+
+    await goToSearch(user);
+
+    const field = await screen.findByLabelText("Search movies and TV shows");
+    await waitFor(() => expect(field).toHaveFocus());
+    expect(mainEl()).not.toHaveFocus();
+  });
+
+  // The shell must not confuse "focus is still parked on `<main>` from the last
+  // navigation" with "the new page claimed focus" — that would skip the move and
+  // leave a screen reader with no announcement for the second page.
+  it("re-focuses main when focus is already sitting on it", async () => {
+    const user = userEvent.setup();
+    renderAt("/search");
+    await screen.findByText("search page");
+
+    await user.click(screen.getAllByRole("link", { name: "Shelf" })[0]);
+    await waitFor(() => expect(mainEl()).toHaveFocus());
+
+    const focusSpy = vi.spyOn(mainEl(), "focus");
+    await user.click(screen.getAllByRole("link", { name: "Calendar" })[0]);
+
+    await waitFor(() => expect(focusSpy).toHaveBeenCalled());
   });
 });

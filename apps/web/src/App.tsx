@@ -229,11 +229,32 @@ function AppShell({
   // change, not on the first render (where it would steal focus from the page
   // the user just loaded) and not on a hash change from the skip link, which
   // already lands there.
+  //
+  // It also stands down when the route it just navigated to has already put
+  // focus somewhere inside the new content — SearchPage's query field claims it
+  // with `autoFocus`, because typing is the whole point of arriving there.
+  // Without this the two raced, and which one won depended on whether the
+  // `/search` chunk happened to be warm: warm, the child committed first and
+  // this effect took the focus straight back off the field; suspended, the
+  // fallback committed first, this effect focused `<main>`, and the field then
+  // mounted and won. Navigating to Search therefore sometimes landed you typing
+  // and sometimes didn't, with no rule a user could learn — and since
+  // `schedulePrefetchOnIdle` warms that chunk, the losing case was the common
+  // one. Yielding here makes the field win both ways, and needs no second
+  // per-route list to stay in sync with: any page that focuses its own content
+  // gets the same deference.
+  //
+  // "Inside" excludes `<main>` itself: arriving with focus still parked on it
+  // from the previous navigation is not a page claiming anything, and skipping
+  // the move there would leave a screen reader with nothing to announce.
   const previousPathname = useRef(location.pathname);
   useEffect(() => {
     if (previousPathname.current === location.pathname) return;
     previousPathname.current = location.pathname;
-    mainRef.current?.focus();
+    const main = mainRef.current;
+    const active = document.activeElement;
+    if (main && active && active !== main && main.contains(active)) return;
+    main?.focus();
   }, [location.pathname]);
 
   // Runs on the first render too, unlike the focus move above: the landing
