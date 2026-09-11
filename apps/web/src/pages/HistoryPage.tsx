@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
-import { AlertCircle, Calendar, Film, NotebookPen, Trash2, Tv } from "lucide-react";
+import { Calendar, Film, NotebookPen, Trash2, Tv } from "lucide-react";
 import { api, type SearchResult, type WatchEvent } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useToast } from "../hooks/useToast";
 import { useCachedState } from "../hooks/useCachedState";
 import { useClockBoundary } from "../hooks/useClockBoundary";
 import { relogWatchEvent, watchEventLabel, watchEventTitle } from "../utils/watchEvents";
-import { PAGE_TITLE, SECTION_TITLE, KICKER } from "../components/typography";
+import { PAGE_TITLE, KICKER } from "../components/typography";
 import { PAGE_SIZE } from "./history-paging";
+import { SectionError } from "../components/SectionError";
 
 type TypeFilter = "all" | "movie" | "episode";
 
@@ -105,6 +106,7 @@ export function HistoryPage() {
    * already on its way to the movies-only list.
    */
   const generation = useRef(0);
+  const [reloadToken, setReloadToken] = useState(0);
 
   // Where the next page starts, counted from the rows on screen rather than
   // tracked alongside them. A delete removes the row here *and* on the server,
@@ -140,7 +142,9 @@ export function HistoryPage() {
     })();
     return () => controller.abort();
     // `setFirstPage` is useCachedState's setter, memoised on a constant key.
-  }, [loadPage, setFirstPage]);
+    // `reloadToken` is what Retry bumps: the first page has no loader of its own
+    // to call, so asking again means asking this effect to run again.
+  }, [loadPage, setFirstPage, reloadToken]);
 
   const loadMore = useCallback(async () => {
     const token = generation.current;
@@ -326,10 +330,7 @@ export function HistoryPage() {
           ))}
         </div>
       ) : error && events.length === 0 ? (
-        <div className="mx-auto max-w-lg rounded-2xl p-8 text-center" style={{ border: "1px solid rgba(244,63,94,0.2)", background: "rgba(244,63,94,0.05)" }}>
-          <AlertCircle className="mx-auto h-12 w-12 text-danger" />
-          <p role="alert" className={`mt-3 ${SECTION_TITLE} text-danger`}>{error}</p>
-        </div>
+        <SectionError variant="page" message={error} onRetry={() => setReloadToken((n) => n + 1)} />
       ) : events.length === 0 ? (
         <div className="glass-panel rounded-2xl p-8 text-center" style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}>
           <Calendar className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />

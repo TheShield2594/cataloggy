@@ -4,7 +4,6 @@ import {
   Film,
   Tv,
   ChevronRight,
-  ChevronLeft,
   Check,
   TrendingUp,
   Sparkles,
@@ -37,8 +36,12 @@ import { timeAgo, timeUntil } from "../utils/timeAgo";
 import { formatRating, ratingLabel } from "../utils/rating";
 import { useCachedState } from "../hooks/useCachedState";
 import { useClockBoundary } from "../hooks/useClockBoundary";
-import { PAGE_TITLE, SECTION_TITLE, KICKER, MICRO_LABEL } from "../components/typography";
+import { PAGE_TITLE, KICKER, MICRO_LABEL } from "../components/typography";
 import { localDateFromIsoDate } from "../utils/calendarDate";
+import { ScrollArrows } from "../components/ScrollArrows";
+import { SectionHeader } from "../components/SectionHeader";
+import { SectionError } from "../components/SectionError";
+import { PosterCard } from "../components/PosterCard";
 
 /* ─── Skeleton placeholders ─── */
 
@@ -97,46 +100,39 @@ export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
   fill?: boolean | undefined;
 }) {
   return (
-    <div className={`group relative rounded-xl ${fill ? "w-full" : "w-poster-card flex-none"}`}>
-      {/* A real button rather than a `role="button"` div: it inherits Enter and
-          Space, the disabled/active semantics, and the announcement assistive
-          tech expects, instead of re-implementing the first and forgoing the
-          rest. It stretches over the whole card because the card is one action
-          — there is nothing else here to overlap with. */}
-      {onSelect && (
-        <button
-          type="button"
-          className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
-          onClick={() => onSelect(item)}
-          aria-label={`View details for ${item.name}`}
-        />
-      )}
-      <div
-        className="poster-frame relative aspect-poster overflow-hidden rounded-xl group-hover:scale-[1.03]"
-      >
-        <Poster src={item.poster} alt={item.name} className="h-full w-full" eager={eager} sizes={fill ? POSTER_CARD_FILL_SIZES : POSTER_CARD_SIZES} />
-        {item.rating != null && item.rating > 0 && (
-          // 28px of chip has no room for "/10", so the scale lives in the
-          // accessible name and the tooltip instead of being left implied.
-          <div
-            role="img"
-            aria-label={ratingLabel(item.rating)}
-            title={ratingLabel(item.rating)}
-            className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm"
-            style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}
-          >
-            {/* Fixed amber rather than --status-warn — the badge is on a black
-                scrim over poster art, not on a theme surface, and the token
-                goes dark on the light theme. Same pairing as the Stats page's
-                rating badges. */}
-            <span aria-hidden="true" className="meta font-bold text-[#f5c451]">{formatRating(item.rating)}</span>
+    <PosterCard
+      poster={item.poster}
+      name={item.name}
+      {...(onSelect ? { onOpen: () => onSelect(item) } : {})}
+      eager={eager}
+      sizes={fill ? POSTER_CARD_FILL_SIZES : POSTER_CARD_SIZES}
+      className={fill ? "w-full" : "w-poster-card flex-none"}
+      overlay={
+        <>
+          {item.rating != null && item.rating > 0 && (
+            // 28px of chip has no room for "/10", so the scale lives in the
+            // accessible name and the tooltip instead of being left implied.
+            <div
+              role="img"
+              aria-label={ratingLabel(item.rating)}
+              title={ratingLabel(item.rating)}
+              className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm"
+              style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}
+            >
+              {/* Fixed amber rather than --status-warn — the badge is on a black
+                  scrim over poster art, not on a theme surface, and the token
+                  goes dark on the light theme. Same pairing as the Stats page's
+                  rating badges. */}
+              <span aria-hidden="true" className="meta font-bold text-[#f5c451]">{formatRating(item.rating)}</span>
+            </div>
+          )}
+          {badge && <div className="absolute top-2 right-2">{badge}</div>}
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/55 to-transparent px-3 pb-2.5 pt-10 opacity-100 transition-opacity duration-base sm:opacity-0 sm:group-hover:opacity-100">
+            <p className="truncate text-xs font-semibold text-white">{item.name}</p>
           </div>
-        )}
-        {badge && <div className="absolute top-2 right-2">{badge}</div>}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/55 to-transparent px-3 pb-2.5 pt-10 opacity-100 transition-opacity duration-base sm:opacity-0 sm:group-hover:opacity-100">
-          <p className="truncate text-xs font-semibold text-white">{item.name}</p>
-        </div>
-      </div>
+        </>
+      }
+    >
       <p className="mt-2.5 truncate text-sm font-semibold text-[var(--text)] transition-colors group-hover:text-claw-text">
         {item.name}
       </p>
@@ -150,7 +146,7 @@ export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
           {reason}
         </p>
       )}
-    </div>
+    </PosterCard>
   );
 }
 
@@ -408,82 +404,7 @@ export function ContinueWatchingHero({
 
 /* ─── Scroll arrows ─── */
 
-function ScrollArrows({
-  canScrollLeft,
-  canScrollRight,
-  onScroll,
-}: {
-  canScrollLeft: boolean;
-  canScrollRight: boolean;
-  onScroll: (dir: "left" | "right") => void;
-}) {
-  const scrollable = canScrollLeft || canScrollRight;
-  return (
-    // Stays mounted when the row fits on screen so a resize fades the cluster
-    // out instead of blinking it away; disabled buttons keep it untabbable.
-    //
-    // The gap doubles on a touch screen, and only there. `.tap-target` takes
-    // each 32px button to 44, which is 6px of overhang per side — exactly the
-    // 6px of `gap-1.5`, so the two expanded areas met in the middle and the
-    // later sibling won the whole strip between them. At 12px they meet at the
-    // boundary and neither claims the other's side of it. A mouse keeps the
-    // tighter cluster, which is what lets it share a line with the heading.
-    <div
-      className={`flex items-center gap-1.5 [@media(pointer:coarse)]:gap-3 transition-opacity duration-slow ${scrollable ? "" : "pointer-events-none opacity-0"}`}
-      aria-hidden={!scrollable}
-    >
-      <button
-        type="button"
-        onClick={() => onScroll("left")}
-        disabled={!canScrollLeft}
-        className="tap-target flex h-8 w-8 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
-        style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
-        aria-label="Scroll left"
-      >
-        <ChevronLeft className="h-4 w-4" />
-      </button>
-      <button
-        type="button"
-        onClick={() => onScroll("right")}
-        disabled={!canScrollRight}
-        className="tap-target flex h-8 w-8 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
-        style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
-        aria-label="Scroll right"
-      >
-        <ChevronRight className="h-4 w-4" />
-      </button>
-    </div>
-  );
-}
-
 /* ─── Section header ─── */
-
-function SectionHeader({
-  title,
-  count,
-  children,
-}: {
-  title: string;
-  count?: number;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="mb-4 flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <h2 className={SECTION_TITLE} style={{ color: "var(--text)" }}>{title}</h2>
-        {count !== undefined && count > 0 && (
-          <span
-            className="meta rounded-full px-2.5 py-1"
-            style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
-          >
-            {count}
-          </span>
-        )}
-      </div>
-      {children}
-    </div>
-  );
-}
 
 /* ─── Section-level failure notice ───
  *
@@ -492,22 +413,6 @@ function SectionHeader({
  * merely different that day, with no hint that anything was wrong or that
  * retrying would help — and, for Upcoming, collapsed the two-column grid.
  */
-
-function SectionError({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div className="flex flex-col items-center gap-2 rounded-2xl py-8 text-center" style={{ border: "1px dashed var(--border-strong)" }}>
-      <AlertCircle className="h-7 w-7" style={{ color: "var(--text-mute)" }} />
-      <p className="text-sm" style={{ color: "var(--text-dim)" }}>{message}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset rounded"
-      >
-        Retry
-      </button>
-    </div>
-  );
-}
 
 /* ─── Discover sub-row: one labeled rail (Movies / Series) within the shared Discover section ─── */
 

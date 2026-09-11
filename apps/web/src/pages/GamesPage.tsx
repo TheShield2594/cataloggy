@@ -14,6 +14,7 @@ import { useCachedState } from "../hooks/useCachedState";
 import { formatPlaytime } from "../utils/playtime";
 import { formatRating, ratingLabel, RATING_MAX } from "../utils/rating";
 import { PAGE_TITLE, SECTION_TITLE } from "../components/typography";
+import { PosterGrid } from "../components/PosterGrid";
 
 const SORT_OPTIONS: { value: GameSort; label: string }[] = [
   { value: "recent", label: "Recently Played" },
@@ -554,11 +555,11 @@ export function GamesPage() {
       )}
 
       {loading && (
-        <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <PosterGrid>
           {Array.from({ length: 10 }, (_, i) => (
             <div key={i} className="skeleton rounded-xl" style={{ aspectRatio: "var(--poster-ratio)" }} />
           ))}
-        </div>
+        </PosterGrid>
       )}
 
       {emptyState && (nothingConfigured ? (
@@ -580,11 +581,11 @@ export function GamesPage() {
       ))}
 
       {!loading && games && games.length > 0 && (
-        <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <PosterGrid>
           {games.map((game) => (
             <GameCard key={game.id} game={game} onSelect={setSelectedGame} />
           ))}
-        </div>
+        </PosterGrid>
       )}
 
       {showAddModal && (

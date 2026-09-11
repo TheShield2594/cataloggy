@@ -4,7 +4,6 @@ import { Check, ChevronDown, ChevronUp, Film, Filter, Heart, MonitorPlay, Plus, 
 import { api, type CatalogList, type SearchResult, type WatchProvider } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useToast } from "../hooks/useToast";
-import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
 import { mergeByRelevance } from "../utils/mergeSearchResults";
 import { formatRating, ratingLabel, RATING_MAX } from "../utils/rating";
 import { getCacheScope } from "../utils/dataCache";
@@ -18,6 +17,8 @@ import {
 } from "../hooks/useSearchFilters";
 import { PAGE_TITLE, SECTION_TITLE, MICRO_LABEL } from "../components/typography";
 import { SelectField } from "../components/SelectField";
+import { PosterGrid } from "../components/PosterGrid";
+import { PosterCard } from "../components/PosterCard";
 
 /* ─── Helpers ─── */
 
@@ -642,7 +643,7 @@ export function SearchPage() {
                 ))}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            <PosterGrid>
               {results.map((result, index) => (
                 <ResultCard
                   key={`${result.type}:${result.imdbId}`}
@@ -660,7 +661,7 @@ export function SearchPage() {
                   onSelect={setSelectedItem}
                 />
               ))}
-            </div>
+            </PosterGrid>
           </>
         )}
       </div>
@@ -698,7 +699,7 @@ function ResultsSkeleton() {
   return (
     <div aria-hidden="true" data-testid="search-skeleton">
       <div className="skeleton h-4 w-24 rounded" />
-      <div className="mt-6 grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+      <PosterGrid className="mt-6">
         {Array.from({ length: 10 }).map((_, i) => (
           <div key={i}>
             <div className="skeleton rounded-xl" style={{ aspectRatio: "2/3" }} />
@@ -706,7 +707,7 @@ function ResultsSkeleton() {
             <div className="skeleton mt-1 h-3 w-1/2 rounded" />
           </div>
         ))}
-      </div>
+      </PosterGrid>
     </div>
   );
 }
@@ -850,52 +851,46 @@ function ResultCard({
     .filter(Boolean) as string[];
 
   return (
-    <div className="group flex flex-col">
-      {/* Poster */}
-      <div
-        // `ring-black/5` was invisible on the four dark themes, so cards of the
-        // same rank carried two different edge treatments — this one and the
-        // Dashboard's themed hairline. --border matches the Dashboard. It stays
-        // a ring rather than an inline inset shadow so .card-lift's hover
-        // shadow can still replace it; an inline style would outrank that.
-        className="card-lift relative rounded-xl ring-1 ring-[var(--border)]"
-        style={{ aspectRatio: "var(--poster-ratio)" }}
-      >
-        {/* A real button rather than a `role="button"` div — and, more to the
-            point, a *sibling* of the quick-add button below rather than its
-            parent. The card used to be an interactive div with a real button
-            nested inside it, a shape assistive technology has no defined mapping
-            for. Same structure and the same reasoning as the Dashboard's card
-            and the History row, both of which were moved off this pattern
-            already; the sweep just didn't reach here.
+    <PosterCard
+      poster={result.poster}
+      name={result.name}
+      onOpen={() => onSelect(result)}
+      eager={eager}
+      className="flex flex-col"
+      actions={
+        <>
+          {/* Quick-add button: same low-resting-opacity treatment so trackpad/keyboard users see it exists before hovering/focusing */}
+          <button
+            ref={triggerRef}
+            type="button"
+            // The outside-click handler is a document mousedown listener and the
+            // trigger sits outside the panel, so without this it closed the
+            // dropdown on mousedown and the click that followed reopened it —
+            // making the button unable to dismiss its own panel.
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleDropdown(result.imdbId);
+            }}
+            className="pointer-events-auto absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-claw-500 text-claw-on opacity-100 sm:opacity-60 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shadow-e2 transition-all duration-slow hover:bg-claw-600 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-300 focus-ring-offset"
+            aria-label={`Add ${result.name} to a list`}
+            aria-expanded={isOpen}
+            aria-controls={isOpen ? panelId : undefined}
+          >
+            <Plus className="h-4 w-4" strokeWidth={3} />
+          </button>
 
-            `overflow-hidden` moved to the frame below so it clips the poster's
-            hover scale without also clipping this button's focus ring, which is
-            drawn with an offset outside the card's edge. */}
-        <button
-          type="button"
-          onClick={() => onSelect(result)}
-          aria-label={`View details for ${result.name}`}
-          className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
-        />
-
-        <div className="absolute inset-0 overflow-hidden rounded-xl">
-          {result.poster ? (
-            <img
-              src={result.poster}
-              srcSet={buildTmdbSrcSet(result.poster)}
-              sizes={POSTER_GRID_SIZES}
-              alt={result.name}
-              className="h-full w-full object-cover transition-transform duration-slow group-hover:scale-105"
-              loading={eager ? "eager" : "lazy"}
-              fetchPriority={eager ? "high" : "low"}
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br" style={{ "--tw-gradient-from": "var(--surface)", "--tw-gradient-to": "var(--surface-strong)" } as React.CSSProperties}>
-              <Film className="h-12 w-12" style={{ color: "var(--text-mute)" }} />
+          {/* Decorative, so it takes no clicks — the `actions` box it sits in
+              passes them through to the full-card button underneath. */}
+          {listNames.length > 0 && (
+            <div className="absolute top-2.5 right-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-claw-500 shadow-e1">
+              <Heart className="h-4 w-4 fill-claw-on text-claw-on" />
             </div>
           )}
-
+        </>
+      }
+      overlay={
+        <>
           {/* Type badge */}
           <span
             className={`absolute left-2.5 top-2.5 flex items-center gap-1 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-e1 ring-1 ring-black/15 ${
@@ -915,38 +910,9 @@ function ResultCard({
 
           {/* Gradient overlay: low resting opacity on desktop so it stays discoverable without a hover, full on hover/focus */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 transition-opacity duration-slow sm:opacity-30 sm:group-hover:opacity-100" />
-        </div>
-
-        {/* Quick-add button: same low-resting-opacity treatment so trackpad/keyboard users see it exists before hovering/focusing */}
-        <button
-          ref={triggerRef}
-          type="button"
-          // The outside-click handler is a document mousedown listener and the
-          // trigger sits outside the panel, so without this it closed the
-          // dropdown on mousedown and the click that followed reopened it —
-          // making the button unable to dismiss its own panel.
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleDropdown(result.imdbId);
-          }}
-          className="absolute bottom-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-claw-500 text-claw-on opacity-100 sm:opacity-60 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shadow-e2 transition-all duration-slow hover:bg-claw-600 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-300 focus-ring-offset"
-          aria-label={`Add ${result.name} to a list`}
-          aria-expanded={isOpen}
-          aria-controls={isOpen ? panelId : undefined}
-        >
-          <Plus className="h-4 w-4" strokeWidth={3} />
-        </button>
-
-        {/* Watchlist indicator. z-20 so it paints over the full-card button
-            above rather than under it — decorative, so it takes no clicks. */}
-        {listNames.length > 0 && (
-          <div className="pointer-events-none absolute top-2.5 right-2.5 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-claw-500 shadow-e1">
-            <Heart className="h-4 w-4 fill-claw-on text-claw-on" />
-          </div>
-        )}
-      </div>
-
+        </>
+      }
+    >
       {/* Quick-add dropdown */}
       {isOpen && (
         <div ref={dropdownRef} className="relative z-30 mt-1">
@@ -1079,7 +1045,7 @@ function ResultCard({
         )}
         <WhereToWatchBadge type={result.type} imdbId={result.imdbId} />
       </div>
-    </div>
+    </PosterCard>
   );
 }
 

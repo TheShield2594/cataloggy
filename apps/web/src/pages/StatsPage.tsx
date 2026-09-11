@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
-import { AlertCircle, Award, BarChart3, Calendar, Clock, Film, Flame, Minus, Star, Trophy, TrendingDown, TrendingUp } from "lucide-react";
+import { Award, BarChart3, Calendar, Clock, Film, Flame, Minus, Star, Trophy, TrendingDown, TrendingUp } from "lucide-react";
 import { api, type DetailedWatchStats, type WatchStats, type YearInReviewStats } from "../api";
 import { TicketTile } from "../components/TicketTile";
-import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
 import { useCachedState } from "../hooks/useCachedState";
 import { formatRating, formatStars, ratingLabel, starsLabel } from "../utils/rating";
 import { monthlyBarGeometry } from "../utils/monthlyBars";
 import { PAGE_TITLE, SECTION_TITLE, KICKER } from "../components/typography";
 import { SelectField } from "../components/SelectField";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import { SectionError } from "../components/SectionError";
+import { PosterGrid } from "../components/PosterGrid";
+import { PosterCard } from "../components/PosterCard";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -113,10 +115,15 @@ export function StatsPage() {
     return (
       <div className="mx-auto max-w-4xl space-y-6">
         <h1 className={PAGE_TITLE} style={{ color: "var(--text)" }}>Watch Statistics</h1>
-        <div className="mx-auto max-w-lg rounded-2xl p-8 text-center" style={{ border: "1px solid rgba(244,63,94,0.2)", background: "rgba(244,63,94,0.05)" }}>
-          <AlertCircle className="mx-auto h-12 w-12 text-danger" />
-          <p role="alert" className={`mt-3 ${SECTION_TITLE} text-danger`}>{error}</p>
-        </div>
+        <SectionError
+          variant="page"
+          message={error}
+          onRetry={() => {
+            setError(null);
+            setLoading(true);
+            void load();
+          }}
+        />
       </div>
     );
   }
@@ -388,44 +395,31 @@ export function StatsPage() {
           <h2 className={`mb-4 flex items-center gap-2 ${SECTION_TITLE}`} style={{ color: "var(--text)" }}>
             <Star className="h-5 w-5 text-warning" /> Top Rated Watched
           </h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+          <PosterGrid density="compact">
             {detailed.topRated.map((item, index) => (
-              <div key={item.imdbId} className="group">
-                <div
-                  className="poster-frame relative overflow-hidden rounded-xl group-hover:scale-[1.03]"
-                  style={{ aspectRatio: "2/3" }}
-                >
-                  {item.poster ? (
-                    <img
-                      src={item.poster}
-                      srcSet={buildTmdbSrcSet(item.poster)}
-                      sizes={POSTER_GRID_SIZES}
-                      alt={item.name}
-                      className="h-full w-full object-cover"
-                      loading={index < 5 ? "eager" : "lazy"}
-                      fetchPriority={index < 5 ? "high" : "low"}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center" style={{ background: "var(--surface-strong)" }}>
-                      <Film className="h-8 w-8" style={{ color: "var(--text-mute)" }} />
-                    </div>
-                  )}
-                  {/* Fixed amber, not --status-warn: this badge sits on a
-                      black scrim over poster art rather than on a theme
-                      surface, so it can't take a token that goes dark on the
-                      light theme — that pairing measured 1.46:1. Against the
-                      scrim this is 5.2:1 even over a white poster. */}
-                  {item.rating != null && (
+              <PosterCard
+                key={item.imdbId}
+                poster={item.poster}
+                name={item.name}
+                eager={index < 5}
+                overlay={
+                  /* Fixed amber, not --status-warn: this badge sits on a black
+                     scrim over poster art rather than on a theme surface, so it
+                     can't take a token that goes dark on the light theme — that
+                     pairing measured 1.46:1. Against the scrim this is 5.2:1
+                     even over a white poster. */
+                  item.rating != null && (
                     <div role="img" aria-label={ratingLabel(item.rating)} title={ratingLabel(item.rating)} className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
                       <span aria-hidden="true" className="meta font-bold text-[#f5c451]">{formatRating(item.rating)}</span>
                     </div>
-                  )}
-                </div>
+                  )
+                }
+              >
                 <p className="mt-1.5 truncate text-sm font-medium" style={{ color: "var(--text)" }}>{item.name}</p>
                 <p className="meta-row" style={{ color: "var(--text-mute)" }}>{item.type}</p>
-              </div>
+              </PosterCard>
             ))}
-          </div>
+          </PosterGrid>
         </section>
       )}
 
@@ -478,32 +472,26 @@ export function StatsPage() {
                 <h3 className={`mb-2 flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-dim)" }}>
                   <Star className="h-4 w-4 text-warning" /> Top Rated Picks
                 </h3>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+                <PosterGrid density="compact">
                   {yearReview.topRated.map((item) => (
-                    <div key={item.imdbId} className="group">
-                      <div
-                        className="poster-frame relative overflow-hidden rounded-xl group-hover:scale-[1.03]"
-                        style={{ aspectRatio: "2/3" }}
-                      >
-                        {item.poster ? (
-                          <img src={item.poster} alt={item.name ?? ""} className="h-full w-full object-cover" loading="lazy" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center" style={{ background: "var(--surface-strong)" }}>
-                            <Film className="h-8 w-8" style={{ color: "var(--text-mute)" }} />
-                          </div>
-                        )}
-                        {/* Your own rating, so it wears the five-star scale the
-                            pickers use — unlike the community score on the card
-                            above, which is TMDB's and stays out of ten. */}
+                    <PosterCard
+                      key={item.imdbId}
+                      poster={item.poster}
+                      name={item.name ?? item.imdbId}
+                      overlay={
+                        /* Your own rating, so it wears the five-star scale the
+                           pickers use — unlike the community score on the card
+                           above, which is TMDB's and stays out of ten. */
                         <div role="img" aria-label={starsLabel(item.rating)} title={starsLabel(item.rating)} className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm" style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}>
                           <span aria-hidden="true" className="meta font-bold text-[#f5c451]">{formatStars(item.rating)}</span>
                         </div>
-                      </div>
+                      }
+                    >
                       <p className="mt-1.5 truncate text-sm font-medium" style={{ color: "var(--text)" }}>{item.name ?? item.imdbId}</p>
                       <p className="meta-row" style={{ color: "var(--text-mute)" }}>{item.type}</p>
-                    </div>
+                    </PosterCard>
                   ))}
-                </div>
+                </PosterGrid>
               </div>
             )}
           </div>

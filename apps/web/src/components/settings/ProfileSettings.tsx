@@ -3,18 +3,7 @@ import { AlertCircle, Check, Loader2, Lock, Pencil, Trash2, Unlock, Users, X } f
 import { api, ApiError, type Profile } from "../../api";
 import { useProfile } from "../../hooks/useProfile";
 import { useToast } from "../../hooks/useToast";
-
-const AVATAR_COLORS = ["#f97316", "#0ea5e9", "#a855f7", "#22c55e", "#ec4899", "#eab308"];
-
-function avatarColor(name: string) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-function initials(name: string) {
-  return name.trim().slice(0, 2).toUpperCase();
-}
+import { avatarColor, initials } from "../../utils/avatar";
 
 function RenameForm({ profile, onSaved, onCancel }: { profile: Profile; onSaved: (p: Profile) => void; onCancel: () => void }) {
   const [name, setName] = useState(profile.name);

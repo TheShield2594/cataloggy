@@ -31,6 +31,7 @@ import {
   type ShelfEntry,
   type ShelfFilter,
 } from "./shelf";
+import { PosterGrid } from "../components/PosterGrid";
 
 /*
  * The Shelf.
@@ -603,11 +604,11 @@ export function ShelfPage() {
                  what turns the grid into a *library* — you see a shelf of them
                  at once instead of a stack you scroll through a pair at a
                  time. */
-              <div className="grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 sm:gap-x-4 sm:gap-y-5">
+              <PosterGrid density="library">
                 {visibleRest.map((entry, index) => (
                   <ShelfCell key={entry.key} entry={entry} eager={index < 6} onOpen={() => openEntry(entry)} />
                 ))}
-              </div>
+              </PosterGrid>
             )}
             {renderLimit < rest.length && <div ref={sentinelRef} className="h-4" />}
           </section>

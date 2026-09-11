@@ -7,6 +7,7 @@ import { useExitAnimation } from "../hooks/useExitAnimation";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { SECTION_TITLE } from "../components/typography";
+import { avatarColor, initials } from "../utils/avatar";
 
 // Standing in for the switcher's own title. As a full page (first run) it is the
 // document's h1; opened as a modal over the app, the page behind already owns the
@@ -237,18 +238,6 @@ function PinPrompt({
       </div>
     </form>
   );
-}
-
-const AVATAR_COLORS = ["#f97316", "#0ea5e9", "#a855f7", "#22c55e", "#ec4899", "#eab308"];
-
-function avatarColor(name: string) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-function initials(name: string) {
-  return name.trim().slice(0, 2).toUpperCase();
 }
 
 function ProfilePicker({
