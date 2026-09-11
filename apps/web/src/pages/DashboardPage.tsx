@@ -72,25 +72,29 @@ function RecentlyWatchedSkeleton() {
 
 /* ─── Discovery Card ─── */
 
+// `?: T | undefined` rather than `?: T`: every caller forwards a value that is
+// already optional, and a missing prop and an undefined one are the same thing
+// to React and to everything below. The distinction the flag exists for is
+// made where it is real — a Prisma `data`, a `fetch` init, a Fastify option.
 type DiscoveryItem = {
   id: string;
   name: string;
-  poster?: string;
-  rating?: number;
-  genres?: string[];
-  year?: number;
-  type?: string;
-  description?: string;
+  poster?: string | undefined;
+  rating?: number | undefined;
+  genres?: string[] | undefined;
+  year?: number | undefined;
+  type?: string | undefined;
+  description?: string | undefined;
 };
 
 export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
   item: DiscoveryItem;
-  badge?: React.ReactNode;
-  reason?: string;
-  onSelect?: (item: DiscoveryItem) => void;
-  eager?: boolean;
+  badge?: React.ReactNode | undefined;
+  reason?: string | undefined;
+  onSelect?: ((item: DiscoveryItem) => void) | undefined;
+  eager?: boolean | undefined;
   /** Fills the width of a grid cell instead of using a fixed carousel-card width. */
-  fill?: boolean;
+  fill?: boolean | undefined;
 }) {
   return (
     <div className={`group relative rounded-xl ${fill ? "w-full" : "w-poster-card flex-none"}`}>
@@ -667,7 +671,7 @@ function DashboardHeader({
   longestStreak: number;
   totalMovies: number;
   totalEpisodes: number;
-  topGenre?: string;
+  topGenre?: string | undefined;
   loading: boolean;
   statsLoading: boolean;
   statsFailed: boolean;
@@ -768,7 +772,12 @@ export function DashboardPage() {
   const { showToast } = useToast();
 
   const toSearchResult = useCallback((imdbId: string, type: "movie" | "series", name: string, opts?: {
-    poster?: string; year?: number | null; description?: string | null; genres?: string[]; rating?: number | null; background?: string | null;
+    poster?: string | undefined;
+    year?: number | null | undefined;
+    description?: string | null | undefined;
+    genres?: string[] | undefined;
+    rating?: number | null | undefined;
+    background?: string | null | undefined;
   }): SearchResult => ({
     imdbId, type, name,
     year: opts?.year ?? null,

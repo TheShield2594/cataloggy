@@ -58,8 +58,8 @@ export class OfflineWriteQueuedError extends Error {
 
 declare global {
   interface Window {
-    __CATALOGGY_API_BASE__?: string;
-    __CATALOGGY_ADDON_BASE__?: string;
+    __CATALOGGY_API_BASE__?: string | undefined;
+    __CATALOGGY_ADDON_BASE__?: string | undefined;
   }
 }
 
@@ -203,6 +203,16 @@ applyCacheScope();
 
 export type MediaType = "movie" | "series";
 
+/*
+ * Optional properties in this file are spelled `?: T | undefined`.
+ *
+ * These types describe what the API sends after parsing, and the parsers set
+ * the key either way — `{ poster: undefined }`, not `{}` — so under
+ * `exactOptionalPropertyTypes` the annotation has to say that undefined is one
+ * of the values, not only that the key may be missing. `SearchResult` below has
+ * always said as much in prose: "undefined = not yet fetched".
+ */
+
 export type SearchResult = {
   imdbId: string;
   type: MediaType;
@@ -216,17 +226,17 @@ export type SearchResult = {
   inCollection: boolean;
   lists: string[];
   // OMDB ratings — undefined = not yet fetched, null = fetched but unavailable
-  imdbRating?: number | null;
-  rtScore?: number | null;
-  mcScore?: number | null;
+  imdbRating?: number | null | undefined;
+  rtScore?: number | null | undefined;
+  mcScore?: number | null | undefined;
   // Detail fields — undefined = not yet fetched
-  runtime?: number | null;
-  certification?: string | null;
-  status?: string | null;
-  network?: string | null;
-  releaseDate?: string | null;
-  tmdbId?: number | null;
-  background?: string | null;
+  runtime?: number | null | undefined;
+  certification?: string | null | undefined;
+  status?: string | null | undefined;
+  network?: string | null | undefined;
+  releaseDate?: string | null | undefined;
+  tmdbId?: number | null | undefined;
+  background?: string | null | undefined;
 };
 
 export type ListItem = {
@@ -238,7 +248,7 @@ export type ListItem = {
 
 export type ListItemWithMeta = ListItem & {
   // Title captured when the item was added — stands in until the metadata row lands.
-  title?: string | null;
+  title?: string | null | undefined;
   metadata: { name: string; poster: string | null; year: number | null; genres: string[]; rating: number | null } | null;
 };
 
@@ -253,9 +263,9 @@ export type CatalogMeta = {
   id: string;
   type: MediaType;
   name: string;
-  poster?: string;
-  year?: number;
-  description?: string;
+  poster?: string | undefined;
+  year?: number | undefined;
+  description?: string | undefined;
 };
 
 export type WatchStats = {
@@ -350,11 +360,11 @@ export type TrendingMeta = {
   id: string;
   type: MediaType;
   name: string;
-  poster?: string;
-  year?: number;
-  description?: string;
-  genres?: string[];
-  rating?: number;
+  poster?: string | undefined;
+  year?: number | undefined;
+  description?: string | undefined;
+  genres?: string[] | undefined;
+  rating?: number | undefined;
 };
 
 /**
@@ -385,13 +395,13 @@ const ratingQuery = (type: RatingType, target?: RatingTarget) => {
 };
 
 /** Locates a season or episode rating; omitted entirely for movies and series. */
-export type RatingTarget = { season?: number; episode?: number };
+export type RatingTarget = { season?: number | undefined; episode?: number | undefined };
 
 export type UserRating = {
   imdbId: string;
   type: RatingType;
-  season?: number;
-  episode?: number;
+  season?: number | undefined;
+  episode?: number | undefined;
   rating: number;
   ratedAt: string;
 };
@@ -405,14 +415,14 @@ export type UserPreferences = {
 export type CheckIn = {
   type: "movie" | "episode";
   imdbId: string;
-  seriesImdbId?: string;
+  seriesImdbId?: string | undefined;
   name: string;
-  poster?: string;
-  background?: string;
-  season?: number;
-  episode?: number;
+  poster?: string | undefined;
+  background?: string | undefined;
+  season?: number | undefined;
+  episode?: number | undefined;
   startedAt: string;
-  expiresAt?: string;
+  expiresAt?: string | undefined;
 };
 
 export type WatchProvider = {
@@ -756,7 +766,7 @@ export function onQueuedWritesReplayed(onReplayed: (summary: QueuedWritesReplaye
   if (!container) return () => {};
 
   const listener = (event: MessageEvent) => {
-    const data = event.data as { type?: unknown; replayed?: unknown; rejected?: unknown } | null;
+    const data = event.data as { type?: unknown | undefined; replayed?: unknown | undefined; rejected?: unknown | undefined } | null;
     if (data?.type !== "QUEUED_WRITES_REPLAYED") return;
     invalidateMemoryCache();
     const summary = {
@@ -891,7 +901,7 @@ export function invalidatedCachePrefixes(path: string): string[] | null {
 declare global {
   interface Window {
     /** Set by public/preload-dashboard.js — in-flight responses started during HTML parse. */
-    __CATALOGGY_PRELOAD__?: Record<string, Promise<Response | null>>;
+    __CATALOGGY_PRELOAD__?: Record<string, Promise<Response | null>> | undefined;
   }
 }
 
@@ -910,7 +920,20 @@ function claimPreloadedResponse(path: string): Promise<Response | null> | null {
   return pending;
 }
 
-async function request<T>(path: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
+/**
+ * `request`'s own options, rather than `RequestInit` straight: every caller
+ * that takes an `AbortSignal` takes an optional one and forwards it as
+ * `{ signal }`, so the type has to say that a present-but-undefined signal
+ * means the same as no signal — which is what `fetch` does with it, and what
+ * `RequestInit`'s own `signal?: AbortSignal | null` stops saying under
+ * `exactOptionalPropertyTypes`.
+ */
+type RequestOptions = Omit<RequestInit, "signal"> & {
+  signal?: AbortSignal | null | undefined;
+  timeoutMs?: number | undefined;
+};
+
+async function request<T>(path: string, init?: RequestOptions): Promise<T> {
   const method = (init?.method ?? "GET").toUpperCase();
   const controller = new AbortController();
   const timeoutMs = init?.timeoutMs ?? 30000;
@@ -1017,7 +1040,7 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
     let errorCode: string | undefined;
     if (body) {
       try {
-        const parsed = JSON.parse(body) as { error?: unknown; code?: unknown };
+        const parsed = JSON.parse(body) as { error?: unknown | undefined; code?: unknown | undefined };
         if (typeof parsed.error === "string" && parsed.error.trim()) {
           message = parsed.error;
         }
@@ -1145,7 +1168,7 @@ export const api = {
   async getWatchHistory(
     limit = 10,
     offset = 0,
-    opts?: { imdbId?: string; type?: "movie" | "episode"; signal?: AbortSignal }
+    opts?: { imdbId?: string | undefined; type?: "movie" | "episode" | undefined; signal?: AbortSignal | undefined }
   ) {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (opts?.imdbId) params.set("imdbId", opts.imdbId);
@@ -1236,7 +1259,7 @@ export const api = {
     return request<{ configured: boolean }>("/omdb/key", { method: "DELETE" });
   },
   getJobStatus() {
-    return request<{ failures: JobFailure[]; runs?: JobRun[] }>("/settings/job-status");
+    return request<{ failures: JobFailure[]; runs?: JobRun[] | undefined }>("/settings/job-status");
   },
   getDetailedStats(signal?: AbortSignal) {
     return request<DetailedWatchStats>("/watch/stats/detailed", { signal });
@@ -1285,7 +1308,7 @@ export const api = {
       method: "DELETE",
     });
   },
-  getAllRatings(type?: RatingType, limit = 50) {
+  getAllRatings(type?: RatingType | undefined, limit = 50) {
     const params = new URLSearchParams();
     if (type) params.set("type", type);
     params.set("limit", String(limit));
@@ -1384,14 +1407,14 @@ export const api = {
       body: JSON.stringify({ note }),
     });
   },
-  logWatch(payload: { type: "movie" | "episode"; imdbId: string; seriesImdbId?: string; season?: number; episode?: number; watchedAt: string; dateUnknown?: boolean; note?: string | null }) {
+  logWatch(payload: { type: "movie" | "episode"; imdbId: string; seriesImdbId?: string | undefined; season?: number | undefined; episode?: number | undefined; watchedAt: string; dateUnknown?: boolean | undefined; note?: string | null | undefined }) {
     return request<{ watchEvent: { id: string } }>("/watch", { method: "POST", body: JSON.stringify(payload) });
   },
   // Check-in
   getCheckin(signal?: AbortSignal) {
     return request<{ checkin: CheckIn | null }>("/checkin", { signal });
   },
-  startCheckin(payload: { type: "movie" | "episode"; imdbId: string; seriesImdbId?: string; name: string; poster?: string; season?: number; episode?: number; runtime?: number | null }) {
+  startCheckin(payload: { type: "movie" | "episode"; imdbId: string; seriesImdbId?: string | undefined; name: string; poster?: string | undefined; season?: number | undefined; episode?: number | undefined; runtime?: number | null | undefined }) {
     return request<{ checkin: CheckIn }>("/checkin", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -1424,7 +1447,7 @@ export const api = {
     return request<{ configured: boolean }>("/ai/config", { method: "DELETE" });
   },
   testAiConfig(config: Record<string, unknown>) {
-    return request<{ success: boolean; response?: string; outcome?: OutboundFailure; error?: string }>("/ai/test", {
+    return request<{ success: boolean; response?: string | undefined; outcome?: OutboundFailure | undefined; error?: string | undefined }>("/ai/test", {
       method: "POST",
       body: JSON.stringify({ config }),
     });
@@ -1433,7 +1456,7 @@ export const api = {
     return request<{ refreshed: boolean }>("/recommendations/ai/refresh", { method: "POST", timeoutMs: 60000 });
   },
   getAiRecommendations(type: MediaType, limit = 20) {
-    return request<{ metas: TrendingMeta[]; reasons?: Record<string, string> }>(`/recommendations/ai?type=${type}&limit=${limit}`);
+    return request<{ metas: TrendingMeta[]; reasons?: Record<string, string> | undefined }>(`/recommendations/ai?type=${type}&limit=${limit}`);
   },
   // Push notifications
   getPushPublicKey() {
@@ -1457,9 +1480,9 @@ export const api = {
   },
   createNotificationChannel(payload: {
     kind: NotificationChannelKind;
-    name?: string;
+    name?: string | undefined;
     url: string;
-    token?: string;
+    token?: string | undefined;
   }) {
     return request<{ channel: NotificationChannel }>("/notifications/channels", {
       method: "POST",
@@ -1469,7 +1492,7 @@ export const api = {
   // Omitting `token` keeps the stored one; an empty string clears it.
   updateNotificationChannel(
     id: string,
-    payload: { name?: string; url?: string; token?: string; enabled?: boolean }
+    payload: { name?: string | undefined; url?: string | undefined; token?: string | undefined; enabled?: boolean | undefined }
   ) {
     return request<{ channel: NotificationChannel }>(`/notifications/channels/${encodeURIComponent(id)}`, {
       method: "PATCH",
@@ -1482,7 +1505,7 @@ export const api = {
     });
   },
   testNotificationChannel(id: string) {
-    return request<{ success: boolean; outcome?: OutboundFailure; error?: string }>(
+    return request<{ success: boolean; outcome?: OutboundFailure | undefined; error?: string | undefined }>(
       `/notifications/channels/${encodeURIComponent(id)}/test`,
       { method: "POST", timeoutMs: 20000 }
     );
@@ -1491,14 +1514,14 @@ export const api = {
   getProfiles() {
     return request<{ profiles: Profile[] }>("/profiles");
   },
-  createProfile(payload: { name: string; pin?: string }) {
+  createProfile(payload: { name: string; pin?: string | undefined }) {
     return request<{ profile: Profile }>("/profiles", {
       method: "POST",
       body: JSON.stringify(payload),
     });
   },
   async verifyProfile(profileId: string, pin?: string) {
-    const result = await request<{ id: string; name: string; profileToken?: string }>(
+    const result = await request<{ id: string; name: string; profileToken?: string | undefined }>(
       `/profiles/${encodeURIComponent(profileId)}/verify`,
       {
         method: "POST",
@@ -1510,7 +1533,7 @@ export const api = {
     runtimeConfig.setProfileToken(result.profileToken ?? "");
     return result;
   },
-  updateProfile(profileId: string, payload: { name?: string; pin?: string | null; currentPin?: string }) {
+  updateProfile(profileId: string, payload: { name?: string | undefined; pin?: string | null | undefined; currentPin?: string | undefined }) {
     return request<{ profile: Profile }>(`/profiles/${encodeURIComponent(profileId)}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
@@ -1588,7 +1611,7 @@ export const api = {
     );
     return res.results;
   },
-  addGame(payload: { igdbId: number; title: string; coverUrl?: string | null; releaseDate?: string | null; genres?: string[] }) {
+  addGame(payload: { igdbId: number; title: string; coverUrl?: string | null | undefined; releaseDate?: string | null | undefined; genres?: string[] | undefined }) {
     return request<{ game: Game }>("/games", {
       method: "POST",
       body: JSON.stringify(payload),

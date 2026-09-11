@@ -56,10 +56,10 @@ interface ExportSeriesProgress {
 interface ExportRating {
   imdbId: string;
   type: string;
-  season?: number;
-  episode?: number;
+  season?: number | undefined;
+  episode?: number | undefined;
   rating: number;
-  note?: string | null;
+  note?: string | null | undefined;
   ratedAt: string;
 }
 

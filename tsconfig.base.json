@@ -19,6 +19,13 @@
     // prefer restructuring until the checker can see that over a `!` that only
     // hides the question.
     "noUncheckedIndexedAccess": true,
+    // `{ poster?: string }` stops accepting `{ poster: undefined }`. The
+    // distinction is one this codebase already makes at the API boundary — the
+    // `@cataloggy/shared` parsers normalise `null` to `undefined` for exactly
+    // this reason — so without it a type that spells an absence `?:` silently
+    // accepts a present-but-undefined field the server never sends, and a
+    // `Object.keys`-shaped consumer sees a key that should not be there.
+    "exactOptionalPropertyTypes": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,

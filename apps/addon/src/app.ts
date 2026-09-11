@@ -49,6 +49,13 @@ const ADDON_PUBLIC_BASE = process.env.ADDON_PUBLIC_BASE;
 const WEB_PUBLIC_BASE = (process.env.CATALOGGY_WEB_PUBLIC ?? process.env.WEB_PUBLIC_BASE)?.replace(/\/+$/, "");
 const PROXY_PATH_PREFIXES = parseProxyPathPrefixes(process.env.PROXY_PATH_PREFIXES, ["/addon"] as const);
 
+// Omitted rather than passed as `undefined` when `TRUST_PROXY` is unset:
+// Fastify's `trustProxy?:` means "the key may be missing", and handing it an
+// explicit undefined under `exactOptionalPropertyTypes` drops `fastify()` to
+// its HTTP/2 overload — which typed every route registration below against the
+// wrong server and the wrong request.
+const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
+
 export const app = Fastify({
   logger: {
     level: process.env.LOG_LEVEL ?? "info",
@@ -60,7 +67,7 @@ export const app = Fastify({
     // bundle pasted into an issue can carry the token off with them.
     serializers: { req: redactedRequestSerializer },
   },
-  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
+  ...(trustProxy !== undefined ? { trustProxy } : {}),
   rewriteUrl: (request: RawRequestDefaultExpression) => normalizeProxyPath(request.url ?? "/", PROXY_PATH_PREFIXES)
 });
 

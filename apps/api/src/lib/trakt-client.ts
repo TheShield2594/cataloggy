@@ -39,9 +39,12 @@ export type TraktScrobbleAction = "start" | "pause" | "stop";
 export type TraktScrobbleParams = {
   type: "movie" | "episode";
   imdbId: string;
-  seriesImdbId?: string | null;
-  season?: number | null;
-  episode?: number | null;
+  // Callers pass these straight through from a watch event, where they are
+  // already optional; a missing field and an undefined one mean the same thing
+  // to every reader of this, so the type says so.
+  seriesImdbId?: string | null | undefined;
+  season?: number | null | undefined;
+  episode?: number | null | undefined;
   progress: number;
 };
 
@@ -94,7 +97,13 @@ export const pushTraktScrobble = async (
  */
 export const syncWatchEventToTrakt = (
   watchEvent: { id: string; traktHistoryId: bigint | null },
-  params: { type: "movie" | "episode"; imdbId: string; seriesImdbId?: string | null; season?: number | null; episode?: number | null },
+  params: {
+    type: "movie" | "episode";
+    imdbId: string;
+    seriesImdbId?: string | null | undefined;
+    season?: number | null | undefined;
+    episode?: number | null | undefined;
+  },
   logger: FastifyRequest["log"]
 ): void => {
   if (watchEvent.traktHistoryId != null) return;

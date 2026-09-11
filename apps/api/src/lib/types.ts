@@ -27,17 +27,22 @@ export type SeriesProgressCandidate = {
   lastWatchedAt: Date;
 };
 
+// The optional fields below are `?: T | undefined` rather than `?: T`: every
+// caller builds these from values that are themselves optional and passes them
+// straight through, and nothing downstream tells a missing key from an
+// undefined one. `exactOptionalPropertyTypes` is left to bite where the
+// distinction is real — a Prisma `data`/`where`, a `fetch` init.
 export type CheckInData = {
   type: "movie" | "episode";
   imdbId: string;
-  seriesImdbId?: string;
+  seriesImdbId?: string | undefined;
   name: string;
-  poster?: string;
-  background?: string;
-  season?: number;
-  episode?: number;
+  poster?: string | undefined;
+  background?: string | undefined;
+  season?: number | undefined;
+  episode?: number | undefined;
   startedAt: string;
-  expiresAt?: string;
+  expiresAt?: string | undefined;
 };
 
 export type AiProviderConfig = {
@@ -49,12 +54,12 @@ export type AiProviderConfig = {
 export type RecordWatchParams = {
   type: "episode" | "movie";
   imdbId: string;
-  seriesImdbId?: string;
-  season?: number | null;
-  episode?: number | null;
+  seriesImdbId?: string | undefined;
+  season?: number | null | undefined;
+  episode?: number | null | undefined;
   watchedAt: Date;
-  dateUnknown?: boolean;
-  note?: string | null;
+  dateUnknown?: boolean | undefined;
+  note?: string | null | undefined;
   source: string;
   /**
    * The profile the event belongs to. Passed explicitly rather than read off the

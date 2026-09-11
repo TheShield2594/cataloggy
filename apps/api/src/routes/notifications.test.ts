@@ -328,7 +328,7 @@ describe("notification channel routes", () => {
     it("rejects an id that is not a UUID before it reaches the database", async () => {
       const app = await buildApp();
 
-      const res = await app.inject({ method, url, payload });
+      const res = await app.inject({ method, url, ...(payload !== undefined ? { payload } : {}) });
 
       expect(res.statusCode).toBe(400);
       expect(res.json().error).toBe("id must be a valid UUID");

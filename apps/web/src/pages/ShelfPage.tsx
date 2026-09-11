@@ -143,9 +143,9 @@ function UpNextCard({
    */
   eager: boolean;
   onOpen: () => void;
-  onResume?: () => void;
-  resumeLabel?: string;
-  resumeBusy?: boolean;
+  onResume?: (() => void) | undefined;
+  resumeLabel?: string | undefined;
+  resumeBusy?: boolean | undefined;
 }) {
   // The landscape still if the record carries one, the poster if not. A poster
   // in a 16:9 frame is cropped to its middle, which is a worse picture than the

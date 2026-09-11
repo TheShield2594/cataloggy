@@ -72,15 +72,27 @@ const asCatalogType = (value: unknown, what: string): StremioCatalogType =>
  * Stremio wire shape — the addon adds `posterShape` and drops what Stremio has
  * no field for before answering a client.
  */
+/*
+ * Optional properties below are spelled `?: T | undefined` rather than `?: T`.
+ *
+ * The parsers normalise an absent or null field to `undefined` and set the key
+ * anyway — `{ poster: undefined }`, not `{}` — because writing each field
+ * conditionally would turn every parse into a chain of spreads for no gain to
+ * any reader. Under `exactOptionalPropertyTypes` those are different types, so
+ * the annotation says which one these actually are. The flag still bites where
+ * it should: an option bag that tells "not set" from "set to undefined" (a
+ * Prisma `where`, a `fetch` init) keeps its bare `?:`.
+ */
+
 export type CataloggyMetaPreview = {
   id: string;
   type: StremioCatalogType;
   name: string;
-  poster?: string;
-  year?: number;
-  description?: string;
-  genres?: string[];
-  rating?: number;
+  poster?: string | undefined;
+  year?: number | undefined;
+  description?: string | undefined;
+  genres?: string[] | undefined;
+  rating?: number | undefined;
 };
 
 export type MetasResponse = { metas: CataloggyMetaPreview[] };
@@ -145,8 +157,8 @@ export type CataloggyListItem = {
     name: string;
     poster: string | null;
     year: number | null;
-    genres?: string[];
-    rating?: number | null;
+    genres?: string[] | undefined;
+    rating?: number | null | undefined;
   } | null;
 };
 
@@ -407,19 +419,19 @@ export const parseCalendarResponse = (value: unknown): CalendarResponse => {
 export type SeriesProgress = {
   imdbId: string;
   name: string;
-  poster?: string;
-  background?: string | null;
+  poster?: string | undefined;
+  background?: string | null | undefined;
   lastSeason: number;
   lastEpisode: number;
   nextSeason: number;
   nextEpisode: number;
-  totalSeasons?: number | null;
-  totalEpisodes?: number | null;
-  watchedEpisodes?: number | null;
+  totalSeasons?: number | null | undefined;
+  totalEpisodes?: number | null | undefined;
+  watchedEpisodes?: number | null | undefined;
   /** Episodes in `lastSeason`, null when TMDB has no season data for the show. */
-  seasonTotalEpisodes?: number | null;
+  seasonTotalEpisodes?: number | null | undefined;
   /** Episodes watched within `lastSeason`. */
-  seasonWatchedEpisodes?: number | null;
+  seasonWatchedEpisodes?: number | null | undefined;
 };
 
 export type SeriesProgressListResponse = { progress: SeriesProgress[] };
@@ -461,17 +473,17 @@ export const parseSeriesProgressListResponse = (value: unknown): SeriesProgressL
 export type WatchEvent = {
   id: string;
   imdbId: string;
-  seriesImdbId?: string;
+  seriesImdbId?: string | undefined;
   type: "movie" | "episode";
   name: string | null;
-  poster?: string;
-  season?: number;
-  episode?: number;
+  poster?: string | undefined;
+  season?: number | undefined;
+  episode?: number | undefined;
   /** ISO 8601. Meaningless when `dateUnknown` — the row still needs an order. */
   watchedAt: string;
   dateUnknown: boolean;
   /** Free text attached to this watch. Trakt imports carry theirs across. */
-  note?: string | null;
+  note?: string | null | undefined;
 };
 
 export type WatchHistoryResponse = { history: WatchEvent[] };

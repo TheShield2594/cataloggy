@@ -102,6 +102,13 @@ const PROXY_PATH_PREFIXES = parseProxyPathPrefixes(process.env.PROXY_PATH_PREFIX
 
 const MAX_BODY_SIZE_MB = parseMaxBodySizeMb(process.env.MAX_BODY_SIZE_MB);
 
+// Omitted rather than passed as `undefined` when `TRUST_PROXY` is unset:
+// Fastify's `trustProxy?:` means "the key may be missing", and handing it an
+// explicit undefined under `exactOptionalPropertyTypes` drops `fastify()` to
+// its HTTP/2 overload — which typed every route registration below against the
+// wrong server and the wrong request.
+const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
+
 const app = Fastify({
   logger: {
     // Fastify's default `req` serializer logs the URL verbatim, so a secret sent
@@ -111,7 +118,7 @@ const app = Fastify({
     serializers: { req: redactedRequestSerializer },
   },
   bodyLimit: mbToBytes(MAX_BODY_SIZE_MB),
-  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
+  ...(trustProxy !== undefined ? { trustProxy } : {}),
   rewriteUrl: (request) => normalizeProxyPath(request.url ?? "/", PROXY_PATH_PREFIXES),
   ...requestSchemaOptions,
 });

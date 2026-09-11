@@ -72,7 +72,8 @@ export const getPushPublicKey = async (): Promise<string> => {
 export type PushPayload = {
   title: string;
   body: string;
-  url?: string;
+  /** The path to open. Absent and undefined both mean "no deep link". */
+  url?: string | undefined;
 };
 
 export const sendPushToAllSubscriptions = async (

@@ -13,7 +13,7 @@ import { SECTION_TITLE } from "../components/typography";
 // h1, so the same title drops a level.
 type HeadingTag = "h1" | "h2";
 
-function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
+function Shell({ children, onClose }: { children: React.ReactNode; onClose?: (() => void) | undefined }) {
   // All three gated on `onClose`: without it this renders as a full page
   // (first-run profile setup), not a modal, and must not lock scroll or
   // swallow Escape.
@@ -86,7 +86,7 @@ function CreateProfileForm({
   subtitle: string;
   headingTag: HeadingTag;
   onCreated: (profile: Profile) => void;
-  onCancel?: () => void;
+  onCancel?: (() => void) | undefined;
 }) {
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
@@ -299,7 +299,7 @@ function ProfilePicker({
   );
 }
 
-export function ProfileSwitcher({ onSelected, onClose }: { onSelected: (profile: Profile) => void; onClose?: () => void }) {
+export function ProfileSwitcher({ onSelected, onClose }: { onSelected: (profile: Profile) => void; onClose?: (() => void) | undefined }) {
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [error, setError] = useState<string | null>(null);

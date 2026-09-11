@@ -47,7 +47,7 @@ export function createScopedMemoCache<T>({
   /** Maximum entries held across all scopes before the oldest write is evicted. */
   limit: number;
   /** How long an entry is served for. Omit to keep entries until they are evicted. */
-  ttlMs?: number;
+  ttlMs?: number | undefined;
 }): ScopedMemoCache<T> {
   const entries = new Map<string, Entry<T>>();
   const scopedKey = (key: string) => `${getCacheScope()}|${key}`;

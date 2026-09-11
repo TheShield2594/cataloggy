@@ -39,24 +39,24 @@ export type ProgressRulerProps = {
    * tick, and folded into the bar's width when the ruler falls back to one.
    * Omitted wherever the app has no partial-play signal, which is most places.
    */
-  partial?: number;
+  partial?: number | undefined;
   /**
    * Whether the units are countable parts. Episodes and chapters are; hours and
    * pages are not, even though both arrive here as two numbers.
    */
-  discrete?: boolean;
+  discrete?: boolean | undefined;
   /**
    * What the ruler is measuring, for anyone who can't see it — "Season 3, 4 of
    * 8 episodes watched". Required unless `decorative`, because a bare
    * progressbar announces a percentage and no subject.
    */
-  label?: string;
+  label?: string | undefined;
   /**
    * Set where the same numbers are already written out in text beside the
    * ruler. The ruler then leaves the accessibility tree entirely rather than
    * announcing the row's progress a second time in a different wording.
    */
-  decorative?: boolean;
+  decorative?: boolean | undefined;
   /**
    * How heavy the ruler is drawn. `sm` (3px) is the default and what a card or
    * a row takes; `md` (5px) is for a detail screen, where the ruler is the

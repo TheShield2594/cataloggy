@@ -61,7 +61,7 @@ export const healthDotClass = (tone: HealthTone): string =>
       : tone === "bad" ? "status-dot status-dot--bad"
         : "status-dot";
 
-export type JobStatus = { failures: JobFailure[]; runs?: JobRun[] };
+export type JobStatus = { failures: JobFailure[]; runs?: JobRun[] | undefined };
 
 /**
  * When a named job last completed, as words, or null if it has never been seen.
