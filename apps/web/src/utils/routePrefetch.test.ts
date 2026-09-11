@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EAGER_ROUTES, ROUTE_LOADERS, prefetchRoute, resetPrefetchStateForTests } from "./routePrefetch";
 import { readCache, resetDataCacheForTests } from "./dataCache";
-import { PAGE_SIZE } from "../pages/HistoryPage";
+import { PAGE_SIZE } from "../pages/history-paging";
 import { MORE_NAV_ITEMS, PRIMARY_NAV_ITEMS } from "../components/MobileTabBar";
 import { SIDEBAR_NAV_ITEMS } from "../components/Sidebar";
 
@@ -21,6 +21,14 @@ afterEach(() => {
   resetPrefetchStateForTests();
   resetDataCacheForTests();
 });
+
+// A warm-up starts with a dynamic import, and `prefetchRoute` has just started
+// the route's own chunk alongside it — on a CI runner sharing its cores with
+// every other suite, resolving those can outlast the one second `waitFor` allows
+// by default. The assertions are unchanged; only the patience is, and it stays
+// under the 5s test timeout so a genuine hang still reports as this assertion
+// rather than as the runner giving up on the case.
+const WARM_UP = { timeout: 4000 };
 
 describe("route prefetch coverage", () => {
   it("has a loader for every sidebar destination", () => {
@@ -49,7 +57,7 @@ describe("route prefetch coverage", () => {
     vi.doMock("../api", () => ({ api: { getWatchHistory: async () => events } }));
 
     prefetchRoute("/history");
-    await vi.waitFor(() => expect(readCache("history:events:all")).toEqual(events));
+    await vi.waitFor(() => expect(readCache("history:events:all")).toEqual(events), WARM_UP);
   });
 
   // The page counts the offset of its next request from the rows it is holding,
@@ -63,7 +71,7 @@ describe("route prefetch coverage", () => {
 
     prefetchRoute("/history");
 
-    await vi.waitFor(() => expect(getWatchHistory).toHaveBeenCalledWith(PAGE_SIZE));
+    await vi.waitFor(() => expect(getWatchHistory).toHaveBeenCalledWith(PAGE_SIZE), WARM_UP);
   });
 
   it("ignores paths it doesn't know rather than throwing at them", () => {

@@ -8,9 +8,7 @@ import { useCachedState } from "../hooks/useCachedState";
 import { useClockBoundary } from "../hooks/useClockBoundary";
 import { relogWatchEvent, watchEventLabel, watchEventTitle } from "../utils/watchEvents";
 import { PAGE_TITLE, SECTION_TITLE, KICKER } from "../components/typography";
-
-/** Rows per request. Exported so the route prefetcher's warm-up can match it. */
-export const PAGE_SIZE = 25;
+import { PAGE_SIZE } from "./history-paging";
 
 type TypeFilter = "all" | "movie" | "episode";
 
