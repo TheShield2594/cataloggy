@@ -15,6 +15,21 @@ import { trendingCache } from "../lib/cache.js";
 import { deleteSecretKv, writeSecretKv } from "../lib/secret-store.js";
 import { isServiceRequest } from "../lib/service-request.js";
 import { failuresFrom, getJobRuns } from "../lib/job-status.js";
+import { outboundFailure } from "../lib/outbound-test.js";
+import {
+  JellyseerrError,
+  clearJellyseerrConfig,
+  getJellyseerrConfig,
+  publicJellyseerrConfig,
+  resolveJellyseerrUrl,
+  saveJellyseerrConfig,
+  testJellyseerr,
+  validateJellyseerrUrl,
+  type JellyseerrConfig,
+} from "../lib/jellyseerr.js";
+
+const JELLYSEERR_URL_ERROR =
+  "url must be an http(s) URL and must not target the cloud-metadata/link-local range";
 
 const settingsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/settings/preferences", async () => {
@@ -208,6 +223,90 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
     if (!isServiceRequest(request)) return reply.code(404).send({ error: "Not found" });
     const apiKey = await getRpdbApiKey();
     return { enabled: !!apiKey, apiKey: apiKey ?? null };
+  });
+
+  // ─── Jellyseerr / Overseerr ───
+  // The one outbound integration: a watchlist add can become a request on the
+  // server that actually fetches things. See lib/jellyseerr.ts.
+
+  app.get("/settings/jellyseerr", async () => {
+    const config = await getJellyseerrConfig();
+    return { configured: !!config, config: config ? publicJellyseerrConfig(config) : null };
+  });
+
+  app.post<{ Body: unknown }>("/settings/jellyseerr", async (request, reply) => {
+    const body = request.body as {
+      url?: unknown;
+      apiKey?: unknown;
+      requestOnAdd?: unknown;
+      cancelOnRemove?: unknown;
+    } | null;
+    if (!body) return reply.code(400).send({ error: "Body is required" });
+
+    const url = typeof body.url === "string" ? body.url.trim() : "";
+    if (!url || !validateJellyseerrUrl(url)) {
+      return reply.code(400).send({ error: JELLYSEERR_URL_ERROR });
+    }
+
+    // The literal hostname is only half the check — a public name pointing at
+    // the metadata service passes the syntax test and fails this one.
+    if (!(await resolveJellyseerrUrl(url))) {
+      return reply.code(400).send({ error: "url resolves to an address that is not an allowed outbound target" });
+    }
+
+    // An existing key is kept when the field is left blank, so toggling
+    // "request on add" doesn't mean re-typing a credential the server already
+    // holds and never hands back.
+    const existing = await getJellyseerrConfig();
+    const apiKey = typeof body.apiKey === "string" && body.apiKey.trim() ? body.apiKey.trim() : existing?.apiKey ?? "";
+    if (!apiKey) return reply.code(400).send({ error: "apiKey is required" });
+
+    const config: JellyseerrConfig = {
+      url,
+      apiKey,
+      requestOnAdd: typeof body.requestOnAdd === "boolean" ? body.requestOnAdd : existing?.requestOnAdd ?? true,
+      cancelOnRemove: typeof body.cancelOnRemove === "boolean" ? body.cancelOnRemove : existing?.cancelOnRemove ?? false,
+    };
+
+    // Saved only once it has answered: a URL that is one typo off, or a key
+    // that was revoked, would otherwise sit there silently requesting nothing
+    // until someone read Sync Status.
+    try {
+      await testJellyseerr(config);
+    } catch (error) {
+      request.log.warn({ err: error }, "Jellyseerr connection test failed while saving");
+      return reply
+        .code(400)
+        .send(error instanceof JellyseerrError ? outboundFailure(error.outcome, error.publicMessage) : outboundFailure("failed"));
+    }
+
+    await saveJellyseerrConfig(config);
+    return { configured: true, config: publicJellyseerrConfig(config) };
+  });
+
+  app.delete("/settings/jellyseerr", async () => {
+    await clearJellyseerrConfig();
+    return { configured: false, config: null };
+  });
+
+  // Same argument as the notification-channel test: the failures people hit
+  // here are a moved container, a revoked key or a URL that never reached the
+  // right service, and none of those are visible from the stored config.
+  app.post("/settings/jellyseerr/test", async (request, reply) => {
+    const config = await getJellyseerrConfig();
+    if (!config) return reply.code(404).send({ error: "Jellyseerr is not configured" });
+
+    try {
+      const result = await testJellyseerr(config);
+      return { success: true as const, ...result };
+    } catch (error) {
+      // The status code and the socket error stay in the log, for the reason
+      // lib/outbound-test.ts gives.
+      request.log.warn({ err: error }, "Jellyseerr connection test failed");
+      return error instanceof JellyseerrError
+        ? outboundFailure(error.outcome, error.publicMessage)
+        : outboundFailure("failed");
+    }
   });
 
   // ─── Background job status ───

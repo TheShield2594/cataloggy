@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Key, Link, Database, Info, Clapperboard, Film, Image, Globe, Star, Sparkles, Bell, Users, Activity, Search, X } from "lucide-react";
+import { Key, Link, Database, Download, Info, Clapperboard, Film, Image, Globe, Star, Sparkles, Bell, Users, Activity, Search, X } from "lucide-react";
 import { Section } from "../components/settings/Section";
 import { healthSummary } from "../components/settings/health";
 import { useSettingsHealth } from "../hooks/useSettingsHealth";
@@ -13,6 +13,7 @@ import { AddonSettings } from "../components/settings/AddonSettings";
 import { StremioSyncSettings } from "../components/settings/StremioSyncSettings";
 import { PlayDetectionSettings } from "../components/settings/PlayDetectionSettings";
 import { AiSettings } from "../components/settings/AiSettings";
+import { JellyseerrSettings } from "../components/settings/JellyseerrSettings";
 import { DataSettings } from "../components/settings/DataSettings";
 import { PreferencesSettings } from "../components/settings/PreferencesSettings";
 import { PushSettings } from "../components/settings/PushSettings";
@@ -160,6 +161,17 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: <Image size={20} />,
     keywords: "rating poster database artwork images api key",
     content: <RpdbSettings />,
+  },
+  // The one integration that points outward: everything above answers "what
+  // have I watched" or "what is this thing"; this one acts on the answer.
+  {
+    id: "jellyseerr",
+    tab: "integrations",
+    group: "Where titles go",
+    title: "Jellyseerr Requests",
+    icon: <Download size={20} />,
+    keywords: "jellyseerr overseerr request sonarr radarr download watchlist acquire",
+    content: <JellyseerrSettings />,
   },
   // The app's own surfaces and the keys that reach them.
   {

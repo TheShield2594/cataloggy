@@ -343,6 +343,18 @@ export type NotificationChannel = {
  */
 export type OutboundFailure = "blocked" | "misconfigured" | "unreachable" | "rejected" | "failed";
 
+export type JellyseerrConfig = {
+  url: string;
+  /** Whether a watchlist add becomes a request on the server. */
+  requestOnAdd: boolean;
+  /** Whether un-listing cancels a request nobody has approved yet. */
+  cancelOnRemove: boolean;
+  /** The key itself is write-only — the API never sends it back. */
+  hasApiKey: boolean;
+};
+
+export type JellyseerrStatus = { configured: boolean; config: JellyseerrConfig | null };
+
 export type PlaySignal = {
   id: string;
   type: "movie" | "episode";
@@ -1509,6 +1521,37 @@ export const api = {
       `/notifications/channels/${encodeURIComponent(id)}/test`,
       { method: "POST", timeoutMs: 20000 }
     );
+  },
+  // Jellyseerr / Overseerr. The API key is write-only: it goes up, and only
+  // `hasApiKey` comes back.
+  getJellyseerrConfig() {
+    return request<JellyseerrStatus>("/settings/jellyseerr");
+  },
+  saveJellyseerrConfig(payload: {
+    url: string;
+    apiKey?: string | undefined;
+    requestOnAdd?: boolean | undefined;
+    cancelOnRemove?: boolean | undefined;
+  }) {
+    // The server tests the connection before storing it, which is a round trip
+    // to a service on someone's LAN rather than to the API.
+    return request<JellyseerrStatus>("/settings/jellyseerr", {
+      method: "POST",
+      body: JSON.stringify(payload),
+      timeoutMs: 30000,
+    });
+  },
+  removeJellyseerrConfig() {
+    return request<JellyseerrStatus>("/settings/jellyseerr", { method: "DELETE" });
+  },
+  testJellyseerr() {
+    return request<{
+      success: boolean;
+      version?: string | null | undefined;
+      applicationTitle?: string | null | undefined;
+      outcome?: OutboundFailure | undefined;
+      error?: string | undefined;
+    }>("/settings/jellyseerr/test", { method: "POST", timeoutMs: 30000 });
   },
   // Profiles
   getProfiles() {

@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { backfillMissingMetadata, syncMetadata } from "../lib/metadata.js";
 import { pushTraktWatchlistChange } from "../lib/trakt-client.js";
+import { pushWatchlistRequest } from "../lib/jellyseerr.js";
 import { resolveProfile } from "../lib/profile.js";
 import { UUID_V4_PATTERN } from "../lib/types.js";
 
@@ -222,6 +223,11 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
 
         if (list.kind === ListKind.watchlist) {
           await pushTraktWatchlistChange("add", { type, imdbId }, request.log);
+          // Scoped to the watchlist for the same reason the Trakt mirror is:
+          // "I want to watch this" is what a watchlist add means, and it is the
+          // only list membership that says anything about acquiring a title.
+          // Never throws — see lib/jellyseerr.ts.
+          await pushWatchlistRequest("add", { type, imdbId }, request.log);
         }
 
         return reply.code(201).send({ listItem });
@@ -262,11 +268,9 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
       if (removed.count === 0) return reply.code(404).send({ error: "List item not found" });
 
       if (list.kind === ListKind.watchlist) {
-        await pushTraktWatchlistChange(
-          "remove",
-          { type: type as ListItemType, imdbId: request.params.imdbId },
-          request.log
-        );
+        const item = { type: type as ListItemType, imdbId: request.params.imdbId };
+        await pushTraktWatchlistChange("remove", item, request.log);
+        await pushWatchlistRequest("remove", item, request.log);
       }
 
       return reply.code(204).send();
@@ -310,7 +314,9 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
       if (removed.count === 0) return reply.code(404).send({ error: "List item not found" });
 
       if (list.kind === ListKind.watchlist) {
-        await pushTraktWatchlistChange("remove", { type: where.type!, imdbId: request.params.imdbId }, request.log);
+        const item = { type: where.type!, imdbId: request.params.imdbId };
+        await pushTraktWatchlistChange("remove", item, request.log);
+        await pushWatchlistRequest("remove", item, request.log);
       }
 
       return reply.code(204).send();

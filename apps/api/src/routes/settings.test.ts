@@ -25,6 +25,11 @@ const getTmdbApiKey = vi.fn();
 const getRpdbApiKey = vi.fn();
 const getJobRuns = vi.fn();
 const trendingCacheClear = vi.fn();
+const getJellyseerrConfig = vi.fn();
+const saveJellyseerrConfig = vi.fn();
+const clearJellyseerrConfig = vi.fn();
+const resolveJellyseerrUrl = vi.fn();
+const testJellyseerr = vi.fn();
 
 vi.mock("../lib/prisma.js", () => ({ prisma: prismaMock }));
 vi.mock("../lib/settings.js", () => ({
@@ -50,6 +55,17 @@ vi.mock("../lib/rpdb.js", () => ({
   RPDB_API_KEY_KV: "rpdb:apiKey",
   getRpdbApiKey: () => getRpdbApiKey(),
 }));
+// `publicJellyseerrConfig` and `validateJellyseerrUrl` are pure, so the route
+// is tested against the real ones — only the stored config, the DNS check and
+// the outbound test are stood in for.
+vi.mock("../lib/jellyseerr.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/jellyseerr.js")>()),
+  getJellyseerrConfig: () => getJellyseerrConfig(),
+  saveJellyseerrConfig: (...a: unknown[]) => saveJellyseerrConfig(...a),
+  clearJellyseerrConfig: () => clearJellyseerrConfig(),
+  resolveJellyseerrUrl: (...a: unknown[]) => resolveJellyseerrUrl(...a),
+  testJellyseerr: (...a: unknown[]) => testJellyseerr(...a),
+}));
 vi.mock("../lib/cache.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/cache.js")>()),
   trendingCache: { clear: () => trendingCacheClear() },
@@ -74,6 +90,11 @@ describe("settings routes", () => {
     getOmdbApiKey.mockResolvedValue(null);
     getRpdbApiKey.mockResolvedValue(null);
     getJobRuns.mockResolvedValue([]);
+    getJellyseerrConfig.mockResolvedValue(null);
+    saveJellyseerrConfig.mockResolvedValue(undefined);
+    clearJellyseerrConfig.mockResolvedValue(undefined);
+    resolveJellyseerrUrl.mockImplementation(async (raw: string) => new URL(raw));
+    testJellyseerr.mockResolvedValue({ version: "2.5.2", applicationTitle: "Jellyseerr" });
     prismaMock.kV.upsert.mockResolvedValue({});
     prismaMock.kV.deleteMany.mockResolvedValue({ count: 1 });
     setLanguageSetting.mockResolvedValue(undefined);
@@ -375,6 +396,150 @@ describe("settings routes", () => {
         url: "/rpdb/config",
         headers: { [SERVICE_TOKEN_HEADER]: API_TOKEN },
       });
+
+      expect(res.statusCode).toBe(404);
+    });
+  });
+
+  describe("Jellyseerr", () => {
+    const STORED = {
+      url: "http://jellyseerr.lan:5055",
+      apiKey: "js_key",
+      requestOnAdd: true,
+      cancelOnRemove: false,
+    };
+
+    it("never hands the API key back out", async () => {
+      getJellyseerrConfig.mockResolvedValue(STORED);
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "GET", url: "/settings/jellyseerr" });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({
+        configured: true,
+        config: { url: STORED.url, requestOnAdd: true, cancelOnRemove: false, hasApiKey: true },
+      });
+      expect(JSON.stringify(res.json())).not.toContain("js_key");
+    });
+
+    it("saves a configuration that answers", async () => {
+      const app = await buildApp();
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/settings/jellyseerr",
+        payload: { url: "http://jellyseerr.lan:5055/", apiKey: "js_key", cancelOnRemove: true },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(saveJellyseerrConfig).toHaveBeenCalledWith({
+        url: "http://jellyseerr.lan:5055/",
+        apiKey: "js_key",
+        requestOnAdd: true,
+        cancelOnRemove: true,
+      });
+    });
+
+    it("keeps the stored key when the field is left blank", async () => {
+      // Toggling a switch shouldn't mean re-typing a credential the server
+      // holds and never shows.
+      getJellyseerrConfig.mockResolvedValue(STORED);
+      const app = await buildApp();
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/settings/jellyseerr",
+        payload: { url: STORED.url, apiKey: "", requestOnAdd: false },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(saveJellyseerrConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ apiKey: "js_key", requestOnAdd: false })
+      );
+    });
+
+    it("refuses a URL pointing at the cloud-metadata range", async () => {
+      const app = await buildApp();
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/settings/jellyseerr",
+        payload: { url: "http://169.254.169.254/latest/meta-data", apiKey: "js_key" },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(saveJellyseerrConfig).not.toHaveBeenCalled();
+    });
+
+    it("refuses a public name that resolves to a blocked address", async () => {
+      resolveJellyseerrUrl.mockResolvedValue(null);
+      const app = await buildApp();
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/settings/jellyseerr",
+        payload: { url: "http://metadata.example.com", apiKey: "js_key" },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(saveJellyseerrConfig).not.toHaveBeenCalled();
+    });
+
+    it("does not save a configuration the server rejected", async () => {
+      const { JellyseerrError } = await import("../lib/jellyseerr.js");
+      testJellyseerr.mockRejectedValue(new JellyseerrError("rejected", "HTTP 403 for /settings/main"));
+      const app = await buildApp();
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/settings/jellyseerr",
+        payload: { url: "http://jellyseerr.lan:5055", apiKey: "wrong" },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(saveJellyseerrConfig).not.toHaveBeenCalled();
+      // The status code stays in the log; the caller gets the verdict.
+      expect(res.json().error).not.toContain("403");
+    });
+
+    it("clears the configuration", async () => {
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "DELETE", url: "/settings/jellyseerr" });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ configured: false, config: null });
+      expect(clearJellyseerrConfig).toHaveBeenCalled();
+    });
+
+    it("tests the stored configuration and reports the version", async () => {
+      getJellyseerrConfig.mockResolvedValue(STORED);
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "POST", url: "/settings/jellyseerr/test" });
+
+      expect(res.json()).toEqual({ success: true, version: "2.5.2", applicationTitle: "Jellyseerr" });
+    });
+
+    it("answers the test with a verdict rather than the failure's detail", async () => {
+      const { JellyseerrError } = await import("../lib/jellyseerr.js");
+      getJellyseerrConfig.mockResolvedValue(STORED);
+      testJellyseerr.mockRejectedValue(
+        new JellyseerrError("unreachable", "connect ECONNREFUSED 10.0.0.5:5055")
+      );
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "POST", url: "/settings/jellyseerr/test" });
+
+      expect(res.json()).toMatchObject({ success: false, outcome: "unreachable" });
+      expect(JSON.stringify(res.json())).not.toContain("10.0.0.5");
+    });
+
+    it("404s a test with nothing configured to test", async () => {
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "POST", url: "/settings/jellyseerr/test" });
 
       expect(res.statusCode).toBe(404);
     });
