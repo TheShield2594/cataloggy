@@ -547,3 +547,96 @@ describe("writes the service worker is holding", () => {
     expect(readCache("dash:progress")).toBeUndefined();
   });
 });
+
+describe("sharing a GET that is already in flight", () => {
+  /**
+   * A fetch that stays pending until the test lets it answer, with a fresh
+   * response per call — a `Response` body can only be read once, so two real
+   * requests cannot be handed the same one.
+   */
+  const deferredFetch = () => {
+    const pending: ((body: unknown) => void)[] = [];
+    fetchMock.mockImplementation(
+      () => new Promise<Response>((resolve) => pending.push((body) => resolve(json(body))))
+    );
+    return (body: unknown) => {
+      for (const settle of pending.splice(0)) settle(body);
+    };
+  };
+
+  it("issues one request for two callers asking for the same thing at once", async () => {
+    // What the dashboard does: several sections load in parallel, and more than
+    // one of them wants the same endpoint.
+    const answer = deferredFetch();
+
+    const first = api.getWatchStats();
+    const second = api.getWatchStats();
+    answer({ totalMovies: 3 });
+
+    expect(await first).toEqual({ totalMovies: 3 });
+    expect(await second).toEqual({ totalMovies: 3 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("shares the failure too, rather than leaving one caller waiting", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    const first = api.getWatchStats();
+    const second = api.getWatchStats();
+
+    await expect(first).rejects.toThrow(/Network error/);
+    await expect(second).rejects.toThrow(/Network error/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not confuse two different requests", async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(json({ metas: [] })));
+
+    await Promise.all([api.getTrending("movie"), api.getTrending("series")]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("goes back to the network once the shared request has answered", async () => {
+    // The entry lives as long as the request, not as long as the answer —
+    // caching the answer is somebody else's job.
+    fetchMock.mockImplementation(() => Promise.resolve(json({ totalMovies: 1 })));
+
+    await api.getWatchStats();
+    await api.getWatchStats();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("never shares a write", async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(json({ ok: true })));
+
+    await Promise.all([api.markNextEpisodeWatched("tt1"), api.markNextEpisodeWatched("tt1")]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaves a cancellable request alone", async () => {
+    // A caller holding a signal expects to be able to cancel its own request;
+    // sharing it would mean cancelling somebody else's answer.
+    fetchMock.mockImplementation(() => Promise.resolve(json({ totalMovies: 1 })));
+    const controller = new AbortController();
+
+    await Promise.all([api.getWatchStats(controller.signal), api.getWatchStats(controller.signal)]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not hand a profile the answer fetched for another one", async () => {
+    const answer = deferredFetch();
+
+    const before = api.getWatchStats();
+    runtimeConfig.setProfileId("22222222-2222-4222-8222-222222222222");
+    const after = api.getWatchStats();
+    answer({ totalMovies: 7 });
+
+    await before;
+    await after;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
