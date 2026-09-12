@@ -400,6 +400,7 @@ in query parameters are redacted from the logs.
 | --- | --- |
 | `POST` | `/webhooks/plex` |
 | `POST` | `/webhooks/jellyfin` |
+| `POST` | `/webhooks/emby` |
 
 Set `WEBHOOK_ALLOWED_IPS` to also restrict them by source address. See the
 [webhook secret placement](../README.md#webhook-secret-placement) section of the

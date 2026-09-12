@@ -199,6 +199,7 @@ describe("isPublicPath", () => {
     expect(isPublicPath("/trakt/oauth/callback?code=x&state=y")).toBe(true);
     expect(isPublicPath("/webhooks/plex")).toBe(true);
     expect(isPublicPath("/webhooks/jellyfin")).toBe(true);
+    expect(isPublicPath("/webhooks/emby")).toBe(true);
     expect(isPublicPath(`/addon/stremio/${"0".repeat(64)}/manifest.json`)).toBe(true);
   });
 

@@ -8,8 +8,8 @@ Self-host it on your home server, open it on your phone or computer, and keep tr
 
 - **One shelf for everything** — shows, films and games in one grid, each measured in its own units: episodes for a season, hours for a game
 - **Discovery when you want it, not in the way** — trending, recommendations and upcoming episodes live on their own page
-- **Works with the tools you already use** — pairs with Stremio, Plex, Jellyfin, Trakt, and Stremio/Omni add-ons
-- **No account you can't walk away from** — watch history comes straight from Stremio, Plex or Jellyfin, and every third-party service is optional and replaceable
+- **Works with the tools you already use** — pairs with Stremio, Plex, Jellyfin, Emby, Trakt, and Stremio/Omni add-ons
+- **No account you can't walk away from** — watch history comes straight from Stremio, Plex, Jellyfin or Emby, and every third-party service is optional and replaceable
 - **Yours, not the cloud's** — runs on your own hardware, your data stays on your network
 - **Phone friendly** — installs as an app on your phone (PWA; needs an HTTPS address, see [Install as a PWA](#install-as-a-pwa))
 - **Works with your TV** — a Stremio add-on puts your catalogs on Apple TV (via Omni) and Android TV
@@ -258,20 +258,20 @@ Rather than assembling either by hand, use **Settings → Stremio Addon** — it
 
 The prefix-less URLs (`http://LAN-IP:7001/manifest.json`, `https://cataloggy.domain.com/addon/manifest.json`) keep working and resolve to your oldest profile, so installs made before profiles existed are unaffected — but on a household with several profiles, each person should install their own URL.
 
-### Profiles and the Plex/Jellyfin webhooks
+### Profiles and the media-server webhooks
 
-Plex and Jellyfin don't send Cataloggy's profile header either, so a scrobble's profile is worked out from the webhook itself:
+Plex, Jellyfin and Emby don't send Cataloggy's profile header either, so a scrobble's profile is worked out from the webhook itself:
 
-1. **A profile pinned to the URL.** Add `profile=<profile-id>` to the webhook URL you configure in Plex/Jellyfin, alongside the secret:
+1. **A profile pinned to the URL.** Add `profile=<profile-id>` to the webhook URL you configure in Plex, Jellyfin or Emby, alongside the secret:
 
    ```text
    http://LAN-IP:7000/webhooks/plex?token=WEBHOOK_SECRET&profile=PROFILE-ID
    ```
 
-   Both servers let you set the target URL per user, so this is the reliable option for a shared server. An unknown or malformed profile ID is rejected rather than quietly redirected.
+   All three let you set the target URL per user, so this is the reliable option for a shared server. An unknown or malformed profile ID is rejected rather than quietly redirected.
 
    On Jellyfin, send the secret as an `x-webhook-secret` header instead and leave only `profile` in the URL — see [Webhook secret placement](#webhook-secret-placement) below.
-2. **The media-server account name.** With no `profile` parameter, the Plex account title (or the Jellyfin username) is matched against your profile names, ignoring case — so a Plex user named `Sam` scrobbles into the Cataloggy profile named `Sam` with nothing to configure.
+2. **The media-server account name.** With no `profile` parameter, the Plex account title (or the Jellyfin/Emby username) is matched against your profile names, ignoring case — so a Plex user named `Sam` scrobbles into the Cataloggy profile named `Sam` with nothing to configure.
 3. **Your oldest profile**, if neither applies. This is what single-profile installs get, and what every webhook did before profiles were taken into account.
 
 ## Where watch history comes from
@@ -284,6 +284,7 @@ Cataloggy records what you've watched from whichever of these you set up — non
 | **Stremio** | Reads your Stremio account library directly — see below |
 | **Plex** | Webhook, as it happens |
 | **Jellyfin** | Webhook, as it happens |
+| **Emby** | Webhook, as it happens |
 | **The web app** | Marking watched by hand, check-ins, the scrobble API |
 | **Stremio add-on** | The "Cataloggy: Mark Watched" entry in the subtitle menu |
 | **Trakt** | Optional — see [Trakt is optional](#trakt-is-optional) |
@@ -454,8 +455,8 @@ Cataloggy is designed for self-hosting on a trusted local network (LAN), not for
 - Connecting a Stremio account stores only the access key Stremio issues, never your password — the password is sent once to Stremio's login endpoint, exchanged for the key, and discarded. The key is not scoped: it grants the same library access a signed-in Stremio client has. It is encrypted at rest along with the other stored credentials (see below). Disconnecting from Settings deletes it. `POST /stremio/library/connect` is rate-limited to 10/min/IP like the other credential-accepting routes.
 - Linking a Trakt account is CSRF-protected: `GET /trakt/oauth/authorize` (which requires the API token) mints a single-use `state` that expires in 10 minutes, and the callback rejects anything else — so a link someone else sends you cannot silently bind your install to their Trakt account.
 - If you do expose Cataloggy beyond your LAN, put it behind a reverse proxy with TLS (e.g. Nginx Proxy Manager) and consider implementing a proper session-based auth flow.
-- All API routes are rate-limited globally (200 req/min/IP), with tighter per-route limits on sensitive endpoints: PIN verification (`POST /profiles/:id/verify`, 10/min/IP), the Trakt OAuth authorize/callback routes (10/min/IP), the Plex/Jellyfin webhooks (60/min/IP) and the built-in Stremio manifest/catalog routes (240/min/IP — they answer unauthenticated callers, but a Stremio home screen fetches one request per catalog, so the budget covers several refreshes a minute rather than a single request). Calls from the Stremio addon service get their own 1000 req/min bucket rather than sharing the browser's — every Stremio client reaches the API from that one container's IP. The addon identifies itself with a token derived from `API_TOKEN` (never the raw token, which the browser also holds), so nothing extra needs configuring and a leaked browser token cannot drain the addon's budget. The limiter's counters are in-memory and per-process, so they assume the documented single-`api`-container deployment; running multiple API replicas would give each its own independent budget.
-- The Plex/Jellyfin webhook endpoints (`/webhooks/plex`, `/webhooks/jellyfin`) authenticate with a single shared secret (`WEBHOOK_SECRET`) sent as a query param or header — neither Plex nor Jellyfin support signing outgoing webhooks, so this is the strongest verification available. Treat `WEBHOOK_SECRET` like a password and **do not expose these endpoints to the public internet**; keep them reachable only from your LAN/reverse-proxy-internal network, where Plex/Jellyfin themselves run. If you must route them through a reverse proxy, set `WEBHOOK_ALLOWED_IPS` to a comma-separated allowlist of your Plex/Jellyfin server IPs (requires `TRUST_PROXY` to be configured correctly) as a second layer of defense. Where you put the secret matters — see [Webhook secret placement](#webhook-secret-placement).
+- All API routes are rate-limited globally (200 req/min/IP), with tighter per-route limits on sensitive endpoints: PIN verification (`POST /profiles/:id/verify`, 10/min/IP), the Trakt OAuth authorize/callback routes (10/min/IP), the Plex/Jellyfin/Emby webhooks (60/min/IP) and the built-in Stremio manifest/catalog routes (240/min/IP — they answer unauthenticated callers, but a Stremio home screen fetches one request per catalog, so the budget covers several refreshes a minute rather than a single request). Calls from the Stremio addon service get their own 1000 req/min bucket rather than sharing the browser's — every Stremio client reaches the API from that one container's IP. The addon identifies itself with a token derived from `API_TOKEN` (never the raw token, which the browser also holds), so nothing extra needs configuring and a leaked browser token cannot drain the addon's budget. The limiter's counters are in-memory and per-process, so they assume the documented single-`api`-container deployment; running multiple API replicas would give each its own independent budget.
+- The media-server webhook endpoints (`/webhooks/plex`, `/webhooks/jellyfin`, `/webhooks/emby`) authenticate with a single shared secret (`WEBHOOK_SECRET`) sent as a query param or header — none of the three sign their outgoing webhooks, so this is the strongest verification available. Treat `WEBHOOK_SECRET` like a password and **do not expose these endpoints to the public internet**; keep them reachable only from your LAN/reverse-proxy-internal network, where the media servers themselves run. If you must route them through a reverse proxy, set `WEBHOOK_ALLOWED_IPS` to a comma-separated allowlist of your media servers' IPs (requires `TRUST_PROXY` to be configured correctly) as a second layer of defense. Where you put the secret matters — see [Webhook secret placement](#webhook-secret-placement).
 - Container logs are capped at 10MB × 3 files per service (`docker-compose.yml`'s `x-logging` block) so they can't grow unbounded on the host over a long-running, unattended deployment.
 
 ### Secrets at rest
@@ -505,6 +506,14 @@ http://LAN-IP:7000/webhooks/jellyfin?profile=PROFILE-ID
 ```
 
 Plex has no such field, so `?token=WEBHOOK_SECRET` is the only form it can send. If your proxy logs concern you, either keep the Plex webhook off the proxy entirely (point it straight at the API on your LAN) or configure the proxy to strip query strings from its access log format.
+
+Emby posts JSON to whatever URL you give it, and takes the secret either way:
+
+```text
+http://LAN-IP:7000/webhooks/emby?token=WEBHOOK_SECRET&profile=PROFILE-ID
+```
+
+If your Emby build's webhook settings offer a custom-headers field, move the secret into `x-webhook-secret` and drop `token` from the URL, the same as on Jellyfin. Emby sends a watch when it reports `playback.stop`; its other events (`playback.start`, `item.markplayed`, the library ones) are answered `200 ignored` and recorded as nothing. An item Emby holds no IMDb id for — the usual case is a series scraped from TVDB alone — is answered `200 skipped` with `no_imdb_id`, because IMDb ids are what Cataloggy keys history by.
 
 ## Useful Commands
 
