@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { first } from "./test-fixtures/present.js";
 
 const prismaMock = {
   kV: { create: vi.fn(), deleteMany: vi.fn() },
@@ -38,7 +39,7 @@ describe("trakt OAuth state", () => {
 
     await createOAuthState();
 
-    const sweep = prismaMock.kV.deleteMany.mock.calls[0][0];
+    const sweep = first(prismaMock.kV.deleteMany.mock.calls, "prismaMock.kV.deleteMany call")[0];
     expect(sweep.where.key).toEqual({ startsWith: STATE_PREFIX });
     expect(sweep.where.updatedAt.lt.getTime()).toBeGreaterThanOrEqual(before - OAUTH_STATE_TTL_MS);
     expect(sweep.where.updatedAt.lt.getTime()).toBeLessThanOrEqual(Date.now() - OAUTH_STATE_TTL_MS);
@@ -51,7 +52,7 @@ describe("trakt OAuth state", () => {
 
     await expect(consumeOAuthState(state)).resolves.toBe(true);
 
-    const call = prismaMock.kV.deleteMany.mock.calls[0][0];
+    const call = first(prismaMock.kV.deleteMany.mock.calls, "prismaMock.kV.deleteMany call")[0];
     expect(call.where.key).toBe(`${STATE_PREFIX}${state}`);
     expect(call.where.updatedAt.gte.getTime()).toBeLessThanOrEqual(Date.now() - OAUTH_STATE_TTL_MS + 1000);
   });

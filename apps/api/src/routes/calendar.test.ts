@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
+import { first } from "../lib/test-fixtures/present.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -21,7 +22,7 @@ const buildApp = (): Promise<FastifyInstance> =>
   buildRouteApp(() => import("./calendar.js"));
 
 /** The `days` argument the route passed through to the lookup. */
-const daysArg = () => getUpcomingEpisodes.mock.calls[0][1];
+const daysArg = () => first(getUpcomingEpisodes.mock.calls, "getUpcomingEpisodes call")[1];
 
 describe("calendar routes", () => {
   beforeEach(() => {

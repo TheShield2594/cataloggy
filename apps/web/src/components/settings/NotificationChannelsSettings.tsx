@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { AlertCircle, Check, Loader2, Plus, Send, Trash2 } from "lucide-react";
-import { api, NotificationChannel, NotificationChannelKind } from "../../api";
+import { api, type NotificationChannel, type NotificationChannelKind } from "../../api";
 import { SelectField } from "../SelectField";
 import { StatusBadge } from "./StatusBadge";
 
@@ -14,7 +14,9 @@ type KindSpec = {
   help: string;
 };
 
-const KINDS: KindSpec[] = [
+// Non-empty by type: `kindSpec` falls back to the first entry for a kind the
+// server sent that this build does not know about.
+const KINDS: [KindSpec, ...KindSpec[]] = [
   {
     id: "ntfy",
     label: "ntfy",

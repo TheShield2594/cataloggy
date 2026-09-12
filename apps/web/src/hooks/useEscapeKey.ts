@@ -35,8 +35,10 @@ export function useEscapeKey(onEscape: () => void, active = true) {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || stack.length === 0) return;
-      stack[stack.length - 1]();
+      // Topmost handler wins: the innermost overlay is the one Escape closes.
+      const innermost = stack.at(-1);
+      if (e.key !== "Escape" || !innermost) return;
+      innermost();
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);

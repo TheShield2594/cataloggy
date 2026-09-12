@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Tv } from "lucide-react";
-import { api, EpisodeInfo, OfflineWriteQueuedError, WATCH_STATE_STALE_EVENT } from "../../api";
+import { api, type EpisodeInfo, OfflineWriteQueuedError, WATCH_STATE_STALE_EVENT } from "../../api";
 import { ProgressRuler } from "../ProgressRuler";
 import { StarPicker } from "../StarPicker";
 import { KICKER } from "../typography";
@@ -203,7 +203,10 @@ export function SeasonsSection({
    */
   const autoExpandedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (seasons.length === 0 || autoExpandedRef.current === imdbId) return;
+    // The last season is the fallback below, and having one is the same thing
+    // as having any seasons at all — so this is the emptiness check.
+    const lastSeason = seasons.at(-1);
+    if (!lastSeason || autoExpandedRef.current === imdbId) return;
     // Nothing to go on yet: the watched read lands a moment after the seasons
     // do, and choosing before it answers would always pick the first season.
     if (watched === null) return;
@@ -214,7 +217,7 @@ export function SeasonsSection({
       return count > 0 && count < s.episodeCount;
     });
     const unstarted = seasons.find((s) => (watchedBySeason[s.seasonNumber] ?? 0) === 0);
-    const open = inProgress ?? unstarted ?? seasons[seasons.length - 1];
+    const open = inProgress ?? unstarted ?? lastSeason;
     setExpanded(open.seasonNumber);
     loadEpisodes(open.seasonNumber);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loadEpisodes is recreated each render and guards its own duplicate fetches

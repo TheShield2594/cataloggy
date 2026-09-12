@@ -99,8 +99,14 @@ export const getWatchedImdbIds = async (profileId?: string): Promise<Set<string>
 };
 
 export const buildTasteProfile = async (profileId?: string) => {
+  // No profile means every profile — the taste profile behind the shared,
+  // profile-less recommendation cache. An empty filter rather than
+  // `where: undefined`: Prisma reads the two the same way, and only one of them
+  // typechecks once an optional property may not be explicitly undefined.
+  const scope = profileId ? { profileId } : {};
+
   const recentEvents = await prisma.watchEvent.findMany({
-    where: profileId ? { profileId } : undefined,
+    where: scope,
     orderBy: { watchedAt: "desc" },
     take: 50,
     distinct: ["imdbId"],
@@ -125,7 +131,7 @@ export const buildTasteProfile = async (profileId?: string) => {
   const metaByImdbId = new Map(allMetadata.map((m) => [m.imdbId, m]));
 
   const ratings = await prisma.rating.findMany({
-    where: profileId ? { profileId } : undefined,
+    where: scope,
     orderBy: { updatedAt: "desc" },
     take: 50,
     select: { imdbId: true, rating: true },
@@ -369,8 +375,8 @@ Return ONLY a JSON array, no other text, no markdown:
       if (metas.length >= limit) break;
       try {
         const results = await tmdb.search(metaType, rec.title);
-        if (!results || results.length === 0) continue;
-        const first = results[0];
+        const [first] = results ?? [];
+        if (!first) continue;
         if (profile.watchedImdbIds.has(first.imdbId)) continue;
         await upsertMetadata(first);
         metas.push({

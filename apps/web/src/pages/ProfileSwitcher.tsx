@@ -1,19 +1,20 @@
-import { FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { AlertCircle, ArrowRight, Loader2, Lock, Plus, X } from "lucide-react";
-import { api, ApiError, Profile, runtimeConfig } from "../api";
+import { api, ApiError, type Profile, runtimeConfig } from "../api";
 import { BRAND_WORDMARK, BrandLockup, BrandMark } from "../components/BrandMark";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { useExitAnimation } from "../hooks/useExitAnimation";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { SECTION_TITLE } from "../components/typography";
+import { avatarColor, initials } from "../utils/avatar";
 
 // Standing in for the switcher's own title. As a full page (first run) it is the
 // document's h1; opened as a modal over the app, the page behind already owns the
 // h1, so the same title drops a level.
 type HeadingTag = "h1" | "h2";
 
-function Shell({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
+function Shell({ children, onClose }: { children: React.ReactNode; onClose?: (() => void) | undefined }) {
   // All three gated on `onClose`: without it this renders as a full page
   // (first-run profile setup), not a modal, and must not lock scroll or
   // swallow Escape.
@@ -86,7 +87,7 @@ function CreateProfileForm({
   subtitle: string;
   headingTag: HeadingTag;
   onCreated: (profile: Profile) => void;
-  onCancel?: () => void;
+  onCancel?: (() => void) | undefined;
 }) {
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
@@ -239,18 +240,6 @@ function PinPrompt({
   );
 }
 
-const AVATAR_COLORS = ["#f97316", "#0ea5e9", "#a855f7", "#22c55e", "#ec4899", "#eab308"];
-
-function avatarColor(name: string) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-function initials(name: string) {
-  return name.trim().slice(0, 2).toUpperCase();
-}
-
 function ProfilePicker({
   profiles,
   headingTag: Heading,
@@ -299,7 +288,7 @@ function ProfilePicker({
   );
 }
 
-export function ProfileSwitcher({ onSelected, onClose }: { onSelected: (profile: Profile) => void; onClose?: () => void }) {
+export function ProfileSwitcher({ onSelected, onClose }: { onSelected: (profile: Profile) => void; onClose?: (() => void) | undefined }) {
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [error, setError] = useState<string | null>(null);

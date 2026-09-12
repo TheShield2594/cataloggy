@@ -49,6 +49,13 @@ const ADDON_PUBLIC_BASE = process.env.ADDON_PUBLIC_BASE;
 const WEB_PUBLIC_BASE = (process.env.CATALOGGY_WEB_PUBLIC ?? process.env.WEB_PUBLIC_BASE)?.replace(/\/+$/, "");
 const PROXY_PATH_PREFIXES = parseProxyPathPrefixes(process.env.PROXY_PATH_PREFIXES, ["/addon"] as const);
 
+// Omitted rather than passed as `undefined` when `TRUST_PROXY` is unset:
+// Fastify's `trustProxy?:` means "the key may be missing", and handing it an
+// explicit undefined under `exactOptionalPropertyTypes` drops `fastify()` to
+// its HTTP/2 overload — which typed every route registration below against the
+// wrong server and the wrong request.
+const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
+
 export const app = Fastify({
   logger: {
     level: process.env.LOG_LEVEL ?? "info",
@@ -60,7 +67,7 @@ export const app = Fastify({
     // bundle pasted into an issue can carry the token off with them.
     serializers: { req: redactedRequestSerializer },
   },
-  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
+  ...(trustProxy !== undefined ? { trustProxy } : {}),
   rewriteUrl: (request: RawRequestDefaultExpression) => normalizeProxyPath(request.url ?? "/", PROXY_PATH_PREFIXES)
 });
 
@@ -538,7 +545,11 @@ addonGet("/manifest.json", async (request, reply) => {
 const parseCatalogId = (id: string) => {
   const match = id.match(/^cataloggy-([0-9a-f-]+)-(movie|series)$/i);
   if (!match) return null;
-  return { listId: match[1], catalogType: match[2] };
+  // Both groups are required by the pattern, so a match has both. The check is
+  // what says so to the checker, and keeps saying it if the pattern is edited.
+  const [, listId, catalogType] = match;
+  if (listId === undefined || catalogType === undefined) return null;
+  return { listId, catalogType };
 };
 
 // The one catalog input that had no cache at all, and the most expensive to go
@@ -838,12 +849,13 @@ const forwardPlaySignal = (
 ): void => {
   if (!PLAY_DETECTION) return;
 
-  const parts = id.split(":");
-  const imdbId = parts[0];
+  const [imdbId, seasonPart, episodePart] = id.split(":");
   if (!imdbId?.startsWith("tt")) return;
 
-  const season = parts.length >= 3 ? Number.parseInt(parts[1], 10) : NaN;
-  const episode = parts.length >= 3 ? Number.parseInt(parts[2], 10) : NaN;
+  // Absent reads as NaN, which `isEpisode` below already rejects — so a bare
+  // series id and a malformed one take the same path they always did.
+  const season = seasonPart === undefined ? NaN : Number.parseInt(seasonPart, 10);
+  const episode = episodePart === undefined ? NaN : Number.parseInt(episodePart, 10);
   const isEpisode = type === "series" && Number.isInteger(season) && Number.isInteger(episode);
 
   // A bare series id means the user opened the show, not an episode — there is
@@ -894,8 +906,7 @@ addonGet<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", 
   }
 
   // Parse IMDb ID — Stremio sends "tt1234567" for movies, "tt1234567:1:2" for episodes
-  const parts = id.split(":");
-  const imdbId = parts[0];
+  const [imdbId, seasonPart, episodePart] = id.split(":");
   if (!imdbId?.startsWith("tt")) {
     return reply.send({ subtitles: [] });
   }
@@ -935,9 +946,9 @@ addonGet<{ Params: { type: string; id: string } }>("/subtitles/:type/:id.json", 
   }
 
   // For series, include season/episode info if available
-  if (type === "series" && parts.length >= 3) {
-    const season = parseInt(parts[1], 10);
-    const episode = parseInt(parts[2], 10);
+  if (type === "series" && seasonPart !== undefined && episodePart !== undefined) {
+    const season = parseInt(seasonPart, 10);
+    const episode = parseInt(episodePart, 10);
     if (!isNaN(season) && !isNaN(episode)) {
       const token = capabilityFor({ type: "episode", imdbId, season, episode });
       if (!token) return reply.send({ subtitles: [] });

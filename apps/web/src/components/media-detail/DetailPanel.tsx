@@ -2,20 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import {
   Check, Film, Play, Star, X,
 } from "lucide-react";
-import { api, CheckIn, OfflineWriteQueuedError, SearchResult, TrendingMeta, WatchEvent, WatchProviders } from "../../api";
+import { api, type CheckIn, OfflineWriteQueuedError, type SearchResult, type TrendingMeta, type WatchEvent, type WatchProviders } from "../../api";
 import { WatchDateModal } from "./WatchDateModal";
 import { CheckInModal } from "./CheckInModal";
 import { ExternalLinks, ExternalRatings, StarRating } from "./RatingsSection";
 import { ListsSection } from "./ListsSection";
 import { TagsSection } from "./TagsSection";
-import { CastSection, CastMember } from "./CastSection";
-import { SeasonsSection, SeasonInfo } from "./SeasonsSection";
+import { CastSection, type CastMember } from "./CastSection";
+import { SeasonsSection, type SeasonInfo } from "./SeasonsSection";
 import { ProvidersSection } from "./ProvidersSection";
 import { CheckInBlock } from "./CheckInBlock";
 import { WatchHistorySection } from "./WatchHistorySection";
 import { DropShowButton } from "./DropShowButton";
 import { RecommendationsSection } from "./RecommendationsSection";
-import { buildMetaLine, formatRuntime, nextEpisodeUp, statusColor, WatchLogTarget } from "./detailPanelUtils";
+import { buildMetaLine, formatRuntime, nextEpisodeUp, statusColor, type WatchLogTarget } from "./detailPanelUtils";
 import { formatRating, ratingLabel, RATING_MAX } from "../../utils/rating";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useScrollLock } from "../../hooks/useScrollLock";

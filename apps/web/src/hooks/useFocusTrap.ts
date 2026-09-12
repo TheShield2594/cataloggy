@@ -84,9 +84,10 @@ export function useFocusTrap<T extends HTMLElement>(active = true) {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Tab") return;
       const focusable = getFocusable();
-      if (focusable.length === 0) return;
       const first = focusable[0];
-      const last = focusable[focusable.length - 1];
+      const last = focusable.at(-1);
+      // Nothing focusable inside: there is no cycle to wrap, so let Tab through.
+      if (!first || !last) return;
 
       if (e.shiftKey && document.activeElement === first) {
         e.preventDefault();

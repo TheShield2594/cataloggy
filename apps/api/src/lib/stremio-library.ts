@@ -177,15 +177,17 @@ const parseEpisodeRef = (
 ): { season: number; episode: number } | null => {
   const videoId = typeof state.video_id === "string" ? state.video_id : null;
   if (videoId) {
-    const parts = videoId.split(":");
+    const [seriesId, seasonRaw, episodeRaw, ...rest] = videoId.split(":");
     // A video_id naming a *different* series is the one case where the
     // season/episode fallback must not run: those numbers describe the foreign
     // id, so using them would file someone else's episode under this series.
-    // Bail out entirely rather than fall through.
-    if (parts.length !== 3 || parts[0] !== itemId) return null;
+    // Bail out entirely rather than fall through. The arity check is the old
+    // `parts.length !== 3`, written so the two parses below are strings.
+    if (seasonRaw === undefined || episodeRaw === undefined || rest.length > 0) return null;
+    if (seriesId !== itemId) return null;
 
-    const season = Number.parseInt(parts[1], 10);
-    const episode = Number.parseInt(parts[2], 10);
+    const season = Number.parseInt(seasonRaw, 10);
+    const episode = Number.parseInt(episodeRaw, 10);
     if (Number.isInteger(season) && Number.isInteger(episode) && season >= 0 && episode >= 0) {
       return { season, episode };
     }

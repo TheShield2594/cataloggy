@@ -215,12 +215,12 @@ const metadataRoutes: FastifyPluginAsync = async (app) => {
         })
       );
 
-      for (let j = 0; j < results.length; j++) {
+      for (const [j, item] of batch.entries()) {
         const result = results[j];
+        if (!result) continue;
         if (result.status === "fulfilled" && result.value) {
           refreshed++;
         } else if (result.status === "rejected") {
-          const item = batch[j];
           request.log.warn(
             { imdbId: item.imdbId, type: item.type, error: result.reason },
             "Failed to refresh metadata"

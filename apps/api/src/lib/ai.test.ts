@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyBaseLogger } from "fastify";
+import { first } from "./test-fixtures/present.js";
 
 // The AI provider is the one outbound target a user configures freely: any URL,
 // any headers. That is what makes it the SSRF surface, and the request builder
@@ -87,8 +88,8 @@ afterEach(() => {
 });
 
 /** The body the provider was actually POSTed. */
-const sentBody = () => JSON.parse(fetchMock.mock.calls[0][1].body as string);
-const sentInit = () => fetchMock.mock.calls[0][1] as RequestInit;
+const sentBody = () => JSON.parse(first(fetchMock.mock.calls, "fetchMock call")[1].body as string);
+const sentInit = () => first(fetchMock.mock.calls, "fetchMock call")[1] as RequestInit;
 
 describe("getAiConfig", () => {
   it("reads the config through the encrypted store", async () => {
@@ -206,7 +207,7 @@ describe("the outbound request", () => {
 
     expect(await getAiRecommendations("movie", 1, undefined, logger)).toBeNull();
     expect(JSON.stringify(loggerMocks.error.mock.calls)).not.toContain("internal-service-response");
-    expect(loggerMocks.error.mock.calls[0][0]).toMatchObject({ message: "AI provider error (403)" });
+    expect(first(loggerMocks.error.mock.calls, "loggerMocks.error call")[0]).toMatchObject({ message: "AI provider error (403)" });
   });
 });
 
@@ -272,7 +273,7 @@ describe("reading the provider's answer", () => {
     fetchMock.mockResolvedValue(aiResponse("<think>Considering the user's taste in crime"));
 
     expect(await getAiRecommendations("movie", 1, undefined, logger)).toBeNull();
-    expect(loggerMocks.error.mock.calls[0][0]).toMatchObject({ message: expect.stringMatching(/max_tokens/) });
+    expect(first(loggerMocks.error.mock.calls, "loggerMocks.error call")[0]).toMatchObject({ message: expect.stringMatching(/max_tokens/) });
   });
 });
 

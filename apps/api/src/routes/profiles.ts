@@ -18,7 +18,9 @@ const LOCKOUT_DECAY_MS = 24 * 60 * 60 * 1000;
 
 const pinAttemptKey = (profileId: string) => `pinattempts:${profileId}`;
 
-type PinAttemptData = { count: number; lockedUntil: string; lockouts?: number };
+// `lockouts` is absent on rows written before it existed, and undefined is how
+// they read back — the same thing, so the type says both.
+type PinAttemptData = { count: number; lockedUntil: string; lockouts?: number | undefined };
 
 const getPinLockout = async (profileId: string): Promise<{ locked: boolean; retryAfterSec: number }> => {
   const row = await prisma.kV.findUnique({ where: { key: pinAttemptKey(profileId) } });

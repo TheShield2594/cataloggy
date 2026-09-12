@@ -1,7 +1,8 @@
-import { ChevronLeft, ChevronRight, User } from "lucide-react";
+import { User } from "lucide-react";
 import { CarouselTrack } from "../CarouselTrack";
 import { useHorizontalScroll } from "../carousel-utils";
 import { KICKER } from "../typography";
+import { ScrollArrows } from "../ScrollArrows";
 
 export interface CastMember {
   name: string;
@@ -36,33 +37,13 @@ export function CastSection({ cast, loading }: { cast: CastMember[]; loading: bo
         <h3 className={`flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
           <User className="h-3.5 w-3.5" /> Cast
         </h3>
-        {/* Mounted even when the row fits, so the cluster fades with layout
-            changes instead of blinking; disabled buttons keep it untabbable. */}
-        <div
-          className={`flex items-center gap-1 transition-opacity duration-slow ${canScrollLeft || canScrollRight ? "" : "pointer-events-none opacity-0"}`}
-          aria-hidden={!canScrollLeft && !canScrollRight}
-        >
-          <button
-            type="button"
-            onClick={() => scroll("left")}
-            disabled={!canScrollLeft}
-            className="flex h-6 w-6 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95"
-            style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
-            aria-label="Scroll cast left"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => scroll("right")}
-            disabled={!canScrollRight}
-            className="flex h-6 w-6 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95"
-            style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
-            aria-label="Scroll cast right"
-          >
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-        </div>
+        <ScrollArrows
+          canScrollLeft={canScrollLeft}
+          canScrollRight={canScrollRight}
+          onScroll={scroll}
+          size="sm"
+          subject="cast"
+        />
       </div>
       <CarouselTrack
         scrollRef={ref}

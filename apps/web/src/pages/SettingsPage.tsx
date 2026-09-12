@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Key, Link, Database, Info, Clapperboard, Film, Image, Globe, Star, Sparkles, Bell, Users, Activity, Search, X } from "lucide-react";
 import { Section } from "../components/settings/Section";
@@ -257,14 +257,21 @@ export function SettingsPage() {
   const onTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     const deltas: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
     const current = SETTINGS_TABS.findIndex((t) => t.id === tab);
+    const delta = deltas[event.key];
     let nextIndex: number;
-    if (event.key in deltas) nextIndex = (current + deltas[event.key] + SETTINGS_TABS.length) % SETTINGS_TABS.length;
+    if (delta !== undefined) nextIndex = (current + delta + SETTINGS_TABS.length) % SETTINGS_TABS.length;
     else if (event.key === "Home") nextIndex = 0;
     else if (event.key === "End") nextIndex = SETTINGS_TABS.length - 1;
     else return;
 
+    // The arithmetic above stays in range, so this is the checker's question
+    // rather than a real one — but answering it before `preventDefault` means a
+    // key that somehow lands outside still does what the browser would.
+    const nextTab = SETTINGS_TABS[nextIndex];
+    if (!nextTab) return;
+
     event.preventDefault();
-    setTab(SETTINGS_TABS[nextIndex].id);
+    setTab(nextTab.id);
     tablistRef.current?.querySelectorAll<HTMLElement>('[role="tab"]')[nextIndex]?.focus();
   };
 

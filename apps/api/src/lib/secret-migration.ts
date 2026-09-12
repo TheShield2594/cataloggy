@@ -8,6 +8,7 @@ import {
   isSecretEncryptionAvailable,
   kvSecretContext,
 } from "./secret-box.js";
+import { invalidateKv } from "./kv.js";
 import { TMDB_API_KEY_KV } from "./tmdb-client.js";
 import { OMDB_API_KEY_KV } from "./omdb.js";
 import { RPDB_API_KEY_KV } from "./rpdb.js";
@@ -69,9 +70,10 @@ export const encryptStoredSecrets = async (logger: FastifyBaseLogger): Promise<S
 
   const kvRows = await prisma.kV.findMany({ where: { key: { in: [...SECRET_KV_KEYS] } } });
   for (const row of kvRows) {
-    await visit(kvSecretContext(row.key), row.key, row.value, (value) =>
-      prisma.kV.update({ where: { key: row.key }, data: { value, updatedAt: new Date() } })
-    );
+    await visit(kvSecretContext(row.key), row.key, row.value, async (value) => {
+      await prisma.kV.update({ where: { key: row.key }, data: { value, updatedAt: new Date() } });
+      invalidateKv(row.key);
+    });
   }
 
   for (const token of await prisma.traktToken.findMany()) {

@@ -13,7 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type MatchCallback = (args: { url: URL; request: Partial<Request> }) => unknown;
 type RouteHandler = (args: { request: Request }) => Promise<Response>;
-type RegisteredRoute = { match: MatchCallback; handler: unknown; method?: string };
+type RegisteredRoute = { match: MatchCallback; handler: unknown; method?: string | undefined };
 
 /** A workbox plugin, of which only the one hook these tests exercise matters. */
 type CacheKeyPlugin = {

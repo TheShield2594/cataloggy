@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router";
 import { BarChart3, CalendarDays, Compass, Gamepad2, History, Library, List, Pin, PinOff, Search, Settings, User } from "lucide-react";
-import { api, CatalogList, Profile } from "../api";
+import { api, type CatalogList, type Profile } from "../api";
 import { BRAND_WORDMARK, BrandMark } from "./BrandMark";
 import { healthDotClass } from "./settings/health";
 import { listTint, orderListsForRail, railSources } from "./sidebar-data";

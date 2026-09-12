@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { first } from "./test-fixtures/present.js";
 
 const prismaMock = {
   kV: { findMany: vi.fn(), update: vi.fn() },
@@ -50,17 +51,17 @@ describe("encryptStoredSecrets", () => {
 
     expect(sweep).toEqual({ encrypted: 5, unreadable: [] });
 
-    const kvWrite = prismaMock.kV.update.mock.calls[0][0];
+    const kvWrite = first(prismaMock.kV.update.mock.calls, "prismaMock.kV.update call")[0];
     expect(decryptSecret(kvSecretContext("tmdb:apiKey"), kvWrite.data.value)).toBe("tmdb-plain");
 
     const [accessWrite, refreshWrite] = prismaMock.traktToken.update.mock.calls.map((c) => c[0]);
     expect(decryptSecret(SECRET_CONTEXT.traktAccessToken, accessWrite.data.accessToken)).toBe("access-plain");
     expect(decryptSecret(SECRET_CONTEXT.traktRefreshToken, refreshWrite.data.refreshToken)).toBe("refresh-plain");
 
-    const stremioWrite = prismaMock.stremioAuth.update.mock.calls[0][0];
+    const stremioWrite = first(prismaMock.stremioAuth.update.mock.calls, "prismaMock.stremioAuth.update call")[0];
     expect(decryptSecret(SECRET_CONTEXT.stremioAuthKey, stremioWrite.data.authKey)).toBe("authkey-plain");
 
-    const channelWrite = prismaMock.notificationChannel.update.mock.calls[0][0];
+    const channelWrite = first(prismaMock.notificationChannel.update.mock.calls, "prismaMock.notificationChannel.update call")[0];
     expect(channelWrite.where).toEqual({ id: "chan-1" });
     expect(decryptSecret(SECRET_CONTEXT.notificationChannelToken, channelWrite.data.token)).toBe("gotify-plain");
   });
@@ -111,7 +112,7 @@ describe("encryptStoredSecrets", () => {
   it("only sweeps the KV rows that hold credentials", async () => {
     await run();
 
-    const { where } = prismaMock.kV.findMany.mock.calls[0][0];
+    const { where } = first(prismaMock.kV.findMany.mock.calls, "prismaMock.kV.findMany call")[0];
     expect(where.key.in).toEqual(["tmdb:apiKey", "omdb:apiKey", "rpdb:apiKey", "ai:config", "push:vapidKeys"]);
     expect(where.key.in).not.toContain("settings:language");
   });
@@ -121,7 +122,7 @@ describe("encryptStoredSecrets", () => {
 
     await run();
 
-    const written = prismaMock.kV.update.mock.calls[0][0].data.value;
+    const written = first(prismaMock.kV.update.mock.calls, "prismaMock.kV.update call")[0].data.value;
     expect(isEncryptedSecret(written)).toBe(true);
     expect(JSON.parse(decryptSecret(kvSecretContext("push:vapidKeys"), written)!)).toEqual({ publicKey: "pub" });
   });

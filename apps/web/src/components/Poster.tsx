@@ -39,12 +39,12 @@ export function Poster({
   eager = false,
   sizes = "(min-width: 640px) 220px, 45vw",
 }: {
-  src?: string;
+  src?: string | undefined;
   alt: string | null | undefined;
-  className?: string;
-  eager?: boolean;
+  className?: string | undefined;
+  eager?: boolean | undefined;
   /** `sizes` attribute matching this poster's actual rendered width, so the browser picks the right srcset entry. */
-  sizes?: string;
+  sizes?: string | undefined;
 }) {
   const [loadFailed, setLoadFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);

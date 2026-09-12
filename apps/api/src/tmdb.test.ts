@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MetadataType } from "@prisma/client";
+import { first } from "./lib/test-fixtures/present.js";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -47,7 +48,7 @@ describe("TmdbClient", () => {
       const results = await TmdbClient.fromKey("key").trending(MetadataType.series);
 
       expect(results).toHaveLength(20);
-      expect(results[0].imdbId).toBe("tt0001");
+      expect(first(results, "trending result").imdbId).toBe("tt0001");
       expect(peakExternalIds).toBeGreaterThan(1);
       expect(peakExternalIds).toBeLessThanOrEqual(5);
     });

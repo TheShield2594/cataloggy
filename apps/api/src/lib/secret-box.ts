@@ -132,6 +132,10 @@ export const decryptSecret = (context: string, stored: string): string | null =>
   if (!key) return null;
 
   const [, ivRaw, tagRaw, ciphertextRaw] = stored.split(".");
+  // `isEncryptedSecret` above already required four parts; this is the same
+  // claim in a form the three uses below can rely on.
+  if (ivRaw === undefined || tagRaw === undefined || ciphertextRaw === undefined) return null;
+
   try {
     const iv = Buffer.from(ivRaw, "base64url");
     const tag = Buffer.from(tagRaw, "base64url");

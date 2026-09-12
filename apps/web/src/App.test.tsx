@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 import { App } from "./App";
 import { runtimeConfig } from "./api";
+import { first } from "./test/present";
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -81,7 +82,7 @@ describe("focus on route change", () => {
   const mainEl = () => screen.getByRole("main", { name: "Main content" });
   const goToSearch = async (user: ReturnType<typeof userEvent.setup>) => {
     // The sidebar's own link, so focus starts where a real navigation leaves it.
-    await user.click(screen.getAllByRole("link", { name: "Search" })[0]);
+    await user.click(first(screen.getAllByRole("link", { name: "Search" }), "Search link"));
   };
 
   it("moves focus into main on a route that claims none", async () => {
@@ -89,7 +90,7 @@ describe("focus on route change", () => {
     renderAt("/search");
     await screen.findByText("search page");
 
-    await user.click(screen.getAllByRole("link", { name: "Shelf" })[0]);
+    await user.click(first(screen.getAllByRole("link", { name: "Shelf" }), "Shelf link"));
 
     await waitFor(() => expect(mainEl()).toHaveFocus());
   });
@@ -122,11 +123,11 @@ describe("focus on route change", () => {
     renderAt("/search");
     await screen.findByText("search page");
 
-    await user.click(screen.getAllByRole("link", { name: "Shelf" })[0]);
+    await user.click(first(screen.getAllByRole("link", { name: "Shelf" }), "Shelf link"));
     await waitFor(() => expect(mainEl()).toHaveFocus());
 
     const focusSpy = vi.spyOn(mainEl(), "focus");
-    await user.click(screen.getAllByRole("link", { name: "Calendar" })[0]);
+    await user.click(first(screen.getAllByRole("link", { name: "Calendar" }), "Calendar link"));
 
     await waitFor(() => expect(focusSpy).toHaveBeenCalled());
   });

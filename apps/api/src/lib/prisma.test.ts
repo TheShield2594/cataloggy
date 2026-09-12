@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { first } from "./test-fixtures/present.js";
 
 // The real module builds a connection pool at import time, so both dependencies
 // are replaced wholesale: what is under test is the wiring between Prisma's log
@@ -67,8 +68,8 @@ describe("the pool the adapter is built with", () => {
       application_name: "cataloggy-api",
     });
     // Without this a caller waits out the exhaustion it is queued behind.
-    expect(adapterConfigs[0].connectionTimeoutMillis).toBeGreaterThan(0);
-    expect(adapterConfigs[0].idleTimeoutMillis).toBeGreaterThan(0);
+    expect(first(adapterConfigs, "adapter config").connectionTimeoutMillis).toBeGreaterThan(0);
+    expect(first(adapterConfigs, "adapter config").idleTimeoutMillis).toBeGreaterThan(0);
   });
 
   it("takes the bounds from the environment", async () => {
@@ -81,7 +82,7 @@ describe("the pool the adapter is built with", () => {
     // node-postgres reads 0 as "cancel immediately", which would fail every query.
     await load({ DATABASE_STATEMENT_TIMEOUT_MS: "0" });
 
-    expect(adapterConfigs[0].statement_timeout).toBe(false);
+    expect(first(adapterConfigs, "adapter config").statement_timeout).toBe(false);
   });
 
   it("refuses to load at all without a connection string", async () => {
@@ -99,8 +100,8 @@ describe("attachDatabaseLogging", () => {
     listeners.get("query")!({ duration: 250.4, query: "SELECT 1", params: "[]" });
 
     expect(logger.warn).toHaveBeenCalledTimes(1);
-    expect(logger.warn.mock.calls[0][0]).toEqual({ durationMs: 250, query: "SELECT 1" });
-    expect(logger.warn.mock.calls[0][1]).toMatch(/250ms/);
+    expect(first(logger.warn.mock.calls, "logger.warn call")[0]).toEqual({ durationMs: 250, query: "SELECT 1" });
+    expect(first(logger.warn.mock.calls, "logger.warn call")[1]).toMatch(/250ms/);
   });
 
   it("never logs the parameters, which carry stored credentials and PIN hashes", async () => {

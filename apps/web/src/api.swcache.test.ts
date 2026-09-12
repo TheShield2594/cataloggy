@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { first } from "./test/present";
 
 /*
  * Waiting on the service worker's cache invalidation.
@@ -20,7 +21,7 @@ type Controller = { postMessage: ReturnType<typeof vi.fn> };
 /** A worker that replies on the port it is handed. */
 const ackingController = (): Controller => ({
   postMessage: vi.fn((_message: unknown, transfer: MessagePort[]) => {
-    transfer[0].postMessage({ done: true });
+    first(transfer, "reply port").postMessage({ done: true });
   }),
 });
 
@@ -128,7 +129,7 @@ describe("notifyServiceWorkerToInvalidateApiCache", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(controller.postMessage).toHaveBeenCalledTimes(2);
-    expect(controller.postMessage.mock.calls[0][0]).toEqual({ type: "INVALIDATE_API_CACHE" });
+    expect(first(controller.postMessage.mock.calls, "postMessage call")[0]).toEqual({ type: "INVALIDATE_API_CACHE" });
   });
 
   it("does nothing at all when no worker controls the page", async () => {

@@ -6,6 +6,13 @@
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
+    // Vite never type-checks: esbuild transpiles each file alone, so it has to
+    // decide from the import statement itself whether a name is a type to be
+    // erased or a value to be kept. Without this, tsc allows an import that
+    // esbuild then has to guess about — and the emit, not the checker, is where
+    // being wrong shows up. Setting it makes the type-only imports explicit,
+    // which is what the bundler was assuming all along.
+    "verbatimModuleSyntax": true,
     "types": ["vite/client", "vite-plugin-pwa/client", "@testing-library/jest-dom"],
     "noEmit": true
   },

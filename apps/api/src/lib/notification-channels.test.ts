@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChannelTarget, NotificationEvent } from "./notification-channels.js";
+import { first } from "./test-fixtures/present.js";
 
 const resolveNotificationUrl = vi.fn();
 vi.mock("./ssrf.js", () => ({ resolveNotificationUrl: (...args: unknown[]) => resolveNotificationUrl(...args) }));
@@ -265,7 +266,7 @@ describe("sendToChannel", () => {
 
       await sendToChannel(channel({ kind: "gotify", url: "http://gotify.lan", token: stored }), EVENT);
 
-      expect(headersOf(fetchMock.mock.calls[0][1])["X-Gotify-Key"]).toBe("gotify-app-token");
+      expect(headersOf(first(fetchMock.mock.calls, "fetchMock call")[1])["X-Gotify-Key"]).toBe("gotify-app-token");
     });
 
     it("says why rather than sending unauthenticated when the token won't decrypt", async () => {

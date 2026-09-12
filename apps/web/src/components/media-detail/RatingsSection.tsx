@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, Star } from "lucide-react";
-import { api, ApiError, MediaType, RatingType } from "../../api";
+import { api, ApiError, type MediaType, type RatingType } from "../../api";
 import { ImdbLogo, RtLogo, McIcon, TmdbLogo } from "./RatingLogos";
 import { StarPicker } from "../StarPicker";
 import { STARS_MAX } from "../../utils/rating";

@@ -45,6 +45,11 @@ export type IgdbGameSummary = {
   genres: string[];
 };
 
+/** The `YYYY-MM-DD` half of an ISO instant. */
+function isoDateOf(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
 export function igdbCoverUrl(imageId: string): string {
   return `https://images.igdb.com/igdb/image/upload/t_720p/${imageId}.jpg`;
 }
@@ -55,7 +60,7 @@ function transformGame(game: IgdbGamePayload): IgdbGameSummary {
     title: game.name,
     coverUrl: game.cover?.image_id ? igdbCoverUrl(game.cover.image_id) : null,
     releaseDate: game.first_release_date
-      ? new Date(game.first_release_date * 1000).toISOString().split("T")[0]
+      ? isoDateOf(new Date(game.first_release_date * 1000))
       : null,
     genres: (game.genres ?? []).map((genre) => genre.name)
   };

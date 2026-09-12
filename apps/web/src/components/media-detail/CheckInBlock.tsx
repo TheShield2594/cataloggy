@@ -1,5 +1,5 @@
 import { Radio } from "lucide-react";
-import { CheckIn } from "../../api";
+import type { CheckIn } from "../../api";
 
 export function CheckInBlock({
   loading,

@@ -4,7 +4,6 @@ import {
   Film,
   Tv,
   ChevronRight,
-  ChevronLeft,
   Check,
   TrendingUp,
   Sparkles,
@@ -15,16 +14,16 @@ import {
 } from "lucide-react";
 import {
   api,
-  CalendarEntry,
-  CheckIn,
-  DetailedWatchStats,
+  type CalendarEntry,
+  type CheckIn,
+  type DetailedWatchStats,
   runtimeConfig,
-  ScrobbleSession,
-  SearchResult,
-  SeriesProgress,
-  TrendingMeta,
-  WatchEvent,
-  WatchStats,
+  type ScrobbleSession,
+  type SearchResult,
+  type SeriesProgress,
+  type TrendingMeta,
+  type WatchEvent,
+  type WatchStats,
 } from "../api";
 import { Link } from "react-router";
 import { CarouselTrack } from "../components/CarouselTrack";
@@ -37,7 +36,13 @@ import { timeAgo, timeUntil } from "../utils/timeAgo";
 import { formatRating, ratingLabel } from "../utils/rating";
 import { useCachedState } from "../hooks/useCachedState";
 import { useClockBoundary } from "../hooks/useClockBoundary";
-import { PAGE_TITLE, SECTION_TITLE, KICKER, MICRO_LABEL } from "../components/typography";
+import { PAGE_TITLE, KICKER, MICRO_LABEL } from "../components/typography";
+import { localDateFromIsoDate } from "../utils/calendarDate";
+import { ScrollArrows } from "../components/ScrollArrows";
+import { SectionHeader } from "../components/SectionHeader";
+import { SectionError } from "../components/SectionError";
+import { PosterCard } from "../components/PosterCard";
+import { useDashboardSection } from "../hooks/useDashboardSection";
 
 /* ─── Skeleton placeholders ─── */
 
@@ -71,67 +76,67 @@ function RecentlyWatchedSkeleton() {
 
 /* ─── Discovery Card ─── */
 
+// `?: T | undefined` rather than `?: T`: every caller forwards a value that is
+// already optional, and a missing prop and an undefined one are the same thing
+// to React and to everything below. The distinction the flag exists for is
+// made where it is real — a Prisma `data`, a `fetch` init, a Fastify option.
+/** What `GET /recommendations/ai` answers with. */
+type AiRecommendationsResponse = { metas: TrendingMeta[]; reasons?: Record<string, string> | undefined };
+
 type DiscoveryItem = {
   id: string;
   name: string;
-  poster?: string;
-  rating?: number;
-  genres?: string[];
-  year?: number;
-  type?: string;
-  description?: string;
+  poster?: string | undefined;
+  rating?: number | undefined;
+  genres?: string[] | undefined;
+  year?: number | undefined;
+  type?: string | undefined;
+  description?: string | undefined;
 };
 
 export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
   item: DiscoveryItem;
-  badge?: React.ReactNode;
-  reason?: string;
-  onSelect?: (item: DiscoveryItem) => void;
-  eager?: boolean;
+  badge?: React.ReactNode | undefined;
+  reason?: string | undefined;
+  onSelect?: ((item: DiscoveryItem) => void) | undefined;
+  eager?: boolean | undefined;
   /** Fills the width of a grid cell instead of using a fixed carousel-card width. */
-  fill?: boolean;
+  fill?: boolean | undefined;
 }) {
   return (
-    <div className={`group relative rounded-xl ${fill ? "w-full" : "w-poster-card flex-none"}`}>
-      {/* A real button rather than a `role="button"` div: it inherits Enter and
-          Space, the disabled/active semantics, and the announcement assistive
-          tech expects, instead of re-implementing the first and forgoing the
-          rest. It stretches over the whole card because the card is one action
-          — there is nothing else here to overlap with. */}
-      {onSelect && (
-        <button
-          type="button"
-          className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
-          onClick={() => onSelect(item)}
-          aria-label={`View details for ${item.name}`}
-        />
-      )}
-      <div
-        className="poster-frame relative aspect-poster overflow-hidden rounded-xl group-hover:scale-[1.03]"
-      >
-        <Poster src={item.poster} alt={item.name} className="h-full w-full" eager={eager} sizes={fill ? POSTER_CARD_FILL_SIZES : POSTER_CARD_SIZES} />
-        {item.rating != null && item.rating > 0 && (
-          // 28px of chip has no room for "/10", so the scale lives in the
-          // accessible name and the tooltip instead of being left implied.
-          <div
-            role="img"
-            aria-label={ratingLabel(item.rating)}
-            title={ratingLabel(item.rating)}
-            className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm"
-            style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}
-          >
-            {/* Fixed amber rather than --status-warn — the badge is on a black
-                scrim over poster art, not on a theme surface, and the token
-                goes dark on the light theme. Same pairing as the Stats page's
-                rating badges. */}
-            <span aria-hidden="true" className="meta font-bold text-[#f5c451]">{formatRating(item.rating)}</span>
+    <PosterCard
+      poster={item.poster}
+      name={item.name}
+      {...(onSelect ? { onOpen: () => onSelect(item) } : {})}
+      eager={eager}
+      sizes={fill ? POSTER_CARD_FILL_SIZES : POSTER_CARD_SIZES}
+      className={fill ? "w-full" : "w-poster-card flex-none"}
+      overlay={
+        <>
+          {item.rating != null && item.rating > 0 && (
+            // 28px of chip has no room for "/10", so the scale lives in the
+            // accessible name and the tooltip instead of being left implied.
+            <div
+              role="img"
+              aria-label={ratingLabel(item.rating)}
+              title={ratingLabel(item.rating)}
+              className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm"
+              style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}
+            >
+              {/* Fixed amber rather than --status-warn — the badge is on a black
+                  scrim over poster art, not on a theme surface, and the token
+                  goes dark on the light theme. Same pairing as the Stats page's
+                  rating badges. */}
+              <span aria-hidden="true" className="meta font-bold text-[#f5c451]">{formatRating(item.rating)}</span>
+            </div>
+          )}
+          {badge && <div className="absolute top-2 right-2">{badge}</div>}
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/55 to-transparent px-3 pb-2.5 pt-10 opacity-100 transition-opacity duration-base sm:opacity-0 sm:group-hover:opacity-100">
+            <p className="truncate text-xs font-semibold text-white">{item.name}</p>
           </div>
-        )}
-        {badge && <div className="absolute top-2 right-2">{badge}</div>}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/55 to-transparent px-3 pb-2.5 pt-10 opacity-100 transition-opacity duration-base sm:opacity-0 sm:group-hover:opacity-100">
-          <p className="truncate text-xs font-semibold text-white">{item.name}</p>
-        </div>
-      </div>
+        </>
+      }
+    >
       <p className="mt-2.5 truncate text-sm font-semibold text-[var(--text)] transition-colors group-hover:text-claw-text">
         {item.name}
       </p>
@@ -145,7 +150,7 @@ export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
           {reason}
         </p>
       )}
-    </div>
+    </PosterCard>
   );
 }
 
@@ -403,82 +408,7 @@ export function ContinueWatchingHero({
 
 /* ─── Scroll arrows ─── */
 
-function ScrollArrows({
-  canScrollLeft,
-  canScrollRight,
-  onScroll,
-}: {
-  canScrollLeft: boolean;
-  canScrollRight: boolean;
-  onScroll: (dir: "left" | "right") => void;
-}) {
-  const scrollable = canScrollLeft || canScrollRight;
-  return (
-    // Stays mounted when the row fits on screen so a resize fades the cluster
-    // out instead of blinking it away; disabled buttons keep it untabbable.
-    //
-    // The gap doubles on a touch screen, and only there. `.tap-target` takes
-    // each 32px button to 44, which is 6px of overhang per side — exactly the
-    // 6px of `gap-1.5`, so the two expanded areas met in the middle and the
-    // later sibling won the whole strip between them. At 12px they meet at the
-    // boundary and neither claims the other's side of it. A mouse keeps the
-    // tighter cluster, which is what lets it share a line with the heading.
-    <div
-      className={`flex items-center gap-1.5 [@media(pointer:coarse)]:gap-3 transition-opacity duration-slow ${scrollable ? "" : "pointer-events-none opacity-0"}`}
-      aria-hidden={!scrollable}
-    >
-      <button
-        type="button"
-        onClick={() => onScroll("left")}
-        disabled={!canScrollLeft}
-        className="tap-target flex h-8 w-8 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
-        style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
-        aria-label="Scroll left"
-      >
-        <ChevronLeft className="h-4 w-4" />
-      </button>
-      <button
-        type="button"
-        onClick={() => onScroll("right")}
-        disabled={!canScrollRight}
-        className="tap-target flex h-8 w-8 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
-        style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
-        aria-label="Scroll right"
-      >
-        <ChevronRight className="h-4 w-4" />
-      </button>
-    </div>
-  );
-}
-
 /* ─── Section header ─── */
-
-function SectionHeader({
-  title,
-  count,
-  children,
-}: {
-  title: string;
-  count?: number;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="mb-4 flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <h2 className={SECTION_TITLE} style={{ color: "var(--text)" }}>{title}</h2>
-        {count !== undefined && count > 0 && (
-          <span
-            className="meta rounded-full px-2.5 py-1"
-            style={{ background: "var(--surface-strong)", color: "var(--text-dim)" }}
-          >
-            {count}
-          </span>
-        )}
-      </div>
-      {children}
-    </div>
-  );
-}
 
 /* ─── Section-level failure notice ───
  *
@@ -487,22 +417,6 @@ function SectionHeader({
  * merely different that day, with no hint that anything was wrong or that
  * retrying would help — and, for Upcoming, collapsed the two-column grid.
  */
-
-function SectionError({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div className="flex flex-col items-center gap-2 rounded-2xl py-8 text-center" style={{ border: "1px dashed var(--border-strong)" }}>
-      <AlertCircle className="h-7 w-7" style={{ color: "var(--text-mute)" }} />
-      <p className="text-sm" style={{ color: "var(--text-dim)" }}>{message}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="text-sm font-medium text-claw-text underline-offset-2 transition-colors hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset rounded"
-      >
-        Retry
-      </button>
-    </div>
-  );
-}
 
 /* ─── Discover sub-row: one labeled rail (Movies / Series) within the shared Discover section ─── */
 
@@ -666,7 +580,7 @@ function DashboardHeader({
   longestStreak: number;
   totalMovies: number;
   totalEpisodes: number;
-  topGenre?: string;
+  topGenre?: string | undefined;
   loading: boolean;
   statsLoading: boolean;
   statsFailed: boolean;
@@ -732,26 +646,71 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(!progressMeta.hadCachedValue && !historyMeta.hadCachedValue);
   const [error, setError] = useState<string | null>(null);
 
-  const [detailedStats, setDetailedStats, detailedMeta] = useCachedState<DetailedWatchStats | null>("dash:detailed-stats", null);
-  const [detailedLoading, setDetailedLoading] = useState(!detailedMeta.hadCachedValue);
-  const [detailedFailed, setDetailedFailed] = useState(false);
-
-  const [trendingMovies, setTrendingMovies, trendingMeta] = useCachedState<TrendingMeta[]>("dash:trending", []);
-  const [trendingLoading, setTrendingLoading] = useState(!trendingMeta.hadCachedValue);
   const [trendingNeedsTmdb, setTrendingNeedsTmdb] = useState(false);
-  const [recommendations, setRecommendations, recsMeta] = useCachedState<TrendingMeta[]>("dash:recs:movie", []);
-  const [recsLoading, setRecsLoading] = useState(!recsMeta.hadCachedValue);
-  const [recsFailed, setRecsFailed] = useState(false);
-  const [seriesRecs, setSeriesRecs, seriesRecsMeta] = useCachedState<TrendingMeta[]>("dash:recs:series", []);
-  const [seriesRecsLoading, setSeriesRecsLoading] = useState(!seriesRecsMeta.hadCachedValue);
-  const [seriesRecsFailed, setSeriesRecsFailed] = useState(false);
   const [aiActive, setAiActive] = useState(false);
   const [aiLastGeneratedAt, setAiLastGeneratedAt] = useState<string | null>(null);
   const [movieReasons, setMovieReasons] = useState<Record<string, string>>({});
   const [seriesReasons, setSeriesReasons] = useState<Record<string, string>>({});
-  const [calendarEntries, setCalendarEntries, calendarMeta] = useCachedState<CalendarEntry[]>("dash:calendar", []);
-  const [calendarLoading, setCalendarLoading] = useState(!calendarMeta.hadCachedValue);
-  const [calendarFailed, setCalendarFailed] = useState(false);
+
+  // Each rail loads, fails and retries on its own, so each gets its own
+  // section — which is what keeps a Retry on one from invalidating a request
+  // still in flight beside it. See `useDashboardSection` for the guard.
+  const detailed = useDashboardSection<DetailedWatchStats | null>(
+    "dash:detailed-stats",
+    null,
+    useCallback(() => api.getDetailedStats(), []),
+  );
+
+  const trending = useDashboardSection<TrendingMeta[], { metas: TrendingMeta[] }>(
+    "dash:trending",
+    [],
+    useCallback(() => api.getTrending("movie", "week"), []),
+    {
+      apply: (res, set) => set(res.metas ?? []),
+      // An unconfigured TMDB key is the one failure worth naming: the rail then
+      // says what to go and set rather than offering a Retry that cannot work.
+      onError: useCallback((err: unknown) => {
+        setTrendingNeedsTmdb(err instanceof Error && /tmdb/i.test(err.message));
+      }, []),
+    },
+  );
+
+  const movieRecs = useDashboardSection<TrendingMeta[], AiRecommendationsResponse>(
+    "dash:recs:movie",
+    [],
+    useCallback(() => api.getAiRecommendations("movie", 20), []),
+    {
+      apply: useCallback((res: AiRecommendationsResponse, set: (v: TrendingMeta[]) => void) => {
+        set(res.metas ?? []);
+        setMovieReasons(res.reasons ?? {});
+      }, []),
+    },
+  );
+
+  const seriesRecsSection = useDashboardSection<TrendingMeta[], AiRecommendationsResponse>(
+    "dash:recs:series",
+    [],
+    useCallback(() => api.getAiRecommendations("series", 20), []),
+    {
+      apply: useCallback((res: AiRecommendationsResponse, set: (v: TrendingMeta[]) => void) => {
+        set(res.metas ?? []);
+        setSeriesReasons(res.reasons ?? {});
+      }, []),
+    },
+  );
+
+  const calendar = useDashboardSection<CalendarEntry[], { calendar: CalendarEntry[] }>(
+    "dash:calendar",
+    [],
+    useCallback(() => api.getCalendar(14), []),
+    { apply: (res, set) => set(res.calendar ?? []) },
+  );
+
+  const detailedStats = detailed.value;
+  const trendingMovies = trending.value;
+  const recommendations = movieRecs.value;
+  const seriesRecs = seriesRecsSection.value;
+  const calendarEntries = calendar.value;
 
   const [markingNext, setMarkingNext] = useState<Set<string>>(new Set());
   const [markedDone, setMarkedDone] = useState<Set<string>>(new Set());
@@ -767,7 +726,12 @@ export function DashboardPage() {
   const { showToast } = useToast();
 
   const toSearchResult = useCallback((imdbId: string, type: "movie" | "series", name: string, opts?: {
-    poster?: string; year?: number | null; description?: string | null; genres?: string[]; rating?: number | null; background?: string | null;
+    poster?: string | undefined;
+    year?: number | null | undefined;
+    description?: string | null | undefined;
+    genres?: string[] | undefined;
+    rating?: number | null | undefined;
+    background?: string | null | undefined;
   }): SearchResult => ({
     imdbId, type, name,
     year: opts?.year ?? null,
@@ -822,96 +786,38 @@ export function DashboardPage() {
 
   const profileId = runtimeConfig.getProfileId();
 
-  // Each section loader is callable on its own so its error state can offer a
-  // retry. The token guard keeps the newest call's result: a retry, or a
-  // profile switch, must not be overwritten by the slower request it replaced.
-  const detailedToken = useRef(0);
-  const loadDetailedStats = useCallback(async () => {
-    const token = ++detailedToken.current;
-    setDetailedLoading(true);
-    setDetailedFailed(false);
-    try {
-      const res = await api.getDetailedStats();
-      if (detailedToken.current === token) setDetailedStats(res);
-    } catch (err) {
-      console.error("Failed to fetch detailed stats:", err);
-      if (detailedToken.current === token) setDetailedFailed(true);
-    } finally {
-      if (detailedToken.current === token) setDetailedLoading(false);
-    }
-  }, [setDetailedStats]);
-
-  const trendingToken = useRef(0);
-  const loadTrending = useCallback(async () => {
-    const token = ++trendingToken.current;
-    setTrendingLoading(true);
-    setTrendingNeedsTmdb(false);
-    try {
-      const res = await api.getTrending("movie", "week");
-      if (trendingToken.current === token) setTrendingMovies(res.metas ?? []);
-    } catch (err) {
-      console.error("Failed to fetch trending:", err);
-      if (trendingToken.current === token) {
-        setTrendingMovies([]);
-        setTrendingNeedsTmdb(err instanceof Error && /tmdb/i.test(err.message));
-      }
-    } finally {
-      if (trendingToken.current === token) setTrendingLoading(false);
-    }
-  }, [setTrendingMovies]);
-
-  // One counter per rail rather than one for both. The rails have separate
-  // Retry buttons and load independently, so retrying movies must not
-  // invalidate the series request that is still in flight beside it — and
-  // `loadAiSection` starts both, so a shared counter would have its second
-  // `loadRecs` call discard the first's answer.
-  const recsToken = useRef<Record<"movie" | "series", number>>({ movie: 0, series: 0 });
-  const loadRecs = useCallback(async (kind: "movie" | "series") => {
-    const isMovie = kind === "movie";
-    const setLoadingFor = isMovie ? setRecsLoading : setSeriesRecsLoading;
-    const setFailedFor = isMovie ? setRecsFailed : setSeriesRecsFailed;
-    // Incremented, like every other loader here. Reading the counter without
-    // advancing it made this no guard at all in the direction that matters: a
-    // request never invalidated the one it replaced, so a Retry and the request
-    // it was retrying both passed the check below, and whichever finished last
-    // won — including a failure landing after good recommendations, which
-    // replaces them with an error offering to fetch them again.
-    const token = ++recsToken.current[kind];
-    setLoadingFor(true);
-    setFailedFor(false);
-    try {
-      const res = await api.getAiRecommendations(kind, 20);
-      if (recsToken.current[kind] !== token) return;
-      if (isMovie) {
-        setRecommendations(res.metas ?? []);
-        setMovieReasons(res.reasons ?? {});
-      } else {
-        setSeriesRecs(res.metas ?? []);
-        setSeriesReasons(res.reasons ?? {});
-      }
-    } catch (err) {
-      console.error(`Failed to fetch ${kind} recommendations:`, err);
-      if (recsToken.current[kind] === token) setFailedFor(true);
-    } finally {
-      if (recsToken.current[kind] === token) setLoadingFor(false);
-    }
-  }, [setRecommendations, setSeriesRecs]);
-
   // AI config gates both rails: a failure here means neither can be fetched, so
   // it surfaces as a failure on both rather than as two empty rows.
+  //
+  // Destructured rather than closing over the two section objects: those are
+  // rebuilt on every render, so depending on them would make this callback new
+  // on every render too — and the effect that calls it runs on its identity.
+  // Everything below is stable for the life of the section.
+  const {
+    claim: claimMovieRecs,
+    isCurrent: movieRecsIsCurrent,
+    load: loadMovieRecs,
+    setLoading: setMovieRecsLoading,
+    setFailed: setMovieRecsFailed,
+  } = movieRecs;
+  const {
+    claim: claimSeriesRecs,
+    isCurrent: seriesRecsIsCurrent,
+    load: loadSeriesRecs,
+    setLoading: setSeriesRecsLoading,
+    setFailed: setSeriesRecsFailed,
+  } = seriesRecsSection;
+
   const loadAiSection = useCallback(async () => {
-    // Both rails restart from here, so both tokens move — an answer from a
-    // request either rail had in flight belongs to the previous run of this
-    // section and is no longer the one on screen.
-    const tokens = {
-      movie: ++recsToken.current.movie,
-      series: ++recsToken.current.series,
-    };
-    const superseded = () =>
-      recsToken.current.movie !== tokens.movie || recsToken.current.series !== tokens.series;
-    setRecsLoading(true);
+    // Both rails restart from here, so both tokens move — an answer either rail
+    // had in flight belongs to the previous run of this section and is no
+    // longer the one on screen.
+    const movieToken = claimMovieRecs();
+    const seriesToken = claimSeriesRecs();
+    const superseded = () => !movieRecsIsCurrent(movieToken) || !seriesRecsIsCurrent(seriesToken);
+    setMovieRecsLoading(true);
     setSeriesRecsLoading(true);
-    setRecsFailed(false);
+    setMovieRecsFailed(false);
     setSeriesRecsFailed(false);
     try {
       const configRes = await api.getAiConfig();
@@ -920,45 +826,43 @@ export function DashboardPage() {
       setAiLastGeneratedAt(configRes.lastGeneratedAt ?? null);
 
       if (!configRes.configured) {
-        setRecsLoading(false);
+        setMovieRecsLoading(false);
         setSeriesRecsLoading(false);
         return;
       }
 
-      void loadRecs("movie");
-      void loadRecs("series");
+      void loadMovieRecs();
+      void loadSeriesRecs();
     } catch (err) {
       console.error("Failed to fetch AI config:", err);
       if (superseded()) return;
-      setRecsFailed(true);
+      setMovieRecsFailed(true);
       setSeriesRecsFailed(true);
-      setRecsLoading(false);
+      setMovieRecsLoading(false);
       setSeriesRecsLoading(false);
     }
-  }, [loadRecs]);
+  }, [
+    claimMovieRecs,
+    claimSeriesRecs,
+    movieRecsIsCurrent,
+    seriesRecsIsCurrent,
+    loadMovieRecs,
+    loadSeriesRecs,
+    setMovieRecsLoading,
+    setSeriesRecsLoading,
+    setMovieRecsFailed,
+    setSeriesRecsFailed,
+  ]);
 
-  const calendarToken = useRef(0);
-  const loadCalendar = useCallback(async () => {
-    const token = ++calendarToken.current;
-    setCalendarLoading(true);
-    setCalendarFailed(false);
-    try {
-      const res = await api.getCalendar(14);
-      if (calendarToken.current === token) setCalendarEntries(res.calendar ?? []);
-    } catch (err) {
-      console.error("Failed to fetch calendar:", err);
-      if (calendarToken.current === token) setCalendarFailed(true);
-    } finally {
-      if (calendarToken.current === token) setCalendarLoading(false);
-    }
-  }, [setCalendarEntries]);
-
+  const loadDetailed = detailed.load;
+  const loadTrending = trending.load;
+  const loadCalendar = calendar.load;
   useEffect(() => {
-    void loadDetailedStats();
+    void loadDetailed();
     void loadTrending();
     void loadAiSection();
     void loadCalendar();
-  }, [profileId, loadDetailedStats, loadTrending, loadAiSection, loadCalendar]);
+  }, [profileId, loadDetailed, loadTrending, loadAiSection, loadCalendar]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1008,7 +912,7 @@ export function DashboardPage() {
       checkSeriesRecsScroll();
     }, 50);
     return () => clearTimeout(timer);
-  }, [loading, trendingLoading, recsLoading, seriesRecsLoading, progress.length, history.length,
+  }, [loading, trending.loading, movieRecs.loading, seriesRecsSection.loading, progress.length, history.length,
     checkContinueScroll, checkRecentScroll, checkRecsScroll, checkSeriesRecsScroll]);
 
   const handleMarkNext = async (imdbId: string) => {
@@ -1078,7 +982,7 @@ export function DashboardPage() {
 
   // Includes the failure case so the column — and the two-column grid with it —
   // stays put and reports the problem instead of quietly reflowing to one column.
-  const hasUpcoming = calendarLoading || calendarEntries.length > 0 || calendarFailed;
+  const hasUpcoming = calendar.loading || calendarEntries.length > 0 || calendar.failed;
 
   // The check-in hero and the Continue Watching hero can end up showing the same series
   // (e.g. actively checked into the episode that's also furthest along in progress).
@@ -1099,9 +1003,9 @@ export function DashboardPage() {
         totalEpisodes={stats?.totalEpisodes ?? 0}
         topGenre={detailedStats?.genreDistribution[0]?.genre}
         loading={loading}
-        statsLoading={detailedLoading}
-        statsFailed={detailedFailed}
-        onRetryStats={() => void loadDetailedStats()}
+        statsLoading={detailed.loading}
+        statsFailed={detailed.failed}
+        onRetryStats={() => void loadDetailed()}
       />
 
       {/* ── Hero: Now Watching ── */}
@@ -1296,7 +1200,7 @@ export function DashboardPage() {
               Search &rarr;
             </Link>
           </SectionHeader>
-          {trendingLoading ? (
+          {trending.loading ? (
             <div className="grid grid-cols-2 gap-3 sm:[grid-template-columns:repeat(auto-fit,var(--poster-card-w))]">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="skeleton aspect-poster rounded-xl" />
@@ -1351,19 +1255,20 @@ export function DashboardPage() {
                 Full calendar &rarr;
               </Link>
             </SectionHeader>
-            {calendarLoading ? (
+            {calendar.loading ? (
               <div className="space-y-2">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="skeleton h-16 rounded-xl" />
                 ))}
               </div>
-            ) : calendarFailed ? (
+            ) : calendar.failed ? (
               <SectionError message="Couldn't load upcoming episodes." onRetry={() => void loadCalendar()} />
             ) : (
               <div className="space-y-2">
                 {calendarEntries.map((entry) => {
-                  const [y, m, d] = entry.airDate.split("-").map(Number);
-                  const airDate = new Date(y, m - 1, d);
+                  // Unreadable stays an Invalid Date, which matches neither
+                  // today nor tomorrow and falls through to the dated label.
+                  const airDate = localDateFromIsoDate(entry.airDate) ?? new Date(NaN);
                   const isToday = airDate.toDateString() === new Date().toDateString();
                   const tomorrow = new Date();
                   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -1410,7 +1315,7 @@ export function DashboardPage() {
       </div>
 
       {/* ── Discover: shared section for both recommendation rails ── */}
-      {(recsLoading || recommendations.length > 0 || recsFailed || seriesRecsLoading || seriesRecs.length > 0 || seriesRecsFailed) && (
+      {(movieRecs.loading || recommendations.length > 0 || movieRecs.failed || seriesRecsSection.loading || seriesRecs.length > 0 || seriesRecsSection.failed) && (
         <section>
           <SectionHeader title={aiActive ? "AI Picks" : "Discover"}>
             {aiActive && aiLastGeneratedAt && (() => {
@@ -1427,9 +1332,9 @@ export function DashboardPage() {
           <div className="space-y-5">
             <DiscoverSubRow
               label="Movies"
-              loading={recsLoading}
-              failed={recsFailed}
-              onRetry={() => void (aiActive ? loadRecs("movie") : loadAiSection())}
+              loading={movieRecs.loading}
+              failed={movieRecs.failed}
+              onRetry={() => void (aiActive ? loadMovieRecs() : loadAiSection())}
               items={recommendations}
               reasons={movieReasons}
               aiActive={aiActive}
@@ -1438,9 +1343,9 @@ export function DashboardPage() {
             />
             <DiscoverSubRow
               label="Series"
-              loading={seriesRecsLoading}
-              failed={seriesRecsFailed}
-              onRetry={() => void (aiActive ? loadRecs("series") : loadAiSection())}
+              loading={seriesRecsSection.loading}
+              failed={seriesRecsSection.failed}
+              onRetry={() => void (aiActive ? loadSeriesRecs() : loadAiSection())}
               items={seriesRecs}
               reasons={seriesReasons}
               aiActive={aiActive}

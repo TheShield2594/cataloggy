@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
 import { P2002 } from "../lib/test-fixtures/prisma-errors.js";
+import { first } from "../lib/test-fixtures/present.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 const GAME_ID = "22222222-2222-4222-8222-222222222222";
@@ -47,7 +48,7 @@ const gameRow = (over: Record<string, unknown> = {}) => ({
 });
 
 /** The orderBy the route handed to Prisma for the current request. */
-const orderBy = () => prismaMock.game.findMany.mock.calls[0][0].orderBy;
+const orderBy = () => first(prismaMock.game.findMany.mock.calls, "prismaMock.game.findMany call")[0].orderBy;
 
 describe("games routes", () => {
   beforeEach(() => {
@@ -252,7 +253,7 @@ describe("games routes", () => {
       });
 
       expect(res.statusCode).toBe(200);
-      const data = prismaMock.game.update.mock.calls[0][0].data;
+      const data = first(prismaMock.game.update.mock.calls, "prismaMock.game.update call")[0].data;
       expect(data.finished).toBe(true);
       expect(data.finishedAt).toBeInstanceOf(Date);
     });
@@ -265,7 +266,7 @@ describe("games routes", () => {
 
       await app.inject({ method: "PATCH", url: `/games/${GAME_ID}`, payload: { finished: true } });
 
-      expect(prismaMock.game.update.mock.calls[0][0].data.finishedAt).toBe(original);
+      expect(first(prismaMock.game.update.mock.calls, "prismaMock.game.update call")[0].data.finishedAt).toBe(original);
     });
 
     it("clears the finish date when a game is un-marked", async () => {
@@ -275,7 +276,7 @@ describe("games routes", () => {
 
       await app.inject({ method: "PATCH", url: `/games/${GAME_ID}`, payload: { finished: false } });
 
-      expect(prismaMock.game.update.mock.calls[0][0].data.finishedAt).toBeNull();
+      expect(first(prismaMock.game.update.mock.calls, "prismaMock.game.update call")[0].data.finishedAt).toBeNull();
     });
 
     it("lets an explicit finishedAt win over the automatic stamp", async () => {
@@ -289,7 +290,7 @@ describe("games routes", () => {
         payload: { finished: true, finishedAt: "2025-03-04T00:00:00Z" },
       });
 
-      expect(prismaMock.game.update.mock.calls[0][0].data.finishedAt).toEqual(
+      expect(first(prismaMock.game.update.mock.calls, "prismaMock.game.update call")[0].data.finishedAt).toEqual(
         new Date("2025-03-04T00:00:00Z")
       );
     });
@@ -306,7 +307,7 @@ describe("games routes", () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(prismaMock.game.update.mock.calls[0][0].data.rating).toBeNull();
+      expect(first(prismaMock.game.update.mock.calls, "prismaMock.game.update call")[0].data.rating).toBeNull();
     });
 
     it("rejects a rating outside 1–10", async () => {

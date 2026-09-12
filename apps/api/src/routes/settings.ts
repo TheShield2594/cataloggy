@@ -1,19 +1,18 @@
 import { STREAMING_PROVIDERS } from "../tmdb.js";
 import type { FastifyPluginAsync } from "fastify";
-import { prisma } from "../lib/prisma.js";
 import {
-  LANGUAGE_KV_KEY,
-  REGION_KV_KEY,
-  SPOILER_PROTECTION_KV_KEY,
   getLanguageSetting,
   getRegionSetting,
   getSpoilerProtection,
+  setLanguageSetting,
+  setRegionSetting,
+  setSpoilerProtection,
 } from "../lib/settings.js";
 import { OMDB_API_KEY_KV, getOmdbApiKey } from "../lib/omdb.js";
 import { TMDB_API_KEY_KV, getTmdbApiKey } from "../lib/tmdb-client.js";
 import { RPDB_API_KEY_KV, getRpdbApiKey } from "../lib/rpdb.js";
 import { trendingCache } from "../lib/cache.js";
-import { writeSecretKv } from "../lib/secret-store.js";
+import { deleteSecretKv, writeSecretKv } from "../lib/secret-store.js";
 import { isServiceRequest } from "../lib/service-request.js";
 import { failuresFrom, getJobRuns } from "../lib/job-status.js";
 
@@ -42,25 +41,21 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
 
     const LANGUAGE_PATTERN = /^[a-z]{2}(-[A-Z]{2})?$/;
     const REGION_PATTERN = /^[A-Z]{2}$/;
-    const now = new Date();
 
     if (typeof body.language === "string" && body.language.trim()) {
-      const raw = body.language.trim();
-      const parts = raw.split("-");
+      const [lang = "", region, ...rest] = body.language.trim().split("-");
+      // Two parts is `fr-FR`, one is `fr`; anything else fails the pattern
+      // below, which is what it did before too.
       const normalizedLang =
-        parts.length === 2
-          ? `${parts[0].toLowerCase()}-${parts[1].toUpperCase()}`
-          : parts[0].toLowerCase();
+        region !== undefined && rest.length === 0
+          ? `${lang.toLowerCase()}-${region.toUpperCase()}`
+          : lang.toLowerCase();
       if (!LANGUAGE_PATTERN.test(normalizedLang)) {
         return reply.code(400).send({
           error: "language must be a valid language code (e.g., 'en-US', 'fr')",
         });
       }
-      await prisma.kV.upsert({
-        where: { key: LANGUAGE_KV_KEY },
-        create: { key: LANGUAGE_KV_KEY, value: normalizedLang, updatedAt: now },
-        update: { value: normalizedLang, updatedAt: now },
-      });
+      await setLanguageSetting(normalizedLang);
     }
 
     if (typeof body.region === "string" && body.region.trim()) {
@@ -70,23 +65,11 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
           error: "region must be a valid two-letter country code (e.g., 'US', 'GB')",
         });
       }
-      await prisma.kV.upsert({
-        where: { key: REGION_KV_KEY },
-        create: { key: REGION_KV_KEY, value: reg, updatedAt: now },
-        update: { value: reg, updatedAt: now },
-      });
+      await setRegionSetting(reg);
     }
 
     if (typeof body.spoilerProtection === "boolean") {
-      await prisma.kV.upsert({
-        where: { key: SPOILER_PROTECTION_KV_KEY },
-        create: {
-          key: SPOILER_PROTECTION_KV_KEY,
-          value: String(body.spoilerProtection),
-          updatedAt: now,
-        },
-        update: { value: String(body.spoilerProtection), updatedAt: now },
-      });
+      await setSpoilerProtection(body.spoilerProtection);
     }
 
     trendingCache.clear();
@@ -141,7 +124,7 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
   // Removing the saved key falls back to TMDB_API_KEY when the deployment
   // sets one, so the response says what is left rather than assuming nothing.
   app.delete("/tmdb/key", async () => {
-    await prisma.kV.deleteMany({ where: { key: TMDB_API_KEY_KV } });
+    await deleteSecretKv(TMDB_API_KEY_KV);
     const { apiKey, source } = await getTmdbApiKey();
     return { configured: !!apiKey, source };
   });
@@ -157,7 +140,7 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
     const body = request.body as { apiKey?: unknown } | null;
     const apiKey = typeof body?.apiKey === "string" ? body.apiKey.trim() : "";
     if (!apiKey) {
-      await prisma.kV.deleteMany({ where: { key: OMDB_API_KEY_KV } });
+      await deleteSecretKv(OMDB_API_KEY_KV);
       return { configured: false };
     }
 
@@ -177,7 +160,7 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.delete("/omdb/key", async () => {
-    await prisma.kV.deleteMany({ where: { key: OMDB_API_KEY_KV } });
+    await deleteSecretKv(OMDB_API_KEY_KV);
     return { configured: false };
   });
 
@@ -196,7 +179,7 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
 
     const apiKey = body.apiKey.trim();
     if (!apiKey) {
-      await prisma.kV.deleteMany({ where: { key: RPDB_API_KEY_KV } });
+      await deleteSecretKv(RPDB_API_KEY_KV);
       return { configured: false };
     }
 
@@ -205,7 +188,7 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.delete("/rpdb/key", async () => {
-    await prisma.kV.deleteMany({ where: { key: RPDB_API_KEY_KV } });
+    await deleteSecretKv(RPDB_API_KEY_KV);
     return { configured: false };
   });
 

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { first } from "./test-fixtures/present.js";
 
 // Real `Response`s rather than a stand-in object: requests go through the
 // shared outbound policy, which reads `Retry-After` off the headers and
@@ -69,7 +70,7 @@ describe("anilist-client", () => {
 
       const { searchAnime } = await import("./anilist-client.js");
       const results = await searchAnime("attack on titan");
-      expect(results[0].title).toBe("Shingeki");
+      expect(first(results, "search result").title).toBe("Shingeki");
     });
 
     it("retries a non-OK response and throws once the retries run out", async () => {

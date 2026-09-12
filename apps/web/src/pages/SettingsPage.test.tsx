@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 import { INITIALLY_OPEN_SECTION_IDS, SETTINGS_SECTIONS, SETTINGS_TABS, SettingsPage, matchesSearch, type SettingsTab } from "./SettingsPage";
+import { at, present } from "../test/present";
 
 // Each section's body is its own component's business, and most of them fetch
 // on mount. Stub them out: what this file tests is which sections the page
@@ -52,7 +53,7 @@ describe("settings sections", () => {
     for (const tab of SETTINGS_TABS) {
       const open = byTab(tab.id).filter((s) => INITIALLY_OPEN_SECTION_IDS.has(s.id));
       expect(open).toHaveLength(1);
-      expect(open[0].id).toBe(byTab(tab.id)[0].id);
+      expect(at(open, 0, "open section").id).toBe(at(byTab(tab.id), 0, "section").id);
     }
   });
 
@@ -108,7 +109,7 @@ const onScreen = () => SETTINGS_SECTIONS.filter((s) => screen.queryByRole("regio
 const searchBox = () => screen.getByLabelText("Search settings");
 // role="tab", not "button": the tab strip is a real tablist, so a query that
 // still found a plain button would mean the roles had been dropped again.
-const tabBar = () => screen.queryByRole("tab", { name: SETTINGS_TABS[1].label });
+const tabBar = () => screen.queryByRole("tab", { name: at(SETTINGS_TABS, 1, "settings tab").label });
 
 describe("SettingsPage", () => {
   /*
@@ -130,45 +131,49 @@ describe("SettingsPage", () => {
   describe("the tab strip's keyboard contract", () => {
     it("moves between tabs with the arrow keys, selecting as it goes", async () => {
       renderPage();
-      const [first, second] = SETTINGS_TABS.map((t) => screen.getByRole("tab", { name: t.label }));
-      expect(first).toHaveAttribute("aria-selected", "true");
+      const tabs = SETTINGS_TABS.map((t) => screen.getByRole("tab", { name: t.label }));
+      const firstTab = at(tabs, 0, "tab");
+      const secondTab = at(tabs, 1, "tab");
+      expect(firstTab).toHaveAttribute("aria-selected", "true");
 
-      first.focus();
+      firstTab.focus();
       await userEvent.keyboard("{ArrowRight}");
 
-      expect(second).toHaveFocus();
-      expect(second).toHaveAttribute("aria-selected", "true");
+      expect(secondTab).toHaveFocus();
+      expect(secondTab).toHaveAttribute("aria-selected", "true");
       expect(onScreen()).toEqual(byTab("integrations").map((s) => s.title));
     });
 
     it("wraps around, and Home/End go straight to the ends", async () => {
       renderPage();
-      const [first, last] = SETTINGS_TABS.map((t) => screen.getByRole("tab", { name: t.label }));
+      const tabs = SETTINGS_TABS.map((t) => screen.getByRole("tab", { name: t.label }));
+      const firstTab = at(tabs, 0, "tab");
+      const lastTab = present(tabs.at(-1), "last tab");
 
-      first.focus();
+      firstTab.focus();
       await userEvent.keyboard("{ArrowLeft}");
-      expect(last).toHaveFocus();
+      expect(lastTab).toHaveFocus();
 
       await userEvent.keyboard("{Home}");
-      expect(first).toHaveFocus();
+      expect(firstTab).toHaveFocus();
 
       await userEvent.keyboard("{End}");
-      expect(last).toHaveFocus();
+      expect(lastTab).toHaveFocus();
     });
 
     it("is one Tab stop, not one per tab", () => {
       renderPage();
-      const [first, second] = SETTINGS_TABS.map((t) => screen.getByRole("tab", { name: t.label }));
+      const tabs = SETTINGS_TABS.map((t) => screen.getByRole("tab", { name: t.label }));
 
-      expect(first).toHaveAttribute("tabindex", "0");
-      expect(second).toHaveAttribute("tabindex", "-1");
+      expect(at(tabs, 0, "tab")).toHaveAttribute("tabindex", "0");
+      expect(at(tabs, 1, "tab")).toHaveAttribute("tabindex", "-1");
     });
 
     it("names the panel after the tab that selected it", () => {
       renderPage();
 
       const panel = screen.getByRole("tabpanel");
-      expect(panel).toHaveAccessibleName(SETTINGS_TABS[0].label);
+      expect(panel).toHaveAccessibleName(at(SETTINGS_TABS, 0, "settings tab").label);
     });
 
     // A search spans both tabs and hides the strip, so labelling the results as
@@ -185,7 +190,7 @@ describe("SettingsPage", () => {
     renderPage();
     expect(onScreen()).toEqual(byTab("preferences").map((s) => s.title));
 
-    await userEvent.click(screen.getByRole("tab", { name: SETTINGS_TABS[1].label }));
+    await userEvent.click(screen.getByRole("tab", { name: at(SETTINGS_TABS, 1, "settings tab").label }));
     expect(onScreen()).toEqual(byTab("integrations").map((s) => s.title));
   });
 
@@ -194,7 +199,7 @@ describe("SettingsPage", () => {
     const expanded = screen.getAllByRole("button", { expanded: true });
 
     expect(expanded).toHaveLength(1);
-    expect(expanded[0]).toHaveAccessibleName(byTab("preferences")[0].title);
+    expect(at(expanded, 0, "expanded section")).toHaveAccessibleName(at(byTab("preferences"), 0, "section").title);
   });
 
   it("titles the page with an h1, so the heading outline starts at the top", () => {
@@ -258,7 +263,7 @@ describe("SettingsPage", () => {
     health.value = { trakt: { tone: "bad", label: "Token expired" } };
     renderPage();
 
-    await userEvent.click(screen.getByRole("tab", { name: SETTINGS_TABS[1].label }));
+    await userEvent.click(screen.getByRole("tab", { name: at(SETTINGS_TABS, 1, "settings tab").label }));
     const header = screen.getByRole("button", { name: /Trakt Integration/ });
 
     expect(header).toHaveAccessibleName("Trakt Integration Token expired");
@@ -267,7 +272,7 @@ describe("SettingsPage", () => {
 
   it("groups the integrations by what a source does rather than by who supplies it", async () => {
     renderPage();
-    await userEvent.click(screen.getByRole("tab", { name: SETTINGS_TABS[1].label }));
+    await userEvent.click(screen.getByRole("tab", { name: at(SETTINGS_TABS, 1, "settings tab").label }));
 
     expect(screen.getByText("Where history comes from")).toBeInTheDocument();
     expect(screen.getByText("Metadata & artwork")).toBeInTheDocument();

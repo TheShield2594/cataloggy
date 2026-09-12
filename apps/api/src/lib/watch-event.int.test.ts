@@ -3,6 +3,7 @@ import { prisma } from "./prisma.js";
 import { createProfile, silentLogger } from "./test-fixtures/int-db.js";
 import { recordWatchEvent } from "./watch-event.js";
 import { isUniqueConstraintError } from "./prisma-tolerant.js";
+import { at, first } from "./test-fixtures/present.js";
 
 // `watchevent_dedup_key` (migration 20260814120000) is a partial unique index over
 // an expression — COALESCE of two columns, two NULL-substituting COALESCEs, and a
@@ -52,9 +53,10 @@ describe("recording the same movie twice in a UTC day", () => {
 
     const events = await prisma.watchEvent.findMany({ where: { profileId: profile.id } });
     expect(events).toHaveLength(1);
-    expect(events[0].plays).toBe(2);
+    const merged = at(events, 0, "watch event");
+    expect(merged.plays).toBe(2);
     // The later timestamp wins, which is what "watched again today" means.
-    expect(events[0].watchedAt.toISOString()).toBe("2026-05-04T21:30:00.000Z");
+    expect(merged.watchedAt.toISOString()).toBe("2026-05-04T21:30:00.000Z");
   });
 
   it("keeps the two apart across a UTC day boundary", async () => {
@@ -89,7 +91,7 @@ describe("recording the same episode twice in a UTC day", () => {
 
     const events = await prisma.watchEvent.findMany({ where: { profileId: profile.id } });
     expect(events).toHaveLength(1);
-    expect(events[0].plays).toBe(2);
+    expect(first(events, "watch event").plays).toBe(2);
   });
 
   it("keeps different episodes of one series apart", async () => {
@@ -227,7 +229,7 @@ describe("watchedAt as an instant", () => {
 
     await recordMovie(profile.id, watchedAt);
 
-    const [event] = await prisma.watchEvent.findMany({ where: { profileId: profile.id } });
+    const event = first(await prisma.watchEvent.findMany({ where: { profileId: profile.id } }), "watch event");
     expect(event.watchedAt.toISOString()).toBe("2026-05-04T09:15:30.123Z");
   });
 });

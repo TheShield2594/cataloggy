@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { CalendarDays, ChevronLeft, ChevronRight, List, LayoutGrid, X } from "lucide-react";
-import { api, CalendarEntry, SearchResult } from "../api";
+import { api, type CalendarEntry, type SearchResult } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { Poster } from "../components/Poster";
 import { useEscapeKey } from "../hooks/useEscapeKey";
@@ -14,6 +14,7 @@ import { useToast } from "../hooks/useToast";
 import { useCachedState } from "../hooks/useCachedState";
 import { useClockBoundary } from "../hooks/useClockBoundary";
 import { PAGE_TITLE, SECTION_TITLE, KICKER, MICRO_LABEL } from "../components/typography";
+import { localDateFromIsoDate } from "../utils/calendarDate";
 
 type ViewMode = "agenda" | "month";
 const AGENDA_RANGES = [14, 30, 60, 90] as const;
@@ -40,9 +41,11 @@ function toSearchResult(entry: CalendarEntry): SearchResult {
   };
 }
 
+// An air date the API sent in a shape this cannot read keeps the Invalid Date
+// it has always produced: it groups under its own key and labels as "Invalid
+// Date" rather than dropping the entry out of the calendar without a trace.
 function parseAirDate(airDate: string): Date {
-  const [y, m, d] = airDate.split("-").map(Number);
-  return new Date(y, m - 1, d);
+  return localDateFromIsoDate(airDate) ?? new Date(NaN);
 }
 
 function startOfDay(d: Date): Date {

@@ -3,16 +3,16 @@ import { Link, useSearchParams } from "react-router";
 import { Play, RotateCw } from "lucide-react";
 import {
   api,
-  CheckIn,
-  Game,
-  ListItemWithMeta,
-  SeriesProgress,
-  WatchEvent,
+  type CheckIn,
+  type Game,
+  type ListItemWithMeta,
+  type SeriesProgress,
+  type WatchEvent,
 } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { GameDetailPanel } from "../components/GameDetailPanel";
 import { GhostLoader } from "../components/GhostLoader";
-import { Poster, POSTER_GRID_SIZES } from "../components/Poster";
+import { Poster } from "../components/Poster";
 import { ProgressRuler } from "../components/ProgressRuler";
 import { SegmentedControl, type SegmentedOption } from "../components/SegmentedControl";
 import { PAGE_TITLE, SECTION_TITLE } from "../components/typography";
@@ -31,6 +31,8 @@ import {
   type ShelfEntry,
   type ShelfFilter,
 } from "./shelf";
+import { PosterGrid } from "../components/PosterGrid";
+import { PosterCard } from "../components/PosterCard";
 
 /*
  * The Shelf.
@@ -143,9 +145,9 @@ function UpNextCard({
    */
   eager: boolean;
   onOpen: () => void;
-  onResume?: () => void;
-  resumeLabel?: string;
-  resumeBusy?: boolean;
+  onResume?: (() => void) | undefined;
+  resumeLabel?: string | undefined;
+  resumeBusy?: boolean | undefined;
 }) {
   // The landscape still if the record carries one, the poster if not. A poster
   // in a 16:9 frame is cropped to its middle, which is a worse picture than the
@@ -246,26 +248,13 @@ function UpNextCard({
  */
 function ShelfCell({ entry, eager, onOpen }: { entry: ShelfEntry; eager: boolean; onOpen: () => void }) {
   return (
-    <div className="group">
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`Open details for ${entry.title}`}
-        // The hairline is `inset` rather than a ring: a poster is a rectangle
-        // of someone else's colour, and a dark one on a black page has no edge
-        // at all without a line — but the line belongs to the picture, not
-        // around it, so it must not add to the box the grid measures.
-        className="card-lift art-hairline relative block w-full overflow-hidden rounded-xl text-left"
-        style={{ aspectRatio: "2/3", backgroundColor: "var(--surface)" }}
-      >
-        <Poster
-          src={entry.art ?? undefined}
-          alt={entry.title}
-          className="h-full w-full"
-          eager={eager}
-          sizes={POSTER_GRID_SIZES}
-        />
-      </button>
+    <PosterCard
+      poster={entry.art}
+      name={entry.title}
+      onOpen={onOpen}
+      openLabel={`Open details for ${entry.title}`}
+      eager={eager}
+    >
       {/*
        * No type badge on the artwork. The coloured "MOVIE"/"SERIES" pills the
        * grids used to carry were the tell the redesign is aimed at: a label
@@ -279,7 +268,7 @@ function ShelfCell({ entry, eager, onOpen }: { entry: ShelfEntry; eager: boolean
       <p className="meta truncate" style={{ color: "var(--text-mute)" }}>
         {entry.meta}
       </p>
-    </div>
+    </PosterCard>
   );
 }
 
@@ -603,11 +592,11 @@ export function ShelfPage() {
                  what turns the grid into a *library* — you see a shelf of them
                  at once instead of a stack you scroll through a pair at a
                  time. */
-              <div className="grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 sm:gap-x-4 sm:gap-y-5">
+              <PosterGrid density="library">
                 {visibleRest.map((entry, index) => (
                   <ShelfCell key={entry.key} entry={entry} eager={index < 6} onOpen={() => openEntry(entry)} />
                 ))}
-              </div>
+              </PosterGrid>
             )}
             {renderLimit < rest.length && <div ref={sentinelRef} className="h-4" />}
           </section>

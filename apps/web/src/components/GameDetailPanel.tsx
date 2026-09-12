@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Clock, Gamepad2, Star, Trash2, X } from "lucide-react";
-import { api, Game } from "../api";
+import { api, type Game } from "../api";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useEscapeKey } from "../hooks/useEscapeKey";

@@ -34,11 +34,15 @@ async function tryFindIgdbMatch(title: string, logger: Logger): Promise<IgdbGame
 }
 
 function playtimeUpdateData(existing: Pick<Game, "coverUrl" | "lastPlayedAt">, steamGame: SteamOwnedGame) {
+  // IGDB artwork, once matched, takes priority over the Steam icon — and when
+  // there is neither, the key is left out rather than set to undefined. Prisma
+  // reads both as "leave the column alone", which is what is wanted: a sync
+  // must not blank artwork that is already there.
+  const coverUrl = existing.coverUrl ?? steamGame.iconUrl ?? undefined;
   return {
     playtimeMinutes: steamGame.playtimeForeverMinutes,
     lastPlayedAt: steamGame.lastPlayedAt ?? existing.lastPlayedAt,
-    // IGDB artwork, once matched, takes priority over the Steam icon.
-    coverUrl: existing.coverUrl ?? steamGame.iconUrl ?? undefined
+    ...(coverUrl !== undefined ? { coverUrl } : {}),
   };
 }
 
@@ -57,11 +61,16 @@ async function enrichExistingRow(
   }
 
   try {
+    // `coverUrl` is omitted rather than sent as undefined when neither side has
+    // one: to Prisma both mean "leave the column as it is", which is the point —
+    // a Steam icon must not overwrite artwork that is already there, and a null
+    // must not erase it.
+    const coverUrl = row.coverUrl ?? match.coverUrl ?? undefined;
     await prisma.game.update({
       where: { id: row.id },
       data: {
         igdbId: match.igdbId,
-        coverUrl: row.coverUrl ?? match.coverUrl ?? undefined,
+        ...(coverUrl !== undefined ? { coverUrl } : {}),
         releaseDate: match.releaseDate ? new Date(match.releaseDate) : null,
         genres: match.genres
       }
@@ -124,13 +133,14 @@ export const syncSteamLibrary = async (logger: Logger, profileId: string): Promi
     if (match) {
       const existingByIgdbId = await prisma.game.findFirst({ where: { profileId, igdbId: match.igdbId } });
       if (existingByIgdbId) {
+        const coverUrl = existingByIgdbId.coverUrl ?? match.coverUrl ?? game.iconUrl ?? undefined;
         await prisma.game.update({
           where: { id: existingByIgdbId.id },
           data: {
             steamAppId: game.appId,
             playtimeMinutes: game.playtimeForeverMinutes,
             lastPlayedAt: game.lastPlayedAt ?? existingByIgdbId.lastPlayedAt,
-            coverUrl: existingByIgdbId.coverUrl ?? match.coverUrl ?? game.iconUrl ?? undefined
+            ...(coverUrl !== undefined ? { coverUrl } : {})
           }
         });
         summary.updated += 1;
@@ -144,7 +154,9 @@ export const syncSteamLibrary = async (logger: Logger, profileId: string): Promi
         data: {
           profileId,
           steamAppId: game.appId,
-          igdbId: match?.igdbId,
+          // Left out rather than sent as undefined when Steam's title matched
+          // nothing on IGDB — the column stays null, which is what it means.
+          ...(match ? { igdbId: match.igdbId } : {}),
           title: game.name,
           coverUrl: match?.coverUrl ?? game.iconUrl,
           releaseDate: match?.releaseDate ? new Date(match.releaseDate) : null,

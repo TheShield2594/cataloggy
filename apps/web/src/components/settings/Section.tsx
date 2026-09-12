@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { SECTION_TITLE } from "../typography";
 import { healthDotClass, type SectionHealth } from "./health";
@@ -26,16 +26,16 @@ export function Section({
   title: string;
   icon: ReactNode;
   /** Only consulted the first time a section is seen; after that the user's own choice wins. */
-  defaultOpen?: boolean;
+  defaultOpen?: boolean | undefined;
   storageKey: string;
   /** Renders the section expanded and without a toggle (search results). */
-  alwaysOpen?: boolean;
+  alwaysOpen?: boolean | undefined;
   /**
    * What this integration is currently doing, shown on the header row. Absent
    * for sections that aren't integrations, and for one whose status could not
    * be read — a missing dot is honest, an alarming one would not be.
    */
-  health?: SectionHealth;
+  health?: SectionHealth | undefined;
   children: ReactNode;
 }) {
   const [storedOpen, setStoredOpen] = useState(() => readStoredOpen(storageKey, defaultOpen ?? false));

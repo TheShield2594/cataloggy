@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
+import { first } from "../lib/test-fixtures/present.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_PROFILE_ID = "22222222-2222-4222-8222-222222222222";
@@ -121,7 +122,7 @@ describe("notification channel routes", () => {
         const res = await create(app, { kind: "gotify", url: "http://192.168.1.25:8080", token: "app-token" });
 
         expect(res.statusCode).toBe(201);
-        const { token } = prismaMock.notificationChannel.create.mock.calls[0][0].data;
+        const { token } = first(prismaMock.notificationChannel.create.mock.calls, "prismaMock.notificationChannel.create call")[0].data;
         expect(token).not.toBe("app-token");
         expect(decryptSecret(SECRET_CONTEXT.notificationChannelToken, token)).toBe("app-token");
         // A channel with a token still reports one, since that is all the UI
@@ -250,7 +251,7 @@ describe("notification channel routes", () => {
 
         await patch(app, { name: "Renamed" });
 
-        const { token } = prismaMock.notificationChannel.update.mock.calls[0][0].data;
+        const { token } = first(prismaMock.notificationChannel.update.mock.calls, "prismaMock.notificationChannel.update call")[0].data;
         expect(token).toBe(stored);
         expect(decryptSecret(SECRET_CONTEXT.notificationChannelToken, token)).toBe("gotify-app-token");
       } finally {
@@ -327,7 +328,7 @@ describe("notification channel routes", () => {
     it("rejects an id that is not a UUID before it reaches the database", async () => {
       const app = await buildApp();
 
-      const res = await app.inject({ method, url, payload });
+      const res = await app.inject({ method, url, ...(payload !== undefined ? { payload } : {}) });
 
       expect(res.statusCode).toBe(400);
       expect(res.json().error).toBe("id must be a valid UUID");

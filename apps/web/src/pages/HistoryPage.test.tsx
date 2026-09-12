@@ -6,6 +6,7 @@ import type { WatchEvent } from "../api";
 import { ToastProvider } from "../hooks/useToast";
 import { readCache, resetDataCacheForTests } from "../utils/dataCache";
 import { HistoryPage } from "./HistoryPage";
+import { first } from "../test/present";
 
 vi.mock("../api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../api")>();
@@ -121,7 +122,8 @@ describe("HistoryPage", () => {
     const note = screen.getByRole("button", { name: /add note to alien/i });
     const remove = screen.getByRole("button", { name: /delete watch of alien/i });
 
-    for (const [a, b] of [[open, note], [open, remove], [note, remove]]) {
+    const pairs: [HTMLElement, HTMLElement][] = [[open, note], [open, remove], [note, remove]];
+    for (const [a, b] of pairs) {
       expect(a.contains(b)).toBe(false);
       expect(b.contains(a)).toBe(false);
     }
@@ -133,7 +135,7 @@ describe("HistoryPage", () => {
     renderPage();
     await screen.findByText("Alien");
 
-    await user.click(screen.getAllByRole("button", { name: /delete watch of alien/i })[0]);
+    await user.click(first(screen.getAllByRole("button", { name: /delete watch of alien/i }), "delete button"));
 
     await waitFor(() => expect(screen.queryByText("Alien")).not.toBeInTheDocument());
     expect(await screen.findByText(/Removed Alien from history/)).toBeInTheDocument();
@@ -151,7 +153,7 @@ describe("HistoryPage", () => {
     renderPage();
     await screen.findByText("Alien");
 
-    screen.getAllByRole("button", { name: /delete watch of alien/i })[0].focus();
+    first(screen.getAllByRole("button", { name: /delete watch of alien/i }), "delete button").focus();
     await user.keyboard("{Enter}");
 
     await waitFor(() => expect(deleteWatchEvent).toHaveBeenCalledWith(ALIEN.id));
@@ -176,7 +178,7 @@ describe("HistoryPage", () => {
     renderPage();
     await screen.findByText("Alien");
 
-    await user.click(screen.getAllByRole("button", { name: /delete watch of alien/i })[0]);
+    await user.click(first(screen.getAllByRole("button", { name: /delete watch of alien/i }), "delete button"));
 
     expect(await screen.findByText("Server said no")).toBeInTheDocument();
     expect(screen.getByText("Alien")).toBeInTheDocument();
@@ -371,7 +373,7 @@ describe("HistoryPage caching and pagination", () => {
     await screen.findByText("Feature 24");
 
     await intersect();
-    await user.click(screen.getAllByRole("button", { name: /delete watch of feature 0/i })[0]);
+    await user.click(first(screen.getAllByRole("button", { name: /delete watch of feature 0/i }), "delete button"));
     await waitFor(() => expect(screen.queryByText("Feature 0")).not.toBeInTheDocument());
     await act(async () => {
       releasePage();

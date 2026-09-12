@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MetadataType } from "@prisma/client";
+import { first } from "./test-fixtures/present.js";
 
 const prismaMock = {
   metadata: { findUnique: vi.fn(), upsert: vi.fn() },
@@ -19,7 +20,8 @@ vi.mock("./omdb.js", () => omdbMock);
 // The real cooldown is an LRU with a 6h TTL; a plain Set gives the same
 // has/set surface while staying inspectable and resettable per test.
 const cooldownKeys = new Set<string>();
-vi.mock("./cache.js", () => ({
+vi.mock("./cache.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./cache.js")>()),
   metadataBackfillCooldownCache: {
     has: (key: string) => cooldownKeys.has(key),
     set: (key: string) => cooldownKeys.add(key),
@@ -74,7 +76,7 @@ describe("backfillMissingMetadata", () => {
     backfillMissingMetadata(movies("tt0000002"));
 
     await vi.waitFor(() => expect(prismaMock.metadata.upsert).toHaveBeenCalledTimes(1));
-    expect(prismaMock.metadata.upsert.mock.calls[0][0].create.name).toBe("Perfect Blue");
+    expect(first(prismaMock.metadata.upsert.mock.calls, "prismaMock.metadata.upsert call")[0].create.name).toBe("Perfect Blue");
   });
 
   it("caps how many items one call syncs so a bulk import cannot stampede TMDB", async () => {

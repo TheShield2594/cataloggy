@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { first } from "./test-fixtures/present.js";
 
 const prismaMock = {
   kV: { findUnique: vi.fn(), upsert: vi.fn() },
@@ -8,10 +9,14 @@ vi.mock("./prisma.js", () => ({ prisma: prismaMock }));
 
 const { readSecretKv, writeSecretKv } = await import("./secret-store.js");
 const { decryptSecret, encryptSecret, kvSecretContext } = await import("./secret-box.js");
+const { kvCacheClear } = await import("./cache.js");
 
 const originalToken = process.env.API_TOKEN;
 
 beforeEach(() => {
+  // The KV read cache lives for the process, so one test's row would otherwise
+  // still be there for the next one.
+  kvCacheClear();
   vi.clearAllMocks();
   prismaMock.kV.upsert.mockResolvedValue({});
   process.env.API_TOKEN = "secret-store-token";
@@ -26,7 +31,7 @@ describe("writeSecretKv", () => {
   it("writes ciphertext, not the value it was given", async () => {
     await writeSecretKv("tmdb:apiKey", "tmdb-secret");
 
-    const call = prismaMock.kV.upsert.mock.calls[0][0];
+    const call = first(prismaMock.kV.upsert.mock.calls, "prismaMock.kV.upsert call")[0];
     expect(call.where).toEqual({ key: "tmdb:apiKey" });
     expect(call.create.value).not.toContain("tmdb-secret");
     expect(call.update.value).toBe(call.create.value);
@@ -43,7 +48,7 @@ describe("readSecretKv", () => {
 
   it("decrypts what writeSecretKv stored", async () => {
     await writeSecretKv("omdb:apiKey", "omdb-secret");
-    prismaMock.kV.findUnique.mockResolvedValue({ value: prismaMock.kV.upsert.mock.calls[0][0].create.value });
+    prismaMock.kV.findUnique.mockResolvedValue({ value: first(prismaMock.kV.upsert.mock.calls, "prismaMock.kV.upsert call")[0].create.value });
 
     expect(await readSecretKv("omdb:apiKey")).toBe("omdb-secret");
   });

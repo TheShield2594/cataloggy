@@ -31,6 +31,18 @@ async function getCachedShowDetails(
  */
 export type UpcomingEpisode = CalendarEntry;
 
+/**
+ * TMDB series statuses that rule out a next episode. Everything else —
+ * "Returning Series", "In Production", "Planned", "Pilot", and a null status on
+ * a row that predates a full metadata sync — is left in.
+ *
+ * Written as a deny-list rather than `status = 'Returning Series'` on purpose:
+ * the cost of wrongly excluding a show is that its episode silently never
+ * appears on the calendar and never notifies, so the list only names the two
+ * statuses that mean "there will not be another one".
+ */
+const NO_FURTHER_EPISODES = ["Ended", "Canceled"];
+
 export const getUpcomingEpisodes = async (
   profileId: string,
   daysAhead: number,
@@ -45,13 +57,30 @@ export const getUpcomingEpisodes = async (
 
   if (progressRows.length === 0) return [];
 
-  const seriesImdbIds = progressRows.map((p) => p.seriesImdbId);
+  // Every show that survives this query costs a TMDB round trip below, so the
+  // filtering has to happen here rather than on the results. The notification
+  // job passes no limit — it has to consider every tracked show, since one
+  // watched two years ago can still air tonight — which means `status` is the
+  // only thing keeping its fan-out proportional to shows that can still air
+  // rather than to the size of the library.
   const metadata = await prisma.metadata.findMany({
-    where: { imdbId: { in: seriesImdbIds }, type: "series" },
+    where: {
+      imdbId: { in: progressRows.map((p) => p.seriesImdbId) },
+      type: "series",
+      tmdbId: { not: null },
+      OR: [{ status: null }, { status: { notIn: NO_FURTHER_EPISODES } }],
+    },
     select: { imdbId: true, tmdbId: true, name: true, poster: true },
   });
 
+  if (metadata.length === 0) return [];
+
   const metaByImdbId = new Map(metadata.map((m) => [m.imdbId, m]));
+  // Ordered by the progress rows rather than by the metadata query, so the
+  // most-recently-watched shows are still the ones fetched first.
+  const seriesImdbIds = progressRows
+    .map((p) => p.seriesImdbId)
+    .filter((imdbId) => metaByImdbId.has(imdbId));
 
   let tmdb: Awaited<ReturnType<typeof getTmdb>>;
   try {

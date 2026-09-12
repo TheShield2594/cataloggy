@@ -39,8 +39,14 @@ export const externalIdsCache = new LRUCache<string, { imdbId: string | null }>(
   max: 5000,
   ttl: EXTERNAL_IDS_CACHE_TTL_MS,
 });
+// Sized for a whole library rather than a page of one: the hourly episode
+// notification job walks every still-airing show every profile tracks, so at
+// 1000 a large library evicted its own earliest entries before the sweep ended
+// and refetched all of them on the next tick — the cache never warmed, which is
+// the one case it was there for. Entries are keyed by language and TMDB id, so
+// profiles tracking the same show share one.
 export const showDetailsCache = new LRUCache<string, { details: ShowDetails }>({
-  max: 1000,
+  max: 5000,
   ttl: SHOW_DETAILS_CACHE_TTL_MS,
 });
 
@@ -121,4 +127,34 @@ export const trendingCacheDeletePrefix = (prefix: string) => {
   for (const key of [...trendingCache.keys()]) {
     if (key.startsWith(prefix)) trendingCache.delete(key);
   }
+};
+
+// Settings and credentials live in the same KV table and are read on paths that
+// run per request: `getTmdb()` resolves the language and the API key on every
+// call, and it is called inside every `loadCached` fetcher, so one detail-panel
+// load pays a handful of identical KV round trips before any TMDB request goes
+// out. Profiles already get this treatment (above) for the same reason; these
+// change far less often and had nothing.
+//
+// Short-lived, and invalidated per key on write (`lib/kv.ts`), so a saved
+// setting takes effect on the next request rather than after the TTL — the TTL
+// is only the backstop for a write that happened in another process.
+export const KV_CACHE_TTL_MS = 30 * 1000;
+
+// Wrapped rather than bare because a missing row is a cacheable answer: a fresh
+// install has no language or region row at all, and `undefined` already means
+// "not cached".
+export const kvCache = new LRUCache<string, { value: string | null }>({
+  max: 100,
+  ttl: KV_CACHE_TTL_MS,
+});
+
+// Same argument as `profileLookups`: the dashboard's parallel requests all
+// reach a cold key before the first read resolves, so the burst only collapses
+// if in-flight reads are shared too.
+export const kvLookups = new Map<string, Promise<string | null>>();
+
+export const kvCacheClear = () => {
+  kvCache.clear();
+  kvLookups.clear();
 };

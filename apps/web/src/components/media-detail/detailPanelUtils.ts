@@ -43,10 +43,14 @@ export function statusColor(status: string): string {
  */
 export const META_LINE_GENRE_LIMIT = 3;
 
+// `?: T | undefined` rather than `?: T`: every caller forwards a value that is
+// already optional, and a missing prop and an undefined one are the same thing
+// to React and to everything below. The distinction the flag exists for is
+// made where it is real — a Prisma `data`, a `fetch` init, a Fastify option.
 export function buildMetaLine(item: {
-  year?: number | null;
-  network?: string | null;
-  genres?: string[] | null;
+  year?: number | null | undefined;
+  network?: string | null | undefined;
+  genres?: string[] | null | undefined;
 }): string[] {
   const genres = (item.genres ?? []).filter((g) => g.trim().length > 0);
   return [
@@ -76,7 +80,7 @@ export type WatchLogTarget =
  * `history` is expected newest-first, as the API returns it.
  */
 export function nextEpisodeUp(
-  history: { season?: number | null; episode?: number | null }[],
+  history: { season?: number | null | undefined; episode?: number | null | undefined }[],
   seasons: { seasonNumber: number; episodeCount: number }[]
 ): { season: number; episode: number } {
   const lastEvent = history.find((e) => e.season != null && e.episode != null);

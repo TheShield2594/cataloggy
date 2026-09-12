@@ -56,10 +56,10 @@ interface ExportSeriesProgress {
 interface ExportRating {
   imdbId: string;
   type: string;
-  season?: number;
-  episode?: number;
+  season?: number | undefined;
+  episode?: number | undefined;
   rating: number;
-  note?: string | null;
+  note?: string | null | undefined;
   ratedAt: string;
 }
 
@@ -318,12 +318,13 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "csv is required" });
     }
 
-    const rows = parseCsv(body.csv);
-    if (rows.length === 0) {
+    const [headerRow, ...rest] = parseCsv(body.csv);
+    if (!headerRow) {
       return reply.code(400).send({ error: "No rows found in CSV" });
     }
+    const rows = [headerRow, ...rest];
 
-    const header = rows[0].map((h) => h.trim().toLowerCase());
+    const header = headerRow.map((h) => h.trim().toLowerCase());
     const col = (name: string) => header.indexOf(name);
     const imdbIdCol = col("imdbid");
     const typeCol = col("type");

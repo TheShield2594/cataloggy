@@ -6,6 +6,7 @@ import {
   resetMetrics,
   statusClassOf,
 } from "./metrics.js";
+import { first } from "./test-fixtures/present.js";
 
 describe("metrics", () => {
   beforeEach(() => {
@@ -61,7 +62,7 @@ describe("metrics", () => {
       recordRequest({ method: "GET", route: "/busy", statusCode: 200, durationMs: 1 });
       recordRequest({ method: "GET", route: "/busy", statusCode: 200, durationMs: 1 });
 
-      expect(metricsSnapshot().requests.routes[0].route).toBe("GET /busy");
+      expect(first(metricsSnapshot().requests.routes, "route bucket").route).toBe("GET /busy");
     });
 
     it("folds requests that matched no route into one bucket", () => {

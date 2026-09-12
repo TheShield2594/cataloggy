@@ -143,7 +143,8 @@ export const isActingAsProfile = async (
 
   // No header is the single-profile install, where the one profile is implied.
   const profiles = await findProfileCandidates();
-  return profiles.length === 1 && profiles[0].id === profileId;
+  const [only, ...rest] = profiles;
+  return rest.length === 0 && only?.id === profileId;
 };
 
 export const resolveProfile = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -166,8 +167,8 @@ export const resolveProfile = async (request: FastifyRequest, reply: FastifyRepl
   }
 
   const profiles = await findProfileCandidates();
-  if (profiles.length === 1) {
-    const [only] = profiles;
+  const [only, ...rest] = profiles;
+  if (only && rest.length === 0) {
     if (only.pinHash && !hasValidProfileToken(request, only.id)) {
       return reply.code(401).send(PROFILE_LOCKED_RESPONSE);
     }

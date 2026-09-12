@@ -19,7 +19,10 @@ const aiMock = { shouldRefreshAiRecs: vi.fn().mockResolvedValue(false), getAiRec
 vi.mock("./ai.js", () => aiMock);
 
 const cacheMock = { trendingCacheDeletePrefix: vi.fn() };
-vi.mock("./cache.js", () => cacheMock);
+vi.mock("./cache.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./cache.js")>()),
+  ...cacheMock,
+}));
 
 const traktClientMock = { syncWatchEventToTrakt: vi.fn() };
 vi.mock("./trakt-client.js", () => traktClientMock);

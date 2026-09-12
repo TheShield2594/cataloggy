@@ -44,7 +44,11 @@ export type SizedTmdbImage = {
 export function parseSizedTmdbImage(href: string): SizedTmdbImage | null {
   const match = href.match(TMDB_IMAGE_RE);
   if (!match) return null;
-  return { prefix: match[1], width: Number(match[2]), path: match[3] };
+  // All three groups are required by the pattern; the check is what says so to
+  // the checker, and keeps saying it if the pattern is ever edited.
+  const [, prefix, width, path] = match;
+  if (prefix === undefined || width === undefined || path === undefined) return null;
+  return { prefix, width: Number(width), path };
 }
 
 /** The same picture at another rung of the ladder. */

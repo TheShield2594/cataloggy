@@ -126,8 +126,8 @@ export function cacheTierForPath(path: string): CacheTier | null {
   if (!match) return null;
   // One capture group per route, in table order; the populated one names the
   // pattern that matched.
-  for (let i = 0; i < API_CACHE_ROUTES.length; i += 1) {
-    if (match[i + 1] !== undefined) return API_CACHE_ROUTES[i].tier;
+  for (const [i, route] of API_CACHE_ROUTES.entries()) {
+    if (match[i + 1] !== undefined) return route.tier;
   }
   /* c8 ignore next -- the regex only matches when one of the groups did */
   return null;

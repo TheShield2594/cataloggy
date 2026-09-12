@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyBaseLogger } from "fastify";
+import { first } from "./test-fixtures/present.js";
 
 const makeLogger = (): FastifyBaseLogger =>
   ({
@@ -238,7 +239,7 @@ describe("trakt-client", () => {
       await pushTraktScrobble("stop", { type: "movie", imdbId: "tt1", progress: 100 }, makeLogger());
 
       expect(seenAuth).toBe("Bearer fresh-at");
-      const stored = prismaMock.traktToken.upsert.mock.calls[0][0].update;
+      const stored = first(prismaMock.traktToken.upsert.mock.calls, "prismaMock.traktToken.upsert call")[0].update;
       expect(stored.accessToken).not.toBe("fresh-at");
       expect(decryptSecret(SECRET_CONTEXT.traktAccessToken, stored.accessToken)).toBe("fresh-at");
       expect(decryptSecret(SECRET_CONTEXT.traktRefreshToken, stored.refreshToken)).toBe("fresh-rt");

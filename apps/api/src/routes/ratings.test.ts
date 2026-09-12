@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildRouteApp } from "../lib/test-fixtures/route-app.js";
+import { first } from "../lib/test-fixtures/present.js";
 
 const PROFILE_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -205,7 +206,7 @@ describe("ratings routes", () => {
       expect(prismaMock.rating.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { profileId: PROFILE_ID, imdbId: "tt2" } })
       );
-      expect(prismaMock.rating.findMany.mock.calls[0][0]).not.toHaveProperty("take");
+      expect(first(prismaMock.rating.findMany.mock.calls, "prismaMock.rating.findMany call")[0]).not.toHaveProperty("take");
       expect(res.json().ratings).toHaveLength(3);
     });
 

@@ -64,5 +64,7 @@ export const resolveProfileFromStremioSecret = async (candidate: unknown): Promi
  * handler is what verifies the secret and 404s on a bad one — so the token gate
  * stays synchronous and free of database work on every request.
  */
-export const isStremioSecretPath = (url: string): boolean =>
-  SECRET_PATH_PATTERN.test(url.split("?")[0]);
+export const isStremioSecretPath = (url: string): boolean => {
+  const queryAt = url.indexOf("?");
+  return SECRET_PATH_PATTERN.test(queryAt === -1 ? url : url.slice(0, queryAt));
+};

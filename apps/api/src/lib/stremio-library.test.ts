@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyBaseLogger } from "fastify";
+import { first } from "./test-fixtures/present.js";
 
 const makeLogger = (): FastifyBaseLogger =>
   ({
@@ -251,7 +252,7 @@ describe("stremio-library", () => {
     expect(second.fetched).toBe(0);
     expect(second.recorded).toBe(0);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0].toString()).toContain("datastoreMeta");
+    expect(first(fetchMock.mock.calls, "fetchMock call")[0].toString()).toContain("datastoreMeta");
   });
 
   it("does not re-record an item whose watch signature is unchanged", async () => {
@@ -295,7 +296,7 @@ describe("stremio-library", () => {
 
     expect(summary.fetched).toBe(0);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0].toString()).toContain("datastoreMeta");
+    expect(first(fetchMock.mock.calls, "fetchMock call")[0].toString()).toContain("datastoreMeta");
   });
 
   it("baseline mode learns the state without recording anything", async () => {
@@ -393,7 +394,7 @@ describe("stremio-library", () => {
 
     await syncStremioLibrary(makeLogger(), PROFILE, "incremental");
 
-    expect(fetchMock.mock.calls[0][0].toString()).toBe("https://proxy.example/stremio/api/datastoreMeta");
+    expect(first(fetchMock.mock.calls, "fetchMock call")[0].toString()).toBe("https://proxy.example/stremio/api/datastoreMeta");
   });
 
   it("stores only the authKey when connecting, never the password", async () => {
@@ -409,7 +410,7 @@ describe("stremio-library", () => {
 
     await connectStremio("me@example.com", "hunter2", PROFILE, makeLogger());
 
-    const upsert = prismaMock.stremioAuth.upsert.mock.calls[0][0];
+    const upsert = first(prismaMock.stremioAuth.upsert.mock.calls, "prismaMock.stremioAuth.upsert call")[0];
     expect(upsert.create).toEqual({
       id: "default",
       authKey: "secret-key",
@@ -435,7 +436,7 @@ describe("stremio-library", () => {
 
       await connectStremio("me@example.com", "hunter2", PROFILE, makeLogger());
 
-      const stored = prismaMock.stremioAuth.upsert.mock.calls[0][0].create.authKey;
+      const stored = first(prismaMock.stremioAuth.upsert.mock.calls, "prismaMock.stremioAuth.upsert call")[0].create.authKey;
       expect(stored).not.toContain("secret-key");
       expect(decryptSecret(SECRET_CONTEXT.stremioAuthKey, stored)).toBe("secret-key");
 
@@ -446,7 +447,7 @@ describe("stremio-library", () => {
 
       await syncStremioLibrary(makeLogger(), PROFILE, "incremental");
 
-      expect(JSON.parse(fetchMock.mock.calls[0][1].body).authKey).toBe("secret-key");
+      expect(JSON.parse(first(fetchMock.mock.calls, "fetchMock call")[1].body).authKey).toBe("secret-key");
     });
 
     it("fails the sync loudly when a rotated API_TOKEN has locked the authKey away", async () => {

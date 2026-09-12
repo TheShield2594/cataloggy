@@ -1,11 +1,10 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { AlertTriangle, Check, Film, FolderOpen, Pencil, Plus, Search, Trash2, Tv, X } from "lucide-react";
-import { api, CatalogList, ListItemWithMeta, MediaType, SearchResult } from "../api";
+import { api, type CatalogList, type ListItemWithMeta, type MediaType, type SearchResult } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useToast } from "../hooks/useToast";
-import { buildTmdbSrcSet, POSTER_GRID_SIZES } from "../components/Poster";
 import { useCachedState } from "../hooks/useCachedState";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { useEscapeKey } from "../hooks/useEscapeKey";
@@ -13,6 +12,8 @@ import { useExitAnimation } from "../hooks/useExitAnimation";
 import { useVisualViewport } from "../hooks/useVisualViewport";
 import { mergeByRelevance } from "../utils/mergeSearchResults";
 import { PAGE_TITLE, SECTION_TITLE } from "../components/typography";
+import { PosterGrid } from "../components/PosterGrid";
+import { PosterCard } from "../components/PosterCard";
 
 type SortOption = "added" | "name" | "year" | "rating";
 
@@ -443,8 +444,9 @@ export function ListsPage() {
   // Landing on /lists with no list named picks the first one, replacing rather
   // than pushing so Back still leaves the page.
   useEffect(() => {
-    if (listsLoaded && !selectedListId && lists.length > 0) {
-      selectList(lists[0].id, { replace: true });
+    const [firstList] = lists;
+    if (listsLoaded && !selectedListId && firstList) {
+      selectList(firstList.id, { replace: true });
     }
   }, [listsLoaded, selectedListId, lists, selectList]);
 
@@ -859,7 +861,7 @@ export function ListsPage() {
 
             {/* Items grid */}
             {loadingItems ? (
-              <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              <PosterGrid>
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i}>
                     <div className="skeleton rounded-xl" style={{ aspectRatio: "2/3" }} />
@@ -867,7 +869,7 @@ export function ListsPage() {
                     <div className="skeleton mt-1 h-3 w-1/2 rounded" />
                   </div>
                 ))}
-              </div>
+              </PosterGrid>
             ) : items.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <div className="flex h-20 w-20 items-center justify-center rounded-full ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border)" } as React.CSSProperties}>
@@ -887,67 +889,52 @@ export function ListsPage() {
                 <p className="mt-1 text-sm" style={{ color: "var(--text-mute)" }}>Try a different search term.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              <PosterGrid>
                 {visibleItems.map((item, index) => {
                   const name = itemName(item);
                   const poster = item.metadata?.poster;
                   const year = item.metadata?.year;
                   return (
-                    <div key={`${item.type}:${item.imdbId}`} className="group relative">
-                      {/* Poster */}
-                      <button
-                        type="button"
-                        onClick={() => setSelectedItem(toSearchResult(item, selectedList))}
-                        className="card-lift relative block w-full overflow-hidden rounded-xl text-left ring-1"
-                        style={{ aspectRatio: "2/3", backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border)" } as React.CSSProperties}
-                        aria-label={`Open details for ${name}`}
-                      >
-                        {poster ? (
-                          <img
-                            src={poster}
-                            srcSet={buildTmdbSrcSet(poster)}
-                            sizes={POSTER_GRID_SIZES}
-                            alt={name}
-                            className="h-full w-full object-cover transition-transform duration-slow group-hover:scale-105"
-                            loading={index < 5 ? "eager" : "lazy"}
-                            fetchPriority={index < 5 ? "high" : "low"}
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[var(--surface)] to-[var(--surface-strong)]">
-                            <Film className="h-10 w-10" style={{ color: "var(--text-mute)" }} />
-                          </div>
-                        )}
-                        {/* Type badge */}
-                        <span
-                          className={`absolute top-2.5 left-2.5 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-e1 ring-1 ring-black/15 ${
-                            item.type === "movie"
-                              ? "bg-claw-500 text-claw-on"
-                              : "bg-plum-500/90 text-white"
-                          }`}
-                          style={item.type === "movie" ? undefined : { textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
+                    <PosterCard
+                      key={`${item.type}:${item.imdbId}`}
+                      poster={poster}
+                      name={name}
+                      onOpen={() => setSelectedItem(toSearchResult(item, selectedList))}
+                      openLabel={`Open details for ${name}`}
+                      eager={index < 5}
+                      actions={
+                        <button
+                          type="button"
+                          disabled={removingIds[item.imdbId]}
+                          onClick={() => handleRemove(item)}
+                          className="pointer-events-auto absolute top-2.5 right-2.5 rounded-full bg-black/60 p-2 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-all duration-base hover:bg-rose-500 hover:text-white disabled:opacity-50 backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-ring-offset"
+                          aria-label="Remove from list"
                         >
-                          {item.type === "movie" ? "Movie" : "Series"}
-                        </span>
-                        {/* Hover overlay with gradient */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 transition-opacity duration-slow sm:opacity-0 sm:group-hover:opacity-100" />
-                      </button>
-                      {/* Remove button on hover */}
-                      <button
-                        type="button"
-                        disabled={removingIds[item.imdbId]}
-                        onClick={() => handleRemove(item)}
-                        className="absolute top-2.5 right-2.5 z-10 rounded-full bg-black/60 p-2 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-all duration-base hover:bg-rose-500 hover:text-white disabled:opacity-50 backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-ring-offset"
-                        aria-label="Remove from list"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                      {/* Title & year */}
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      }
+                      overlay={
+                        <>
+                          <span
+                            className={`absolute top-2.5 left-2.5 rounded-md px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-e1 ring-1 ring-black/15 ${
+                              item.type === "movie"
+                                ? "bg-claw-500 text-claw-on"
+                                : "bg-plum-500/90 text-white"
+                            }`}
+                            style={item.type === "movie" ? undefined : { textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
+                          >
+                            {item.type === "movie" ? "Movie" : "Series"}
+                          </span>
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 transition-opacity duration-slow sm:opacity-0 sm:group-hover:opacity-100" />
+                        </>
+                      }
+                    >
                       <p className="mt-2.5 truncate text-sm font-semibold" style={{ color: "var(--text)" }}>{name}</p>
                       <p className="meta-row" style={{ color: "var(--text-mute)" }}>{year ?? "Unknown year"}</p>
-                    </div>
+                    </PosterCard>
                   );
                 })}
-              </div>
+              </PosterGrid>
             )}
             {!loadingItems && renderLimit < displayedItems.length && <div ref={sentinelRef} className="h-4" />}
           </>

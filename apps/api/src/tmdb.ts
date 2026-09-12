@@ -564,13 +564,14 @@ export class TmdbClient {
       return found;
     }
 
-    const link = TMDB_URL_PATTERN.exec(trimmed);
-    if (link) {
-      const mediaType = link[1].toLowerCase() as TmdbMediaType;
+    const [, linkMediaType, linkTmdbId] = TMDB_URL_PATTERN.exec(trimmed) ?? [];
+    // Both groups are required by the pattern, so having the first is having both.
+    if (linkMediaType !== undefined && linkTmdbId !== undefined) {
+      const mediaType = linkMediaType.toLowerCase() as TmdbMediaType;
       const type = mediaType === "movie" ? MetadataType.movie : MetadataType.series;
       if (!types.includes(type)) return [];
 
-      const tmdbId = Number(link[2]);
+      const tmdbId = Number(linkTmdbId);
       const imdbId = await this.getImdbId(mediaType, tmdbId).catch(() => null);
       if (!imdbId) return [];
 

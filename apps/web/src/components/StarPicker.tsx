@@ -46,7 +46,7 @@ export function StarPicker({
   value: number | null;
   /** Called with the stored 1-10 value. Called with the current value when the user picks it again, which the caller treats as "clear". */
   onRate: (value: number) => void;
-  disabled?: boolean;
+  disabled?: boolean | undefined;
   size?: "sm" | "md";
   /** Names what is being rated in the accessible label, e.g. "Season 3". */
   subject?: string;

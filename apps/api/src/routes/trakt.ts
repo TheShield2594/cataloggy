@@ -267,7 +267,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
 
       await prisma.item.upsert({
         where: { type_imdbId: { type: ItemType.movie, imdbId } },
-        create: { type: ItemType.movie, imdbId, title: title || undefined },
+        create: { type: ItemType.movie, imdbId, ...(title ? { title } : {}) },
         update: title ? { title } : {},
       });
 
@@ -286,7 +286,7 @@ const traktRoutes: FastifyPluginAsync = async (app) => {
 
       await prisma.item.upsert({
         where: { type_imdbId: { type: ItemType.series, imdbId } },
-        create: { type: ItemType.series, imdbId, title: title || undefined },
+        create: { type: ItemType.series, imdbId, ...(title ? { title } : {}) },
         update: title ? { title } : {},
       });
 

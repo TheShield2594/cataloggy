@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { BarChart3, CalendarDays, Compass, Film, Gamepad2, History, Library, List, Search, Settings, Tv } from "lucide-react";
-import { api, SearchResult } from "../api";
+import { api, type SearchResult } from "../api";
 import { Poster } from "./Poster";
 import { DetailPanel, useDetailPanel } from "./MediaDetailPanel";
 import { useEscapeKey } from "../hooks/useEscapeKey";
@@ -98,8 +98,10 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           const merged: SearchResult[] = [];
           const maxLen = Math.max(movies.length, series.length);
           for (let i = 0; i < maxLen && merged.length < 8; i++) {
-            if (i < movies.length) merged.push(movies[i]);
-            if (i < series.length) merged.push(series[i]);
+            const movie = movies[i];
+            const show = series[i];
+            if (movie) merged.push(movie);
+            if (show) merged.push(show);
           }
           setResults(merged.slice(0, 8));
         } catch (err) {

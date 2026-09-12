@@ -1,5 +1,5 @@
 import { Check, Heart, Undo2, X } from "lucide-react";
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 export type ToastAction = { label: string; onAction: () => void };
 
@@ -7,13 +7,13 @@ export type Toast = {
   id: number;
   message: string;
   type: "success" | "error" | "info";
-  action?: ToastAction;
+  action?: ToastAction | undefined;
   // Set the moment a toast is dismissed, so it can play its exit animation
   // before the state update that actually removes it from the DOM.
   exiting?: boolean;
 };
 
-export type ShowToastOptions = { action?: ToastAction; duration?: number };
+export type ShowToastOptions = { action?: ToastAction | undefined; duration?: number | undefined };
 
 export type ShowToast = (message: string, type?: Toast["type"], options?: ShowToastOptions) => void;
 

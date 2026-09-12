@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { runtimeConfig } from "../../api";
 import { useTransientFlag } from "../../hooks/useTransientFlag";
 import { Eye, EyeOff, Check } from "lucide-react";

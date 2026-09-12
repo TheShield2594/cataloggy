@@ -74,11 +74,14 @@ const importRoutes: FastifyPluginAsync = async (app) => {
     }
     if (!csv.trim()) return reply.code(400).send({ error: "csv is required" });
 
-    const rows = parseCsv(csv);
-    if (rows.length < 2) return reply.code(400).send({ error: "No data rows found in CSV" });
+    const [headerRow, ...bodyRows] = parseCsv(csv);
+    // A header and at least one row after it — the old `rows.length < 2`.
+    if (!headerRow || bodyRows.length === 0) {
+      return reply.code(400).send({ error: "No data rows found in CSV" });
+    }
 
-    const header = rows[0].map((h) => h.trim().toLowerCase());
-    const dataRows = rows.slice(1).filter((r) => r.length > 0 && !r.every((c) => c.trim() === ""));
+    const header = headerRow.map((h) => h.trim().toLowerCase());
+    const dataRows = bodyRows.filter((r) => r.length > 0 && !r.every((c) => c.trim() === ""));
     // Bounded on top of MAX_BODY_SIZE_MB: row count, not payload size, is what
     // a single request's work scales with — and for Letterboxd that work
     // includes a TMDB search per unique title.
@@ -244,8 +247,7 @@ async function importLetterboxd(
   const watchInputs: WatchEventInput[] = [];
   const ratingInputs: RatingInput[] = [];
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
+  for (const [i, row] of rows.entries()) {
     const title = row[nameCol]?.trim();
     if (!title) {
       summary.skipped += 1;

@@ -29,7 +29,8 @@ import type { SectionHealth } from "./settings/health";
  * neither is a list's identity either. What's left is five that can't be
  * mistaken for anything.
  */
-export const LIST_TINTS = [
+// Non-empty by type, so the modulo below has something to fall back to.
+export const LIST_TINTS: [string, ...string[]] = [
   "var(--tint-purple)",
   "var(--tint-pink)",
   "var(--tint-indigo)",
@@ -56,7 +57,7 @@ export function listTint(list: CatalogList): string {
   if (list.kind === "collection") return "var(--tint-blue)";
   let hash = 0;
   for (let i = 0; i < list.id.length; i++) hash = (hash * 31 + list.id.charCodeAt(i)) | 0;
-  return LIST_TINTS[Math.abs(hash) % LIST_TINTS.length];
+  return LIST_TINTS[Math.abs(hash) % LIST_TINTS.length] ?? LIST_TINTS[0];
 }
 
 /**

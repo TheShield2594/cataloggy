@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { first } from "./test-fixtures/present.js";
 
 const prismaMock = {
   kV: { upsert: vi.fn(), deleteMany: vi.fn(), findMany: vi.fn() },
@@ -6,7 +7,7 @@ const prismaMock = {
 
 vi.mock("./prisma.js", () => ({ prisma: prismaMock }));
 
-const storedValue = () => JSON.parse(prismaMock.kV.upsert.mock.calls[0][0].create.value);
+const storedValue = () => JSON.parse(first(prismaMock.kV.upsert.mock.calls, "prismaMock.kV.upsert call")[0].create.value);
 
 describe("job-status", () => {
   beforeEach(() => {

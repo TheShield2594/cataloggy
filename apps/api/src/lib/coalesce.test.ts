@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearCoalescedForTests, coalesce, inFlightCountForTests } from "./coalesce.js";
+import { at } from "./test-fixtures/present.js";
 
 afterEach(() => clearCoalescedForTests());
 
@@ -62,9 +63,10 @@ describe("coalesce", () => {
     expect(failing).toHaveBeenCalledTimes(1);
     expect(results.every((r) => r.status === "rejected")).toBe(true);
 
-    const [first, second] = results as PromiseRejectedResult[];
-    expect(first.reason).toBeInstanceOf(Error);
+    const rejections = results as PromiseRejectedResult[];
+    const firstReason = at(rejections, 0, "settled result").reason;
+    expect(firstReason).toBeInstanceOf(Error);
     // The same Error object, not merely an equal one — proof they shared a run.
-    expect(first.reason).toBe(second.reason);
+    expect(firstReason).toBe(at(rejections, 1, "settled result").reason);
   });
 });

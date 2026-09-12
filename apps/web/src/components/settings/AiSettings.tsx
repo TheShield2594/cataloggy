@@ -15,13 +15,17 @@ type Provider =
   | "openrouter"
   | "custom";
 
-const PROVIDERS: {
+type ProviderSpec = {
   id: Provider;
   label: string;
   url: string;
   model: string;
   helpUrl: string;
-}[] = [
+};
+
+// Non-empty by type, because the first entry is the form's initial state and
+// what "Remove" resets it to.
+const PROVIDERS: [ProviderSpec, ...ProviderSpec[]] = [
   {
     id: "openai",
     label: "OpenAI",

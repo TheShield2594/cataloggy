@@ -35,14 +35,18 @@ import { isIP } from "node:net";
 const normalizeHostname = (hostname: string): string => {
   const host = hostname.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
 
-  const dotted = host.match(/^::ffff:(?:0:)?(\d{1,3}(?:\.\d{1,3}){3})$/);
-  if (dotted) return dotted[1];
+  const dotted = host.match(/^::ffff:(?:0:)?(\d{1,3}(?:\.\d{1,3}){3})$/)?.[1];
+  if (dotted !== undefined) return dotted;
 
   const mapped = host.match(/^::ffff:(?:0:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-  if (!mapped) return host;
+  // Both halves are required by the pattern. Falling back to the hostname
+  // unchanged is the same answer a non-match gets, which is the safe direction:
+  // an address this cannot canonicalize is checked as it was written.
+  const [, highRaw, lowRaw] = mapped ?? [];
+  if (highRaw === undefined || lowRaw === undefined) return host;
 
-  const high = Number.parseInt(mapped[1], 16);
-  const low = Number.parseInt(mapped[2], 16);
+  const high = Number.parseInt(highRaw, 16);
+  const low = Number.parseInt(lowRaw, 16);
   return [high >> 8, high & 0xff, low >> 8, low & 0xff].join(".");
 };
 

@@ -1,6 +1,7 @@
 import { MetadataType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
+import { invalidateKv } from "../lib/kv.js";
 import { getTmdb } from "../lib/tmdb-client.js";
 import { upsertMetadata } from "../lib/metadata.js";
 import { getRpdbApiKey, applyRpdbToMetaList } from "../lib/rpdb.js";
@@ -400,6 +401,8 @@ const aiRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete("/ai/config", async () => {
     await prisma.kV.deleteMany({ where: { key: { in: [AI_CONFIG_KEY, AI_LAST_RECS_GENERATED_AT_KEY] } } });
+    // AI_CONFIG_KEY is read through the KV cache; the watermark beside it is not.
+    invalidateKv(AI_CONFIG_KEY);
     trendingCacheDeletePrefix("ai-recs:");
     return { configured: false };
   });

@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { Check, Eye, EyeOff, Loader2, AlertCircle, ArrowLeft, ArrowRight } from "lucide-react";
 import { api, ApiError, runtimeConfig } from "../api";
 import { BrandLockup } from "../components/BrandMark";
@@ -13,7 +13,7 @@ export const WIZARD_STEPS: Step[] = ["token", "tmdb", "trakt", "done"];
 /** The step to return to from `step`, or null if it is the entry point. */
 export function previousStep(step: Step): Step | null {
   const index = WIZARD_STEPS.indexOf(step);
-  return index > 0 ? WIZARD_STEPS[index - 1] : null;
+  return index > 0 ? (WIZARD_STEPS[index - 1] ?? null) : null;
 }
 
 function BackButton({ onBack }: { onBack: () => void }) {

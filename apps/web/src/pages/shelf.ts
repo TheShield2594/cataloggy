@@ -1,4 +1,4 @@
-import { CheckIn, Game, ListItemWithMeta, SearchResult, SeriesProgress } from "../api";
+import type { CheckIn, Game, ListItemWithMeta, SearchResult, SeriesProgress } from "../api";
 import { formatPlaytime } from "../utils/playtime";
 
 /*

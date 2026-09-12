@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 /* ─── Poster fallback helpers ─── */
 
-export const FALLBACK_GRADIENTS = [
+// Typed as non-empty so `FALLBACK_GRADIENTS[0]` — the answer for a title with
+// no name to hash — is a gradient rather than a maybe.
+export const FALLBACK_GRADIENTS: [string, ...string[]] = [
   "from-rose-900 to-slate-900",
   "from-violet-900 to-slate-900",
   "from-blue-900 to-slate-900",
@@ -28,7 +30,7 @@ export function getGradient(name: string | null | undefined): string {
   if (!name) return FALLBACK_GRADIENTS[0];
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
-  return FALLBACK_GRADIENTS[Math.abs(hash) % FALLBACK_GRADIENTS.length];
+  return FALLBACK_GRADIENTS[Math.abs(hash) % FALLBACK_GRADIENTS.length] ?? FALLBACK_GRADIENTS[0];
 }
 
 /* ─── Horizontal scroll hook ─── */

@@ -482,12 +482,12 @@ export class TraktClient {
     options: {
       method: "GET" | "POST";
       headers: Record<string, string>;
-      body?: string;
-      queryParams?: Record<string, string>;
-      page?: number;
-      perPage?: number;
+      body?: string | undefined;
+      queryParams?: Record<string, string> | undefined;
+      page?: number | undefined;
+      perPage?: number | undefined;
       logger: FastifyBaseLogger;
-      allowRefresh?: boolean;
+      allowRefresh?: boolean | undefined;
     }
   ): Promise<Response> {
     const url = new URL(path, TRAKT_API_BASE);
@@ -515,7 +515,9 @@ export class TraktClient {
       {
         method: options.method,
         headers: { "User-Agent": "Cataloggy/1.0", ...options.headers },
-        body: options.body,
+        // A GET carries no body, and `RequestInit.body` spells that as a
+        // missing key rather than an undefined value.
+        ...(options.body !== undefined ? { body: options.body } : {}),
       },
       { timeoutMs: REQUEST_TIMEOUT_MS, concurrency: 4 }
     );

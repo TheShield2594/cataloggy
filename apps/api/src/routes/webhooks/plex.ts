@@ -86,15 +86,15 @@ const plexWebhookRoutes: FastifyPluginAsync = async (app) => {
 
     let imdbId: string | null = null;
     for (const guid of metadata.Guid ?? []) {
-      const match = guid.id?.match(/imdb:\/\/(tt\d+)/);
+      const match = guid.id?.match(/imdb:\/\/(tt\d+)/)?.[1];
       if (match) {
-        imdbId = match[1];
+        imdbId = match;
         break;
       }
     }
     if (!imdbId && metadata.guid) {
-      const match = metadata.guid.match(/imdb:\/\/(tt\d+)/);
-      if (match) imdbId = match[1];
+      const match = metadata.guid.match(/imdb:\/\/(tt\d+)/)?.[1];
+      if (match) imdbId = match;
     }
 
     if (!imdbId) {

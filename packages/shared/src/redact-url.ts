@@ -69,9 +69,13 @@ export const redactUrl = (url: string): string => {
 type LoggableRequest = {
   method: string;
   url: string;
-  host?: string;
-  ip?: string;
-  socket?: { remotePort?: number };
+  // `?: T | undefined`, not `?: T`: Fastify types these as present-and-possibly
+  // -undefined, and under `exactOptionalPropertyTypes` the bare `?:` made the
+  // claim above — that a `FastifyRequest` satisfies this — untrue, which showed
+  // up as `fastify()` silently picking its HTTP/2 overload instead.
+  host?: string | undefined;
+  ip?: string | undefined;
+  socket?: { remotePort?: number | undefined } | undefined;
 };
 
 /**
@@ -79,10 +83,19 @@ type LoggableRequest = {
  * {@link redactUrl}. Every other field is reproduced as Fastify emits it, so
  * the shape of an access log line is unchanged.
  */
-export const redactedRequestSerializer = (request: LoggableRequest) => ({
-  method: request.method,
-  url: redactUrl(request.url),
-  host: request.host,
-  remoteAddress: request.ip,
-  remotePort: request.socket?.remotePort,
-});
+export const redactedRequestSerializer = (request: LoggableRequest) => {
+  const remotePort = request.socket?.remotePort;
+  return {
+    method: request.method,
+    url: redactUrl(request.url),
+    // The three optional fields are omitted rather than set to `undefined`.
+    // The log line is identical either way — JSON drops an undefined value —
+    // but Fastify's serializer return type spells them `?: string`, which under
+    // `exactOptionalPropertyTypes` means "the key may be missing", not "the
+    // value may be undefined". Setting them made `fastify()` fall through to
+    // its HTTP/2 overload, and every route registration after it fail.
+    ...(request.host !== undefined ? { host: request.host } : {}),
+    ...(request.ip !== undefined ? { remoteAddress: request.ip } : {}),
+    ...(remotePort !== undefined ? { remotePort } : {}),
+  };
+};

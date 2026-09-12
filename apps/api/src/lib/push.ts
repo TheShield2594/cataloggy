@@ -1,6 +1,7 @@
 import webpush from "web-push";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
+import { invalidateKv, readKv } from "./kv.js";
 import { decryptSecret, encryptSecret, kvSecretContext } from "./secret-box.js";
 import { readSecretKv } from "./secret-store.js";
 
@@ -25,9 +26,12 @@ const UNREADABLE_VAPID =
 // Both halves are stored as a single JSON row so concurrent first calls
 // can't interleave and end up with a mismatched public/private pair.
 const getOrCreateVapidKeys = async (): Promise<{ publicKey: string; privateKey: string }> => {
-  const row = await prisma.kV.findUnique({ where: { key: VAPID_KEYS_KV } });
-  if (row?.value) {
-    const stored = decryptSecret(kvSecretContext(VAPID_KEYS_KV), row.value);
+  // Read through `readKv` rather than `readSecretKv`: this is the one caller
+  // that has to tell "no row yet" (generate a keypair) from "a row that will
+  // not decrypt" (refuse), and the decrypting reader collapses both to null.
+  const stored0 = await readKv(VAPID_KEYS_KV);
+  if (stored0) {
+    const stored = decryptSecret(kvSecretContext(VAPID_KEYS_KV), stored0);
     if (stored === null) throw new Error(UNREADABLE_VAPID);
     return JSON.parse(stored);
   }
@@ -41,10 +45,14 @@ const getOrCreateVapidKeys = async (): Promise<{ publicKey: string; privateKey: 
         updatedAt: new Date(),
       },
     });
+    // The "no row" answer from a moment ago is cached; drop it, or the next
+    // reader regenerates a second keypair over the top of this one.
+    invalidateKv(VAPID_KEYS_KV);
     return generated;
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       // Another concurrent call already created the row; use that one.
+      invalidateKv(VAPID_KEYS_KV);
       const existing = await readSecretKv(VAPID_KEYS_KV);
       if (existing) return JSON.parse(existing);
     }
@@ -64,7 +72,8 @@ export const getPushPublicKey = async (): Promise<string> => {
 export type PushPayload = {
   title: string;
   body: string;
-  url?: string;
+  /** The path to open. Absent and undefined both mean "no deep link". */
+  url?: string | undefined;
 };
 
 export const sendPushToAllSubscriptions = async (
