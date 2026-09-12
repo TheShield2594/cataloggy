@@ -393,13 +393,16 @@ Those two formats are capped at 10,000 rows; the id-carrying formats allow
 ### Webhooks
 
 No bearer token. Authenticated by `WEBHOOK_SECRET`, in a header where the
-sender supports one and in a query parameter where it doesn't (Plex). Secrets
-in query parameters are redacted from the logs.
+sender supports one and in a query parameter where it doesn't (Plex). Prefer
+the header: Cataloggy redacts `token` from its own application logs
+(`?token=REDACTED`), but a reverse proxy or any other hop in front of it keeps
+its own access log, and that copy still carries the query string.
 
 | Method | Path |
 | --- | --- |
 | `POST` | `/webhooks/plex` |
 | `POST` | `/webhooks/jellyfin` |
+| `POST` | `/webhooks/emby` |
 
 Set `WEBHOOK_ALLOWED_IPS` to also restrict them by source address. See the
 [webhook secret placement](../README.md#webhook-secret-placement) section of the
