@@ -306,8 +306,9 @@ const mediaTypeFor = (type: WatchlistRequestItem["type"]): "movie" | "tv" => (ty
 
 /**
  * Mirrors a watchlist change to Jellyseerr. Best-effort in the strong sense:
- * it never throws, and a failure is recorded against the `jellyseerr-request`
- * job so Settings → Sync Status can show it.
+ * it never throws — including from the config read, so a caller may leave the
+ * promise unawaited — and a failure is recorded against the
+ * `jellyseerr-request` job so Settings → Sync Status can show it.
  *
  * Returns what it did, which is what the tests assert on and what the log line
  * says; callers have no decision to make from it.
@@ -317,11 +318,11 @@ export const pushWatchlistRequest = async (
   item: WatchlistRequestItem,
   logger: FastifyBaseLogger
 ): Promise<"skipped" | "requested" | "already-requested" | "cancelled" | "not-found" | "failed"> => {
-  const config = await getJellyseerrConfig();
-  if (!config?.url || !config.apiKey) return "skipped";
-  if (action === "add" ? !config.requestOnAdd : !config.cancelOnRemove) return "skipped";
-
   try {
+    const config = await getJellyseerrConfig();
+    if (!config?.url || !config.apiKey) return "skipped";
+    if (action === "add" ? !config.requestOnAdd : !config.cancelOnRemove) return "skipped";
+
     const tmdbId = await resolveTmdbId(item);
     if (tmdbId === null) {
       // Not a failure of the integration: TMDB has no entry against this IMDb

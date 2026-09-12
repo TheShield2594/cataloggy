@@ -180,6 +180,15 @@ describe("jellyseerr", () => {
       expect(recordJobFailure).toHaveBeenCalled();
     });
 
+    it("survives the stored config being unreadable, so a caller can leave it unawaited", async () => {
+      // The list routes call this without awaiting it — a rejection here would
+      // be an unhandled one rather than a failed add.
+      readSecretKv.mockRejectedValue(new Error("API_TOKEN changed; cannot decrypt"));
+
+      expect(await pushWatchlistRequest("add", { type: "movie", imdbId: "tt0133093" }, logger)).toBe("failed");
+      expect(recordJobFailure).toHaveBeenCalled();
+    });
+
     it("refuses a stored URL that now resolves to a blocked address", async () => {
       resolveNotificationUrl.mockResolvedValue(null);
 

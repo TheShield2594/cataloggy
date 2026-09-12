@@ -361,8 +361,9 @@ What it does, and deliberately does not do:
   what a watchlist add means, and it is the only list membership that says
   anything about acquiring a title. (Same scoping the Trakt watchlist mirror
   uses.)
-- **A failure never fails the add.** The title goes on your watchlist either
-  way; a failed request shows up under **Settings → Sync Status**, alongside the
+- **A failure never fails the add, or delays it.** The request is filed in the
+  background of an add that has already succeeded, so a Jellyseerr that is off
+  costs nothing but a line under **Settings → Sync Status**, alongside the
   scheduled jobs. Re-adding something already requested is not a failure —
   Jellyseerr says it already has it, and that is treated as success.
 - **Series are requested whole.** Picking seasons is a decision this has no way

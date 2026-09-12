@@ -379,8 +379,9 @@ the web UI lives.
 
 The one integration that writes outward: a watchlist add can become a request on
 a Jellyseerr (or Overseerr) server. Off unless configured, scoped to the default
-watchlist only, and never able to fail a list write — a failed push is recorded
-against the `jellyseerr-request` job and shows up in `/settings/job-status`.
+watchlist only, and never able to fail or delay a list write: the push runs in
+the background of a request that has already answered, and a failure is recorded
+against the `jellyseerr-request` job, where `/settings/job-status` shows it.
 The URL is held to the notification-channel rules (http(s) only, never the
 cloud-metadata/link-local range, checked by DNS as well as by name, re-resolved
 before every request, redirects refused), since a LAN address is the expected

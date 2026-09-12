@@ -226,8 +226,13 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
           // Scoped to the watchlist for the same reason the Trakt mirror is:
           // "I want to watch this" is what a watchlist add means, and it is the
           // only list membership that says anything about acquiring a title.
-          // Never throws — see lib/jellyseerr.ts.
-          await pushWatchlistRequest("add", { type, imdbId }, request.log);
+          //
+          // Not awaited, unlike the Trakt push above: this one talks to a
+          // service on the user's own network that may be off, and waiting out
+          // its timeout would hold the add button spinning for ten seconds over
+          // something the add does not depend on. It never throws and records
+          // its own failures — see lib/jellyseerr.ts.
+          void pushWatchlistRequest("add", { type, imdbId }, request.log);
         }
 
         return reply.code(201).send({ listItem });
@@ -270,7 +275,7 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
       if (list.kind === ListKind.watchlist) {
         const item = { type: type as ListItemType, imdbId: request.params.imdbId };
         await pushTraktWatchlistChange("remove", item, request.log);
-        await pushWatchlistRequest("remove", item, request.log);
+        void pushWatchlistRequest("remove", item, request.log);
       }
 
       return reply.code(204).send();
@@ -316,7 +321,7 @@ const listsRoutes: FastifyPluginAsync = async (app) => {
       if (list.kind === ListKind.watchlist) {
         const item = { type: where.type!, imdbId: request.params.imdbId };
         await pushTraktWatchlistChange("remove", item, request.log);
-        await pushWatchlistRequest("remove", item, request.log);
+        void pushWatchlistRequest("remove", item, request.log);
       }
 
       return reply.code(204).send();
