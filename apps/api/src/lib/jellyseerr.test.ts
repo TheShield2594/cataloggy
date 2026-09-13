@@ -52,7 +52,10 @@ const json = (body: unknown, status = 200) =>
 /** The (url, init) of the nth call through the policy wrapper. */
 const callArgs = (index: number) => {
   const call = fetchWithPolicy.mock.calls[index];
-  return { url: call?.[0] as string, init: (call?.[1] ?? {}) as RequestInit };
+  // The target is the `URL` the SSRF check returned, not the string it was
+  // built from — the request has to be made against the value that was
+  // actually checked.
+  return { url: String(call?.[0]), init: (call?.[1] ?? {}) as RequestInit };
 };
 
 describe("jellyseerr", () => {
@@ -130,6 +133,18 @@ describe("jellyseerr", () => {
       await pushWatchlistRequest("add", { type: "movie", imdbId: "tt0133093" }, logger);
 
       expect(callArgs(0).url).toBe("http://jellyseerr.lan:5055/api/v1/request");
+    });
+
+    it("requests the URL the SSRF check approved, not a second parse of the string", async () => {
+      // Two parsers disagreeing about where a URL points is the shape of the
+      // bypass the check exists to prevent, so the checked value is the one
+      // that gets requested.
+      const approved = new URL("http://jellyseerr.lan:5055/api/v1/request");
+      resolveNotificationUrl.mockResolvedValue(approved);
+
+      await pushWatchlistRequest("add", { type: "movie", imdbId: "tt0133093" }, logger);
+
+      expect(fetchWithPolicy.mock.calls[0]?.[0]).toBe(approved);
     });
 
     it("falls back to TMDB when the metadata row has no TMDB id yet", async () => {

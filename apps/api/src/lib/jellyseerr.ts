@@ -141,19 +141,23 @@ const call = async <T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> => {
-  const url = apiUrl(config.url, path);
-
   // Resolved per request rather than trusting the save-time check: the config
   // may have been stored months ago, and the name could point somewhere else
   // now.
-  if (!(await resolveNotificationUrl(url))) {
+  //
+  // What comes back is what gets requested. Handing `fetch` the string instead
+  // would parse it a second time, and a request is only as safe as the value
+  // that was actually checked — two parsers disagreeing about where a URL
+  // points is the shape of the bypass this whole path exists to prevent.
+  const target = await resolveNotificationUrl(apiUrl(config.url, path));
+  if (!target) {
     throw new JellyseerrError("blocked", `Jellyseerr URL resolves to an address that is not an allowed outbound target`);
   }
 
   let response: Response;
   try {
     response = await fetchWithPolicy(
-      url,
+      target,
       {
         ...init,
         headers: {
