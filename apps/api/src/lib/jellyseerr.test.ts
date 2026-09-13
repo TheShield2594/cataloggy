@@ -175,6 +175,16 @@ describe("jellyseerr", () => {
       expect(recordJobFailure).not.toHaveBeenCalled();
     });
 
+    it("does not read a socket error mentioning HTTP 409 as an already-requested title", async () => {
+      // The already-requested case is the upstream status, not text: a peer is
+      // free to put anything in the error a failed connection carries, and
+      // reading it as success would hide a real failure from Sync Status.
+      fetchWithPolicy.mockRejectedValue(new Error("connect ECONNREFUSED via proxy (HTTP 409 upstream)"));
+
+      expect(await pushWatchlistRequest("add", { type: "movie", imdbId: "tt0133093" }, logger)).toBe("failed");
+      expect(recordJobFailure).toHaveBeenCalled();
+    });
+
     it("does nothing when Jellyseerr isn't configured", async () => {
       readSecretKv.mockResolvedValue(null);
 

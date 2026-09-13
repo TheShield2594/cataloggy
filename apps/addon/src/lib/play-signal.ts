@@ -34,22 +34,30 @@ export const forwardPlaySignal = (
   const [imdbId, seasonPart, episodePart] = id.split(":");
   if (!imdbId?.startsWith("tt")) return;
 
-  // Absent reads as NaN, which `isEpisode` below already rejects — so a bare
-  // series id and a malformed one take the same path they always did.
-  const season = seasonPart === undefined ? NaN : Number.parseInt(seasonPart, 10);
-  const episode = episodePart === undefined ? NaN : Number.parseInt(episodePart, 10);
-  const isEpisode = type === "series" && Number.isInteger(season) && Number.isInteger(episode);
+  // The whole token has to be a number. `Number.parseInt` takes a numeric
+  // prefix, so `tt0903747:1junk:2junk` used to read as S1E2 and file a signal
+  // against an episode nobody opened. Zero is allowed on purpose: Stremio
+  // numbers a show's specials as season 0.
+  const partAsNumber = (value: string | undefined): number | null =>
+    value !== undefined && /^\d{1,9}$/.test(value) ? Number(value) : null;
+
+  const season = partAsNumber(seasonPart);
+  const episode = partAsNumber(episodePart);
+  const episodeRef =
+    type === "series" && season !== null && episode !== null
+      ? { seriesImdbId: imdbId, season, episode }
+      : null;
 
   // A bare series id means the user opened the show, not an episode — there is
-  // nothing specific enough to record.
-  if (type === "series" && !isEpisode) return;
+  // nothing specific enough to record. A half-parsed one says even less.
+  if (type === "series" && !episodeRef) return;
 
   void apiPost(
     "/stremio/play-signal",
     {
-      type: isEpisode ? "episode" : "movie",
+      type: episodeRef ? "episode" : "movie",
       imdbId,
-      ...(isEpisode ? { seriesImdbId: imdbId, season, episode } : {}),
+      ...(episodeRef ?? {}),
       resource,
       // The player's own user-agent. Without forwarding it the API would only
       // ever see this service's fetch agent, which says nothing about which app

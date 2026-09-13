@@ -58,7 +58,9 @@ describe("JellyseerrSettings", () => {
     await userEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() => expect(saveJellyseerrConfig).toHaveBeenCalled());
-    expect(saveJellyseerrConfig.mock.calls[0]?.[0]).toEqual({
+    // Strict: `toEqual` counts a present-but-undefined `apiKey` as absent,
+    // which is the one thing this test is here to rule out.
+    expect(saveJellyseerrConfig.mock.calls[0]?.[0]).toStrictEqual({
       url: CONFIG.url,
       requestOnAdd: true,
       cancelOnRemove: true,
@@ -100,8 +102,12 @@ describe("JellyseerrSettings", () => {
   });
 
   it("offers disconnecting only once something is configured", async () => {
-    await renderLoaded();
+    // Unmounted before the second render: `screen` queries every mounted
+    // container, so two live instances would make any shared element ambiguous.
+    const unconfigured = render(<JellyseerrSettings />);
+    await screen.findByLabelText(/server url/i);
     expect(screen.queryByRole("button", { name: /disconnect/i })).not.toBeInTheDocument();
+    unconfigured.unmount();
 
     getJellyseerrConfig.mockResolvedValue({ configured: true, config: CONFIG });
     render(<JellyseerrSettings />);

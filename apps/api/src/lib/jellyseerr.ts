@@ -72,11 +72,23 @@ export const publicJellyseerrConfig = (config: JellyseerrConfig): PublicJellysee
 export class JellyseerrError extends Error {
   readonly outcome: OutboundFailure;
   readonly publicMessage: string;
+  /**
+   * The status Jellyseerr answered with, or null when nothing answered.
+   * Carried so a caller can branch on it — 409 means "already requested" —
+   * rather than reading it back out of the message, which also carries socket
+   * error text a peer is free to put anything in.
+   */
+  readonly status: number | null;
 
-  constructor(outcome: OutboundFailure, message: string, options: { cause?: unknown; publicMessage?: string } = {}) {
+  constructor(
+    outcome: OutboundFailure,
+    message: string,
+    options: { cause?: unknown; publicMessage?: string; status?: number } = {}
+  ) {
     super(message, { cause: options.cause });
     this.name = "JellyseerrError";
     this.outcome = outcome;
+    this.status = options.status ?? null;
     this.publicMessage = options.publicMessage ?? OUTBOUND_FAILURE_MESSAGE[outcome];
   }
 }
@@ -181,6 +193,7 @@ const call = async <T>(
 
   if (response.status === 401 || response.status === 403) {
     throw new JellyseerrError("rejected", `Jellyseerr rejected the API key (HTTP ${response.status})`, {
+      status: response.status,
       // Safe to name: it describes this install's own configuration rather
       // than anything learned from the target.
       publicMessage: "Jellyseerr rejected that API key.",
@@ -188,7 +201,9 @@ const call = async <T>(
   }
 
   if (!response.ok) {
-    throw new JellyseerrError("rejected", `Jellyseerr answered HTTP ${response.status} for ${path}`);
+    throw new JellyseerrError("rejected", `Jellyseerr answered HTTP ${response.status} for ${path}`, {
+      status: response.status,
+    });
   }
 
   if (response.status === 204) return undefined as T;
@@ -316,7 +331,7 @@ const createRequest = async (
     });
     return "requested";
   } catch (error) {
-    if (error instanceof JellyseerrError && /HTTP 409/.test(error.message)) return "already-requested";
+    if (error instanceof JellyseerrError && error.status === 409) return "already-requested";
     throw error;
   }
 };
