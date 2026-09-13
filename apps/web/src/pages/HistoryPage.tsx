@@ -10,6 +10,7 @@ import { relogWatchEvent, watchEventLabel, watchEventTitle } from "../utils/watc
 import { PAGE_TITLE, KICKER } from "../components/typography";
 import { PAGE_SIZE } from "./history-paging";
 import { SectionError } from "../components/SectionError";
+import { Poster } from "../components/Poster";
 
 type TypeFilter = "all" | "movie" | "episode";
 
@@ -407,7 +408,11 @@ export function HistoryPage() {
                     style={{ background: "var(--surface-strong)" }}
                   >
                     {event.poster ? (
-                      <img src={event.poster} alt={watchEventTitle(event)} className="h-full w-full object-cover" loading="lazy" />
+                      // `Poster`, not a bare `<img>`: it brings the srcset (a
+                      // 40px slot was pulling a w500 poster), the shimmer while
+                      // the bytes are in flight, and the initials fallback when
+                      // the image 404s — which a raw tag renders as a hole.
+                      <Poster src={event.poster} alt={watchEventTitle(event)} className="h-full w-full" sizes="40px" />
                     ) : event.type === "movie" ? (
                       <Film className="h-5 w-5" style={{ color: "var(--text-mute)" }} />
                     ) : (

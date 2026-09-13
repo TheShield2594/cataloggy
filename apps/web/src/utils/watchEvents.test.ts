@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WatchEvent } from "../api";
-import { watchEventLabel, watchEventTitle } from "./watchEvents";
+import { historyItemImdbId, watchEventLabel, watchEventTitle } from "./watchEvents";
 
 // `WatchEvent.name` comes from the metadata row rather than from the event, so
 // it is null for anything nothing has been fetched for yet — a Trakt import
@@ -57,5 +57,25 @@ describe("watchEventLabel", () => {
 
   it("stays readable when the metadata row is missing", () => {
     expect(watchEventLabel(event({ name: null, season: 5, episode: 14 }))).toBe("this watch S5E14");
+  });
+});
+
+describe("historyItemImdbId", () => {
+  it("opens an episode row on its series, not on the episode", () => {
+    expect(
+      historyItemImdbId({ type: "episode", imdbId: "tt2301451", seriesImdbId: "tt0903747" })
+    ).toBe("tt0903747");
+  });
+
+  it("falls back to the row's own id when an episode carries no series id", () => {
+    expect(historyItemImdbId({ type: "episode", imdbId: "tt2301451" })).toBe("tt2301451");
+  });
+
+  it("leaves a movie row alone", () => {
+    // A movie has no series to redirect to, and a stray `seriesImdbId` on one
+    // must not hijack it.
+    expect(
+      historyItemImdbId({ type: "movie", imdbId: "tt0110912", seriesImdbId: "tt0903747" })
+    ).toBe("tt0110912");
   });
 });

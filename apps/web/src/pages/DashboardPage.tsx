@@ -1,17 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import {
-  AlertCircle,
-  Film,
-  Tv,
-  ChevronRight,
-  Check,
-  TrendingUp,
-  Sparkles,
-  X,
-  Flame,
-  Trophy,
-  Clock,
-} from "lucide-react";
+import { AlertCircle, Film, Tv, TrendingUp, Clock } from "lucide-react";
 import {
   api,
   type CalendarEntry,
@@ -29,607 +17,27 @@ import { Link } from "react-router";
 import { CarouselTrack } from "../components/CarouselTrack";
 import { useHorizontalScroll } from "../components/carousel-utils";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
-import { Poster, POSTER_CARD_SIZES, POSTER_CARD_FILL_SIZES } from "../components/Poster";
 import { useToast } from "../hooks/useToast";
-import { watchEventTitle } from "../utils/watchEvents";
-import { timeAgo, timeUntil } from "../utils/timeAgo";
-import { formatRating, ratingLabel } from "../utils/rating";
+import { historyItemImdbId, watchEventTitle } from "../utils/watchEvents";
+import { timeUntil } from "../utils/timeAgo";
 import { useCachedState } from "../hooks/useCachedState";
-import { useClockBoundary } from "../hooks/useClockBoundary";
-import { PAGE_TITLE, KICKER, MICRO_LABEL } from "../components/typography";
-import { localDateFromIsoDate } from "../utils/calendarDate";
 import { ScrollArrows } from "../components/ScrollArrows";
 import { SectionHeader } from "../components/SectionHeader";
 import { SectionError } from "../components/SectionError";
-import { PosterCard } from "../components/PosterCard";
 import { useDashboardSection } from "../hooks/useDashboardSection";
+import { CarouselSkeleton } from "../components/dashboard/CarouselSkeleton";
+import { ContinueWatchingCard } from "../components/dashboard/ContinueWatchingCard";
+import { ContinueWatchingHero } from "../components/dashboard/ContinueWatchingHero";
+import { DashboardHeader, PageHeading } from "../components/dashboard/DashboardHeader";
+import { DiscoverSubRow } from "../components/dashboard/DiscoverSubRow";
+import { DiscoveryCard } from "../components/dashboard/DiscoveryCard";
+import { NowPlayingList } from "../components/dashboard/NowPlayingList";
+import { NowWatchingHero } from "../components/dashboard/NowWatchingHero";
+import { RecentlyWatchedCard } from "../components/dashboard/RecentlyWatchedCard";
+import { UpcomingList } from "../components/dashboard/UpcomingList";
 
-/* ─── Skeleton placeholders ─── */
-
-function ContinueWatchingSkeleton() {
-  return (
-    <div className="flex gap-4 overflow-hidden pb-2">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="flex-none">
-          <div className="skeleton aspect-poster w-poster-card rounded-xl" />
-          <div className="skeleton mt-2.5 h-4 w-32 rounded" />
-          <div className="skeleton mt-1.5 h-3 w-20 rounded" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function RecentlyWatchedSkeleton() {
-  return (
-    <div className="flex gap-4 overflow-hidden pb-2">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="flex-none">
-          <div className="skeleton aspect-poster w-poster-card rounded-xl" />
-          <div className="skeleton mt-2.5 h-4 w-28 rounded" />
-          <div className="skeleton mt-1.5 h-3 w-16 rounded" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ─── Discovery Card ─── */
-
-// `?: T | undefined` rather than `?: T`: every caller forwards a value that is
-// already optional, and a missing prop and an undefined one are the same thing
-// to React and to everything below. The distinction the flag exists for is
-// made where it is real — a Prisma `data`, a `fetch` init, a Fastify option.
 /** What `GET /recommendations/ai` answers with. */
 type AiRecommendationsResponse = { metas: TrendingMeta[]; reasons?: Record<string, string> | undefined };
-
-type DiscoveryItem = {
-  id: string;
-  name: string;
-  poster?: string | undefined;
-  rating?: number | undefined;
-  genres?: string[] | undefined;
-  year?: number | undefined;
-  type?: string | undefined;
-  description?: string | undefined;
-};
-
-export function DiscoveryCard({ item, badge, reason, onSelect, eager, fill }: {
-  item: DiscoveryItem;
-  badge?: React.ReactNode | undefined;
-  reason?: string | undefined;
-  onSelect?: ((item: DiscoveryItem) => void) | undefined;
-  eager?: boolean | undefined;
-  /** Fills the width of a grid cell instead of using a fixed carousel-card width. */
-  fill?: boolean | undefined;
-}) {
-  return (
-    <PosterCard
-      poster={item.poster}
-      name={item.name}
-      {...(onSelect ? { onOpen: () => onSelect(item) } : {})}
-      eager={eager}
-      sizes={fill ? POSTER_CARD_FILL_SIZES : POSTER_CARD_SIZES}
-      className={fill ? "w-full" : "w-poster-card flex-none"}
-      overlay={
-        <>
-          {item.rating != null && item.rating > 0 && (
-            // 28px of chip has no room for "/10", so the scale lives in the
-            // accessible name and the tooltip instead of being left implied.
-            <div
-              role="img"
-              aria-label={ratingLabel(item.rating)}
-              title={ratingLabel(item.rating)}
-              className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 backdrop-blur-sm"
-              style={{ boxShadow: "0 0 0 1.5px rgba(245,158,11,0.7)" }}
-            >
-              {/* Fixed amber rather than --status-warn — the badge is on a black
-                  scrim over poster art, not on a theme surface, and the token
-                  goes dark on the light theme. Same pairing as the Stats page's
-                  rating badges. */}
-              <span aria-hidden="true" className="meta font-bold text-[#f5c451]">{formatRating(item.rating)}</span>
-            </div>
-          )}
-          {badge && <div className="absolute top-2 right-2">{badge}</div>}
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/55 to-transparent px-3 pb-2.5 pt-10 opacity-100 transition-opacity duration-base sm:opacity-0 sm:group-hover:opacity-100">
-            <p className="truncate text-xs font-semibold text-white">{item.name}</p>
-          </div>
-        </>
-      }
-    >
-      <p className="mt-2.5 truncate text-sm font-semibold text-[var(--text)] transition-colors group-hover:text-claw-text">
-        {item.name}
-      </p>
-      <p className="meta-row truncate" style={{ color: "var(--text-dim)" }}>
-        {item.year ?? ""}
-        {item.type ? ` · ${item.type === "movie" ? "Movie" : "Series"}` : ""}
-        {item.genres && item.genres.length > 0 ? ` · ${item.genres.slice(0, 2).join(", ")}` : ""}
-      </p>
-      {reason && (
-        <p className="mt-0.5 line-clamp-2 text-2xs italic leading-snug" style={{ color: "var(--text-dim)" }} title={reason}>
-          {reason}
-        </p>
-      )}
-    </PosterCard>
-  );
-}
-
-/* ─── Continue Watching card (used for every item after the hero) ─── */
-
-/**
- * The IMDb id the detail panel should open for a history row.
- *
- * An episode row carries the episode's own id in `imdbId` and its series' in
- * `seriesImdbId`. The panel is about the series — opening it on the episode id
- * looks up a title that isn't there. `HistoryPage` has always made this
- * distinction; the dashboard's Recently Watched carousel did not.
- */
-export function historyItemImdbId(
-  event: Pick<WatchEvent, "type" | "imdbId" | "seriesImdbId">
-): string {
-  return event.type === "episode" ? (event.seriesImdbId ?? event.imdbId) : event.imdbId;
-}
-
-const pctOf = (watched: number, total: number) => Math.min(Math.max((watched / total) * 100, 0), 100);
-
-export function computeProgressPct(s: SeriesProgress): number | null {
-  return typeof s.watchedEpisodes === "number" && s.totalEpisodes && s.totalEpisodes > 0
-    ? pctOf(s.watchedEpisodes, s.totalEpisodes)
-    : null;
-}
-
-export type ProgressSummary = { label: string; watched: number; total: number; pct: number };
-
-/**
- * The bar the featured card draws, and what to call it.
- *
- * The season the viewer is actually in is the useful reading next to the
- * `S1:E5` marker above it, so it wins when TMDB knows how long that season is.
- * Series-wide totals are the fallback, and they're labelled as such — filling a
- * bar called "Season progress" from the series total is what made a show five
- * episodes into season 1 of 3 read `5 / 27 episodes` against a near-empty bar.
- */
-export function computeProgressSummary(s: SeriesProgress): ProgressSummary | null {
-  if (
-    typeof s.seasonWatchedEpisodes === "number" &&
-    typeof s.seasonTotalEpisodes === "number" &&
-    s.seasonTotalEpisodes > 0
-  ) {
-    return {
-      label: "Season progress",
-      watched: s.seasonWatchedEpisodes,
-      total: s.seasonTotalEpisodes,
-      pct: pctOf(s.seasonWatchedEpisodes, s.seasonTotalEpisodes),
-    };
-  }
-  if (typeof s.watchedEpisodes === "number" && s.totalEpisodes && s.totalEpisodes > 0) {
-    return {
-      label: "Series progress",
-      watched: s.watchedEpisodes,
-      total: s.totalEpisodes,
-      pct: pctOf(s.watchedEpisodes, s.totalEpisodes),
-    };
-  }
-  return null;
-}
-
-/**
- * The ` · 4 seasons` suffix under a Continue Watching title, empty when the
- * season count is unknown. Interpolating the number straight in gave a
- * one-season show `1 seasons`.
- */
-export function seasonCountSuffix(totalSeasons: number | null | undefined): string {
-  if (!totalSeasons || totalSeasons < 1) return "";
-  return ` · ${totalSeasons} season${totalSeasons === 1 ? "" : "s"}`;
-}
-
-export function ContinueWatchingCard({
-  s,
-  eager,
-  isMarking,
-  isDone,
-  onMarkNext,
-  onSelect,
-}: {
-  s: SeriesProgress;
-  eager: boolean;
-  isMarking: boolean;
-  isDone: boolean;
-  onMarkNext: () => void;
-  onSelect: () => void;
-}) {
-  const progressPct = computeProgressPct(s);
-  return (
-    // One card, two controls — grouped and labelled so a screen reader announces
-    // them as belonging to this series rather than as loose buttons in a row.
-    <div role="group" aria-label={s.name} className="group w-poster-card flex-none">
-      <div
-        className="poster-frame relative aspect-poster overflow-hidden rounded-xl"
-      >
-        <Poster src={s.poster} alt={s.name} className="absolute inset-0 h-full w-full" eager={eager} sizes={POSTER_CARD_SIZES} />
-        {/* The poster is a backdrop and the two controls are siblings in a
-            column above it: "view details" takes the space the overlay doesn't,
-            "mark next" lives inside the overlay. Neither covers the other, so
-            which one a click lands on is a matter of layout rather than z-order. */}
-        <div className="relative flex h-full flex-col">
-          <button
-            type="button"
-            className="flex-1 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-claw-300"
-            aria-label={`View details for ${s.name}`}
-            onClick={onSelect}
-          />
-          <div className="bg-gradient-to-t from-black via-black/80 to-transparent px-3 pb-3 pt-16">
-            {progressPct !== null && (
-              <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-white/20">
-                <div className="h-full rounded-full bg-claw-500 transition-all duration-slow" style={{ width: `${progressPct}%` }} />
-              </div>
-            )}
-            <p className="meta-row text-white/75">
-              S{s.lastSeason}:E{s.lastEpisode}
-              {seasonCountSuffix(s.totalSeasons)}
-            </p>
-            <button
-              type="button"
-              disabled={isMarking || isDone}
-              onClick={onMarkNext}
-              aria-label={isMarking ? "Marking" : isDone ? "Marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
-              className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all duration-base active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-claw-300 ${
-                isMarking ? "bg-white/10 text-white/50" : isDone ? "bg-emerald-500/20 text-success" : "bg-white/15 text-white backdrop-blur-sm hover:bg-white/25"
-              }`}
-            >
-              {isDone ? (
-                <><Check className="h-3.5 w-3.5" /> Marked</>
-              ) : isMarking ? (
-                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: "rgba(255,255,255,0.4)", borderTopColor: "transparent" }} />
-              ) : (
-                <><ChevronRight className="h-3.5 w-3.5" /> Mark S{s.nextSeason}:E{s.nextEpisode}</>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-      {/* Plain text, not a third control: it opened the same panel the poster
-          already opens, which cost a keyboard user an extra stop per card. */}
-      <p className="mt-2.5 truncate text-sm font-semibold text-[var(--text)] transition-colors group-hover:text-claw-text">
-        {s.name}
-      </p>
-      {progressPct !== null && (
-        <p className="meta-row" style={{ color: "var(--text-dim)" }}>
-          {s.watchedEpisodes} of {s.totalEpisodes} episodes
-        </p>
-      )}
-    </div>
-  );
-}
-
-/* ─── Continue Watching hero — the first in-progress item, featured ─── */
-
-/**
- * The scrim over a hero's backdrop: opaque under the text, clear over the art.
- *
- * Only painted when there is a real TMDB backdrop to darken. It used to be
- * unconditional, over a blurred copy of the poster when `background` was null —
- * and with no art behind it the ramp is just --bg-0 fading to the page, which
- * on the light theme runs cream to grey-brown across the half of the card
- * holding nothing and reads as a rendering fault rather than a choice. A hero
- * without a backdrop is a flat panel like every other one on the page instead.
- */
-const HERO_SCRIM =
-  "linear-gradient(110deg, var(--bg-0) 15%, color-mix(in srgb, var(--bg-0) 35%, transparent) 60%, transparent)";
-
-export function ContinueWatchingHero({
-  s,
-  isMarking,
-  isDone,
-  onMarkNext,
-  onSelect,
-}: {
-  s: SeriesProgress;
-  isMarking: boolean;
-  isDone: boolean;
-  onMarkNext: () => void;
-  onSelect: () => void;
-}) {
-  const progress = computeProgressSummary(s);
-  return (
-    <div
-      className="relative mb-3 flex flex-col gap-4 overflow-hidden rounded-2xl p-4 sm:flex-row sm:items-center"
-      style={{
-        minHeight: "10.5rem",
-        border: "1px solid var(--border)",
-        // No backdrop, no hero treatment — see HERO_SCRIM.
-        ...(s.background ? null : { background: "var(--bg-1)" }),
-      }}
-    >
-      {s.background && (
-        <>
-          <img
-            src={s.background}
-            alt=""
-            aria-hidden="true"
-            className="absolute inset-0 h-full w-full object-cover opacity-60 scale-110"
-          />
-          <div className="absolute inset-0" style={{ background: HERO_SCRIM }} />
-        </>
-      )}
-      <div className="relative z-10 h-40 w-28 flex-none overflow-hidden rounded-xl" style={{ boxShadow: "0 0 0 1px var(--border), var(--elevation-2)" }}>
-        <Poster src={s.poster} alt={s.name} className="h-full w-full" eager sizes="112px" />
-      </div>
-      <div className="relative z-10 min-w-0 flex-1">
-        <p className={`${MICRO_LABEL} text-claw-text`}>Series &middot; In Progress</p>
-        <p className="mt-1 truncate font-heading text-xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{s.name}</p>
-        <p className="meta-row mt-1" style={{ color: "var(--text-dim)" }}>
-          S{s.lastSeason}:E{s.lastEpisode}
-          {seasonCountSuffix(s.totalSeasons)}
-        </p>
-        {progress && (
-          <div className="mt-3 max-w-xs">
-            <div className="meta-row mb-1.5 flex items-center justify-between" style={{ color: "var(--text-mute)" }}>
-              <span>{progress.label}</span>
-              <span className="font-semibold text-claw-text">{progress.watched} / {progress.total} episodes</span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--surface-strong)" }}>
-              <div className="h-full rounded-full bg-claw-500 transition-all duration-slow" style={{ width: `${progress.pct}%` }} />
-            </div>
-          </div>
-        )}
-      </div>
-      {/* Out at the card's other edge, so the composition spans the width the
-          card claims instead of stacking everything into the left third and
-          leaving the rest to the backdrop. Below `sm` the row wraps to a column
-          and these sit under the text, which is where they were. */}
-      <div className="relative z-10 flex flex-none items-center gap-2">
-        <button
-          type="button"
-          disabled={isMarking || isDone}
-          onClick={onMarkNext}
-          aria-label={isMarking ? "Marking" : isDone ? "Marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
-          className="btn-primary"
-        >
-          {isDone ? (
-            <><Check className="h-4 w-4" /> Marked</>
-          ) : isMarking ? (
-            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-transparent" />
-          ) : (
-            <><ChevronRight className="h-4 w-4" /> Mark S{s.nextSeason}:E{s.nextEpisode}</>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={onSelect}
-          className="btn-secondary"
-        >
-          Details
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ─── Scroll arrows ─── */
-
-/* ─── Section header ─── */
-
-/* ─── Section-level failure notice ───
- *
- * A section whose loader failed keeps its container and says so, rather than
- * rendering nothing. Silently dropping the section made the dashboard look
- * merely different that day, with no hint that anything was wrong or that
- * retrying would help — and, for Upcoming, collapsed the two-column grid.
- */
-
-/* ─── Discover sub-row: one labeled rail (Movies / Series) within the shared Discover section ─── */
-
-function DiscoverSubRow({
-  label,
-  loading,
-  failed,
-  onRetry,
-  items,
-  reasons,
-  aiActive,
-  scroll,
-  onSelect,
-}: {
-  label: string;
-  loading: boolean;
-  failed: boolean;
-  onRetry: () => void;
-  items: TrendingMeta[];
-  reasons: Record<string, string>;
-  aiActive: boolean;
-  scroll: ReturnType<typeof useHorizontalScroll>;
-  onSelect: (item: DiscoveryItem) => void;
-}) {
-  if (!loading && !failed && items.length === 0) return null;
-  return (
-    <div>
-      <div className="mb-2.5 flex items-center justify-between">
-        <h3 className={KICKER} style={{ color: "var(--text-mute)" }}>{label}</h3>
-        {!loading && !failed && items.length > 0 && (
-          <ScrollArrows canScrollLeft={scroll.canScrollLeft} canScrollRight={scroll.canScrollRight} onScroll={scroll.scroll} />
-        )}
-      </div>
-      {failed && !loading ? (
-        <SectionError message={`Couldn't load ${label.toLowerCase()} recommendations.`} onRetry={onRetry} />
-      ) : loading ? (
-        aiActive
-          ? <p className="text-sm italic" style={{ color: "var(--text-dim)" }}>Generating AI recommendations...</p>
-          : <ContinueWatchingSkeleton />
-      ) : (
-        <CarouselTrack
-          scrollRef={scroll.ref}
-          canScrollLeft={scroll.canScrollLeft}
-          canScrollRight={scroll.canScrollRight}
-          className="gap-4"
-        >
-          {items.map((item) => (
-            <DiscoveryCard
-              key={item.id}
-              item={item}
-              reason={reasons[item.id]}
-              onSelect={onSelect}
-              badge={
-                <span className="inline-flex items-center gap-1 rounded-md bg-plum-500/80 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
-                  <Sparkles className="h-2.5 w-2.5" />
-                  {aiActive && <span>AI</span>}
-                </span>
-              }
-            />
-          ))}
-        </CarouselTrack>
-      )}
-    </div>
-  );
-}
-
-/* ─── Header stat row: greeting + the collectible stats folded into one persistent strip ─── */
-
-// The dashboard shows a greeting, not a title, so its h1 is hidden — every render
-// path still needs one to head the outline, including the API-error card.
-function PageHeading() {
-  return <h1 className="sr-only">Dashboard</h1>;
-}
-
-export function timeOfDayGreeting(now: Date) {
-  const hour = now.getHours();
-  if (hour < 5) return "Good night";
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
-
-// The hours at which the header's two clock-derived strings change: the
-// greeting cutoffs above, plus midnight, which also rolls the date over.
-export const GREETING_CUTOFF_HOURS = [0, 5, 12, 18];
-
-// Whether two instants would render the header identically — the greeting and
-// the date together, which is more than the day-boundary default the hook uses
-// for pages that only ask what day it is.
-export const showsSameHeader = (a: Date, b: Date) =>
-  timeOfDayGreeting(a) === timeOfDayGreeting(b) && a.toDateString() === b.toDateString();
-
-// The stat row's stand-in while getWatchStats and getDetailedStats are in
-// flight. Without it the header renders as greeting + date only and then grows
-// a whole row taller when the two calls land — on every dashboard load, warm
-// ones included, because the calls are issued from their own effects. The
-// widths are the chips' rough measure, enough to hold the line's height and
-// keep the page below from being shoved down.
-const STAT_CHIP_SKELETON_WIDTHS = ["w-24", "w-32", "w-20", "w-24", "w-20"];
-
-function StatChipsSkeleton() {
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5" aria-hidden="true">
-      {STAT_CHIP_SKELETON_WIDTHS.map((width, i) => (
-        <span key={i} className={`skeleton h-4 ${width} rounded`} />
-      ))}
-    </div>
-  );
-}
-
-/**
- * The bites out of the header strip's left and right edges that make it a
- * ticket stub — the collectible-stat idea the Stats page's `TicketTile` is
- * named for, spent here on the row that actually carries the numbers on every
- * visit rather than on the page people open once a month.
- *
- * Page-coloured circles centred on the strip's edge: the half that lands
- * inside erases the border it crosses, and an interrupted border is what the
- * eye reads as a notch. Absolutely positioned on purpose — this row is one
- * line of chips wide on a laptop with the sidebar pinned, and a decoration
- * that took any width at all would spend the last of it and wrap the date
- * onto a second line. It sits in the padding, so it never meets the text.
- */
-function TicketNotches() {
-  const notch = "pointer-events-none absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full";
-  return (
-    <span aria-hidden="true">
-      <span className={`${notch} -left-1.5`} style={{ background: "var(--bg-0)" }} />
-      <span className={`${notch} -right-1.5`} style={{ background: "var(--bg-0)" }} />
-    </span>
-  );
-}
-
-function StatChip({ icon: Icon, label, value, accent }: { icon: React.ElementType; label: string; value: string | number; accent?: boolean }) {
-  return (
-    <span className="flex items-center gap-1.5 text-sm" style={{ color: accent ? undefined : "var(--text-dim)" }}>
-      <Icon className={`h-3.5 w-3.5 ${accent ? "text-claw-text" : ""}`} style={accent ? undefined : { color: "var(--text-mute)" }} />
-      {/* Tabular figures so a ticking count doesn't shuffle the label beside it. */}
-      <span className={`tabular-nums ${accent ? "font-semibold text-claw-text" : ""}`}>
-        {typeof value === "number" ? value.toLocaleString() : value}
-      </span>
-      <span className="hidden sm:inline" style={{ color: "var(--text-mute)" }}>{label}</span>
-    </span>
-  );
-}
-
-function DashboardHeader({
-  playsThisWeek,
-  streak,
-  longestStreak,
-  totalMovies,
-  totalEpisodes,
-  topGenre,
-  loading,
-  statsLoading,
-  statsFailed,
-  onRetryStats,
-}: {
-  playsThisWeek: number;
-  streak: number;
-  longestStreak: number;
-  totalMovies: number;
-  totalEpisodes: number;
-  topGenre?: string | undefined;
-  loading: boolean;
-  statsLoading: boolean;
-  statsFailed: boolean;
-  onRetryStats: () => void;
-}) {
-  const now = useClockBoundary(GREETING_CUTOFF_HOURS, showsSameHeader);
-  const today = now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-  return (
-    <div
-      className="glass-panel relative flex flex-col gap-2.5 rounded-xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-    >
-      <PageHeading />
-      <TicketNotches />
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-        <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{timeOfDayGreeting(now)}</span>
-        <span style={{ color: "var(--border-strong)" }}>&middot;</span>
-        <span className="text-xs" style={{ color: "var(--text-mute)" }}>{today}</span>
-      </div>
-      {loading || statsLoading ? (
-        <StatChipsSkeleton />
-      ) : (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-          <StatChip icon={Clock} label="this week" value={playsThisWeek} />
-          {!statsFailed && streak > 0 && <StatChip icon={Flame} label={`day streak (best ${longestStreak})`} value={streak} accent />}
-          <StatChip icon={Film} label="movies" value={totalMovies} />
-          <StatChip icon={Tv} label="episodes" value={totalEpisodes} />
-          {!statsFailed && topGenre && <StatChip icon={Trophy} label="top genre" value={topGenre} />}
-          {/* Streak and top genre come from the detailed-stats call. When only
-              that one fails, say so rather than rendering a 0-day streak and a
-              missing genre as though they were the real numbers. */}
-          {statsFailed && (
-            <button
-              type="button"
-              onClick={onRetryStats}
-              className="rounded text-xs font-medium underline-offset-2 transition-colors hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
-              style={{ color: "var(--text-mute)" }}
-            >
-              Streak unavailable &middot; Retry
-            </button>
-          )}
-          <Link to="/stats" className="text-xs font-medium text-claw-text underline-offset-2 transition-colors hover:underline">
-            Full stats &rarr;
-          </Link>
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* ─── Main component ─── */
 
@@ -1009,130 +417,10 @@ export function DashboardPage() {
       />
 
       {/* ── Hero: Now Watching ── */}
-      {activeCheckin && (
-        <section
-          className="relative overflow-hidden rounded-2xl"
-          style={{
-            minHeight: "13rem",
-            border: "1px solid var(--border)",
-            // No backdrop, no hero treatment — see HERO_SCRIM.
-            ...(activeCheckin.background ? null : { background: "var(--bg-1)" }),
-          }}
-        >
-          {activeCheckin.background && (
-            <>
-              <img
-                src={activeCheckin.background}
-                alt=""
-                aria-hidden="true"
-                className="absolute inset-0 h-full w-full object-cover opacity-70 scale-110"
-              />
-              <div className="absolute inset-0" style={{ background: HERO_SCRIM }} />
-            </>
-          )}
-          <div className="relative z-10 flex h-full flex-col gap-5 p-6 sm:flex-row sm:items-center">
-            {activeCheckin.poster && (
-              <div className="h-32 w-[5.5rem] flex-none overflow-hidden rounded-xl" style={{ boxShadow: "0 0 0 1px var(--border), var(--elevation-2)" }}>
-                <img src={activeCheckin.poster} alt="" className="h-full w-full object-cover" loading="lazy" />
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-claw-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-claw-500" />
-                </span>
-                <span className={`${KICKER} text-claw-text`}>Now Watching</span>
-              </div>
-              {/* A heading, not a styled paragraph. This is visually the largest
-                  thing on the dashboard and it was invisible to heading
-                  navigation — the one element a screen-reader user jumping by
-                  heading would most expect to land on was the one they couldn't
-                  reach. */}
-              <h2 className={`mt-1 truncate ${PAGE_TITLE}`} style={{ color: "var(--text)" }}>{activeCheckin.name}</h2>
-              {activeCheckin.season != null && activeCheckin.episode != null && (
-                <p className="mt-1 text-sm" style={{ color: "var(--text-dim)" }}>
-                  S{String(activeCheckin.season).padStart(2, "0")}:E{String(activeCheckin.episode).padStart(2, "0")}
-                </p>
-              )}
-            </div>
-            <div className="flex items-center gap-2 flex-none">
-              <button
-                type="button"
-                onClick={() => void handleCheckout(true)}
-                className="btn-primary"
-              >
-                <Check className="h-4 w-4" /> Finished
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleCheckout(false)}
-                className="btn-secondary h-10 w-10 p-0"
-                aria-label="Check out without logging"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
+      {activeCheckin && <NowWatchingHero checkin={activeCheckin} onCheckout={(logWatch) => void handleCheckout(logWatch)} />}
 
       {/* ── Live: Plex/Jellyfin scrobble sessions ── */}
-      {nowPlaying.length > 0 && (
-        <section className="space-y-2">
-          {/* h2, not h3: this is a top-level dashboard section, and the only
-              heading above it is the sr-only h1. The KICKER class is what makes
-              it look like a kicker — the level says where it sits. */}
-          <h2 className={`flex items-center gap-2 ${KICKER}`} style={{ color: "var(--text-mute)" }}>
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-            </span>
-            Playing now
-          </h2>
-          <div className="space-y-2">
-            {nowPlaying.map((session) => (
-              <div
-                key={session.id}
-                className="glass-panel flex items-center gap-3 rounded-xl p-3"
-                style={{ border: "1px solid var(--border)", background: "var(--bg-1)" }}
-              >
-                <div
-                  className="flex h-12 w-12 flex-none items-center justify-center overflow-hidden rounded-lg"
-                  style={{ background: "var(--surface-strong)" }}
-                >
-                  {session.poster ? (
-                    <img src={session.poster} alt="" className="h-full w-full object-cover" loading="lazy" />
-                  ) : session.type === "movie" ? (
-                    <Film className="h-5 w-5" style={{ color: "var(--text-mute)" }} />
-                  ) : (
-                    <Tv className="h-5 w-5" style={{ color: "var(--text-mute)" }} />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>
-                    {session.name ?? session.imdbId}
-                    {session.type === "episode" && session.season != null && session.episode != null && (
-                      <span style={{ color: "var(--text-mute)" }}>
-                        {" "}S{session.season}E{session.episode}
-                      </span>
-                    )}
-                  </p>
-                  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--surface-strong)" }}>
-                    <div
-                      className={`h-full rounded-full ${session.status === "paused" ? "bg-amber-400" : "bg-emerald-500"}`}
-                      style={{ width: `${Math.round(session.progress)}%` }}
-                    />
-                  </div>
-                </div>
-                <span className="meta-row flex-none" style={{ color: "var(--text-mute)" }}>
-                  {session.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      <NowPlayingList sessions={nowPlaying} />
 
       {/* ── Continue Watching ── */}
       <section>
@@ -1146,7 +434,7 @@ export function DashboardPage() {
           )}
         </SectionHeader>
         {loading ? (
-          <ContinueWatchingSkeleton />
+          <CarouselSkeleton />
         ) : progress.length === 0 ? (
           <div className="rounded-2xl py-12 text-center" style={{ border: "1px dashed var(--border-strong)" }}>
             <Tv className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
@@ -1264,51 +552,7 @@ export function DashboardPage() {
             ) : calendar.failed ? (
               <SectionError message="Couldn't load upcoming episodes." onRetry={() => void loadCalendar()} />
             ) : (
-              <div className="space-y-2">
-                {calendarEntries.map((entry) => {
-                  // Unreadable stays an Invalid Date, which matches neither
-                  // today nor tomorrow and falls through to the dated label.
-                  const airDate = localDateFromIsoDate(entry.airDate) ?? new Date(NaN);
-                  const isToday = airDate.toDateString() === new Date().toDateString();
-                  const tomorrow = new Date();
-                  tomorrow.setDate(tomorrow.getDate() + 1);
-                  const isTomorrow = airDate.toDateString() === tomorrow.toDateString();
-                  const dateLabel = isToday ? "Today"
-                    : isTomorrow ? "Tomorrow"
-                    : airDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-
-                  return (
-                    <div
-                      key={`${entry.seriesImdbId}-s${entry.season}e${entry.episode}`}
-                      className="flex items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5 transition-all duration-base hover:border-[var(--border-strong)] hover:bg-[var(--surface-strong)]"
-                    >
-                      <div className="h-12 w-8 flex-none overflow-hidden rounded-md" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
-                        <Poster src={entry.poster ?? undefined} alt={entry.seriesName} className="h-full w-full" sizes="32px" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold" style={{ color: "var(--text)" }}>
-                          {entry.seriesName}
-                        </p>
-                        <p className="meta-row mt-0.5 truncate" style={{ color: "var(--text-dim)" }}>
-                          S{entry.season}:E{entry.episode}
-                        </p>
-                      </div>
-                      <span
-                        className={`meta-row flex-none rounded-full px-2 py-1 font-semibold ${
-                          isToday
-                            ? "bg-claw-500/15 text-claw-text"
-                            : isTomorrow
-                              ? "bg-amber-500/15 text-warning"
-                              : ""
-                        }`}
-                        style={!isToday && !isTomorrow ? { background: "var(--surface-strong)", color: "var(--text-dim)" } : undefined}
-                      >
-                        {dateLabel}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+              <UpcomingList entries={calendarEntries} />
             )}
           </section>
         )}
@@ -1368,7 +612,7 @@ export function DashboardPage() {
           )}
         </SectionHeader>
         {loading ? (
-          <RecentlyWatchedSkeleton />
+          <CarouselSkeleton count={6} />
         ) : history.length === 0 ? (
           <div className="rounded-2xl py-12 text-center" style={{ border: "1px dashed var(--border-strong)" }}>
             <Film className="mx-auto h-10 w-10" style={{ color: "var(--text-mute)" }} />
@@ -1387,41 +631,20 @@ export function DashboardPage() {
             className="gap-4"
           >
             {history.map((event) => (
-              <div
+              <RecentlyWatchedCard
                 key={event.id}
-                className="group relative w-poster-card flex-none rounded-xl"
-              >
-                {/* Same treatment as DiscoveryCard: one real button covering a
-                    card that has exactly one action. */}
-                <button
-                  type="button"
-                  className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
-                  onClick={() => setSelectedItem(toSearchResult(historyItemImdbId(event), event.type === "movie" ? "movie" : "series", watchEventTitle(event), { poster: event.poster }))}
-                  aria-label={`View details for ${watchEventTitle(event)}`}
-                />
-                <div
-                  className="poster-frame relative aspect-poster overflow-hidden rounded-xl group-hover:scale-[1.03]"
-                >
-                  <Poster src={event.poster} alt={watchEventTitle(event)} className="h-full w-full" sizes={POSTER_CARD_SIZES} />
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent px-3 pb-3 pt-12">
-                    {event.type === "episode" && event.season != null && event.episode != null ? (
-                      <span className="inline-block rounded px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm" style={{ background: "var(--surface-strong)" }}>
-                        S{event.season}:E{event.episode}
-                      </span>
-                    ) : event.type === "movie" ? (
-                      <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold text-claw-300 backdrop-blur-sm bg-claw-500/20">
-                        <Film className="h-3 w-3" /> Movie
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                <p className="mt-2.5 truncate text-sm font-semibold text-[var(--text)] transition-colors group-hover:text-claw-text">
-                  {watchEventTitle(event)}
-                </p>
-                <p className="meta-row" style={{ color: "var(--text-dim)" }}>
-                  {timeAgo(event.watchedAt)}
-                </p>
-              </div>
+                event={event}
+                onSelect={() =>
+                  setSelectedItem(
+                    toSearchResult(
+                      historyItemImdbId(event),
+                      event.type === "movie" ? "movie" : "series",
+                      watchEventTitle(event),
+                      { poster: event.poster }
+                    )
+                  )
+                }
+              />
             ))}
           </CarouselTrack>
         )}

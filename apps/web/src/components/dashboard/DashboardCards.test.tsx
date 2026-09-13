@@ -1,8 +1,10 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { SeriesProgress } from "../api";
-import { ContinueWatchingCard, ContinueWatchingHero, DiscoveryCard } from "./DashboardPage";
+import type { SeriesProgress } from "../../api";
+import { ContinueWatchingCard } from "./ContinueWatchingCard";
+import { ContinueWatchingHero } from "./ContinueWatchingHero";
+import { DiscoveryCard } from "./DiscoveryCard";
 
 const series: SeriesProgress = {
   imdbId: "tt0903747",

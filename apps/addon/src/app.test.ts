@@ -776,6 +776,21 @@ describe("play detection", () => {
       expect(await waitForSignals(1)).toHaveLength(0);
     });
 
+    it("sends nothing for a half-numeric episode id, which names no episode either", async () => {
+      // `Number.parseInt` takes a numeric prefix, so this used to read as S1E2
+      // and file a signal against an episode nobody opened.
+      await app.inject({ method: "GET", url: "/stream/series/tt0903747:1junk:2junk.json" });
+
+      expect(await waitForSignals(1)).toHaveLength(0);
+    });
+
+    it("still records a special, which Stremio numbers as season 0", async () => {
+      await app.inject({ method: "GET", url: "/stream/series/tt0903747:0:1.json" });
+
+      const signal = first(await waitForSignals(1), "forwarded play signal");
+      expect(signal.body).toMatchObject({ type: "episode", season: 0, episode: 1 });
+    });
+
     it("sends nothing for content that is not IMDb-keyed", async () => {
       await app.inject({ method: "GET", url: "/stream/movie/kitsu:12345.json" });
 

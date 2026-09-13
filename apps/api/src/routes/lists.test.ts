@@ -24,6 +24,7 @@ const prismaMock = {
 const syncMetadata = vi.fn();
 const backfillMissingMetadata = vi.fn();
 const pushTraktWatchlistChange = vi.fn();
+const pushWatchlistRequest = vi.fn();
 
 vi.mock("../lib/prisma.js", () => ({ prisma: prismaMock }));
 vi.mock("../lib/metadata.js", () => ({
@@ -32,6 +33,9 @@ vi.mock("../lib/metadata.js", () => ({
 }));
 vi.mock("../lib/trakt-client.js", () => ({
   pushTraktWatchlistChange: (...args: unknown[]) => pushTraktWatchlistChange(...args),
+}));
+vi.mock("../lib/jellyseerr.js", () => ({
+  pushWatchlistRequest: (...args: unknown[]) => pushWatchlistRequest(...args),
 }));
 vi.mock("../lib/profile.js", () => ({
   resolveProfile: async (request: { profileId?: string }) => {
@@ -56,6 +60,7 @@ describe("lists routes", () => {
     vi.clearAllMocks();
     syncMetadata.mockResolvedValue(undefined);
     pushTraktWatchlistChange.mockResolvedValue(undefined);
+    pushWatchlistRequest.mockResolvedValue("skipped");
     // The route runs its item upsert and list-item insert in one transaction;
     // running the callback against the same mock keeps assertions on the inner
     // calls working.
@@ -274,6 +279,31 @@ describe("lists routes", () => {
         { type: "movie", imdbId: "tt0111161" },
         expect.anything()
       );
+      // The same add is what a request service is told about — see
+      // lib/jellyseerr.ts, which decides whether it is configured to act.
+      expect(pushWatchlistRequest).toHaveBeenCalledWith(
+        "add",
+        { type: "movie", imdbId: "tt0111161" },
+        expect.anything()
+      );
+    });
+
+    it("still adds the item when the Jellyseerr push reports a failure", async () => {
+      // It never throws, but the route must not depend on that: a request
+      // service that is down is not a reason to refuse a watchlist add.
+      prismaMock.list.findFirst.mockResolvedValue(listRow({ kind: "watchlist" }));
+      prismaMock.item.upsert.mockResolvedValue({});
+      prismaMock.listItem.create.mockResolvedValue({ listId: LIST_ID, type: "movie", imdbId: "tt0111161" });
+      pushWatchlistRequest.mockResolvedValue("failed");
+      const app = await buildApp();
+
+      const res = await app.inject({
+        method: "POST",
+        url: `/lists/${LIST_ID}/items`,
+        payload: { type: "movie", imdbId: "tt0111161" },
+      });
+
+      expect(res.statusCode).toBe(201);
     });
 
     it("does not push to Trakt for a custom list", async () => {
@@ -291,6 +321,7 @@ describe("lists routes", () => {
 
       expect(res.statusCode).toBe(201);
       expect(pushTraktWatchlistChange).not.toHaveBeenCalled();
+      expect(pushWatchlistRequest).not.toHaveBeenCalled();
     });
 
     it("returns 409 rather than 500 when the item is already in the list", async () => {
@@ -384,6 +415,11 @@ describe("lists routes", () => {
 
       expect(res.statusCode).toBe(204);
       expect(pushTraktWatchlistChange).toHaveBeenCalledWith(
+        "remove",
+        { type: "movie", imdbId: "tt1" },
+        expect.anything()
+      );
+      expect(pushWatchlistRequest).toHaveBeenCalledWith(
         "remove",
         { type: "movie", imdbId: "tt1" },
         expect.anything()

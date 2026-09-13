@@ -9,6 +9,7 @@ Self-host it on your home server, open it on your phone or computer, and keep tr
 - **One shelf for everything** — shows, films and games in one grid, each measured in its own units: episodes for a season, hours for a game
 - **Discovery when you want it, not in the way** — trending, recommendations and upcoming episodes live on their own page
 - **Works with the tools you already use** — pairs with Stremio, Plex, Jellyfin, Emby, Trakt, and Stremio/Omni add-ons
+- **Adding to the watchlist can fetch it** — optional, off by default: a watchlist add becomes a Jellyseerr/Overseerr request
 - **No account you can't walk away from** — watch history comes straight from Stremio, Plex, Jellyfin or Emby, and every third-party service is optional and replaceable
 - **Yours, not the cloud's** — runs on your own hardware, your data stays on your network
 - **Phone friendly** — installs as an app on your phone (PWA; needs an HTTPS address, see [Install as a PWA](#install-as-a-pwa))
@@ -341,6 +342,48 @@ Trakt is supported but is not a system of record, and nothing depends on it:
 
 Everything Cataloggy knows can be exported as a single JSON file (lists, watch history, series progress, ratings) — see [Export / import your data](#export--import-your-data).
 
+## Requesting what you add (Jellyseerr / Overseerr)
+
+Every other integration points inward: it answers "what have I watched" or
+"what is this thing". This one points the other way — adding a title to your
+watchlist can file a request on the server that actually fetches it, instead of
+being a manual hop into another app.
+
+Set it up under **Settings → Jellyseerr Requests**: your server's URL and the
+API key from **Settings → General → API Key** in Jellyseerr. Overseerr works
+too — the API this uses is the same one. Nothing is sent until you configure it.
+Saving stores the URL and key and then tests them straight away, so a typo or a
+revoked key shows up there and then rather than weeks later — and a server that
+happens to be off tonight doesn't stop you saving the setting that fixes it.
+**Test connection** re-runs that check whenever you want it.
+
+What it does, and deliberately does not do:
+
+- **Only the watchlist.** Your other lists stay local. "I want to watch this" is
+  what a watchlist add means, and it is the only list membership that says
+  anything about acquiring a title. (Same scoping the Trakt watchlist mirror
+  uses.)
+- **A failure never fails the add, or delays it.** The request is filed in the
+  background of an add that has already succeeded, so a Jellyseerr that is off
+  costs nothing but a line under **Settings → Sync Status**, alongside the
+  scheduled jobs. Re-adding something already requested is not a failure —
+  Jellyseerr says it already has it, and that is treated as success.
+- **Series are requested whole.** Picking seasons is a decision this has no way
+  to ask you about.
+- **Removals cancel nothing unless you opt in**, and even then only a request
+  nobody has approved yet. Once Jellyseerr has approved one, the download exists
+  or is on its way in Sonarr/Radarr, and un-listing a title is not a decision to
+  delete it — the same caution `TRAKT_WATCHLIST_MIRROR_DELETES` applies to the
+  watchlist itself, for a case that is harder to undo.
+
+The URL is checked the way the notification-channel and AI-provider URLs are:
+http(s) only, never the cloud-metadata/link-local range, by DNS result as well
+as by name, re-checked immediately before every request, and redirects are
+refused rather than followed. LAN and loopback addresses are allowed, since a
+Jellyseerr on your own network is the expected setup. The API key is stored
+encrypted (see [Secrets at rest](#secrets-at-rest)) and is never handed back
+out by the API.
+
 ## Notifications
 
 Cataloggy can tell you when the next episode of something you're watching airs.
@@ -470,6 +513,7 @@ Every credential Cataloggy stores on your behalf is encrypted in the database wi
 | ntfy / Gotify / webhook tokens | `NotificationChannel.token` |
 | TMDB, OMDB and RPDB API keys | `KV` |
 | AI provider config, including its `Authorization` header | `KV` |
+| Jellyseerr URL + API key | `KV` |
 | VAPID private key (web push) | `KV` |
 
 The key is derived from `API_TOKEN` with HKDF-SHA256 — the same "derive from the one secret you already have" approach as the add-on URL secret and profile access tokens — so there is no extra variable to set and no key file to lose. Each value is also bound to the column it lives in, so a ciphertext lifted out of one row and pasted into another fails to decrypt rather than being accepted somewhere it doesn't belong.

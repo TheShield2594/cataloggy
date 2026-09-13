@@ -1,19 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { Check, Clock, Gamepad2, Plus, RefreshCw, Search, Star, X } from "lucide-react";
+import { Check, Clock, Gamepad2, Plus, RefreshCw, Star } from "lucide-react";
 import { api, ApiError, type Game, type GameSearchResult, type GameSort, type SteamStatus } from "../api";
 import { GameDetailPanel } from "../components/GameDetailPanel";
-import { useFocusTrap } from "../hooks/useFocusTrap";
-import { useScrollLock } from "../hooks/useScrollLock";
-import { useEscapeKey } from "../hooks/useEscapeKey";
-import { useExitAnimation } from "../hooks/useExitAnimation";
-import { useVisualViewport } from "../hooks/useVisualViewport";
+import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
 import { useToast } from "../hooks/useToast";
+import { SearchAddDialog, SearchAddResultRow } from "../components/SearchAddDialog";
 import { preconnectToGameArtwork } from "../utils/preconnect";
 import { useCachedState } from "../hooks/useCachedState";
 import { formatPlaytime } from "../utils/playtime";
 import { formatRating, ratingLabel, RATING_MAX } from "../utils/rating";
-import { PAGE_TITLE, SECTION_TITLE } from "../components/typography";
+import { PAGE_TITLE } from "../components/typography";
 import { PosterGrid } from "../components/PosterGrid";
 import { PosterCard } from "../components/PosterCard";
 
@@ -98,77 +95,29 @@ function AddGameModal({
   onAdded: (game: Game) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<GameSearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState<Record<number, boolean>>({});
-  const [error, setError] = useState<string | null>(null);
-  // Held apart from `error` because it isn't one: searching an instance without
-  // IGDB credentials is a setup step outstanding, not a failure, and it reads
-  // as a notice with a way forward rather than as red text.
+  // Held apart from the search's own error because it isn't one: searching an
+  // instance without IGDB credentials is a setup step outstanding, not a
+  // failure, and it reads as a notice with a way forward rather than as red
+  // text.
   const [notConfigured, setNotConfigured] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const dialogRef = useFocusTrap<HTMLDivElement>();
-  const { exiting, requestClose, onExitAnimationEnd } = useExitAnimation(onClose);
-  const abortRef = useRef<AbortController | null>(null);
-  const viewportStyle = useVisualViewport();
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  const search = useCallback((q: string, signal: AbortSignal) => api.searchGames(q, signal), []);
 
-  useScrollLock();
-  useEscapeKey(requestClose);
-
-  // Cancel any still-in-flight search when the modal unmounts, so its response
-  // can't land after the fact.
-  useEffect(() => () => abortRef.current?.abort(), []);
-
-  const doSearch = useCallback(async (q: string) => {
-    if (!q.trim()) {
-      setResults([]);
-      return;
-    }
-
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    setSearching(true);
-    setError(null);
-    setNotConfigured(false);
-    try {
-      const res = await api.searchGames(q, controller.signal);
-      setResults(res);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
+  const { results, setResults, searching, error, setError } = useDebouncedSearch<GameSearchResult>(
+    query,
+    search,
+    {
+      onStart: useCallback(() => setNotConfigured(false), []),
       // Branch on the code, not the message: the prose is the API's to reword.
-      if (err instanceof ApiError && err.code === "igdb_not_configured") {
-        setNotConfigured(true);
-        setResults([]);
-        return;
-      }
-      setError(err instanceof Error ? err.message : "Search failed");
-    } finally {
-      if (abortRef.current === controller) setSearching(false);
+      onError: useCallback((err: unknown) => {
+        if (err instanceof ApiError && err.code === "igdb_not_configured") {
+          setNotConfigured(true);
+          return "handled" as const;
+        }
+      }, []),
     }
-  }, []);
-
-  useEffect(() => {
-    if (!query.trim()) {
-      abortRef.current?.abort();
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      setResults([]);
-      setSearching(false);
-      setNotConfigured(false);
-      return;
-    }
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => void doSearch(query), 350);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query, doSearch]);
+  );
 
   const handleAdd = async (result: GameSearchResult) => {
     if (adding[result.igdbId] || result.inLibrary) return;
@@ -191,89 +140,53 @@ function AddGameModal({
   };
 
   return (
-    <div
-      className={`overlay-scrim overlay-fade fixed inset-0 z-50 flex items-start justify-center p-4 sm:pt-[10vh] ${exiting ? "overlay-exit" : ""}`}
-      style={viewportStyle}
-      onClick={requestClose}
+    <SearchAddDialog
+      title="Add a game"
+      titleId="add-game-modal-title"
+      query={query}
+      onQueryChange={setQuery}
+      placeholder="Search games on IGDB..."
+      inputLabel="Search games"
+      onClose={onClose}
     >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="add-game-modal-title"
-        tabIndex={-1}
-        inert={exiting}
-        className={`glass-surface overlay-dialog flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-3xl border shadow-e3 ${exiting ? "overlay-exit" : ""}`}
-        style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}
-        onClick={(e) => e.stopPropagation()}
-        onAnimationEnd={onExitAnimationEnd}
-      >
-        <div className="flex flex-none items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
-          <h3 id="add-game-modal-title" className={SECTION_TITLE} style={{ color: "var(--text)" }}>Add a game</h3>
-          <button onClick={requestClose} aria-label="Close dialog" className="rounded-lg p-1.5 hover:bg-[var(--surface)] hover:text-[var(--text)]" style={{ color: "var(--text-mute)" }}>
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="flex-none border-b px-5 py-3" style={{ borderColor: "var(--border)" }}>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--text-mute)" }} />
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search games on IGDB..."
-              aria-label="Search games"
-              className="w-full rounded-full border py-2.5 pl-9 pr-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
-              style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)" }}
-            />
-          </div>
-        </div>
-
-        {/* `flex-auto` + `min-h-0`, not a `vh` cap: the list takes whatever the
-            dialog has left over, so on a phone with the keyboard up it stops
-            where the keyboard starts instead of scrolling on behind it. */}
-        <div className="min-h-0 flex-auto overflow-y-auto px-5 py-3 sm:max-h-[50vh]">
-          {error && <p role="alert" className="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-danger">{error}</p>}
-          {notConfigured && <div className="mb-2"><ConnectGamesNotice compact /></div>}
-          {searching && <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>Searching...</p>}
-          {!searching && query.trim() && results.length === 0 && !error && !notConfigured && (
-            <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>No results found.</p>
-          )}
-          <div className="space-y-1">
-            {results.map((r) => (
-              <button
-                key={r.igdbId}
-                type="button"
-                disabled={adding[r.igdbId] || r.inLibrary}
-                onClick={() => void handleAdd(r)}
-                className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-[var(--surface)] disabled:opacity-50 transition-colors"
-              >
-                <div className="h-14 w-10 flex-none overflow-hidden rounded-lg ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border)" } as React.CSSProperties}>
-                  {r.coverUrl ? (
-                    <img src={r.coverUrl} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center"><Gamepad2 className="h-4 w-4" style={{ color: "var(--text-mute)" }} /></div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>{r.title}</p>
-                  <p className="text-xs" style={{ color: "var(--text-mute)" }}>
-                    {r.releaseDate ? new Date(r.releaseDate).getFullYear() : "Unknown"}
-                    {r.genres.length > 0 ? ` · ${r.genres.slice(0, 2).join(", ")}` : ""}
-                  </p>
-                </div>
-                {r.inLibrary ? (
-                  <Check className="h-4 w-4 flex-none text-success" />
-                ) : (
-                  <Plus className="h-4 w-4 flex-none text-claw-text" />
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
+      {error && <p role="alert" className="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-danger">{error}</p>}
+      {notConfigured && <div className="mb-2"><ConnectGamesNotice compact /></div>}
+      {searching && <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>Searching...</p>}
+      {!searching && query.trim() && results.length === 0 && !error && !notConfigured && (
+        <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>No results found.</p>
+      )}
+      <div className="space-y-1">
+        {results.map((r) => (
+          <SearchAddResultRow
+            key={r.igdbId}
+            disabled={!!adding[r.igdbId] || r.inLibrary}
+            muted={r.inLibrary}
+            onAdd={() => void handleAdd(r)}
+            thumbnail={
+              r.coverUrl ? (
+                <img src={r.coverUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center"><Gamepad2 className="h-4 w-4" style={{ color: "var(--text-mute)" }} /></div>
+              )
+            }
+            title={r.title}
+            subtitle={
+              <>
+                {r.releaseDate ? new Date(r.releaseDate).getFullYear() : "Unknown"}
+                {r.genres.length > 0 ? ` \u00b7 ${r.genres.slice(0, 2).join(", ")}` : ""}
+              </>
+            }
+            trailing={
+              r.inLibrary ? (
+                <Check className="h-4 w-4 flex-none text-success" />
+              ) : (
+                <Plus className="h-4 w-4 flex-none text-claw-text" />
+              )
+            }
+          />
+        ))}
       </div>
-    </div>
+    </SearchAddDialog>
   );
 }
 

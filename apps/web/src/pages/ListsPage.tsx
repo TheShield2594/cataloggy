@@ -1,16 +1,14 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { AlertTriangle, Check, Film, FolderOpen, Pencil, Plus, Search, Trash2, Tv, X } from "lucide-react";
+import { AlertTriangle, Check, Film, FolderOpen, Pencil, Plus, Search, Trash2, Tv } from "lucide-react";
 import { api, type CatalogList, type ListItemWithMeta, type MediaType, type SearchResult } from "../api";
 import { DetailPanel, useDetailPanel } from "../components/MediaDetailPanel";
-import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useToast } from "../hooks/useToast";
 import { useCachedState } from "../hooks/useCachedState";
-import { useScrollLock } from "../hooks/useScrollLock";
-import { useEscapeKey } from "../hooks/useEscapeKey";
-import { useExitAnimation } from "../hooks/useExitAnimation";
-import { useVisualViewport } from "../hooks/useVisualViewport";
+import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
 import { mergeByRelevance } from "../utils/mergeSearchResults";
+import { SearchAddDialog, SearchAddResultRow } from "../components/SearchAddDialog";
+import { Poster } from "../components/Poster";
 import { PAGE_TITLE, SECTION_TITLE } from "../components/typography";
 import { PosterGrid } from "../components/PosterGrid";
 import { PosterCard } from "../components/PosterCard";
@@ -81,88 +79,31 @@ function AddItemModal({
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<AddFilter>("all");
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState<Record<string, boolean>>({});
   // Added during this modal's lifetime. `existingKeys` is a snapshot taken when
   // the modal opened and the parent's refetch is in flight behind it, so without
   // this a row would sit unchanged for as long as the reload took.
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());
-  const [error, setError] = useState<string | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const requestIdRef = useRef(0);
-  const abortRef = useRef<AbortController | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const dialogRef = useFocusTrap<HTMLDivElement>();
-  const { exiting, requestClose, onExitAnimationEnd } = useExitAnimation(onClose);
   const { showToast } = useToast();
-  const viewportStyle = useVisualViewport();
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  // Closing the modal mid-search shouldn't leave the request running, and its
-  // resolution must not set state on an unmounted component.
-  useEffect(() => () => {
-    requestIdRef.current++;
-    abortRef.current?.abort();
-  }, []);
-
-  useScrollLock();
-  useEscapeKey(requestClose);
-
-  // Debounced typing can still leave two searches in flight — more so since
-  // "All" issues two requests per search — and the slower one landing last
-  // would overwrite fresher results, or clear the spinner while the newer
-  // search was still running. Only the newest request may touch state; the
-  // rest are aborted and ignored, as on the search page.
-  const doSearch = useCallback(async (q: string, f: AddFilter) => {
-    abortRef.current?.abort();
-    const requestId = ++requestIdRef.current;
-
-    if (!q.trim()) {
-      setResults([]);
-      return;
-    }
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setSearching(true);
-    setError(null);
-    try {
-      let next: SearchResult[];
-      if (f === "all") {
+  // "All" is two requests per search, so both have to be carried by the same
+  // guard — a half-resolved pair is exactly the case a bare abort misses. See
+  // `useDebouncedSearch`.
+  const search = useCallback(
+    async (q: string, signal: AbortSignal): Promise<SearchResult[]> => {
+      if (filter === "all") {
         const [movies, series] = await Promise.all([
-          api.search("movie", q, controller.signal),
-          api.search("series", q, controller.signal),
+          api.search("movie", q, signal),
+          api.search("series", q, signal),
         ]);
-        next = mergeByRelevance(movies, series, q);
-      } else {
-        next = await api.search(f, q, controller.signal);
+        return mergeByRelevance(movies, series, q);
       }
-      if (requestIdRef.current !== requestId) return;
-      setResults(next);
-    } catch (err) {
-      if (requestIdRef.current !== requestId) return;
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      setError(err instanceof Error ? err.message : "Search failed");
-    } finally {
-      if (requestIdRef.current === requestId) setSearching(false);
-    }
-  }, []);
+      return api.search(filter, q, signal);
+    },
+    [filter]
+  );
 
-  useEffect(() => {
-    if (!query.trim()) {
-      setResults([]);
-      return;
-    }
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => void doSearch(query, filter), 350);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query, filter, doSearch]);
+  const { results, searching, error, setError } = useDebouncedSearch<SearchResult>(query, search);
 
   const handleAdd = async (result: SearchResult) => {
     const key = resultKey(result.type, result.imdbId);
@@ -184,127 +125,88 @@ function AddItemModal({
   };
 
   return (
-    <div
-      className={`overlay-scrim overlay-fade fixed inset-0 z-50 flex items-start justify-center p-4 sm:pt-[10vh] ${exiting ? "overlay-exit" : ""}`}
-      style={viewportStyle}
-      onClick={requestClose}
+    <SearchAddDialog
+      title={`Add to ${listName}`}
+      titleId="add-item-modal-title"
+      query={query}
+      onQueryChange={setQuery}
+      placeholder="Search movies & series..."
+      inputLabel="Search movies and series"
+      onClose={onClose}
+      filters={
+        <div
+          role="group"
+          aria-label="Filter by type"
+          className="mt-2.5 inline-flex rounded-full bg-[var(--surface)] p-1"
+          style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)" }}
+        >
+          {ADD_FILTERS.map((opt) => {
+            const Icon = opt.icon;
+            const active = filter === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setFilter(opt.value)}
+                aria-pressed={active}
+                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-medium transition-all duration-base ${
+                  active ? "bg-claw-500 text-claw-on shadow-e1" : "text-[var(--text-mute)] hover:text-[var(--text)]"
+                }`}
+              >
+                {Icon && <Icon className="h-3 w-3" />}
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      }
     >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="add-item-modal-title"
-        tabIndex={-1}
-        inert={exiting}
-        className={`glass-surface overlay-dialog flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-3xl border shadow-e3 ${exiting ? "overlay-exit" : ""}`}
-        style={{ borderColor: "var(--border)", background: "var(--bg-1)" }}
-        onClick={(e) => e.stopPropagation()}
-        onAnimationEnd={onExitAnimationEnd}
-      >
-        {/* Header */}
-        <div className="flex flex-none items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
-          <h3 id="add-item-modal-title" className={SECTION_TITLE} style={{ color: "var(--text)" }}>Add to {listName}</h3>
-          <button onClick={requestClose} aria-label="Close dialog" className="rounded-lg p-1.5 hover:bg-[var(--surface)] hover:text-[var(--text)]" style={{ color: "var(--text-mute)" }}>
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Search input */}
-        <div className="flex-none border-b px-5 py-3" style={{ borderColor: "var(--border)" }}>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--text-mute)" }} />
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search movies & series..."
-              aria-label="Search movies and series"
-              className="w-full rounded-full border py-2.5 pl-9 pr-3 text-sm focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15"
-              style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)" }}
+      {error && <p role="alert" className="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-danger">{error}</p>}
+      {searching && <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>Searching...</p>}
+      {!searching && query.trim() && results.length === 0 && (
+        <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>No results found.</p>
+      )}
+      <div className="space-y-1">
+        {results.map((r) => {
+          const key = resultKey(r.type, r.imdbId);
+          const already = existingKeys.has(key) || addedKeys.has(key);
+          const pending = !!adding[key];
+          return (
+            <SearchAddResultRow
+              key={key}
+              disabled={pending || already}
+              muted={already}
+              onAdd={() => void handleAdd(r)}
+              thumbnail={
+                r.poster ? (
+                  <Poster src={r.poster} alt="" className="h-full w-full" sizes="40px" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center"><Film className="h-4 w-4" style={{ color: "var(--text-mute)" }} /></div>
+                )
+              }
+              title={r.name}
+              subtitle={<>{r.year ?? "Unknown"} &middot; {r.type}</>}
+              trailing={
+                pending ? (
+                  <span
+                    role="status"
+                    aria-label={`Adding ${r.name}`}
+                    className="h-4 w-4 flex-none animate-spin rounded-full border-2 border-claw-500 border-t-transparent"
+                  />
+                ) : already ? (
+                  <span className="flex flex-none items-center gap-1 text-2xs font-semibold" style={{ color: "var(--text-mute)" }}>
+                    <Check className="h-4 w-4 text-success" />
+                    Added
+                  </span>
+                ) : (
+                  <Plus className="h-4 w-4 flex-none text-claw-text" />
+                )
+              }
             />
-          </div>
-          <div
-            role="group"
-            aria-label="Filter by type"
-            className="mt-2.5 inline-flex rounded-full bg-[var(--surface)] p-1"
-            style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)" }}
-          >
-            {ADD_FILTERS.map((opt) => {
-              const Icon = opt.icon;
-              const active = filter === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setFilter(opt.value)}
-                  aria-pressed={active}
-                  className={`flex items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-medium transition-all duration-base ${
-                    active ? "bg-claw-500 text-claw-on shadow-e1" : "text-[var(--text-mute)] hover:text-[var(--text)]"
-                  }`}
-                >
-                  {Icon && <Icon className="h-3 w-3" />}
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Results — sized by what's left of the dialog rather than a `vh`
-            fraction, so the on-screen keyboard can't bury the list. */}
-        <div className="min-h-0 flex-auto overflow-y-auto px-5 py-3 sm:max-h-[50vh]">
-          {error && <p role="alert" className="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-danger">{error}</p>}
-          {searching && <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>Searching...</p>}
-          {!searching && query.trim() && results.length === 0 && (
-            <p className="py-6 text-center text-sm" style={{ color: "var(--text-mute)" }}>No results found.</p>
-          )}
-          <div className="space-y-1">
-            {results.map((r) => {
-              const key = resultKey(r.type, r.imdbId);
-              const already = existingKeys.has(key) || addedKeys.has(key);
-              const pending = adding[key];
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  // Nothing distinguished an item already in the list, so adding
-                  // the same title twice looked exactly like adding it once.
-                  disabled={pending || already}
-                  onClick={() => handleAdd(r)}
-                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-[var(--surface)] disabled:opacity-60 disabled:hover:bg-transparent transition-colors"
-                >
-                  <div className="h-14 w-10 flex-none overflow-hidden rounded-lg ring-1" style={{ backgroundColor: "var(--surface)", "--tw-ring-color": "var(--border)" } as React.CSSProperties}>
-                    {r.poster ? (
-                      <img src={r.poster} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center"><Film className="h-4 w-4" style={{ color: "var(--text-mute)" }} /></div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold" style={{ color: already ? "var(--text-mute)" : "var(--text)" }}>{r.name}</p>
-                    <p className="text-xs" style={{ color: "var(--text-mute)" }}>{r.year ?? "Unknown"} &middot; {r.type}</p>
-                  </div>
-                  {pending ? (
-                    <span
-                      role="status"
-                      aria-label={`Adding ${r.name}`}
-                      className="h-4 w-4 flex-none animate-spin rounded-full border-2 border-claw-500 border-t-transparent"
-                    />
-                  ) : already ? (
-                    <span className="flex flex-none items-center gap-1 text-2xs font-semibold" style={{ color: "var(--text-mute)" }}>
-                      <Check className="h-4 w-4 text-success" />
-                      Added
-                    </span>
-                  ) : (
-                    <Plus className="h-4 w-4 flex-none text-claw-text" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+          );
+        })}
       </div>
-    </div>
+    </SearchAddDialog>
   );
 }
 
