@@ -122,6 +122,16 @@ describe("jellyseerr", () => {
       expect(callArgs(0).url).toBe("https://home.example/jellyseerr/api/v1/request");
     });
 
+    it("takes every trailing slash off a pasted URL, however many there are", async () => {
+      // Scanned rather than matched with `/\\/+$/`, which is the polynomial
+      // backtracking shape on a value this re-reads on every add.
+      readSecretKv.mockResolvedValue(storedConfig({ url: `http://jellyseerr.lan:5055${"/".repeat(50_000)}` }));
+
+      await pushWatchlistRequest("add", { type: "movie", imdbId: "tt0133093" }, logger);
+
+      expect(callArgs(0).url).toBe("http://jellyseerr.lan:5055/api/v1/request");
+    });
+
     it("falls back to TMDB when the metadata row has no TMDB id yet", async () => {
       findUnique.mockResolvedValue({ tmdbId: null });
       findByImdbId.mockResolvedValue({ tmdbId: 1399 });

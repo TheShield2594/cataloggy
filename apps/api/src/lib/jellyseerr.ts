@@ -111,8 +111,23 @@ export const saveJellyseerrConfig = (config: JellyseerrConfig): Promise<void> =>
 
 export const clearJellyseerrConfig = (): Promise<void> => deleteSecretKv(JELLYSEERR_CONFIG_KEY);
 
+/**
+ * Trailing slashes off, by scan rather than by `replace(/\/+$/, "")`.
+ *
+ * The regex is the polynomial-backtracking shape CodeQL flags on a value that
+ * came from outside: a base URL ending in tens of thousands of slashes makes
+ * the engine retry from every one of them. Nothing here is worth a stall, and
+ * the stored URL is a string this process accepted once and then re-reads on
+ * every watchlist add.
+ */
+const stripTrailingSlashes = (value: string): string => {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") end -= 1;
+  return value.slice(0, end);
+};
+
 /** The server URL with its path prefix kept, so an instance behind a reverse proxy works. */
-const apiUrl = (base: string, path: string): string => `${base.replace(/\/+$/, "")}/api/v1${path}`;
+const apiUrl = (base: string, path: string): string => `${stripTrailingSlashes(base)}/api/v1${path}`;
 
 const REQUEST_TIMEOUT_MS = 10_000;
 
