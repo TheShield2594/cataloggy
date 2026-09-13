@@ -390,7 +390,7 @@ target.
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/settings/jellyseerr` | `{ configured, config }`. The stored API key is never returned — only `hasApiKey`. |
-| `POST` | `/settings/jellyseerr` | `{ url, apiKey?, requestOnAdd?, cancelOnRemove? }`. Omitting `apiKey` (or sending `""`) keeps the stored one. The connection is tested before anything is saved, so a refusal answers with the same collapsed `outcome`/`error` shape as `/ai/test` rather than storing a config that cannot work. |
+| `POST` | `/settings/jellyseerr` | `{ url, apiKey?, requestOnAdd?, cancelOnRemove? }`. Omitting `apiKey` (or sending `""`) keeps the stored one. The URL is validated (syntax and DNS) and stored; it is not requested here — proving the connection is the test route below, which Settings calls straight after a save. Two reasons: a server that is down must not refuse the save that fixes a typo, and a route that fetched a URL out of its own request body is the request-forgery shape a scanner is right to flag. |
 | `DELETE` | `/settings/jellyseerr` | Forgets the URL, the key and both flags. |
 | `POST` | `/settings/jellyseerr/test` | Checks the stored config: `{ success: true, version, applicationTitle }`, or `{ success: false, outcome, error }`. 404 when nothing is configured. |
 

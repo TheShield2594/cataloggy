@@ -50,6 +50,37 @@ describe("JellyseerrSettings", () => {
     expect(await screen.findByText(/requesting watchlist adds/i)).toBeInTheDocument();
   });
 
+  it("proves the connection itself, right after saving it", async () => {
+    // The server stores what it is given; this is where a wrong URL or a
+    // revoked key surfaces.
+    await renderLoaded();
+
+    await userEvent.type(screen.getByLabelText(/server url/i), "http://jellyseerr.lan:5055");
+    await userEvent.type(screen.getByLabelText(/api key/i), "js_key");
+    await userEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => expect(testJellyseerr).toHaveBeenCalled());
+    expect(await screen.findByText(/reached home requests/i)).toBeInTheDocument();
+  });
+
+  it("says so when the server it just saved is not answering", async () => {
+    testJellyseerr.mockResolvedValue({
+      success: false,
+      outcome: "unreachable",
+      error: "Could not reach that address — check the host and port. The server log has the details.",
+    });
+    await renderLoaded();
+
+    await userEvent.type(screen.getByLabelText(/server url/i), "http://jellyseerr.lan:5055");
+    await userEvent.type(screen.getByLabelText(/api key/i), "js_key");
+    await userEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    // Saved either way — a server that is off tonight must not block fixing a
+    // typo — but the failure is on screen rather than waiting in Sync Status.
+    await waitFor(() => expect(saveJellyseerrConfig).toHaveBeenCalled());
+    expect(await screen.findByText(/could not reach that address/i)).toBeInTheDocument();
+  });
+
   it("omits the key when the field is left blank, so a toggle keeps the stored one", async () => {
     getJellyseerrConfig.mockResolvedValue({ configured: true, config: CONFIG });
     await renderLoaded();

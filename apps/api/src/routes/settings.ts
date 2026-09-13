@@ -268,18 +268,17 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
       cancelOnRemove: typeof body.cancelOnRemove === "boolean" ? body.cancelOnRemove : existing?.cancelOnRemove ?? false,
     };
 
-    // Saved only once it has answered: a URL that is one typo off, or a key
-    // that was revoked, would otherwise sit there silently requesting nothing
-    // until someone read Sync Status.
-    try {
-      await testJellyseerr(config);
-    } catch (error) {
-      request.log.warn({ err: error }, "Jellyseerr connection test failed while saving");
-      return reply
-        .code(400)
-        .send(error instanceof JellyseerrError ? outboundFailure(error.outcome, error.publicMessage) : outboundFailure("failed"));
-    }
-
+    // Stored, not sent to. Proving the connection is `/settings/jellyseerr/test`
+    // below, which Settings calls the moment a save lands — the same shape the
+    // notification channels have, for two reasons beyond consistency:
+    //
+    //   * A server that is off must not stop you saving a correct URL. Testing
+    //     inline meant a Jellyseerr that was down for the evening refused every
+    //     save, including the one fixing a typo.
+    //   * Fetching a URL that arrived in this request body is the request-forgery
+    //     shape a scanner is right to flag. What the test route reaches for is
+    //     what is stored — validated above, and validated again per request in
+    //     `lib/jellyseerr.ts`.
     await saveJellyseerrConfig(config);
     return { configured: true, config: publicJellyseerrConfig(config) };
   });

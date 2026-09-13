@@ -423,7 +423,7 @@ describe("settings routes", () => {
       expect(JSON.stringify(res.json())).not.toContain("js_key");
     });
 
-    it("saves a configuration that answers", async () => {
+    it("stores the configuration without sending to it", async () => {
       const app = await buildApp();
 
       const res = await app.inject({
@@ -439,6 +439,28 @@ describe("settings routes", () => {
         requestOnAdd: true,
         cancelOnRemove: true,
       });
+      // Proving the connection is `/settings/jellyseerr/test`, which Settings
+      // calls straight after. A save that fetched the URL out of its own
+      // request body would be the request-forgery shape, and a server that is
+      // off would stop you saving a correct URL.
+      expect(testJellyseerr).not.toHaveBeenCalled();
+    });
+
+    it("stores a configuration whose server is not answering right now", async () => {
+      const { JellyseerrError } = await import("../lib/jellyseerr.js");
+      testJellyseerr.mockRejectedValue(new JellyseerrError("unreachable", "connect ECONNREFUSED"));
+      const app = await buildApp();
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/settings/jellyseerr",
+        payload: { url: "http://jellyseerr.lan:5055", apiKey: "js_key" },
+      });
+
+      // Jellyseerr being down for the evening must not refuse the save that
+      // fixes a typo.
+      expect(res.statusCode).toBe(200);
+      expect(saveJellyseerrConfig).toHaveBeenCalled();
     });
 
     it("keeps the stored key when the field is left blank", async () => {
@@ -484,23 +506,6 @@ describe("settings routes", () => {
 
       expect(res.statusCode).toBe(400);
       expect(saveJellyseerrConfig).not.toHaveBeenCalled();
-    });
-
-    it("does not save a configuration the server rejected", async () => {
-      const { JellyseerrError } = await import("../lib/jellyseerr.js");
-      testJellyseerr.mockRejectedValue(new JellyseerrError("rejected", "HTTP 403 for /settings/main"));
-      const app = await buildApp();
-
-      const res = await app.inject({
-        method: "POST",
-        url: "/settings/jellyseerr",
-        payload: { url: "http://jellyseerr.lan:5055", apiKey: "wrong" },
-      });
-
-      expect(res.statusCode).toBe(400);
-      expect(saveJellyseerrConfig).not.toHaveBeenCalled();
-      // The status code stays in the log; the caller gets the verdict.
-      expect(res.json().error).not.toContain("403");
     });
 
     it("clears the configuration", async () => {

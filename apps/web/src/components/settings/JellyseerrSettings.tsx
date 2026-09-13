@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useId, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useId, useState } from "react";
 import { AlertCircle, Check, Download, Loader2, Send, Unplug } from "lucide-react";
 import { api, type JellyseerrConfig } from "../../api";
 import { useTransientFlag } from "../../hooks/useTransientFlag";
@@ -44,31 +44,7 @@ export function JellyseerrSettings() {
     })();
   }, []);
 
-  const save = async (e: FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
-    setTestResult(null);
-    try {
-      const status = await api.saveJellyseerrConfig({
-        url: url.trim(),
-        // Blank means "keep the key you have" — the server never sends it back
-        // for this field to be pre-filled with.
-        ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
-        requestOnAdd,
-        cancelOnRemove,
-      });
-      setConfig(status.config);
-      setApiKey("");
-      setSaved(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save Jellyseerr settings");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const test = async () => {
+  const test = useCallback(async () => {
     setTesting(true);
     setTestResult(null);
     try {
@@ -87,6 +63,35 @@ export function JellyseerrSettings() {
       setTestResult({ ok: false, message: err instanceof Error ? err.message : "The test could not be completed." });
     } finally {
       setTesting(false);
+    }
+  }, []);
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    setTestResult(null);
+    try {
+      const status = await api.saveJellyseerrConfig({
+        url: url.trim(),
+        // Blank means "keep the key you have" — the server never sends it back
+        // for this field to be pre-filled with.
+        ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+        requestOnAdd,
+        cancelOnRemove,
+      });
+      setConfig(status.config);
+      setApiKey("");
+      setSaved(true);
+      // The save stores; this is what proves it works. Saving a URL a server
+      // isn't currently answering on is allowed — the answer shows up here
+      // rather than refusing the save, and a failure that persists shows up
+      // under Sync Status.
+      await test();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save Jellyseerr settings");
+    } finally {
+      setSaving(false);
     }
   };
 

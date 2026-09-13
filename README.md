@@ -351,9 +351,11 @@ being a manual hop into another app.
 
 Set it up under **Settings → Jellyseerr Requests**: your server's URL and the
 API key from **Settings → General → API Key** in Jellyseerr. Overseerr works
-too — the API this uses is the same one. Nothing is sent until you configure it,
-and the connection is tested before it is stored, so a typo or a revoked key is
-refused at the point you save rather than discovered weeks later.
+too — the API this uses is the same one. Nothing is sent until you configure it.
+Saving stores the URL and key and then tests them straight away, so a typo or a
+revoked key shows up there and then rather than weeks later — and a server that
+happens to be off tonight doesn't stop you saving the setting that fixes it.
+**Test connection** re-runs that check whenever you want it.
 
 What it does, and deliberately does not do:
 
