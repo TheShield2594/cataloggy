@@ -149,7 +149,7 @@ function AddItemModal({
                 type="button"
                 onClick={() => setFilter(opt.value)}
                 aria-pressed={active}
-                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-medium transition-all duration-base ${
+                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-medium transition-[color,background-color,box-shadow] duration-base ${
                   active ? "bg-claw-500 text-claw-on shadow-e1" : "text-[var(--text-mute)] hover:text-[var(--text)]"
                 }`}
               >
@@ -210,6 +210,11 @@ function AddItemModal({
   );
 }
 
+/**
+ * The lists page: browse and manage custom lists and the titles in them. The
+ * selected list lives in the URL (`?list=`) so it can be linked, bookmarked and
+ * navigated back to.
+ */
 export function ListsPage() {
   const [lists, setLists] = useCachedState<CatalogList[]>("lists:all", []);
   // The selection lives in the URL so a list can be linked, bookmarked and
@@ -572,7 +577,7 @@ export function ListsPage() {
                   </div>
                 </div>
               ) : (
-                <div className={`group flex items-center rounded-xl border transition-all duration-base md:w-full ${
+                <div className={`group flex items-center rounded-xl border transition-colors duration-base md:w-full ${
                   selectedListId === list.id
                     ? "border-claw-500/40 bg-claw-500/10"
                     : "glass-row hover:bg-[var(--surface)] hover:border-[var(--border-strong)]"
@@ -608,7 +613,7 @@ export function ListsPage() {
                       }}
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(list.id); }}
-                      className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/15 hover:text-danger transition-all duration-fast focus:opacity-100"
+                      className="mr-2 flex h-7 w-7 flex-none items-center justify-center rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-rose-500/15 hover:text-danger transition-[opacity,color,background-color] duration-fast focus:opacity-100"
                       style={{ color: "var(--text-mute)" }}
                       aria-label={`Delete list ${list.name}`}
                     >
@@ -749,7 +754,7 @@ export function ListsPage() {
                       type="button"
                       onClick={() => setSortBy(value)}
                       aria-pressed={sortBy === value}
-                      className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-base ${
+                      className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors duration-base ${
                         sortBy === value ? "bg-claw-500 text-claw-on" : "hover:text-[var(--text)]"
                       }`}
                       style={sortBy === value ? undefined : { color: "var(--text-mute)" }}
@@ -809,7 +814,7 @@ export function ListsPage() {
                           type="button"
                           disabled={removingIds[item.imdbId]}
                           onClick={() => handleRemove(item)}
-                          className="pointer-events-auto absolute top-2.5 right-2.5 rounded-full bg-black/60 p-2 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-all duration-base hover:bg-rose-500 hover:text-white disabled:opacity-50 backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-ring-offset"
+                          className="pointer-events-auto absolute top-2.5 right-2.5 rounded-full bg-black/60 p-2 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-[opacity,color,background-color] duration-base hover:bg-rose-500 hover:text-white disabled:opacity-50 backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-ring-offset"
                           aria-label="Remove from list"
                         >
                           <Trash2 className="h-4 w-4" />

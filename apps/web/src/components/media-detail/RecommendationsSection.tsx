@@ -5,6 +5,12 @@ import { useHorizontalScroll } from "../carousel-utils";
 import type { TrendingMeta } from "../../api";
 import { KICKER } from "../typography";
 
+/**
+ * A horizontally-scrolling rail of recommended titles inside the detail panel,
+ * drawn as poster cards with scroll arrows that appear only when the row
+ * overflows. Renders a skeleton while loading and nothing when there is nothing
+ * to recommend.
+ */
 export function RecommendationsSection({
   items, loading, onSelect,
 }: {
@@ -50,7 +56,7 @@ export function RecommendationsSection({
             type="button"
             onClick={() => scroll("left")}
             disabled={!canScrollLeft}
-            className="flex h-6 w-6 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95"
+            className="flex h-6 w-6 items-center justify-center rounded-full transition-[transform,opacity] duration-base disabled:opacity-30 disabled:cursor-default active:scale-95"
             style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
             aria-label="Scroll recommendations left"
           >
@@ -60,7 +66,7 @@ export function RecommendationsSection({
             type="button"
             onClick={() => scroll("right")}
             disabled={!canScrollRight}
-            className="flex h-6 w-6 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95"
+            className="flex h-6 w-6 items-center justify-center rounded-full transition-[transform,opacity] duration-base disabled:opacity-30 disabled:cursor-default active:scale-95"
             style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
             aria-label="Scroll recommendations right"
           >

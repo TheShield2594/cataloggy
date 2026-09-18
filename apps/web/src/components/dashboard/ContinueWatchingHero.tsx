@@ -73,7 +73,7 @@ export function ContinueWatchingHero({
               <span className="font-semibold text-claw-text">{progress.watched} / {progress.total} episodes</span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--surface-strong)" }}>
-              <div className="h-full rounded-full bg-claw-500 transition-all duration-slow" style={{ width: `${progress.pct}%` }} />
+              <div className="h-full rounded-full bg-claw-500 transition-[width] duration-slow" style={{ width: `${progress.pct}%` }} />
             </div>
           </div>
         )}

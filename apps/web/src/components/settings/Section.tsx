@@ -14,6 +14,13 @@ function readStoredOpen(storageKey: string, fallback: boolean): boolean {
   }
 }
 
+/**
+ * A collapsible settings section wrapped in a real `<h2>` so a screen reader can
+ * jump between sections. Persists its open/closed state to localStorage (the
+ * user's choice wins over the default after the first visit), reveals its body
+ * by animating a grid track, and shows an integration's health dot on the
+ * header row. `alwaysOpen` renders it expanded and without a toggle.
+ */
 export function Section({
   title,
   icon,
@@ -41,32 +48,12 @@ export function Section({
   const [storedOpen, setStoredOpen] = useState(() => readStoredOpen(storageKey, defaultOpen ?? false));
   const open = alwaysOpen || storedOpen;
   const contentRef = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState<number | undefined>(open ? undefined : 0);
-  const animatable = useRef(false);
   const id = useId();
   const headerId = `${id}-header`;
   const panelId = `${id}-panel`;
 
   useEffect(() => {
     if (contentRef.current) contentRef.current.inert = !open;
-  }, [open]);
-
-  useEffect(() => {
-    if (!contentRef.current) return;
-    // The initial height already matches `open`; animating on mount would flash
-    // a collapsed section's whole body open before sliding it shut again.
-    if (!animatable.current) {
-      animatable.current = true;
-      return;
-    }
-    if (open) {
-      setHeight(contentRef.current.scrollHeight);
-      const timer = setTimeout(() => setHeight(undefined), 300);
-      return () => clearTimeout(timer);
-    } else {
-      setHeight(contentRef.current.scrollHeight);
-      requestAnimationFrame(() => setHeight(0));
-    }
   }, [open]);
 
   const toggle = () => {
@@ -155,15 +142,33 @@ export function Section({
           </button>
         )}
       </h2>
+      {/*
+       * The reveal animates a single grid track from 0fr to 1fr rather than an
+       * explicit pixel height. `transition-[height]` had to read scrollHeight on
+       * every toggle — a forced synchronous layout — then hand back to `auto` on
+       * a 300ms timer that a mid-animation toggle couldn't interrupt. One grid
+       * track interpolates to the content's own size with no measurement, and
+       * retargets from wherever it is when toggled again. It is still a layout
+       * animation on purpose — the sections below have to move to make room —
+       * but a declarative, interruptible one, and it names the one property it
+       * touches instead of leaning on `transition-all`. The reduced-motion block
+       * in index.css collapses the transition to instant.
+       */}
       <div
-        id={panelId}
-        ref={contentRef}
-        role="region"
-        aria-labelledby={headerId}
-        style={{ height: height !== undefined ? `${height}px` : "auto" }}
-        className="overflow-hidden transition-[height] duration-slow ease-in-out"
+        className="grid transition-[grid-template-rows] duration-slow ease-in-out"
+        style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
       >
-        <div className="border-t px-5 py-5" style={{ borderColor: "var(--border)" }}>{children}</div>
+        <div
+          id={panelId}
+          ref={contentRef}
+          role="region"
+          aria-labelledby={headerId}
+          // min-h-0 lets the grid track shrink the row past its content's min
+          // size, and overflow-hidden clips the body while the row is collapsing.
+          className="min-h-0 overflow-hidden"
+        >
+          <div className="border-t px-5 py-5" style={{ borderColor: "var(--border)" }}>{children}</div>
+        </div>
       </div>
     </div>
   );

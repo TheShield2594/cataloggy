@@ -4,6 +4,11 @@ import type { WatchEvent } from "../../api";
 import { watchEventLabel, watchEventTitle } from "../../utils/watchEvents";
 import { KICKER } from "../typography";
 
+/**
+ * A title's past watch events, newest first, each row carrying an icon for its
+ * media type and a delete affordance. The most recent row animates in so a
+ * freshly logged watch reads as arriving; renders a skeleton while loading.
+ */
 export function WatchHistorySection({
   history,
   loading,
@@ -80,7 +85,7 @@ export function WatchHistorySection({
               <button
                 type="button"
                 onClick={() => onDeleteEvent(event)}
-                className="shrink-0 rounded p-1 text-[var(--text-mute)] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 hover:bg-rose-500/10 hover:text-danger transition-all duration-fast"
+                className="shrink-0 rounded p-1 text-[var(--text-mute)] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 hover:bg-rose-500/10 hover:text-danger transition-[opacity,color,background-color] duration-fast"
                 aria-label={`Remove watch of ${watchEventLabel(event)}`}
               >
                 <Trash2 className="h-3.5 w-3.5" />

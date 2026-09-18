@@ -26,6 +26,12 @@ const SIZES: Record<Size, { button: string; icon: string; coarseGap: string }> =
   md: { button: "h-8 w-8", icon: "h-4 w-4", coarseGap: "[@media(pointer:coarse)]:gap-3" },
 };
 
+/**
+ * The left/right scroll controls for a horizontal carousel, at the `sm` or `md`
+ * size. Stays mounted and fades itself out when the row already fits, so a
+ * resize dissolves the cluster instead of blinking it away, and names each
+ * arrow with its subject for assistive tech.
+ */
 export function ScrollArrows({
   canScrollLeft,
   canScrollRight,
@@ -59,7 +65,7 @@ export function ScrollArrows({
           type="button"
           onClick={() => onScroll(direction)}
           disabled={direction === "left" ? !canScrollLeft : !canScrollRight}
-          className={`tap-target flex ${button} items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset`}
+          className={`tap-target flex ${button} items-center justify-center rounded-full transition-[transform,opacity] duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset`}
           style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
           aria-label={label(direction)}
         >

@@ -32,7 +32,7 @@ export function UpcomingList({ entries }: { entries: CalendarEntry[] }) {
         return (
           <div
             key={`${entry.seriesImdbId}-s${entry.season}e${entry.episode}`}
-            className="flex items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5 transition-all duration-base hover:border-[var(--border-strong)] hover:bg-[var(--surface-strong)]"
+            className="flex items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5 transition-colors duration-base hover:border-[var(--border-strong)] hover:bg-[var(--surface-strong)]"
           >
             <div className="h-12 w-8 flex-none overflow-hidden rounded-md" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
               <Poster src={entry.poster ?? undefined} alt={entry.seriesName} className="h-full w-full" sizes="32px" />

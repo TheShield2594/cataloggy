@@ -44,12 +44,16 @@ function AddonManifestUrl({ profileName, multiProfile }: { profileName: string |
         <button
           type="button"
           onClick={copy}
-          className={`flex-none inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-base ${
+          // A permanent transparent 1px border on the base, so the confirmed
+          // (ring) states don't drop the border the idle state carries and
+          // shift the box by a pixel. Only border-color changes between states,
+          // and it eases with the rest.
+          className={`flex-none inline-flex items-center gap-1.5 rounded-lg border border-transparent px-3 py-2 text-xs font-semibold transition-[color,background-color,border-color,box-shadow,opacity] duration-base ${
             copied
               ? "bg-emerald-500/15 text-success ring-1 ring-emerald-500/20"
               : copyError
                 ? "bg-rose-500/15 text-danger ring-1 ring-rose-500/20"
-                : "hover:bg-[var(--surface-strong)] border"
+                : "hover:bg-[var(--surface-strong)]"
           }`}
           style={!copied && !copyError ? { color: "var(--text-dim)", borderColor: "var(--border)", background: "var(--bg-0)" } : undefined}
           aria-label="Copy manifest URL"
@@ -75,6 +79,11 @@ function AddonManifestUrl({ profileName, multiProfile }: { profileName: string |
   );
 }
 
+/**
+ * The settings panel for the local Stremio addon: shows the manifest URL with a
+ * copy button and per-profile install guidance, and loads and saves the addon
+ * configuration.
+ */
 export function AddonSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

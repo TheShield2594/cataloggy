@@ -1,17 +1,13 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Settings } from "lucide-react";
 import { Section } from "./Section";
 
-// jsdom has no layout, so every element measures 0 and the height animation is
-// invisible to the assertions below. Give the panel a size to animate between.
-beforeEach(() => {
-  Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get: () => 500 });
-});
-afterEach(() => {
-  Reflect.deleteProperty(HTMLElement.prototype, "scrollHeight");
-});
+// The reveal animates grid-template-rows on the panel's wrapper, so the open
+// state is legible from an inline style that jsdom reflects without needing
+// layout — no scrollHeight stub required.
+const track = () => panel().parentElement;
 
 const sectionElement = (props: Partial<Parameters<typeof Section>[0]> = {}) => (
   <Section title="Trakt Integration" icon={<Settings size={20} />} storageKey="trakt" {...props}>
@@ -56,15 +52,15 @@ describe("Section", () => {
     expect(header()).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("mounts collapsed at zero height, without flashing its body open first", () => {
+  it("mounts collapsed with the panel's grid track at zero, without flashing its body open first", () => {
     renderSection();
-    expect(panel()).toHaveStyle({ height: "0px" });
+    expect(track()).toHaveStyle("grid-template-rows: 0fr");
   });
 
-  it("still animates the height when the user opens it", async () => {
+  it("opens the grid track when the user expands it", async () => {
     renderSection();
     await userEvent.click(header());
-    expect(panel()).toHaveStyle({ height: "500px" });
+    expect(track()).toHaveStyle("grid-template-rows: 1fr");
   });
 
   it("drops the toggle entirely when held open, so the chevron can't disagree with the panel", () => {
@@ -84,7 +80,7 @@ describe("Section", () => {
 
     expect(header()).toHaveAttribute("aria-expanded", "false");
     // Unlike the mount case this one animates: it was on screen a frame ago.
-    await waitFor(() => expect(panel()).toHaveStyle({ height: "0px" }));
+    await waitFor(() => expect(track()).toHaveStyle("grid-template-rows: 0fr"));
     expect(localStorage.getItem("cataloggy:settings-section:trakt")).toBe("0");
   });
 

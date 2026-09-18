@@ -112,6 +112,11 @@ function buildConfig(
   };
 }
 
+/**
+ * The settings panel for the AI provider integration: endpoint, model and key
+ * fields, an advanced raw-JSON editor for the request payload, and Test, Save
+ * and Remove actions with their busy and result states.
+ */
 export function AiSettings() {
   const [loading, setLoading] = useState(true);
   const [configured, setConfigured] = useState(false);
@@ -510,7 +515,7 @@ export function AiSettings() {
       >
         <ChevronDown
           size={14}
-          className={`transition-transform ${showAdvanced ? "rotate-180" : ""}`}
+          className={`transition-transform duration-slow ${showAdvanced ? "rotate-180" : ""}`}
         />
         Advanced: edit raw JSON
       </button>
@@ -578,7 +583,7 @@ export function AiSettings() {
           type="button"
           onClick={handleTest}
           disabled={testing}
-          className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-all duration-base hover:bg-[var(--surface-strong)] disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-[color,background-color,box-shadow,opacity] duration-base hover:bg-[var(--surface-strong)] disabled:opacity-40 disabled:cursor-not-allowed"
           style={{
             borderColor: "var(--border-strong)",
             color: "var(--text-dim)",
@@ -597,7 +602,7 @@ export function AiSettings() {
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-base ${
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-[color,background-color,box-shadow,opacity] duration-base ${
             saved
               ? "bg-emerald-500/15 text-success ring-1 ring-emerald-500/20"
               : "bg-plum-500 text-white hover:bg-plum-600 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -624,7 +629,7 @@ export function AiSettings() {
             // carried: those are near-white fixed values, so on the four dark
             // themes the button was a white slab and its own label sat at
             // 2.18:1 on it. A tint tracks whatever it is laid over.
-            className="inline-flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-danger transition-all duration-base hover:bg-rose-500/15 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-danger transition-[color,background-color,box-shadow,opacity] duration-base hover:bg-rose-500/15 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {removing ? (
               <>

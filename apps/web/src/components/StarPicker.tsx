@@ -98,7 +98,7 @@ export function StarPicker({
                   style={{ width: `${fill * 100}%` }}
                 >
                   <Star
-                    className={`star-shake-target absolute left-0 top-0 fill-warning text-warning ${starClass} ${popping ? "star-pop" : ""}`}
+                    className={`absolute left-0 top-0 fill-warning text-warning ${starClass} ${popping ? "star-pop" : ""}`}
                   />
                 </span>
               )}
