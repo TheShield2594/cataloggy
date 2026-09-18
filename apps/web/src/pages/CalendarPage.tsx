@@ -350,7 +350,10 @@ export function CalendarPage() {
                 className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors duration-base ${
                   agendaDays === d ? "bg-claw-500 text-claw-on" : "hover:text-[var(--text)]"
                 }`}
-                style={agendaDays === d ? undefined : { color: "var(--text-mute)", border: "1px solid var(--border)" }}
+                // Both states carry a 1px border so selecting one doesn't shift
+                // the row by a pixel; the active state's is transparent and only
+                // its colour changes, easing with `transition-colors`.
+                style={agendaDays === d ? { border: "1px solid transparent" } : { color: "var(--text-mute)", border: "1px solid var(--border)" }}
               >
                 {d} Days
               </button>
