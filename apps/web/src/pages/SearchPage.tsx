@@ -356,7 +356,7 @@ export function SearchPage() {
             onChange={(e) => setFilters({ query: e.target.value })}
             placeholder="Search movies & TV shows..."
             aria-label="Search movies and TV shows"
-            className="w-full rounded-full py-3.5 pl-14 pr-12 text-base placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15 transition-all duration-base"
+            className="w-full rounded-full py-3.5 pl-14 pr-12 text-base placeholder:text-[var(--text-mute)] focus:border-claw-500 focus:outline-none focus:ring-2 focus:ring-claw-500/15 transition-[border-color,box-shadow] duration-base"
             style={{ borderWidth: 1, borderStyle: "solid", borderColor: "var(--border-strong)", background: "var(--bg-0)", color: "var(--text)" }}
             autoFocus={typeof window !== "undefined" && !window.matchMedia("(pointer: coarse)").matches}
           />
@@ -387,7 +387,7 @@ export function SearchPage() {
                   // Which filter is on is otherwise carried by a background
                   // colour and nothing else — SC 1.4.1 and 4.1.2.
                   aria-pressed={active}
-                  className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-base ${
+                  className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-[color,background-color,box-shadow] duration-base ${
                     active
                       ? "bg-claw-500 text-claw-on shadow-e1"
                       : "text-[var(--text-mute)] hover:text-[var(--text)]"
@@ -413,7 +413,7 @@ export function SearchPage() {
             aria-expanded={filtersOpen}
             aria-controls={advancedFiltersId}
             aria-label={activeFilterCount > 0 ? `Filters (${activeFilterCount} active)` : "Filters"}
-            className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all duration-base ${
+            className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-[color,background-color,border-color] duration-base ${
               hasActiveFilters
                 ? "border-claw-500/50 bg-claw-500/10 text-claw-text"
                 : "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-mute)] hover:text-[var(--text)]"
@@ -629,7 +629,7 @@ export function SearchPage() {
                     // midnight. The one control saying which sort is in force was
                     // the least legible thing on the page on the default theme.
                     aria-pressed={filters.sort === s}
-                    className={`rounded-full px-2.5 py-1 text-2xs font-medium transition-all duration-base focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset ${
+                    className={`rounded-full px-2.5 py-1 text-2xs font-medium transition-colors duration-base focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset ${
                       filters.sort === s ? "" : "hover:text-[var(--text)]"
                     }`}
                     style={
@@ -872,7 +872,7 @@ function ResultCard({
               e.stopPropagation();
               onToggleDropdown(result.imdbId);
             }}
-            className="pointer-events-auto absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-claw-500 text-claw-on opacity-100 sm:opacity-60 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shadow-e2 transition-all duration-slow hover:bg-claw-600 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-300 focus-ring-offset"
+            className="pointer-events-auto absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-claw-500 text-claw-on opacity-100 sm:opacity-60 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shadow-e2 transition-[transform,opacity,background-color] duration-slow hover:bg-claw-600 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-claw-300 focus-ring-offset"
             aria-label={`Add ${result.name} to a list`}
             aria-expanded={isOpen}
             aria-controls={isOpen ? panelId : undefined}

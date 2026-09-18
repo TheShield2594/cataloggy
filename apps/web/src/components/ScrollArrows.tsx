@@ -59,7 +59,7 @@ export function ScrollArrows({
           type="button"
           onClick={() => onScroll(direction)}
           disabled={direction === "left" ? !canScrollLeft : !canScrollRight}
-          className={`tap-target flex ${button} items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset`}
+          className={`tap-target flex ${button} items-center justify-center rounded-full transition-[transform,opacity] duration-base disabled:opacity-30 disabled:cursor-default active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset`}
           style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
           aria-label={label(direction)}
         >

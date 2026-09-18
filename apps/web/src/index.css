@@ -1607,12 +1607,16 @@ body {
   }
 }
 
+/* Enter decelerates (the arrival is the moment watched most), exit accelerates
+   away — the same ease-out/ease-in asymmetry the overlay choreography uses. A
+   bare `ease` on the entrance started the 100px slide slowly and read as the
+   toast being late rather than as it landing. */
 .toast-enter {
-  animation: toast-in 0.3s ease forwards;
+  animation: toast-in 0.3s ease-out forwards;
 }
 
 .toast-exit {
-  animation: toast-out 0.3s ease forwards;
+  animation: toast-out 0.3s ease-in forwards;
 }
 
 @media (max-width: 640px) {
@@ -1655,20 +1659,8 @@ body {
   }
 }
 
-@keyframes star-shake {
-  0% { transform: rotate(0deg); }
-  20% { transform: rotate(-18deg); }
-  50% { transform: rotate(18deg); }
-  80% { transform: rotate(-12deg); }
-  100% { transform: rotate(0deg); }
-}
-
 .star-pop {
   animation: star-pop-in 0.45s cubic-bezier(0.75, 0.41, 0.82, 1.1);
-}
-
-.star-shake-target:hover {
-  animation: star-shake 0.6s ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1681,8 +1673,7 @@ body {
     scroll-behavior: auto !important;
   }
 
-  .star-pop,
-  .star-shake-target:hover {
+  .star-pop {
     animation: none;
   }
 

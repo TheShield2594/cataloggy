@@ -330,13 +330,13 @@ export function StatsPage() {
                     )}
                     {episodeHeight > 0 && (
                       <div
-                        className={`w-full rounded-t bg-plum-500/70 transition-all duration-slow ${isHovered ? "bg-plum-500" : ""}`}
+                        className={`w-full rounded-t bg-plum-500/70 transition-[height,background-color] duration-slow ${isHovered ? "bg-plum-500" : ""}`}
                         style={{ height: `${episodeHeight}%` }}
                       />
                     )}
                     {movieHeight > 0 && (
                       <div
-                        className={`w-full bg-claw-500/70 transition-all duration-slow ${episodeHeight === 0 ? "rounded-t" : ""} rounded-b ${isHovered ? "bg-claw-500" : ""}`}
+                        className={`w-full bg-claw-500/70 transition-[height,background-color] duration-slow ${episodeHeight === 0 ? "rounded-t" : ""} rounded-b ${isHovered ? "bg-claw-500" : ""}`}
                         style={{ height: `${movieHeight}%` }}
                       />
                     )}
@@ -378,7 +378,7 @@ export function StatsPage() {
                   title={`${g.genre}: ${g.count} watched`}
                 >
                   <div
-                    className="h-full rounded-full bg-claw-500/80 transition-all duration-slow"
+                    className="h-full rounded-full bg-claw-500/80 transition-[width] duration-slow"
                     style={{ width: `${(g.count / maxGenreCount) * 100}%` }}
                   />
                 </div>

@@ -347,7 +347,7 @@ export function CalendarPage() {
                 key={d}
                 type="button"
                 onClick={() => setAgendaDays(d)}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-base ${
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors duration-base ${
                   agendaDays === d ? "bg-claw-500 text-claw-on" : "hover:text-[var(--text)]"
                 }`}
                 style={agendaDays === d ? undefined : { color: "var(--text-mute)", border: "1px solid var(--border)" }}

@@ -260,6 +260,18 @@ export function Sidebar({
       onFocus={() => setFocused(true)}
       onBlur={handleBlur}
     >
+      {/*
+       * The expand/collapse animates `width`, a layout property, which is the
+       * deliberate exception to "animate transform/opacity only". A transform
+       * can't stand in here: the icons are pinned to the rail's leading edge and
+       * stay visible while collapsed, so translating the panel would slide them
+       * off screen, and the collapsed rail has to physically occupy 4rem or it
+       * would sit over the page's content instead of beside it. The reflow is
+       * bounded — one column of rows, `duration-base`, off a hover — and the
+       * page itself doesn't move (App.tsx's `sidebarPad` reserves the footprint
+       * and the expanded rail floats over content on its shadow). Named as
+       * `transition-[width]`, not `transition-all`, so nothing else eases with it.
+       */}
       <div
         className="glass-surface flex h-full flex-col overflow-hidden py-3 backdrop-blur-xl transition-[width] duration-base"
         style={{

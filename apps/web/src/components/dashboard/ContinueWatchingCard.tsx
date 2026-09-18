@@ -48,7 +48,7 @@ export function ContinueWatchingCard({
           <div className="bg-gradient-to-t from-black via-black/80 to-transparent px-3 pb-3 pt-16">
             {progressPct !== null && (
               <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-white/20">
-                <div className="h-full rounded-full bg-claw-500 transition-all duration-slow" style={{ width: `${progressPct}%` }} />
+                <div className="h-full rounded-full bg-claw-500 transition-[width] duration-slow" style={{ width: `${progressPct}%` }} />
               </div>
             )}
             <p className="meta-row text-white/75">
@@ -60,7 +60,7 @@ export function ContinueWatchingCard({
               disabled={isMarking || isDone}
               onClick={onMarkNext}
               aria-label={isMarking ? "Marking" : isDone ? "Marked" : `Mark S${s.nextSeason}:E${s.nextEpisode}`}
-              className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all duration-base active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-claw-300 ${
+              className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-[transform,color,background-color,box-shadow] duration-base active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-claw-300 ${
                 isMarking ? "bg-white/10 text-white/50" : isDone ? "bg-emerald-500/20 text-success" : "bg-white/15 text-white backdrop-blur-sm hover:bg-white/25"
               }`}
             >

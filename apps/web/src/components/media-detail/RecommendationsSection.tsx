@@ -50,7 +50,7 @@ export function RecommendationsSection({
             type="button"
             onClick={() => scroll("left")}
             disabled={!canScrollLeft}
-            className="flex h-6 w-6 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95"
+            className="flex h-6 w-6 items-center justify-center rounded-full transition-[transform,opacity] duration-base disabled:opacity-30 disabled:cursor-default active:scale-95"
             style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
             aria-label="Scroll recommendations left"
           >
@@ -60,7 +60,7 @@ export function RecommendationsSection({
             type="button"
             onClick={() => scroll("right")}
             disabled={!canScrollRight}
-            className="flex h-6 w-6 items-center justify-center rounded-full transition-all duration-base disabled:opacity-30 disabled:cursor-default active:scale-95"
+            className="flex h-6 w-6 items-center justify-center rounded-full transition-[transform,opacity] duration-base disabled:opacity-30 disabled:cursor-default active:scale-95"
             style={{ border: "1px solid var(--border-strong)", background: "var(--bg-1)", color: "var(--text-dim)" }}
             aria-label="Scroll recommendations right"
           >

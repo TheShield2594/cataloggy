@@ -44,7 +44,7 @@ function AddonManifestUrl({ profileName, multiProfile }: { profileName: string |
         <button
           type="button"
           onClick={copy}
-          className={`flex-none inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-base ${
+          className={`flex-none inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-[color,background-color,box-shadow,opacity] duration-base ${
             copied
               ? "bg-emerald-500/15 text-success ring-1 ring-emerald-500/20"
               : copyError
