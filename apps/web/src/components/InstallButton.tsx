@@ -29,6 +29,12 @@ function snoozeInstallPrompt() {
   }
 }
 
+/**
+ * The PWA install affordance: an Install / Add to Home Screen button when the
+ * browser offers one, a "needs HTTPS" explainer when it can't, and a manual
+ * hint for iOS. Owns the deferred `beforeinstallprompt` event and the snooze
+ * that keeps a dismissed prompt from returning for a few days.
+ */
 export function InstallButton() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showManualHint, setShowManualHint] = useState(false);

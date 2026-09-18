@@ -4,6 +4,11 @@ import type { WatchEvent } from "../../api";
 import { watchEventLabel, watchEventTitle } from "../../utils/watchEvents";
 import { KICKER } from "../typography";
 
+/**
+ * A title's past watch events, newest first, each row carrying an icon for its
+ * media type and a delete affordance. The most recent row animates in so a
+ * freshly logged watch reads as arriving; renders a skeleton while loading.
+ */
 export function WatchHistorySection({
   history,
   loading,

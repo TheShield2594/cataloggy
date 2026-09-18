@@ -14,6 +14,13 @@ function readStoredOpen(storageKey: string, fallback: boolean): boolean {
   }
 }
 
+/**
+ * A collapsible settings section wrapped in a real `<h2>` so a screen reader can
+ * jump between sections. Persists its open/closed state to localStorage (the
+ * user's choice wins over the default after the first visit), reveals its body
+ * by animating a grid track, and shows an integration's health dot on the
+ * header row. `alwaysOpen` renders it expanded and without a toggle.
+ */
 export function Section({
   title,
   icon,

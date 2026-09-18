@@ -237,6 +237,11 @@ function isSettingsTab(value: string | null): value is SettingsTab {
   return value === "preferences" || value === "integrations";
 }
 
+/**
+ * The settings page: Preferences and Integrations tabs built from collapsible
+ * `Section`s, with a search box and the integration health dots that are shared
+ * with the sidebar's Sources rows.
+ */
 export function SettingsPage() {
   // `sections` is shared with the rail, which shows the same dots against its
   // Sources rows — see the provider note in useSettingsHealth. It is read once

@@ -83,6 +83,12 @@ const HINT_KEY = "cataloggy:sidebar-hint-seen";
 const HOVER_DELAY_MS = 200;
 const HINT_AUTO_DISMISS_MS = 15000;
 
+/**
+ * The desktop source-list rail (hidden below `sm`, where the tab bar navigates
+ * instead): the primary navigation rows with a sliding selection marker,
+ * hover- and focus-to-expand, a pin toggle persisted to localStorage, and a
+ * one-time hint that explains the expand gesture.
+ */
 export function Sidebar({
   pinned,
   onPinnedChange,

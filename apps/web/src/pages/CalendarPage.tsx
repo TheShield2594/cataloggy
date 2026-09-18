@@ -174,6 +174,10 @@ function DayEntriesModal({
   );
 }
 
+/**
+ * The calendar page: upcoming releases shown either as an agenda list over a
+ * chosen day range or as a month grid, opening a detail panel on selection.
+ */
 export function CalendarPage() {
   const [view, setView] = useState<ViewMode>("agenda");
   const [agendaDays, setAgendaDays] = useState<(typeof AGENDA_RANGES)[number]>(30);

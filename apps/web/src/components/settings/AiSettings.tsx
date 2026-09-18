@@ -112,6 +112,11 @@ function buildConfig(
   };
 }
 
+/**
+ * The settings panel for the AI provider integration: endpoint, model and key
+ * fields, an advanced raw-JSON editor for the request payload, and Test, Save
+ * and Remove actions with their busy and result states.
+ */
 export function AiSettings() {
   const [loading, setLoading] = useState(true);
   const [configured, setConfigured] = useState(false);

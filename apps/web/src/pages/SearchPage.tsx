@@ -78,6 +78,10 @@ function applyFiltersAndSort(
 
 /* ─── Main Component ─── */
 
+/**
+ * The search page: a query box with filter and sort chips over the combined
+ * catalog, rendering matches as poster cards and adding titles to the shelf.
+ */
 export function SearchPage() {
   const { filters, setFilters, clearFilters, hasActiveFilters, activeFilterCount } = useSearchFilters();
   const [rawResults, setRawResults] = useState<SearchResult[] | null>(null);

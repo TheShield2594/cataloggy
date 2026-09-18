@@ -46,6 +46,10 @@ function nextMilestone(milestones: Milestone[], value: number) {
   return milestones.find((m) => value < m.threshold) ?? null;
 }
 
+/**
+ * The stats page: watch totals, streak milestones and charts (day/type bars and
+ * progress meters) summarising viewing activity, with a year-in-review section.
+ */
 export function StatsPage() {
   const [stats, setStats, statsMeta] = useCachedState<WatchStats | null>("stats:summary", null);
   const [detailed, setDetailed, detailedMeta] = useCachedState<DetailedWatchStats | null>("stats:detailed", null);

@@ -26,6 +26,12 @@ const SIZES: Record<Size, { button: string; icon: string; coarseGap: string }> =
   md: { button: "h-8 w-8", icon: "h-4 w-4", coarseGap: "[@media(pointer:coarse)]:gap-3" },
 };
 
+/**
+ * The left/right scroll controls for a horizontal carousel, at the `sm` or `md`
+ * size. Stays mounted and fades itself out when the row already fits, so a
+ * resize dissolves the cluster instead of blinking it away, and names each
+ * arrow with its subject for assistive tech.
+ */
 export function ScrollArrows({
   canScrollLeft,
   canScrollRight,

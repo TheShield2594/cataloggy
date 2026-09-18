@@ -48,6 +48,11 @@ function toSearchResult(event: WatchEvent): SearchResult {
   };
 }
 
+/**
+ * The watch-history page: a paginated, filterable timeline of watch events.
+ * Only the first page is cached; later pages are held separately and merged for
+ * rendering so appending never rewrites the cache.
+ */
 export function HistoryPage() {
   // Only the first page goes through the cache. Appended pages are held
   // separately and merged for rendering: writing them through would grow the

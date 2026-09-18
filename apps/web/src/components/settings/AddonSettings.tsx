@@ -79,6 +79,11 @@ function AddonManifestUrl({ profileName, multiProfile }: { profileName: string |
   );
 }
 
+/**
+ * The settings panel for the local Stremio addon: shows the manifest URL with a
+ * copy button and per-profile install guidance, and loads and saves the addon
+ * configuration.
+ */
 export function AddonSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

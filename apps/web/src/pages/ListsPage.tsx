@@ -210,6 +210,11 @@ function AddItemModal({
   );
 }
 
+/**
+ * The lists page: browse and manage custom lists and the titles in them. The
+ * selected list lives in the URL (`?list=`) so it can be linked, bookmarked and
+ * navigated back to.
+ */
 export function ListsPage() {
   const [lists, setLists] = useCachedState<CatalogList[]>("lists:all", []);
   // The selection lives in the URL so a list can be linked, bookmarked and
