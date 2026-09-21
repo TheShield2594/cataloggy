@@ -59,7 +59,7 @@ export function PosterCard({
   children?: ReactNode | undefined;
 }) {
   return (
-    <div className={`group relative rounded-xl ${className}`.trimEnd()}>
+    <div className={`group relative rounded-2xl ${className}`.trimEnd()}>
       {/* A real button rather than a `role="button"` div: it inherits Enter and
           Space, the disabled and active semantics, and the announcement
           assistive tech expects, instead of re-implementing the first and
@@ -75,11 +75,11 @@ export function PosterCard({
           type="button"
           onClick={onOpen}
           aria-label={openLabel ?? `View details for ${name}`}
-          className="absolute inset-0 z-10 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
+          className="absolute inset-0 z-10 cursor-pointer rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-ring-offset"
         />
       )}
       <div
-        className={`poster-frame relative aspect-poster overflow-hidden rounded-xl${hover ? " group-hover:scale-[1.03]" : ""}`}
+        className={`poster-frame relative aspect-poster overflow-hidden rounded-2xl${hover ? " group-hover:scale-[1.03]" : ""}`}
       >
         <Poster src={poster ?? undefined} alt={name} className="h-full w-full" eager={eager} sizes={sizes} />
         {overlay}

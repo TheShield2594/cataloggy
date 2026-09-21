@@ -104,8 +104,10 @@ describe("ContinueWatchingHero", () => {
   /** The decorative full-bleed backdrop, not the poster in the card's corner. */
   const backdropOf = (container: HTMLElement) =>
     container.querySelector('img[aria-hidden="true"]');
+  // The bottom-up cinematic scrim (see HERO_SCRIM) — a gradient that rises to
+  // the top, painted only when there is a backdrop to darken.
   const scrimOf = (container: HTMLElement) =>
-    container.querySelector('div[style*="linear-gradient(110deg"]');
+    container.querySelector('div[style*="linear-gradient(to top"]');
 
   it("wears the hero treatment when there is a backdrop to wear it over", () => {
     const { container } = renderHero({ background: "https://image.tmdb.org/t/p/w500/bd.jpg" });

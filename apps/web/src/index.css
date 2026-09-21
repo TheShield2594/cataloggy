@@ -1698,13 +1698,35 @@ body {
  * it, which is how the `shadow-lg` on these frames came to be dead weight next
  * to an inline `boxShadow` carrying only the hairline.
  */
+/*
+ * The poster card's finish — glossier than a plain clipped box, which is what
+ * carries the "modern card" read the redesign is after without a badge shouted
+ * over the art (see the ShelfCell note on why the pills went away).
+ *
+ * Three layers, outermost last: a hairline edge so the artwork separates from
+ * the page, the resting lift, and — the gloss — a 1px inset highlight along the
+ * top edge, the sheen a physical card catches from a light above it. The sheen
+ * is a fixed low-alpha white rather than a theme token for the same reason the
+ * rating chip's amber is fixed: it sits on poster art, not on a theme surface,
+ * so it reads the same on all five themes (and simply disappears where the top
+ * of a poster is already bright, which is harmless).
+ *
+ * Hover trades the resting lift for the strongest elevation and firms the edge
+ * to --border-strong, so the card rises rather than merely brightening.
+ */
 .poster-frame {
-  box-shadow: inset 0 0 0 1px var(--border), var(--elevation-1);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 0 1px var(--border),
+    var(--elevation-1);
   transition: box-shadow var(--duration-slow) ease-out, transform var(--duration-slow) ease-out;
 }
 
 .group:hover .poster-frame {
-  box-shadow: inset 0 0 0 1px var(--border), var(--elevation-2);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px var(--border-strong),
+    var(--elevation-3);
 }
 
 /*
