@@ -106,7 +106,7 @@ export function ContinueWatchingHero({
         </div>
         <div className="min-w-0 flex-1">
           {kicker}
-          <p className="mt-1 truncate font-heading text-xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{s.name}</p>
+          <h2 className="mt-1 truncate font-heading text-xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{s.name}</h2>
           {meta}
           {meter}
         </div>
@@ -133,7 +133,10 @@ export function ContinueWatchingHero({
       <div className="absolute inset-0" style={{ background: HERO_SCRIM }} />
       <div className="relative z-10 min-w-0">
         {kicker}
-        <p className={`mt-1 truncate ${PAGE_TITLE}`} style={{ color: "var(--text)" }}>{s.name}</p>
+        {/* A heading, not a styled paragraph — like NowWatchingHero, so a
+            screen-reader user navigating by heading lands on the hero's title
+            rather than skipping past the largest thing on the card. */}
+        <h2 className={`mt-1 truncate ${PAGE_TITLE}`} style={{ color: "var(--text)" }}>{s.name}</h2>
         {meta}
         {meter}
       </div>
