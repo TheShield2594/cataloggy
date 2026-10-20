@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { recordWatchEvent } from "../lib/watch-event.js";
 import { pushTraktScrobble } from "../lib/trakt-client.js";
 import { resolveProfile } from "../lib/profile.js";
+import { resolveProgressPercent, savePlaybackProgress, type PlaybackPosition } from "../lib/playback.js";
 import { MAX_EPISODE, MAX_SEASON } from "../lib/import-validation.js";
 import {
   MAX_IMDB_ID_LENGTH,
@@ -18,6 +19,50 @@ import type { CheckInData } from "../lib/types.js";
 export const SCROBBLE_COMPLETE_THRESHOLD = 80;
 export const SCROBBLE_STALE_TTL_MS = 24 * 60 * 60 * 1000;
 export const SCROBBLE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+
+/**
+ * Below this a stop is "opened it and backed out", not a place to resume from,
+ * so it leaves no resume point behind.
+ */
+export const SCROBBLE_MIN_RESUME_PERCENT = 1;
+
+/** A whole, non-negative number of seconds, or `null` for anything else. */
+const toSeconds = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.round(value) : null;
+
+/**
+ * What a player reported about where it is. `progress` is the Trakt-style
+ * percentage; `positionSeconds`/`durationSeconds` are for players that know
+ * exactly, and are what make a resume land on the right second.
+ */
+const readPosition = (body: { progress?: unknown; positionSeconds?: unknown; durationSeconds?: unknown }) => {
+  const position: PlaybackPosition = {
+    progress: typeof body.progress === "number" && Number.isFinite(body.progress) ? body.progress : null,
+    positionSeconds: toSeconds(body.positionSeconds),
+    durationSeconds: toSeconds(body.durationSeconds),
+  };
+  return { position, progress: resolveProgressPercent(position) };
+};
+
+/**
+ * Keeps the resume point in step with a paused or abandoned session. Best-effort:
+ * the scrobble already succeeded, and a resume point that failed to save is
+ * one the next pause or `PUT /playback` writes anyway.
+ */
+const saveResumePoint = async (
+  profileId: string,
+  session: { type: WatchEventType; imdbId: string; seriesImdbId: string | null; season: number | null; episode: number | null },
+  position: PlaybackPosition,
+  progress: number,
+  log: FastifyBaseLogger
+) => {
+  if (progress < SCROBBLE_MIN_RESUME_PERCENT) return;
+  try {
+    await savePlaybackProgress(profileId, session, { ...position, progress });
+  } catch (error) {
+    log.warn(error, "Failed to save playback progress from scrobble");
+  }
+};
 
 export const cleanupStaleSessions = async (logger?: FastifyBaseLogger) => {
   const cutoff = new Date(Date.now() - SCROBBLE_STALE_TTL_MS);
@@ -189,6 +234,8 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
       season?: unknown;
       episode?: unknown;
       progress?: unknown;
+      positionSeconds?: unknown;
+      durationSeconds?: unknown;
     };
 
     if (!Object.values(WatchEventType).includes(body.type as WatchEventType)) {
@@ -204,7 +251,7 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
     const seriesImdbId = typeof body.seriesImdbId === "string" ? body.seriesImdbId.trim() || null : null;
     const season = typeof body.season === "number" && Number.isInteger(body.season) ? body.season : null;
     const episode = typeof body.episode === "number" && Number.isInteger(body.episode) ? body.episode : null;
-    const progress = typeof body.progress === "number" ? Math.max(0, Math.min(100, body.progress)) : 0;
+    const progress = readPosition(body).progress ?? 0;
     const profileId = request.profileId!;
 
     const { session, created, wasPlaying } = await prisma.$transaction(async (tx) => {
@@ -244,7 +291,14 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "imdbId is required" });
     }
 
-    const body = request.body as { imdbId?: unknown; season?: unknown; episode?: unknown; progress?: unknown };
+    const body = request.body as {
+      imdbId?: unknown;
+      season?: unknown;
+      episode?: unknown;
+      progress?: unknown;
+      positionSeconds?: unknown;
+      durationSeconds?: unknown;
+    };
     if (typeof body.imdbId !== "string" || !body.imdbId.trim()) {
       return reply.code(400).send({ error: "imdbId is required" });
     }
@@ -252,8 +306,8 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
     const imdbId = (body.imdbId as string).trim();
     const season = typeof body.season === "number" ? body.season : null;
     const episode = typeof body.episode === "number" ? body.episode : null;
-    const progress =
-      typeof body.progress === "number" ? Math.max(0, Math.min(100, body.progress)) : undefined;
+    const reported = readPosition(body);
+    const progress = reported.progress ?? undefined;
 
     const session = await prisma.scrobbleSession.findFirst({
       where: { profileId: request.profileId!, imdbId, season, episode, status: ScrobbleStatus.playing },
@@ -265,6 +319,8 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
       where: { id: session.id },
       data: { status: ScrobbleStatus.paused, ...(progress !== undefined ? { progress } : {}) },
     });
+
+    await saveResumePoint(request.profileId!, session, reported.position, updated.progress, request.log);
 
     void pushTraktScrobble(
       "pause",
@@ -287,7 +343,14 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "imdbId is required" });
     }
 
-    const body = request.body as { imdbId?: unknown; season?: unknown; episode?: unknown; progress?: unknown };
+    const body = request.body as {
+      imdbId?: unknown;
+      season?: unknown;
+      episode?: unknown;
+      progress?: unknown;
+      positionSeconds?: unknown;
+      durationSeconds?: unknown;
+    };
     if (typeof body.imdbId !== "string" || !body.imdbId.trim()) {
       return reply.code(400).send({ error: "imdbId is required" });
     }
@@ -295,8 +358,8 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
     const imdbId = (body.imdbId as string).trim();
     const season = typeof body.season === "number" ? body.season : null;
     const episode = typeof body.episode === "number" ? body.episode : null;
-    const progress =
-      typeof body.progress === "number" ? Math.max(0, Math.min(100, body.progress)) : undefined;
+    const reported = readPosition(body);
+    const progress = reported.progress ?? undefined;
 
     const session = await prisma.scrobbleSession.findFirst({
       where: {
@@ -334,6 +397,7 @@ const scrobbleRoutes: FastifyPluginAsync = async (app) => {
       });
       watchEvent = result.watchEvent;
     } else {
+      await saveResumePoint(request.profileId!, session, reported.position, finalProgress, request.log);
       void pushTraktScrobble(
         "stop",
         {
