@@ -183,6 +183,31 @@ describe("scrobble routes", () => {
       );
     });
 
+    it("keeps the stored seconds when a pause reports no position at all", async () => {
+      prismaMock.scrobbleSession.findFirst.mockResolvedValue(movieSession);
+      prismaMock.scrobbleSession.update.mockResolvedValue({ ...movieSession, status: "paused", progress: 25 });
+
+      const app = await buildApp();
+      await app.inject({ method: "POST", url: "/scrobble/pause", payload: { imdbId: "tt1" } });
+
+      const [call] = prismaMock.playbackProgress.upsert.mock.calls[0] as [{ update: Record<string, unknown> }];
+      expect(call.update).toMatchObject({ progress: 25 });
+      expect(call.update).not.toHaveProperty("positionSeconds");
+      expect(call.update).not.toHaveProperty("durationSeconds");
+    });
+
+    it("clears a stale position when a pause reports only a new percentage", async () => {
+      prismaMock.scrobbleSession.findFirst.mockResolvedValue(movieSession);
+      prismaMock.scrobbleSession.update.mockResolvedValue({ ...movieSession, status: "paused", progress: 70 });
+
+      const app = await buildApp();
+      await app.inject({ method: "POST", url: "/scrobble/pause", payload: { imdbId: "tt1", progress: 70 } });
+
+      const [call] = prismaMock.playbackProgress.upsert.mock.calls[0] as [{ update: Record<string, unknown> }];
+      expect(call.update).toMatchObject({ progress: 70, positionSeconds: null });
+      expect(call.update).not.toHaveProperty("durationSeconds");
+    });
+
     it("keys an episode's resume point on the series", async () => {
       prismaMock.scrobbleSession.findFirst.mockResolvedValue({
         ...movieSession,

@@ -86,7 +86,8 @@ const playbackRoutes: FastifyPluginAsync = async (app) => {
     if (type !== undefined && type !== WatchEventType.movie && type !== WatchEventType.episode) {
       return reply.code(400).send({ error: "type must be one of: movie, episode" });
     }
-    const limit = Math.min(Math.max(Number(request.query.limit) || 50, 1), 200);
+    // Truncated because Prisma rejects a fractional `take`, which made `?limit=1.5` a 500.
+    const limit = Math.min(Math.max(Math.trunc(Number(request.query.limit)) || 50, 1), 200);
 
     const rows = await prisma.playbackProgress.findMany({
       where: { profileId: request.profileId!, ...(type ? { type } : {}) },
@@ -162,7 +163,9 @@ const playbackRoutes: FastifyPluginAsync = async (app) => {
       const row = await savePlaybackProgress(
         request.profileId!,
         { type, imdbId: imdbId.trim(), seriesImdbId: seriesImdbId?.trim() || null, season, episode },
-        { progress, positionSeconds, durationSeconds }
+        // A percentage on its own makes any stored position stale, so it is
+        // cleared; an unreported duration is kept, since the runtime has not changed.
+        { progress, positionSeconds: positionSeconds ?? null, durationSeconds }
       );
       // Both cases that make the helper return null were rejected above.
       return { playback: toPlaybackData(row!) };

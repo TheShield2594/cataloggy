@@ -230,8 +230,10 @@ A resume point looks like:
 }
 ```
 
-`name` and `poster` are only on the list. `positionSeconds` and
-`durationSeconds` are `null` when the player only reported a percentage.
+`name` and `poster` are only on the list. `positionSeconds` is
+`null` when the latest save reported only a percentage; a save that reports no
+position at all keeps the stored seconds. `durationSeconds` is kept until a
+save reports a new one.
 
 #### Wiring a player to it
 
@@ -254,6 +256,11 @@ while playing, so the resume point is never more than one heartbeat stale.
 Marking a title watched without playing it is still `POST /watch`.
 
 ```bash
+# Started watching from the beginning
+curl -X POST -H "Authorization: Bearer $API_TOKEN" -H "Content-Type: application/json" \
+     -d '{"type":"episode","imdbId":"tt0903747","season":2,"episode":7,"positionSeconds":0,"durationSeconds":2832}' \
+     http://192.168.1.25:7000/scrobble/start
+
 # Paused at 18:50 of a 47:12 episode
 curl -X POST -H "Authorization: Bearer $API_TOKEN" -H "Content-Type: application/json" \
      -d '{"type":"episode","imdbId":"tt0903747","season":2,"episode":7,"positionSeconds":1130,"durationSeconds":2832}' \

@@ -20,6 +20,11 @@ export type PlaybackTarget = {
   episode?: number | null | undefined;
 };
 
+/**
+ * For the two second fields, `undefined` means "not reported — keep what is
+ * stored" and `null` means "clear it". A player that reports seconds on one
+ * pause and nothing on the next must not lose the exact position it saved.
+ */
 export type PlaybackPosition = {
   progress?: number | null | undefined;
   positionSeconds?: number | null | undefined;
@@ -90,14 +95,23 @@ export const savePlaybackProgress = async (
     season: resolved.season,
     episode: resolved.episode,
     progress,
-    positionSeconds: position.positionSeconds ?? null,
-    durationSeconds: position.durationSeconds ?? null,
     pausedAt,
   };
+  const { positionSeconds, durationSeconds } = position;
   return prisma.playbackProgress.upsert({
     where: { profileId_key: { profileId, key: resolved.key } },
-    create: { profileId, key: resolved.key, ...data },
-    update: data,
+    create: {
+      profileId,
+      key: resolved.key,
+      ...data,
+      positionSeconds: positionSeconds ?? null,
+      durationSeconds: durationSeconds ?? null,
+    },
+    update: {
+      ...data,
+      ...(positionSeconds !== undefined ? { positionSeconds } : {}),
+      ...(durationSeconds !== undefined ? { durationSeconds } : {}),
+    },
   });
 };
 

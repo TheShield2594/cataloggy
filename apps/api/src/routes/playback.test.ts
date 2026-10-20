@@ -93,6 +93,16 @@ describe("playback routes", () => {
       );
     });
 
+    it("truncates a fractional limit rather than handing Prisma a fractional take", async () => {
+      prismaMock.playbackProgress.findMany.mockResolvedValue([]);
+
+      const app = await buildApp();
+      const response = await app.inject({ method: "GET", url: "/playback?limit=1.5" });
+
+      expect(response.statusCode).toBe(200);
+      expect(prismaMock.playbackProgress.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 1 }));
+    });
+
     it("rejects an unknown type rather than returning an unfiltered page", async () => {
       const app = await buildApp();
       const response = await app.inject({ method: "GET", url: "/playback?type=series" });
@@ -180,6 +190,15 @@ describe("playback routes", () => {
           create: expect.objectContaining({ imdbId: "tt0903747", season: 2, episode: 7, progress: 61 }),
         })
       );
+    });
+
+    it("clears a stale position on a percentage-only save, but keeps the duration", async () => {
+      const app = await buildApp();
+      await app.inject({ method: "PUT", url: "/playback", payload: { type: "movie", imdbId: "tt1", progress: 60 } });
+
+      const [call] = prismaMock.playbackProgress.upsert.mock.calls[0] as [{ update: Record<string, unknown> }];
+      expect(call.update).toMatchObject({ progress: 60, positionSeconds: null });
+      expect(call.update).not.toHaveProperty("durationSeconds");
     });
 
     it("prefers an explicit progress over the one seconds would give", async () => {

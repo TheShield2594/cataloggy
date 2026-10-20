@@ -31,6 +31,17 @@ describe("playback progress", () => {
     expect(rows[0]).toMatchObject({ progress: 50, positionSeconds: 4_260, durationSeconds: 8_520 });
   });
 
+  it("keeps the stored seconds when a later save reports none", async () => {
+    const { id: profileId } = await createProfile("Ada");
+    const target = { type: "movie", imdbId: SHAWSHANK } as const;
+
+    await savePlaybackProgress(profileId, target, { positionSeconds: 1_800, durationSeconds: 7_200 });
+    await savePlaybackProgress(profileId, target, { progress: 25 });
+
+    const row = await prisma.playbackProgress.findFirstOrThrow({ where: { profileId } });
+    expect(row).toMatchObject({ progress: 25, positionSeconds: 1_800, durationSeconds: 7_200 });
+  });
+
   it("lands an episode on the same row whichever id the player sent", async () => {
     const { id: profileId } = await createProfile("Ada");
 

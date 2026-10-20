@@ -26,9 +26,9 @@ export const SCROBBLE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
  */
 export const SCROBBLE_MIN_RESUME_PERCENT = 1;
 
-/** A whole, non-negative number of seconds, or `null` for anything else. */
-const toSeconds = (value: unknown): number | null =>
-  typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.round(value) : null;
+/** A whole, non-negative number of seconds, or `undefined` (not reported) for anything else. */
+const toSeconds = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.round(value) : undefined;
 
 /**
  * What a player reported about where it is. `progress` is the Trakt-style
@@ -57,8 +57,17 @@ const saveResumePoint = async (
   log: FastifyBaseLogger
 ) => {
   if (progress < SCROBBLE_MIN_RESUME_PERCENT) return;
+  // No seconds reported: keep the stored position — unless a new percentage
+  // came with the request, which makes the stored position stale. The
+  // duration is kept either way; a title's runtime does not change between
+  // pauses, and it is what lets a client turn the percentage back into seconds.
+  const positionSeconds = position.positionSeconds ?? (position.progress != null ? null : undefined);
   try {
-    await savePlaybackProgress(profileId, session, { ...position, progress });
+    await savePlaybackProgress(profileId, session, {
+      progress,
+      positionSeconds,
+      durationSeconds: position.durationSeconds,
+    });
   } catch (error) {
     log.warn(error, "Failed to save playback progress from scrobble");
   }
