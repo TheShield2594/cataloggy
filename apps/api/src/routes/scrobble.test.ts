@@ -11,6 +11,7 @@ const txMock = {
 const prismaMock = {
   scrobbleSession: { findFirst: vi.fn(), update: vi.fn(), create: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
   checkIn: { findUnique: vi.fn(), upsert: vi.fn(), deleteMany: vi.fn() },
+  playbackProgress: { upsert: vi.fn() },
   metadata: { findMany: vi.fn(), findUnique: vi.fn() },
   $transaction: vi.fn(async (callback: (tx: typeof txMock) => unknown) => callback(txMock)),
 };
@@ -146,6 +147,136 @@ describe("scrobble routes", () => {
         expect.objectContaining({ progress: 42 }),
         expect.anything()
       );
+    });
+  });
+
+  describe("resume points", () => {
+    const movieSession = {
+      id: "s1",
+      type: "movie",
+      imdbId: "tt1",
+      season: null,
+      episode: null,
+      seriesImdbId: null,
+      progress: 10,
+    };
+
+    it("saves a resume point on pause, working the percentage out from seconds", async () => {
+      prismaMock.scrobbleSession.findFirst.mockResolvedValue(movieSession);
+      prismaMock.scrobbleSession.update.mockResolvedValue({ ...movieSession, status: "paused", progress: 25 });
+
+      const app = await buildApp();
+      await app.inject({
+        method: "POST",
+        url: "/scrobble/pause",
+        payload: { imdbId: "tt1", positionSeconds: 1_800, durationSeconds: 7_200 },
+      });
+
+      expect(prismaMock.scrobbleSession.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: "paused", progress: 25 } })
+      );
+      expect(prismaMock.playbackProgress.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { profileId_key: { profileId: PROFILE_ID, key: "movie:tt1" } },
+          create: expect.objectContaining({ progress: 25, positionSeconds: 1_800, durationSeconds: 7_200 }),
+        })
+      );
+    });
+
+    it("keeps the stored seconds when a pause reports no position at all", async () => {
+      prismaMock.scrobbleSession.findFirst.mockResolvedValue(movieSession);
+      prismaMock.scrobbleSession.update.mockResolvedValue({ ...movieSession, status: "paused", progress: 25 });
+
+      const app = await buildApp();
+      await app.inject({ method: "POST", url: "/scrobble/pause", payload: { imdbId: "tt1" } });
+
+      const [call] = prismaMock.playbackProgress.upsert.mock.calls[0] as [{ update: Record<string, unknown> }];
+      expect(call.update).toMatchObject({ progress: 25 });
+      expect(call.update).not.toHaveProperty("positionSeconds");
+      expect(call.update).not.toHaveProperty("durationSeconds");
+    });
+
+    it("clears a stale position when a pause reports only a new percentage", async () => {
+      prismaMock.scrobbleSession.findFirst.mockResolvedValue(movieSession);
+      prismaMock.scrobbleSession.update.mockResolvedValue({ ...movieSession, status: "paused", progress: 70 });
+
+      const app = await buildApp();
+      await app.inject({ method: "POST", url: "/scrobble/pause", payload: { imdbId: "tt1", progress: 70 } });
+
+      const [call] = prismaMock.playbackProgress.upsert.mock.calls[0] as [{ update: Record<string, unknown> }];
+      expect(call.update).toMatchObject({ progress: 70, positionSeconds: null });
+      expect(call.update).not.toHaveProperty("durationSeconds");
+    });
+
+    it("keys an episode's resume point on the series", async () => {
+      prismaMock.scrobbleSession.findFirst.mockResolvedValue({
+        ...movieSession,
+        type: "episode",
+        imdbId: "tt-ep",
+        seriesImdbId: "tt-show",
+        season: 2,
+        episode: 7,
+      });
+      prismaMock.scrobbleSession.update.mockResolvedValue({ id: "s1", status: "paused", progress: 40 });
+
+      const app = await buildApp();
+      await app.inject({
+        method: "POST",
+        url: "/scrobble/pause",
+        payload: { imdbId: "tt-ep", season: 2, episode: 7, progress: 40 },
+      });
+
+      expect(prismaMock.playbackProgress.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { profileId_key: { profileId: PROFILE_ID, key: "episode:tt-show:2:7" } } })
+      );
+    });
+
+    it("saves a resume point when stopped short of the threshold", async () => {
+      prismaMock.scrobbleSession.findFirst.mockResolvedValue(movieSession);
+      prismaMock.scrobbleSession.update.mockResolvedValue({ ...movieSession, status: "stopped", progress: 55 });
+
+      const app = await buildApp();
+      await app.inject({ method: "POST", url: "/scrobble/stop", payload: { imdbId: "tt1", progress: 55 } });
+
+      expect(prismaMock.playbackProgress.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ create: expect.objectContaining({ progress: 55 }) })
+      );
+    });
+
+    it("leaves no resume point for a play stopped as soon as it started", async () => {
+      prismaMock.scrobbleSession.findFirst.mockResolvedValue({ ...movieSession, progress: 0 });
+      prismaMock.scrobbleSession.update.mockResolvedValue({ ...movieSession, status: "stopped", progress: 0.5 });
+
+      const app = await buildApp();
+      await app.inject({ method: "POST", url: "/scrobble/stop", payload: { imdbId: "tt1", progress: 0.5 } });
+
+      expect(prismaMock.playbackProgress.upsert).not.toHaveBeenCalled();
+    });
+
+    it("does not save a resume point for a finished play — recording the watch clears it", async () => {
+      prismaMock.scrobbleSession.findFirst.mockResolvedValue(movieSession);
+      prismaMock.scrobbleSession.update.mockResolvedValue({ ...movieSession, status: "stopped", progress: 92 });
+
+      const app = await buildApp();
+      await app.inject({ method: "POST", url: "/scrobble/stop", payload: { imdbId: "tt1", progress: 92 } });
+
+      expect(prismaMock.playbackProgress.upsert).not.toHaveBeenCalled();
+      expect(watchEventMock.recordWatchEvent).toHaveBeenCalled();
+    });
+
+    it("still answers the scrobble when the resume point fails to save", async () => {
+      prismaMock.scrobbleSession.findFirst.mockResolvedValue(movieSession);
+      prismaMock.scrobbleSession.update.mockResolvedValue({ ...movieSession, status: "paused", progress: 30 });
+      prismaMock.playbackProgress.upsert.mockRejectedValue(new Error("db down"));
+
+      const app = await buildApp();
+      const response = await app.inject({
+        method: "POST",
+        url: "/scrobble/pause",
+        payload: { imdbId: "tt1", progress: 30 },
+      });
+
+      expect(response.statusCode).toBe(200);
     });
   });
 

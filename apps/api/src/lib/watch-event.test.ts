@@ -12,6 +12,9 @@ const prismaMock = {
 
 vi.mock("./prisma.js", () => ({ prisma: prismaMock }));
 
+const playbackMock = { clearPlaybackProgress: vi.fn() };
+vi.mock("./playback.js", () => playbackMock);
+
 const seriesProgressMock = { upsertSeriesProgressIfNewer: vi.fn() };
 vi.mock("./series-progress.js", () => seriesProgressMock);
 
@@ -318,6 +321,32 @@ describe("recordWatchEvent", () => {
     expect(traktClientMock.syncWatchEventToTrakt).toHaveBeenCalledWith(
       expect.objectContaining({ id: "we-trakt" }),
       expect.objectContaining({ type: "movie", imdbId: "tt-trakt" }),
+      expect.anything()
+    );
+  });
+
+  it("clears the resume point for the episode it recorded, bounded by the watch date", async () => {
+    txMock.watchEvent.findFirst.mockResolvedValue(null);
+    txMock.watchEvent.create.mockResolvedValue({ id: "we-ep", plays: 1, traktHistoryId: null });
+    const watchedAt = new Date("2024-04-01T00:00:00Z");
+
+    const { recordWatchEvent } = await import("./watch-event.js");
+    await recordWatchEvent({
+      type: "episode",
+      imdbId: "tt-ep",
+      seriesImdbId: "tt-show",
+      season: 1,
+      episode: 3,
+      watchedAt,
+      source: "test",
+      profileId: "profile-1",
+      log: makeLog(),
+    });
+
+    expect(playbackMock.clearPlaybackProgress).toHaveBeenCalledWith(
+      "profile-1",
+      { type: "episode", imdbId: "tt-show", season: 1, episode: 3 },
+      watchedAt,
       expect.anything()
     );
   });

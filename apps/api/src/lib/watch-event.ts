@@ -5,6 +5,7 @@ import { shouldRefreshAiRecs, getAiRecommendations } from "./ai.js";
 import { trendingCacheDeletePrefix } from "./cache.js";
 import { syncWatchEventToTrakt } from "./trakt-client.js";
 import { watchEventDayWindow } from "./watch-event-dedup.js";
+import { clearPlaybackProgress } from "./playback.js";
 import type { RecordWatchParams } from "./types.js";
 
 /**
@@ -82,6 +83,13 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
       })
     );
 
+    await clearPlaybackProgress(
+      profileId,
+      { type: "episode", imdbId: resolvedSeriesImdbId, season, episode },
+      watchedAt,
+      log
+    );
+
     if (season != null && episode != null) {
       await upsertSeriesProgressIfNewer(profileId, resolvedSeriesImdbId, {
         lastSeason: season,
@@ -140,6 +148,8 @@ export const recordWatchEvent = async (params: RecordWatchParams) => {
       return { watchEvent: created, wasCreated: true };
     })
   );
+
+  await clearPlaybackProgress(profileId, { type: "movie", imdbId }, watchedAt, log);
 
   syncWatchEventToTrakt(watchEvent, { type: "movie", imdbId }, log);
 

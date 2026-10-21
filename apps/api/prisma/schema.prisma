@@ -70,6 +70,7 @@ model Profile {
   checkIn           CheckIn?
   games             Game[]
   playSignals       PlaySignal[]
+  playbackProgress  PlaybackProgress[]
 }
 
 model Item {
@@ -351,6 +352,36 @@ model ScrobbleSession {
   // sequential scan of a table nothing bounds — stopped sessions are never
   // deleted, so it grows with every play.
   @@index([status, updatedAt])
+}
+
+// Where a profile stopped part-way through a film or an episode, so a player can
+// offer "resume from 42:10" — Trakt's /sync/playback. One row per title: saving
+// again moves it, and recording a watch of the title clears it. Written by
+// `PUT /playback` and by a scrobble that pauses or stops short of the
+// watched threshold (lib/playback.ts).
+model PlaybackProgress {
+  id String @id @default(uuid()) @db.Uuid
+  // "movie:tt0111161" / "episode:tt0903747:2:7" — the same explicit-key pattern
+  // as PlaySignal, for the same reason: a compound unique over the nullable
+  // season/episode columns would not stop a movie holding two resume points.
+  key  String
+  type WatchEventType
+  // The film, or the series for an episode (as WatchEvent stores it).
+  imdbId  String
+  season  Int?
+  episode Int?
+  progress        Float // 0-100 percentage
+  // Optional because Trakt-style clients only report a percentage; a player
+  // that knows the exact position should send it so the resume is precise.
+  positionSeconds Int?
+  durationSeconds Int?
+  pausedAt        DateTime @db.Timestamptz(6)
+
+  profileId String  @db.Uuid
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, key])
+  @@index([profileId, pausedAt])
 }
 
 model Tag {

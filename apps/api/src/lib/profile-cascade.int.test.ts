@@ -5,7 +5,8 @@ import { createProfile } from "./test-fixtures/int-db.js";
 // Deleting a profile is meant to take everything that belonged to it: watch
 // history, lists and their items, ratings, tags and their tagged items, games,
 // scrobble sessions, the check-in, push subscriptions, notification channels,
-// notified-episode records, play signals and series progress.
+// notified-episode records, play signals, playback resume points and series
+// progress.
 //
 // All of that is `onDelete: Cascade` on a foreign key — enforced entirely by
 // Postgres, so a mocked client cannot tell the difference between a schema that
@@ -85,6 +86,10 @@ const seedFullProfile = async (name: string) => {
     },
   });
 
+  await prisma.playbackProgress.create({
+    data: { profileId, key: `movie:${SHAWSHANK}`, type: "movie", imdbId: SHAWSHANK, progress: 40, pausedAt: new Date() },
+  });
+
   return { profile, listId: list.id, tagId: tag.id };
 };
 
@@ -104,6 +109,7 @@ const countsFor = async (profileId: string, listId: string, tagId: string) => ({
   notificationChannels: await prisma.notificationChannel.count({ where: { profileId } }),
   notifiedEpisodes: await prisma.notifiedEpisode.count({ where: { profileId } }),
   playSignals: await prisma.playSignal.count({ where: { profileId } }),
+  playbackProgress: await prisma.playbackProgress.count({ where: { profileId } }),
 });
 
 describe("deleting a profile", () => {
@@ -131,6 +137,7 @@ describe("deleting a profile", () => {
       notificationChannels: 0,
       notifiedEpisodes: 0,
       playSignals: 0,
+      playbackProgress: 0,
     });
   });
 

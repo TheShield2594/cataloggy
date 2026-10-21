@@ -39,6 +39,8 @@ export const registerScrobbleRoute = (routes: AddonRouter): void => {
       season?: unknown;
       episode?: unknown;
       progress?: unknown;
+      positionSeconds?: unknown;
+      durationSeconds?: unknown;
     };
 
     if (typeof body.imdbId !== "string" || !body.imdbId.trim()) {
@@ -61,7 +63,12 @@ export const registerScrobbleRoute = (routes: AddonRouter): void => {
         seriesImdbId: body.seriesImdbId ?? null,
         season: body.season ?? null,
         episode: body.episode ?? null,
-        progress: body.progress ?? 0
+        // Left null rather than defaulted to 0: the API works a percentage out
+        // of the position when there is none, and a pause without one keeps the
+        // session's last known progress instead of rewinding it to the start.
+        progress: body.progress ?? null,
+        positionSeconds: body.positionSeconds ?? null,
+        durationSeconds: body.durationSeconds ?? null
       }, scope.profileId);
       return reply.send(result);
     } catch (error) {

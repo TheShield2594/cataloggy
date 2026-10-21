@@ -19,6 +19,7 @@ something on top of it.
   - [Watch history](#watch-history)
   - [Series progress](#series-progress)
   - [Check-in and scrobbling](#check-in-and-scrobbling)
+  - [Playback progress (resume points)](#playback-progress-resume-points)
   - [Ratings](#ratings)
   - [Lists](#lists)
   - [Tags](#tags)
@@ -189,7 +190,89 @@ Plex and Jellyfin webhooks drive.
 | `POST` | `/checkin` | `{ type, imdbId, name, poster?, seriesImdbId?, season?, episode?, runtime? }`. `runtime` is in **minutes** (1–1440), and sets an expiry that far ahead so an abandoned check-in clears itself. `name` is capped at 300 characters and `poster` at 2,048. |
 | `DELETE` | `/checkin?log=` | Clears the check-in. `?log=true` records a watch event from it first — that is the "finished watching" action, where the bare call is "cancel". A failure to record still clears the check-in. |
 | `GET` | `/scrobble/now-playing` | |
-| `POST` | `/scrobble/start` \| `/scrobble/pause` \| `/scrobble/stop` | Stale sessions are swept periodically. |
+| `POST` | `/scrobble/start` \| `/scrobble/pause` \| `/scrobble/stop` | `{ type, imdbId, seriesImdbId?, season?, episode?, progress?, positionSeconds?, durationSeconds? }` (`pause` and `stop` find the session by `imdbId`/`season`/`episode`). `progress` is a 0–100 percentage; without one it is worked out from `positionSeconds / durationSeconds`. A `stop` at 80% or more records a watch. A `pause`, or a `stop` short of 80%, saves a [resume point](#playback-progress-resume-points) once playback is past 1%. Stale sessions are swept periodically. |
+
+### Playback progress (resume points)
+
+Where a profile stopped part-way through a film or an episode, so a player can
+offer "resume from 42:10" — the same idea as Trakt's `/sync/playback`. There is
+one resume point per title: saving again moves it, and recording a watch of the
+title (from any source — `POST /watch`, a scrobble `stop` past 80%, a webhook,
+Stremio) clears it. A watch dated *before* the resume point was saved, such as
+a history import, leaves it alone.
+
+Episodes are stored against the **series** id plus `season` and `episode`, the
+way watch history stores them. A player can send the episode's own IMDb id as
+long as it sends `seriesImdbId` beside it.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/playback?type=&limit=` | Every resume point, most recently paused first, each with the title's `name` and `poster`. `type` is `movie` or `episode`; `limit` is 1–200, default 50. This is the "Continue Watching" row. |
+| `GET` | `/playback/:imdbId?season=&episode=` | One title's resume point, or `{ playback: null }`. Pass `season` and `episode` together for an episode (`:imdbId` is the series). Ask before starting playback to decide where to seek. |
+| `PUT` | `/playback` | `{ type, imdbId, seriesImdbId?, season?, episode?, progress?, positionSeconds?, durationSeconds? }` — save where playback is now. Needs `progress` (0–100), or `positionSeconds` with `durationSeconds` (whole seconds, up to 12 hours), from which `progress` is worked out. An explicit `progress` wins over the seconds. Episodes need `season` and `episode`. This never records a watch: use `POST /watch` or `/scrobble/stop` for that. |
+| `DELETE` | `/playback/:id` | Remove a resume point by its `id` from the list ("remove from Continue Watching"). `204`, or `404` when it is not this profile's. |
+
+A resume point looks like:
+
+```json
+{
+  "id": "6f0c…",
+  "type": "episode",
+  "imdbId": "tt0903747",
+  "season": 2,
+  "episode": 7,
+  "progress": 39.9,
+  "positionSeconds": 1130,
+  "durationSeconds": 2832,
+  "pausedAt": "2026-10-20T20:15:00.000Z",
+  "name": "Breaking Bad",
+  "poster": "https://image.tmdb.org/…"
+}
+```
+
+`name` and `poster` are only on the list. `positionSeconds` is
+`null` when the latest save reported only a percentage; a save that reports no
+position at all keeps the stored seconds. `durationSeconds` is kept until a
+save reports a new one.
+
+#### Wiring a player to it
+
+A TV or mobile player needs four calls. The scrobble routes do the bookkeeping,
+so a player that uses them never has to call `PUT /playback` itself:
+
+1. **Opening a title** — `GET /playback/:imdbId` (with `season`/`episode` for
+   an episode). If it returns a resume point, offer to resume from
+   `positionSeconds` (or `progress`% of the runtime).
+2. **Playback starts or resumes** — `POST /scrobble/start` with the current
+   position.
+3. **Paused, or backed out of** — `POST /scrobble/pause` or
+   `POST /scrobble/stop` with the position. Short of 80%, that saves the resume
+   point; at 80% or more, `stop` marks the title watched and clears it.
+4. **The "Continue Watching" row** — `GET /playback`.
+
+If the app might be killed without getting to send a `pause` or `stop` — a TV
+switched off at the wall — also send `PUT /playback` every 30 seconds or so
+while playing, so the resume point is never more than one heartbeat stale.
+Marking a title watched without playing it is still `POST /watch`.
+
+```bash
+# Started watching from the beginning
+curl -X POST -H "Authorization: Bearer $API_TOKEN" -H "Content-Type: application/json" \
+     -d '{"type":"episode","imdbId":"tt0903747","season":2,"episode":7,"positionSeconds":0,"durationSeconds":2832}' \
+     http://192.168.1.25:7000/scrobble/start
+
+# Paused at 18:50 of a 47:12 episode
+curl -X POST -H "Authorization: Bearer $API_TOKEN" -H "Content-Type: application/json" \
+     -d '{"type":"episode","imdbId":"tt0903747","season":2,"episode":7,"positionSeconds":1130,"durationSeconds":2832}' \
+     http://192.168.1.25:7000/scrobble/pause
+
+# Later, on another device: where was I?
+curl -H "Authorization: Bearer $API_TOKEN" \
+     "http://192.168.1.25:7000/playback/tt0903747?season=2&episode=7"
+```
+
+Resume points are per profile, like everything else: send `x-profile-id` (and
+`x-profile-token` for a PIN-protected profile).
 
 ### Ratings
 
