@@ -2,7 +2,7 @@ import { WatchEventType } from "@prisma/client";
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { resolveProfile } from "../lib/profile.js";
-import { resolvePlaybackTarget, savePlaybackProgress } from "../lib/playback.js";
+import { MAX_PLAYBACK_SECONDS, resolvePlaybackTarget, savePlaybackProgress } from "../lib/playback.js";
 import { MAX_EPISODE, MAX_SEASON } from "../lib/import-validation.js";
 import { MAX_IMDB_ID_LENGTH, NON_BLANK, nullable } from "../lib/request-schema.js";
 import { UUID_V4_PATTERN } from "../lib/types.js";
@@ -18,8 +18,6 @@ import { UUID_V4_PATTERN } from "../lib/types.js";
  * `POST /watch`; nothing here writes history.
  */
 
-/** Twelve hours: longer than anything a player will report, finite so it cannot overflow an INTEGER column. */
-const MAX_PLAYBACK_SECONDS = 12 * 60 * 60;
 
 const savePlaybackBodySchema = {
   type: "object",

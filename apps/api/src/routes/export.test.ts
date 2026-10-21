@@ -12,6 +12,7 @@ const prismaMock = {
   seriesProgress: { findMany: vi.fn() },
   rating: { findMany: vi.fn(), createMany: vi.fn(), updateMany: vi.fn() },
   listItem: { createMany: vi.fn() },
+  playbackProgress: { findMany: vi.fn() },
 };
 
 vi.mock("../lib/prisma.js", () => ({ prisma: prismaMock }));
@@ -31,6 +32,14 @@ const seriesProgressLibMock = {
 };
 vi.mock("../lib/series-progress.js", () => seriesProgressLibMock);
 
+// The forward-only restore is the library's to prove, against a real database
+// (playback.int.test.ts). Here it only has to receive what validation let through.
+const playbackLibMock = { importPlaybackProgress: vi.fn() };
+vi.mock("../lib/playback.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/playback.js")>()),
+  ...playbackLibMock,
+}));
+
 const resetMocks = () => {
   vi.clearAllMocks();
   prismaMock.profile.findUnique.mockResolvedValue({ name: "Default" });
@@ -44,6 +53,8 @@ const resetMocks = () => {
   prismaMock.rating.findMany.mockResolvedValue([]);
   prismaMock.rating.createMany.mockResolvedValue({ count: 0 });
   prismaMock.rating.updateMany.mockResolvedValue({ count: 0 });
+  prismaMock.playbackProgress.findMany.mockResolvedValue([]);
+  playbackLibMock.importPlaybackProgress.mockImplementation(async (_profileId: string, rows: unknown[]) => rows.length);
 };
 
 // `bodyLimit` mirrors the configurable ceiling index.ts sets from
@@ -76,7 +87,7 @@ describe("export routes", () => {
       const response = await app.inject({ method: "POST", url: "/import", payload: { version: 1 } });
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual(
-        expect.objectContaining({ status: "imported", summary: { lists: 0, listItems: 0, watchEvents: 0, seriesProgress: 0, ratings: 0 } })
+        expect.objectContaining({ status: "imported", summary: { lists: 0, listItems: 0, watchEvents: 0, seriesProgress: 0, ratings: 0, playback: 0 } })
       );
     });
   });
@@ -297,6 +308,7 @@ describe("export routes", () => {
         watchEvents: 0,
         seriesProgress: 0,
         ratings: 0,
+        playback: 0,
       });
     });
 
@@ -416,6 +428,94 @@ describe("export routes", () => {
     });
   });
 
+  describe("POST /import — resume points", () => {
+    const point = (over: Record<string, unknown> = {}) => ({
+      type: "movie",
+      imdbId: "tt0111161",
+      season: null,
+      episode: null,
+      progress: 40,
+      positionSeconds: 3_400,
+      durationSeconds: 8_520,
+      pausedAt: "2026-10-20T20:15:00.000Z",
+      ...over,
+    });
+    const importPlayback = async (playback: unknown[]) => {
+      const app = await buildApp();
+      return app.inject({ method: "POST", url: "/import", payload: { version: 1, playback } });
+    };
+    const passedRows = () => playbackLibMock.importPlaybackProgress.mock.calls[0]?.[1] as unknown[];
+
+    it("hands valid points to the forward-only restore and reports what it wrote", async () => {
+      playbackLibMock.importPlaybackProgress.mockResolvedValueOnce(1);
+      const response = await importPlayback([
+        point(),
+        point({ type: "episode", imdbId: "tt0141842", season: 2, episode: 7, progress: 12.5 }),
+      ]);
+
+      expect(response.statusCode).toBe(200);
+      // What was written, not what was read: the restore skips points that are
+      // behind the profile, and the count says so.
+      expect(response.json().summary.playback).toBe(1);
+      expect(playbackLibMock.importPlaybackProgress).toHaveBeenCalledWith(PROFILE_ID, [
+        {
+          target: { type: "movie", imdbId: "tt0111161", season: null, episode: null },
+          progress: 40,
+          positionSeconds: 3_400,
+          durationSeconds: 8_520,
+          pausedAt: new Date("2026-10-20T20:15:00.000Z"),
+        },
+        expect.objectContaining({
+          target: { type: "episode", imdbId: "tt0141842", season: 2, episode: 7 },
+          progress: 12.5,
+        }),
+      ]);
+    });
+
+    it.each([
+      ["a non-IMDb id", point({ imdbId: "../etc" })],
+      ["an unknown type", point({ type: "series" })],
+      ["progress over 100", point({ progress: 150 })],
+      ["no progress", point({ progress: undefined })],
+      ["an unparseable pause time", point({ pausedAt: "yesterday-ish" })],
+      ["an episode without numbers", point({ type: "episode", season: 2, episode: null })],
+      ["an episode past the 32-bit column", point({ type: "episode", season: 2, episode: 2 ** 40 })],
+    ])("drops a point with %s", async (_label, row) => {
+      await importPlayback([row]);
+      expect(passedRows()).toEqual([]);
+    });
+
+    it("keeps a point whose seconds are unusable, without the seconds", async () => {
+      await importPlayback([
+        point({ positionSeconds: 9_000, durationSeconds: 100 }),
+        point({ imdbId: "tt0068646", positionSeconds: -5 }),
+      ]);
+
+      expect(passedRows()).toEqual([
+        expect.objectContaining({ positionSeconds: null, durationSeconds: null, progress: 40 }),
+        expect.objectContaining({ positionSeconds: null, durationSeconds: 8_520 }),
+      ]);
+    });
+
+    it("ignores season and episode on a film", async () => {
+      await importPlayback([point({ season: 3, episode: 4 })]);
+      expect(passedRows()).toEqual([expect.objectContaining({ target: expect.objectContaining({ season: null, episode: null }) })]);
+    });
+
+    it("caps the collection like every other, before any of it is read", async () => {
+      const app = await buildApp(512 * 1024 * 1024);
+      const response = await app.inject({
+        method: "POST",
+        url: "/import",
+        payload: { version: 1, playback: new Array(MAX_IMPORT_ROWS + 1).fill(0) },
+      });
+
+      expect(response.statusCode).toBe(413);
+      expect(response.json().error).toMatch(/resume points/);
+      expect(playbackLibMock.importPlaybackProgress).not.toHaveBeenCalled();
+    });
+  });
+
   describe("POST /import/csv — input validation", () => {
     it("skips a row whose imdbId isn't an IMDb id", async () => {
       const app = await buildApp();
@@ -450,6 +550,41 @@ describe("export routes", () => {
       const response = await app.inject({ method: "GET", url: "/export" });
       expect(response.statusCode).toBe(200);
       expect(response.json().version).toBe(1);
+    });
+
+    it("carries the profile's resume points", async () => {
+      prismaMock.playbackProgress.findMany.mockResolvedValue([
+        {
+          id: "p1",
+          key: "episode:tt0141842:2:7",
+          type: "episode",
+          imdbId: "tt0141842",
+          season: 2,
+          episode: 7,
+          progress: 40,
+          positionSeconds: 1_130,
+          durationSeconds: 2_832,
+          pausedAt: new Date("2026-10-20T20:15:00.000Z"),
+          profileId: PROFILE_ID,
+        },
+      ]);
+      const app = await buildApp();
+      const response = await app.inject({ method: "GET", url: "/export" });
+
+      // No row id, key or profile: those are this database's, and an import
+      // derives its own.
+      expect(response.json().playback).toEqual([
+        {
+          type: "episode",
+          imdbId: "tt0141842",
+          season: 2,
+          episode: 7,
+          progress: 40,
+          positionSeconds: 1_130,
+          durationSeconds: 2_832,
+          pausedAt: "2026-10-20T20:15:00.000Z",
+        },
+      ]);
     });
   });
 });

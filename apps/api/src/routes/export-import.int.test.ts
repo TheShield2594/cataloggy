@@ -47,6 +47,16 @@ type ExportPayload = {
   }[];
   seriesProgress: { seriesImdbId: string; lastSeason: number; lastEpisode: number; lastWatchedAt: string }[];
   ratings: { imdbId: string; type: string; season?: number; episode?: number; rating: number; ratedAt: string }[];
+  playback: {
+    type: string;
+    imdbId: string;
+    season: number | null;
+    episode: number | null;
+    progress: number;
+    positionSeconds: number | null;
+    durationSeconds: number | null;
+    pausedAt: string;
+  }[];
 };
 
 const exportFor = async (id: string): Promise<ExportPayload> => {
@@ -144,6 +154,32 @@ const seedLibrary = async (name: string) => {
     },
   });
 
+  // Paused after the last watch of each title, so the import keeps both.
+  await prisma.playbackProgress.create({
+    data: {
+      profileId: profile.id,
+      key: `movie:${GODFATHER}`,
+      type: "movie",
+      imdbId: GODFATHER,
+      progress: 35,
+      positionSeconds: 3_660,
+      durationSeconds: 10_500,
+      pausedAt: new Date("2026-05-03T20:00:00Z"),
+    },
+  });
+  await prisma.playbackProgress.create({
+    data: {
+      profileId: profile.id,
+      key: `episode:${SOPRANOS}:2:8`,
+      type: "episode",
+      imdbId: SOPRANOS,
+      season: 2,
+      episode: 8,
+      progress: 50,
+      pausedAt: new Date("2026-05-04T20:00:00Z"),
+    },
+  });
+
   return profile;
 };
 
@@ -156,6 +192,7 @@ const comparable = (payload: ExportPayload) => ({
   watchEvents: [...payload.watchEvents].sort((a, b) => a.watchedAt.localeCompare(b.watchedAt)),
   seriesProgress: [...payload.seriesProgress].sort((a, b) => a.seriesImdbId.localeCompare(b.seriesImdbId)),
   ratings: [...payload.ratings].sort((a, b) => `${a.imdbId}${a.type}`.localeCompare(`${b.imdbId}${b.type}`)),
+  playback: [...payload.playback].sort((a, b) => a.pausedAt.localeCompare(b.pausedAt)),
 });
 
 describe("GET /export then POST /import", () => {
@@ -168,7 +205,7 @@ describe("GET /export then POST /import", () => {
 
     expect(summary).toMatchObject({
       status: "imported",
-      summary: { lists: 1, listItems: 3, watchEvents: 2, seriesProgress: 1, ratings: 2 },
+      summary: { lists: 1, listItems: 3, watchEvents: 2, seriesProgress: 1, ratings: 2, playback: 2 },
     });
     expect(comparable(await exportFor(restored.id))).toEqual(comparable(exported));
   });
@@ -218,6 +255,7 @@ describe("GET /export then POST /import", () => {
     expect(await prisma.list.count({ where: { profileId: restored.id } })).toBe(2);
     expect(await prisma.rating.count({ where: { profileId: restored.id } })).toBe(2);
     expect(await prisma.seriesProgress.count({ where: { profileId: restored.id } })).toBe(1);
+    expect(await prisma.playbackProgress.count({ where: { profileId: restored.id } })).toBe(2);
   });
 
   it("adds to the play counts on a second import rather than replacing them", async () => {
@@ -256,7 +294,7 @@ describe("GET /export then POST /import", () => {
     const empty = await createProfile("Empty");
     const exported = await exportFor(empty.id);
 
-    expect(exported).toMatchObject({ watchEvents: [], seriesProgress: [], ratings: [] });
+    expect(exported).toMatchObject({ watchEvents: [], seriesProgress: [], ratings: [], playback: [] });
 
     const target = await createProfile("Target");
     await importInto(target.id, exported);

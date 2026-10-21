@@ -7,6 +7,7 @@ import type { SeriesProgressCandidate } from "../lib/types.js";
 import { getDefaultWatchlist } from "../lib/watchlist.js";
 import { batchUpsertWatchEvents, type WatchEventInput } from "../lib/batch-watch-events.js";
 import { batchUpsertRatings, type RatingInput } from "../lib/batch-ratings.js";
+import { importPlaybackProgress, MAX_PLAYBACK_SECONDS, type PlaybackImportRow } from "../lib/playback.js";
 import {
   boundedInt,
   boundedNumber,
@@ -63,6 +64,22 @@ interface ExportRating {
   ratedAt: string;
 }
 
+/**
+ * A resume point. Episodes carry the series id as `imdbId`, as watch events
+ * do. Added without bumping `EXPORT_VERSION`: a file from before it simply has
+ * no `playback`, which imports as none, and an older build ignores the key.
+ */
+interface ExportPlayback {
+  type: WatchEventType;
+  imdbId: string;
+  season: number | null;
+  episode: number | null;
+  progress: number;
+  positionSeconds: number | null;
+  durationSeconds: number | null;
+  pausedAt: string;
+}
+
 interface ExportPayload {
   version: number;
   exportedAt: string;
@@ -71,6 +88,7 @@ interface ExportPayload {
   watchEvents: ExportWatchEvent[];
   seriesProgress: ExportSeriesProgress[];
   ratings: ExportRating[];
+  playback: ExportPlayback[];
 }
 
 const isString = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
@@ -87,7 +105,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
   app.get("/export", async (request) => {
     const profileId = request.profileId!;
 
-    const [profile, lists, watchEvents, seriesProgress, ratingRows] = await Promise.all([
+    const [profile, lists, watchEvents, seriesProgress, ratingRows, playbackRows] = await Promise.all([
       prisma.profile.findUnique({ where: { id: profileId }, select: { name: true } }),
       prisma.list.findMany({
         where: { profileId },
@@ -97,6 +115,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       prisma.watchEvent.findMany({ where: { profileId }, orderBy: { watchedAt: "asc" } }),
       prisma.seriesProgress.findMany({ where: { profileId } }),
       prisma.rating.findMany({ where: { profileId } }),
+      prisma.playbackProgress.findMany({ where: { profileId }, orderBy: { pausedAt: "asc" } }),
     ]);
 
     const ratings: ExportRating[] = ratingRows.map((row) => ({
@@ -139,6 +158,16 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
         lastWatchedAt: sp.lastWatchedAt.toISOString(),
       })),
       ratings,
+      playback: playbackRows.map((row) => ({
+        type: row.type,
+        imdbId: row.imdbId,
+        season: row.season,
+        episode: row.episode,
+        progress: row.progress,
+        positionSeconds: row.positionSeconds,
+        durationSeconds: row.durationSeconds,
+        pausedAt: row.pausedAt.toISOString(),
+      })),
     };
 
     return payload;
@@ -160,12 +189,14 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       watchEvents: Array.isArray(body.watchEvents) ? body.watchEvents : [],
       seriesProgress: Array.isArray(body.seriesProgress) ? body.seriesProgress : [],
       ratings: Array.isArray(body.ratings) ? body.ratings : [],
+      playback: Array.isArray(body.playback) ? body.playback : [],
     };
     const collectionLabels: Record<keyof typeof collections, string> = {
       lists: "lists",
       watchEvents: "watch events",
       seriesProgress: "series progress rows",
       ratings: "ratings",
+      playback: "resume points",
     };
     for (const [name, rows] of Object.entries(collections)) {
       if (rows.length > MAX_IMPORT_ROWS) {
@@ -181,7 +212,7 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(413).send({ error: tooManyRowsMessage("list items"), code: "too_many_rows" });
     }
 
-    const summary = { lists: 0, listItems: 0, watchEvents: 0, seriesProgress: 0, ratings: 0 };
+    const summary = { lists: 0, listItems: 0, watchEvents: 0, seriesProgress: 0, ratings: 0, playback: 0 };
 
     for (const list of collections.lists) {
       if (!isRecord(list) || !isString(list.name) || !Object.values(ListKind).includes(list.kind)) continue;
@@ -307,6 +338,43 @@ const exportRoutes: FastifyPluginAsync = async (app) => {
       summary.ratings += 1;
     }
     await batchUpsertRatings(profileId, ratingInputs);
+
+    // After the watch events, on purpose: a point for a title the file also
+    // shows as watched since is one the import must not bring back, and
+    // `importPlaybackProgress` can only see those watches once they are in.
+    const playbackInputs: PlaybackImportRow[] = [];
+    for (const point of collections.playback) {
+      if (!isRecord(point) || !Object.values(WatchEventType).includes(point.type)) continue;
+      const imdbId = normalizeImdbId(point.imdbId);
+      const progress = boundedNumber(point.progress, 0, 100);
+      const pausedAt = parseDate(point.pausedAt);
+      if (!imdbId || progress === null || !pausedAt) continue;
+
+      // An episode is only a resume point with both numbers — the same rule
+      // PUT /playback applies — and a film ignores whatever it was handed.
+      const isEpisode = point.type === WatchEventType.episode;
+      const season = isEpisode ? boundedInt(point.season, 0, MAX_SEASON) : null;
+      const episode = isEpisode ? boundedInt(point.episode, 0, MAX_EPISODE) : null;
+      if (isEpisode && (season === null || episode === null)) continue;
+
+      // Unusable seconds are dropped rather than the point: the percentage is
+      // still a place to resume from, just a less exact one.
+      let positionSeconds = point.positionSeconds == null ? null : boundedInt(point.positionSeconds, 0, MAX_PLAYBACK_SECONDS);
+      let durationSeconds = point.durationSeconds == null ? null : boundedInt(point.durationSeconds, 1, MAX_PLAYBACK_SECONDS);
+      if (positionSeconds !== null && durationSeconds !== null && positionSeconds > durationSeconds) {
+        positionSeconds = null;
+        durationSeconds = null;
+      }
+
+      playbackInputs.push({
+        target: { type: point.type, imdbId, season, episode },
+        progress,
+        positionSeconds,
+        durationSeconds,
+        pausedAt,
+      });
+    }
+    summary.playback = await importPlaybackProgress(profileId, playbackInputs);
 
     return reply.code(200).send({ status: "imported", summary });
   });
