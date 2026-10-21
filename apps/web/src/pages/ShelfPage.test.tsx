@@ -443,7 +443,12 @@ describe("ShelfPage", () => {
       const user = userEvent.setup();
       const point = paused();
       getPlayback.mockResolvedValue({ playback: [point] });
-      savePlayback.mockResolvedValue({ playback: { ...point, id: "p2" } });
+      // What the API actually answers: the saved point, without the title and
+      // poster the list endpoint joins in.
+      const saved: Partial<PlaybackProgress> = { ...point, id: "p2" };
+      delete saved.name;
+      delete saved.poster;
+      savePlayback.mockResolvedValue({ playback: saved as PlaybackProgress });
       renderShelf();
 
       await user.click(await screen.findByRole("button", { name: "Remove Understudy from Continue Watching" }));
@@ -459,7 +464,8 @@ describe("ShelfPage", () => {
           expect.objectContaining({ type: "movie", imdbId: "tt1", progress: 40, positionSeconds: 2_880 })
         )
       );
-      expect(await screen.findByText("Continue Watching")).toBeInTheDocument();
+      const section = await screen.findByRole("region", { name: "Continue Watching" });
+      expect(within(section).getByText("Understudy")).toBeInTheDocument();
     });
 
     it("keeps the shelf up when resume points fail to load", async () => {

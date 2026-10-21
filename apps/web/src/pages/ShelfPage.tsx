@@ -562,7 +562,9 @@ export function ShelfPage() {
                 positionSeconds: p.positionSeconds,
                 durationSeconds: p.durationSeconds,
               })
-              .then((res) => setPlayback((prev) => [res.playback, ...prev]))
+              // The PUT answers with the point alone; the title and poster the
+              // list joins in come from the row that was just removed.
+              .then((res) => setPlayback((prev) => [{ ...res.playback, name: p.name, poster: p.poster }, ...prev]))
               .catch((err: unknown) =>
                 showToast(err instanceof Error ? err.message : "Couldn't put it back", "error")
               );
