@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "./prisma.js";
 import { createProfile, silentLogger } from "./test-fixtures/int-db.js";
-import { savePlaybackProgress } from "./playback.js";
+import { importPlaybackProgress, savePlaybackProgress, type PlaybackImportRow } from "./playback.js";
 import { recordWatchEvent } from "./watch-event.js";
 
 // The resume-point lifecycle against the real `PlaybackProgress_profileId_key_key`
@@ -83,5 +83,84 @@ describe("playback progress", () => {
 
     expect(await prisma.playbackProgress.count({ where: { profileId: ada.id } })).toBe(0);
     expect(await prisma.playbackProgress.count({ where: { profileId: bob.id } })).toBe(1);
+  });
+});
+
+describe("importing resume points", () => {
+  const row = (over: Partial<PlaybackImportRow> = {}): PlaybackImportRow => ({
+    target: { type: "movie", imdbId: SHAWSHANK },
+    progress: 40,
+    positionSeconds: 3_400,
+    durationSeconds: 8_520,
+    pausedAt: new Date("2026-06-01T20:00:00Z"),
+    ...over,
+  });
+
+  it("writes a point into an empty profile, with its pause time kept", async () => {
+    const { id: profileId } = await createProfile("Ada");
+
+    expect(await importPlaybackProgress(profileId, [row()])).toBe(1);
+
+    const stored = await prisma.playbackProgress.findFirstOrThrow({ where: { profileId } });
+    expect(stored).toMatchObject({ key: `movie:${SHAWSHANK}`, progress: 40, positionSeconds: 3_400 });
+    expect(stored.pausedAt.toISOString()).toBe("2026-06-01T20:00:00.000Z");
+  });
+
+  it("does not rewind a pause that is newer than the file's", async () => {
+    const { id: profileId } = await createProfile("Ada");
+    await savePlaybackProgress(profileId, { type: "movie", imdbId: SHAWSHANK }, { progress: 80 }, new Date("2026-07-01T20:00:00Z"));
+
+    expect(await importPlaybackProgress(profileId, [row()])).toBe(0);
+    expect(await prisma.playbackProgress.findFirstOrThrow({ where: { profileId } })).toMatchObject({ progress: 80 });
+  });
+
+  it("moves an older pause forward to the file's", async () => {
+    const { id: profileId } = await createProfile("Ada");
+    await savePlaybackProgress(profileId, { type: "movie", imdbId: SHAWSHANK }, { progress: 10 }, new Date("2026-05-01T20:00:00Z"));
+
+    expect(await importPlaybackProgress(profileId, [row()])).toBe(1);
+    expect(await prisma.playbackProgress.count({ where: { profileId } })).toBe(1);
+    expect(await prisma.playbackProgress.findFirstOrThrow({ where: { profileId } })).toMatchObject({ progress: 40 });
+  });
+
+  it("brings back nothing the profile has watched since the pause", async () => {
+    const { id: profileId } = await createProfile("Ada");
+    await recordMovie(profileId, new Date("2026-06-02T20:00:00Z"));
+    await recordWatchEvent({
+      type: "episode",
+      imdbId: SOPRANOS,
+      seriesImdbId: SOPRANOS,
+      season: 2,
+      episode: 7,
+      watchedAt: new Date("2026-06-02T20:00:00Z"),
+      source: "test",
+      profileId,
+      log: silentLogger,
+    });
+
+    const written = await importPlaybackProgress(profileId, [
+      row(),
+      row({ target: { type: "episode", imdbId: SOPRANOS, season: 2, episode: 7 } }),
+      // Watched the episode before, paused on the next one after: that one stays.
+      row({ target: { type: "episode", imdbId: SOPRANOS, season: 2, episode: 8 }, pausedAt: new Date("2026-06-03T20:00:00Z") }),
+    ]);
+
+    expect(written).toBe(1);
+    expect(await prisma.playbackProgress.findMany({ where: { profileId }, select: { key: true } })).toEqual([
+      { key: `episode:${SOPRANOS}:2:8` },
+    ]);
+  });
+
+  it("keeps the newest pause when a file lists one title twice", async () => {
+    const { id: profileId } = await createProfile("Ada");
+
+    await importPlaybackProgress(profileId, [
+      row({ progress: 70, pausedAt: new Date("2026-06-05T20:00:00Z") }),
+      row({ progress: 20, pausedAt: new Date("2026-06-01T20:00:00Z") }),
+    ]);
+
+    expect(await prisma.playbackProgress.findMany({ where: { profileId } })).toEqual([
+      expect.objectContaining({ progress: 70 }),
+    ]);
   });
 });

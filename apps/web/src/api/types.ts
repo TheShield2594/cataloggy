@@ -363,6 +363,17 @@ export type ExportPayload = {
     lastWatchedAt: string;
   }>;
   ratings: Array<{ imdbId: string; type: string; rating: number; ratedAt: string }>;
+  /** Absent from files exported before resume points were. */
+  playback?: Array<{
+    type: "movie" | "episode";
+    imdbId: string;
+    season: number | null;
+    episode: number | null;
+    progress: number;
+    positionSeconds: number | null;
+    durationSeconds: number | null;
+    pausedAt: string;
+  }>;
 };
 
 export type ImportSummary = {
@@ -371,6 +382,8 @@ export type ImportSummary = {
   watchEvents: number;
   seriesProgress: number;
   ratings: number;
+  /** Absent when the API predates resume points. */
+  playback?: number;
 };
 
 export type GameSort = "recent" | "playtime" | "rating";

@@ -487,8 +487,8 @@ only ever deletes a request still in Jellyseerr's pending state.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/export` | The profile's data as JSON: lists and their items, watch events, series progress, and ratings. Carries a `version` field. |
-| `POST` | `/import` | Restores an `/export` payload. The body's `version` must be exactly `1`; anything else is a `400` rather than a partial restore. |
+| `GET` | `/export` | The profile's data as JSON: lists and their items, watch events, series progress, ratings, and resume points (`playback`). Carries a `version` field. |
+| `POST` | `/import` | Restores an `/export` payload. The body's `version` must be exactly `1`; anything else is a `400` rather than a partial restore. Resume points only move forward: one is skipped when the profile already has a newer pause for that title, or a watch of it at or after the pause, so restoring an old backup can't bring back something finished since. The summary's `playback` count is the points actually written. A file from before resume points were exported has no `playback` and imports fine. |
 | `POST` | `/import/csv` | Header must include `imdbId,type,watchedAt`; `season,episode` optional. |
 | `POST` | `/import/external` | `{ format, csv }` where format is `letterboxd-diary`, `letterboxd-ratings`, `imdb-ratings` or `simkl`. |
 

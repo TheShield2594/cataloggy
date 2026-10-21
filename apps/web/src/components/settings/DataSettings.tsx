@@ -68,7 +68,8 @@ export function DataSettings() {
       const res = await api.importData(payload);
       const s = res.summary;
       setImportResult(
-        `Imported ${s.watchEvents} watch events, ${s.listItems} list items, ${s.seriesProgress} series progress entries, ${s.ratings} ratings`
+        `Imported ${s.watchEvents} watch events, ${s.listItems} list items, ${s.seriesProgress} series progress entries, ${s.ratings} ratings` +
+          (s.playback ? `, ${s.playback} resume points` : "")
       );
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Import failed");
