@@ -86,6 +86,9 @@ export const API_CACHE_ROUTES: readonly ApiCacheRoute[] = [
   { pattern: "continue", tier: "revalidate" },
   { pattern: "recent", tier: "revalidate" },
   { pattern: "series/progress", tier: "revalidate" },
+  // The resume-point list only. `playback/:imdbId` is what a player asks right
+  // before it seeks, and an offline answer there would be a guess.
+  { pattern: "playback", tier: "revalidate" },
   { pattern: "watch/history", tier: "revalidate" },
   { pattern: "watch/stats(?:/detailed)?", tier: "revalidate" },
   { pattern: "lists(?:/.*)?", tier: "revalidate" },

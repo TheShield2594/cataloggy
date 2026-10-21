@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { Play, RotateCw } from "lucide-react";
+import { Check, Play, RotateCw, X } from "lucide-react";
 import {
   api,
   type CheckIn,
   type Game,
   type ListItemWithMeta,
+  OfflineWriteQueuedError,
+  type PlaybackProgress,
   type SeriesProgress,
   type WatchEvent,
 } from "../api";
@@ -24,7 +26,9 @@ import {
   buildShelf,
   countByKind,
   isGameInProgress,
+  isResumedNextEpisode,
   shelfEntryFromGameInProgress,
+  shelfEntryFromPlayback,
   shelfEntryFromSeriesProgress,
   shelfSummary,
   SHELF_FILTERS,
@@ -69,6 +73,7 @@ const GAMES_CACHE_KEY = "games:recent";
 const PROGRESS_CACHE_KEY = "dash:progress";
 /** The Shelf's own union. The per-list rows behind it stay under the Lists page's key. */
 const SHELF_ITEMS_CACHE_KEY = "shelf:items";
+const PLAYBACK_CACHE_KEY = "shelf:playback";
 
 /* ─── The filter row ───────────────────────────────────────── */
 
@@ -135,6 +140,9 @@ function UpNextCard({
   onResume,
   resumeLabel,
   resumeBusy,
+  resumeIcon = "play",
+  onDismiss,
+  dismissLabel,
 }: {
   entry: ShelfEntry;
   /**
@@ -148,6 +156,15 @@ function UpNextCard({
   onResume?: (() => void) | undefined;
   resumeLabel?: string | undefined;
   resumeBusy?: boolean | undefined;
+  /**
+   * What the action does, drawn. Up Next's starts the next episode, so it is a
+   * play glyph; Continue Watching's finishes the title it is on, which is a
+   * check — a play button there would promise playback the web app can't give.
+   */
+  resumeIcon?: "play" | "check" | undefined;
+  /** A small corner control that takes the card off the row. */
+  onDismiss?: (() => void) | undefined;
+  dismissLabel?: string | undefined;
 }) {
   // The landscape still if the record carries one, the poster if not. A poster
   // in a 16:9 frame is cropped to its middle, which is a worse picture than the
@@ -225,6 +242,8 @@ function UpNextCard({
           >
             {resumeBusy ? (
               <RotateCw className="h-4 w-4 animate-spin" />
+            ) : resumeIcon === "check" ? (
+              <Check className="h-4 w-4" strokeWidth={2.5} />
             ) : (
               // Nudged right by a pixel: a triangle's optical centre sits left
               // of its bounding box, so a centred play glyph reads as
@@ -234,6 +253,22 @@ function UpNextCard({
           </button>
         )}
       </div>
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          disabled={resumeBusy}
+          aria-label={dismissLabel}
+          title={dismissLabel}
+          // Top-right and quiet: it is the action nobody should hit by accident,
+          // so it sits away from the one they came for, on a dark disc that
+          // stays legible over a bright still.
+          className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full text-white transition-colors duration-fast hover:bg-black/70 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          style={{ background: "rgba(0,0,0,0.55)" }}
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
     </div>
   );
 }
@@ -284,12 +319,14 @@ export function ShelfPage() {
   const [items, setItems, itemsMeta] = useCachedState<ListItemWithMeta[]>(SHELF_ITEMS_CACHE_KEY, []);
   const [games, setGames] = useCachedState<Game[]>(GAMES_CACHE_KEY, []);
   const [progress, setProgress] = useCachedState<SeriesProgress[]>(PROGRESS_CACHE_KEY, []);
+  const [playback, setPlayback] = useCachedState<PlaybackProgress[]>(PLAYBACK_CACHE_KEY, []);
   const [checkin, setCheckin] = useState<CheckIn | null>(null);
   const [lastEvent, setLastEvent] = useState<WatchEvent | null>(null);
 
   const [loading, setLoading] = useState(!itemsMeta.hadCachedValue);
   const [error, setError] = useState<string | null>(null);
   const [markingId, setMarkingId] = useState<string | null>(null);
+  const [playbackBusyId, setPlaybackBusyId] = useState<string | null>(null);
   const [renderLimit, setRenderLimit] = useState(RENDER_PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadAbortRef = useRef<AbortController | null>(null);
@@ -314,15 +351,16 @@ export function ShelfPage() {
     setError(null);
 
     try {
-      // The five questions the page opens with, asked at once. Each one that
+      // The six questions the page opens with, asked at once. Each one that
       // isn't the shelf itself is allowed to fail on its own: a broken check-in
       // should cost the row its "42 min left", not the whole grid.
-      const [lists, gamesRes, progressRes, checkinRes, historyRes] = await Promise.all([
+      const [lists, gamesRes, progressRes, checkinRes, historyRes, playbackRes] = await Promise.all([
         api.getLists(signal),
         api.listGames("recent", signal).catch(() => [] as Game[]),
         api.getSeriesProgress(signal).catch(() => [] as SeriesProgress[]),
         api.getCheckin(signal).catch(() => ({ checkin: null })),
         api.getWatchHistory(1, 0, { signal }).catch(() => [] as WatchEvent[]),
+        api.getPlayback(signal).catch(() => ({ playback: [] as PlaybackProgress[] })),
       ]);
 
       // One request per list, in parallel. The alternative — a union endpoint —
@@ -342,6 +380,7 @@ export function ShelfPage() {
       setProgress(progressRes ?? []);
       setCheckin(checkinRes.checkin);
       setLastEvent(historyRes[0] ?? null);
+      setPlayback(playbackRes.playback ?? []);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       if (loadAbortRef.current !== controller) return;
@@ -349,24 +388,32 @@ export function ShelfPage() {
     } finally {
       if (loadAbortRef.current === controller) setLoading(false);
     }
-  }, [setItems, setGames, setProgress]);
+  }, [setItems, setGames, setProgress, setPlayback]);
 
   useEffect(() => {
     void load();
     return () => loadAbortRef.current?.abort();
   }, [load]);
 
+  /* ── Continue Watching ── */
+
+  // Already newest-paused first from the API, which is the order to resume in.
+  const continueWatching = useMemo(() => playback.map(shelfEntryFromPlayback), [playback]);
+  const visibleContinue = useMemo(() => applyShelfFilter(continueWatching, filter), [continueWatching, filter]);
+
   /* ── In progress ── */
 
   const inProgress = useMemo(() => {
-    const shows = progress.map((s) => shelfEntryFromSeriesProgress(s, checkin));
+    const shows = progress
+      .filter((s) => !isResumedNextEpisode(s, playback))
+      .map((s) => shelfEntryFromSeriesProgress(s, checkin));
     const playing = games.filter(isGameInProgress).map((g) => shelfEntryFromGameInProgress(g, timeAgo));
     // Shows first, then games by how recently they were touched. A show in
     // flight is the thing most likely to be resumed tonight, and the series
     // progress feed is already ordered by recency at the API.
     playing.sort((a, b) => (b.game?.lastPlayedAt ?? "").localeCompare(a.game?.lastPlayedAt ?? ""));
     return [...shows, ...playing];
-  }, [progress, games, checkin]);
+  }, [progress, games, checkin, playback]);
 
   const visibleInProgress = useMemo(() => applyShelfFilter(inProgress, filter), [inProgress, filter]);
 
@@ -389,15 +436,19 @@ export function ShelfPage() {
    */
   const everything = useMemo(() => {
     const byKey = new Map(shelf.map((entry) => [entry.key, entry]));
+    for (const entry of continueWatching) byKey.set(entry.key, entry);
     for (const entry of inProgress) byKey.set(entry.key, entry);
     return [...byKey.values()];
-  }, [shelf, inProgress]);
+  }, [shelf, continueWatching, inProgress]);
 
   const counts = useMemo(() => countByKind(everything), [everything]);
 
   // What is already pinned at the top doesn't also belong in the grid — the
   // section is called "everything else" and has to mean it.
-  const inProgressKeys = useMemo(() => new Set(inProgress.map((entry) => entry.key)), [inProgress]);
+  const inProgressKeys = useMemo(
+    () => new Set([...continueWatching, ...inProgress].map((entry) => entry.key)),
+    [continueWatching, inProgress]
+  );
   const rest = useMemo(
     () => applyShelfFilter(shelf, filter).filter((entry) => !inProgressKeys.has(entry.key)),
     [shelf, filter, inProgressKeys]
@@ -442,6 +493,86 @@ export function ShelfPage() {
       showToast(err instanceof Error ? err.message : "Failed to mark episode", "error");
     } finally {
       setMarkingId(null);
+    }
+  };
+
+  /**
+   * Logs the paused title as watched. That is an ordinary watch, so it goes
+   * through the offline queue like any other — and recording it is what clears
+   * the resume point at the API. The explicit delete after it is for a browser
+   * whose clock runs behind the server's: the API only clears points paused at
+   * or before the watch, and a watch stamped a minute "earlier" than the pause
+   * would leave the card standing.
+   */
+  const finishPlayback = async (p: PlaybackProgress, title: string) => {
+    setPlaybackBusyId(p.id);
+    const label = p.season != null && p.episode != null ? `S${p.season}:E${p.episode} of ${title}` : title;
+    try {
+      try {
+        await api.logWatch({
+          type: p.type,
+          imdbId: p.imdbId,
+          seriesImdbId: p.type === "episode" ? p.imdbId : undefined,
+          season: p.season ?? undefined,
+          episode: p.episode ?? undefined,
+          watchedAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        if (!(err instanceof OfflineWriteQueuedError)) throw err;
+        // The watch will land when the connection does, and clear the point
+        // then. Until it has, the card would only offer to log it twice.
+        setPlayback((prev) => prev.filter((row) => row.id !== p.id));
+        showToast(err.message, "info");
+        return;
+      }
+      await api.deletePlayback(p.id).catch(() => undefined);
+      showToast(`Marked ${label} watched`, "success");
+      // The show's Up Next card moves on with it, so this refetches the whole
+      // page rather than dropping one card and hoping the rest still agree.
+      await load();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to mark as watched", "error");
+    } finally {
+      setPlaybackBusyId(null);
+    }
+  };
+
+  /**
+   * Takes a title off Continue Watching without logging anything — the "I'm
+   * not going back to this" action. Undo puts the same position back; the
+   * point gets a new id and a fresh pause time, which is what moves it to the
+   * front of the row it left.
+   */
+  const dismissPlayback = async (p: PlaybackProgress, title: string) => {
+    setPlaybackBusyId(p.id);
+    try {
+      await api.deletePlayback(p.id);
+      setPlayback((prev) => prev.filter((row) => row.id !== p.id));
+      showToast(`Removed ${title} from Continue Watching`, "info", {
+        action: {
+          label: "Undo",
+          onAction: () => {
+            void api
+              .savePlayback({
+                type: p.type,
+                imdbId: p.imdbId,
+                season: p.season,
+                episode: p.episode,
+                progress: p.progress,
+                positionSeconds: p.positionSeconds,
+                durationSeconds: p.durationSeconds,
+              })
+              .then((res) => setPlayback((prev) => [res.playback, ...prev]))
+              .catch((err: unknown) =>
+                showToast(err instanceof Error ? err.message : "Couldn't put it back", "error")
+              );
+          },
+        },
+      });
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to remove it", "error");
+    } finally {
+      setPlaybackBusyId(null);
     }
   };
 
@@ -502,7 +633,7 @@ export function ShelfPage() {
         />
       )}
 
-      {loading && shelf.length === 0 && inProgress.length === 0 ? (
+      {loading && shelf.length === 0 && inProgress.length === 0 && continueWatching.length === 0 ? (
         <GhostLoader label="Loading your shelf…" className="items-center py-24" />
       ) : nothingAtAll ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -524,6 +655,38 @@ export function ShelfPage() {
         </div>
       ) : (
         <div className="mt-6 flex flex-col gap-7">
+          {visibleContinue.length > 0 && (
+            <section aria-labelledby="shelf-continue">
+              <h2 id="shelf-continue" className={`${SECTION_TITLE} mb-3`} style={{ color: "var(--text)" }}>
+                Continue Watching
+              </h2>
+              {/* The same rail-then-grid as Up Next below, for the same reasons. */}
+              <div className="scrollbar-hide -mx-5 flex snap-x snap-mandatory scroll-px-5 gap-3 overflow-x-auto px-5 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 lg:grid-cols-3">
+                {visibleContinue.map((entry, index) => {
+                  const p = entry.playback!;
+                  const what =
+                    p.season != null && p.episode != null ? `S${p.season}:E${p.episode} of ${entry.title}` : entry.title;
+                  return (
+                    <UpNextCard
+                      // By the resume point, not the entry key: one show can be
+                      // paused on two episodes, which share `series:<id>`.
+                      key={p.id}
+                      entry={entry}
+                      eager={index < 3}
+                      onOpen={() => openEntry(entry)}
+                      onResume={() => void finishPlayback(p, entry.title)}
+                      resumeIcon="check"
+                      resumeLabel={`Mark ${what} watched`}
+                      resumeBusy={playbackBusyId === p.id}
+                      onDismiss={() => void dismissPlayback(p, entry.title)}
+                      dismissLabel={`Remove ${what} from Continue Watching`}
+                    />
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
           {visibleInProgress.length > 0 && (
             <section aria-labelledby="shelf-up-next">
               <h2 id="shelf-up-next" className={`${SECTION_TITLE} mb-3`} style={{ color: "var(--text)" }}>
@@ -544,7 +707,7 @@ export function ShelfPage() {
                * the last card doesn't stop short of the edge with a gutter's
                * worth of black beside it.
                */}
-              <div className="scrollbar-hide -mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 lg:grid-cols-3">
+              <div className="scrollbar-hide -mx-5 flex snap-x snap-mandatory scroll-px-5 gap-3 overflow-x-auto px-5 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 lg:grid-cols-3">
                 {visibleInProgress.map((entry, index) => {
                   const series =
                     entry.kind === "show" ? progress.find((s) => `series:${s.imdbId}` === entry.key) : undefined;

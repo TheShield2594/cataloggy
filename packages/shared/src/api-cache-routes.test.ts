@@ -23,6 +23,11 @@ describe("cacheTierForPath", () => {
     expect(cacheTierForPath("/collection")).toBe("revalidate");
     expect(cacheTierForPath("/games/igdb/status")).toBe("revalidate");
     expect(cacheTierForPath("/tags")).toBe("revalidate");
+    expect(cacheTierForPath("/playback")).toBe("revalidate");
+  });
+
+  it("caches the resume-point list but not one title's point, which a player seeks by", () => {
+    expect(cacheTierForPath("/playback/tt0903747")).toBeNull();
   });
 
   it("lets a narrow entry win over the prefix it sits under", () => {

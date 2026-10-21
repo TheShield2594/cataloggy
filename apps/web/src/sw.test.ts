@@ -186,6 +186,7 @@ describe("API response caching", () => {
 
     expect(matches(apiRequest("http://192.168.1.25:7000/watchlist"))).toBeTruthy();
     expect(matches(apiRequest("http://192.168.1.25:7000/series/progress"))).toBeTruthy();
+    expect(matches(apiRequest("http://192.168.1.25:7000/playback"))).toBeTruthy();
   });
 
   it("caches nothing from another host, whatever the path looks like", async () => {

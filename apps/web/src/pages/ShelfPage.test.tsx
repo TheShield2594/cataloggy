@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
-import type { CatalogList, Game, ListItemWithMeta, SeriesProgress } from "../api";
+import { type CatalogList, type Game, type ListItemWithMeta, OfflineWriteQueuedError, type PlaybackProgress, type SeriesProgress } from "../api";
 import { ToastProvider } from "../hooks/useToast";
 import { ShelfPage } from "./ShelfPage";
 
@@ -18,6 +18,10 @@ vi.mock("../api", async (importOriginal) => {
       getCheckin: vi.fn(),
       getWatchHistory: vi.fn(),
       markNextEpisodeWatched: vi.fn(),
+      getPlayback: vi.fn(),
+      deletePlayback: vi.fn(),
+      savePlayback: vi.fn(),
+      logWatch: vi.fn(),
     },
   };
 });
@@ -40,6 +44,25 @@ const getSeriesProgress = vi.mocked(api.getSeriesProgress);
 const getCheckin = vi.mocked(api.getCheckin);
 const getWatchHistory = vi.mocked(api.getWatchHistory);
 const markNextEpisodeWatched = vi.mocked(api.markNextEpisodeWatched);
+const getPlayback = vi.mocked(api.getPlayback);
+const deletePlayback = vi.mocked(api.deletePlayback);
+const savePlayback = vi.mocked(api.savePlayback);
+const logWatch = vi.mocked(api.logWatch);
+
+const paused = (over: Partial<PlaybackProgress> = {}): PlaybackProgress => ({
+  id: "p1",
+  type: "movie",
+  imdbId: "tt1",
+  season: null,
+  episode: null,
+  progress: 40,
+  positionSeconds: 2_880,
+  durationSeconds: 7_200,
+  pausedAt: "2026-10-20T20:15:00.000Z",
+  name: "Understudy",
+  poster: null,
+  ...over,
+});
 
 const list = (id: string, name: string): CatalogList => ({ id, name, kind: "custom", itemCount: 1 });
 
@@ -100,6 +123,9 @@ beforeEach(() => {
   getSeriesProgress.mockResolvedValue([]);
   getCheckin.mockResolvedValue({ checkin: null });
   getWatchHistory.mockResolvedValue([]);
+  getPlayback.mockResolvedValue({ playback: [] });
+  deletePlayback.mockResolvedValue(undefined);
+  logWatch.mockResolvedValue({ watchEvent: { id: "we-1" } });
 });
 
 describe("ShelfPage", () => {
@@ -333,5 +359,116 @@ describe("ShelfPage", () => {
 
     await screen.findByRole("heading", { name: "Shelf" });
     expect(screen.queryByRole("navigation")).toBeNull();
+  });
+
+  describe("Continue Watching", () => {
+    it("shows what was paused part-way through, with the time left", async () => {
+      getPlayback.mockResolvedValue({ playback: [paused()] });
+      renderShelf();
+
+      const section = await screen.findByRole("region", { name: "Continue Watching" });
+      expect(within(section).getByText("Understudy")).toBeInTheDocument();
+      expect(within(section).getByText("Film · 72 min left")).toBeInTheDocument();
+    });
+
+    it("draws no row at all when nothing is paused", async () => {
+      getListItems.mockResolvedValue({ items: [item("tt2", "Nightjar")] });
+      renderShelf();
+
+      await screen.findByText("Nightjar");
+      expect(screen.queryByText("Continue Watching")).not.toBeInTheDocument();
+    });
+
+    it("keeps a paused film out of the Library grid below, as Up Next does", async () => {
+      getListItems.mockResolvedValue({ items: [item("tt1", "Understudy")] });
+      getPlayback.mockResolvedValue({ playback: [paused()] });
+      renderShelf();
+
+      await screen.findByText("Continue Watching");
+      expect(screen.getAllByText("Understudy")).toHaveLength(1);
+    });
+
+    it("drops a show from Up Next when its next episode is the one paused", async () => {
+      getSeriesProgress.mockResolvedValue([series()]);
+      getPlayback.mockResolvedValue({
+        playback: [paused({ type: "episode", imdbId: "tt9", season: 3, episode: 4, name: "The Long Shore" })],
+      });
+      renderShelf();
+
+      await screen.findByText("Continue Watching");
+      expect(screen.queryByText("Up Next")).not.toBeInTheDocument();
+      expect(screen.getAllByText("The Long Shore")).toHaveLength(1);
+    });
+
+    it("follows the kind filter like the rows around it", async () => {
+      getPlayback.mockResolvedValue({ playback: [paused()] });
+      renderShelf("/?kind=show");
+
+      await waitFor(() => expect(getPlayback).toHaveBeenCalled());
+      expect(screen.queryByText("Continue Watching")).not.toBeInTheDocument();
+    });
+
+    it("marks the paused episode watched, clears the point, then refetches", async () => {
+      const user = userEvent.setup();
+      getPlayback.mockResolvedValue({
+        playback: [paused({ type: "episode", imdbId: "tt9", season: 2, episode: 7, name: "The Long Shore" })],
+      });
+      renderShelf();
+
+      await user.click(await screen.findByRole("button", { name: "Mark S2:E7 of The Long Shore watched" }));
+
+      await waitFor(() =>
+        expect(logWatch).toHaveBeenCalledWith(
+          expect.objectContaining({ type: "episode", imdbId: "tt9", seriesImdbId: "tt9", season: 2, episode: 7 })
+        )
+      );
+      await waitFor(() => expect(deletePlayback).toHaveBeenCalledWith("p1"));
+      await waitFor(() => expect(getPlayback).toHaveBeenCalledTimes(2));
+    });
+
+    it("takes the card off at once when the watch is queued offline", async () => {
+      const user = userEvent.setup();
+      getPlayback.mockResolvedValue({ playback: [paused()] });
+      logWatch.mockRejectedValue(new OfflineWriteQueuedError());
+      renderShelf();
+
+      await user.click(await screen.findByRole("button", { name: "Mark Understudy watched" }));
+
+      await waitFor(() => expect(screen.queryByText("Continue Watching")).not.toBeInTheDocument());
+      expect(await screen.findByText(/Saved offline/)).toBeInTheDocument();
+      expect(deletePlayback).not.toHaveBeenCalled();
+    });
+
+    it("removes a title without logging it, and Undo puts the same position back", async () => {
+      const user = userEvent.setup();
+      const point = paused();
+      getPlayback.mockResolvedValue({ playback: [point] });
+      savePlayback.mockResolvedValue({ playback: { ...point, id: "p2" } });
+      renderShelf();
+
+      await user.click(await screen.findByRole("button", { name: "Remove Understudy from Continue Watching" }));
+
+      await waitFor(() => expect(deletePlayback).toHaveBeenCalledWith("p1"));
+      expect(logWatch).not.toHaveBeenCalled();
+      await waitFor(() => expect(screen.queryByText("Continue Watching")).not.toBeInTheDocument());
+
+      await user.click(await screen.findByRole("button", { name: "Undo" }));
+
+      await waitFor(() =>
+        expect(savePlayback).toHaveBeenCalledWith(
+          expect.objectContaining({ type: "movie", imdbId: "tt1", progress: 40, positionSeconds: 2_880 })
+        )
+      );
+      expect(await screen.findByText("Continue Watching")).toBeInTheDocument();
+    });
+
+    it("keeps the shelf up when resume points fail to load", async () => {
+      getListItems.mockResolvedValue({ items: [item("tt2", "Nightjar")] });
+      getPlayback.mockRejectedValue(new Error("nope"));
+      renderShelf();
+
+      expect(await screen.findByText("Nightjar")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+    });
   });
 });

@@ -7,6 +7,7 @@ import { parseCalendarResponse, parseSeriesProgressListResponse, parseWatchHisto
 import type {
   CheckIn,
   DetailedWatchStats,
+  PlaybackProgress,
   EpisodeInfo,
   ScrobbleSession,
   WatchEvent,
@@ -109,6 +110,25 @@ export const watchApi = {
   // Now playing (live Plex/Jellyfin scrobble sessions)
   getNowPlaying(signal?: AbortSignal) {
     return request<{ sessions: ScrobbleSession[] }>("/scrobble/now-playing", { signal });
+  },
+  // Resume points — where playback stopped part-way through a title
+  getPlayback(signal?: AbortSignal) {
+    return request<{ playback: PlaybackProgress[] }>("/playback", { signal });
+  },
+  // Puts one back — the Undo after removing it from Continue Watching.
+  savePlayback(payload: {
+    type: "movie" | "episode";
+    imdbId: string;
+    season?: number | null | undefined;
+    episode?: number | null | undefined;
+    progress: number;
+    positionSeconds?: number | null | undefined;
+    durationSeconds?: number | null | undefined;
+  }) {
+    return request<{ playback: PlaybackProgress }>("/playback", { method: "PUT", body: JSON.stringify(payload) });
+  },
+  deletePlayback(id: string) {
+    return request<void>(`/playback/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
   // Calendar
   async getCalendar(days = 30) {
