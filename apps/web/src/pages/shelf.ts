@@ -1,4 +1,4 @@
-import type { CheckIn, Game, ListItemWithMeta, SearchResult, SeriesProgress } from "../api";
+import type { CheckIn, Game, ListItemWithMeta, PlaybackProgress, SearchResult, SeriesProgress } from "../api";
 import { formatPlaytime } from "../utils/playtime";
 
 /*
@@ -62,6 +62,8 @@ export type ShelfEntry = {
   game?: Game;
   /** Set on show and film rows, so the page can open the media detail panel. */
   item?: SearchResult;
+  /** Set on Continue Watching rows: the resume point the card is drawn from. */
+  playback?: PlaybackProgress;
 };
 
 const KIND_LABEL: Record<ShelfKind, string> = { show: "Show", film: "Film", game: "Game" };
@@ -289,6 +291,86 @@ export function shelfEntryFromSeriesProgress(s: SeriesProgress, checkin: CheckIn
     },
   };
 }
+
+/**
+ * Whole minutes left in a paused title, or null when the player never said how
+ * long it is.
+ *
+ * The reported position wins over the percentage when both are there: it is
+ * what the player will actually seek to, and the percentage may have been
+ * rounded by whichever client sent it. Floored at one, because "0 min left" on
+ * a card that is still there reads as a fault rather than as nearly done.
+ */
+export function playbackMinutesLeft(p: PlaybackProgress): number | null {
+  if (!p.durationSeconds || p.durationSeconds <= 0) return null;
+  const position =
+    typeof p.positionSeconds === "number" ? p.positionSeconds : (p.durationSeconds * p.progress) / 100;
+  return Math.max(Math.round((p.durationSeconds - position) / 60), 1);
+}
+
+/**
+ * A Continue Watching row — a film or an episode stopped part-way through.
+ *
+ * Measured within the one title rather than across the series: what a resume
+ * point knows is how far into *this* episode you got, so the ruler is a
+ * continuous bar of that, not the season's ticks. "42 min left" when the player
+ * reported a runtime, the percentage when it only sent that.
+ *
+ * Keyed the way a list row or a series row is (`movie:` / `series:`), not by
+ * the resume point's id. That is what lets the page count a paused film once
+ * under Films and keep it out of the Library grid below, where it would
+ * otherwise appear a second time.
+ */
+export function shelfEntryFromPlayback(p: PlaybackProgress): ShelfEntry {
+  const isEpisode = p.type === "episode";
+  const kind: ShelfKind = isEpisode ? "show" : "film";
+  const title = p.name ?? p.imdbId;
+  const percent = Math.round(p.progress);
+  const minutesLeft = playbackMinutesLeft(p);
+  const left = minutesLeft !== null ? `${minutesLeft} min left` : `${percent}% watched`;
+  const episode = isEpisode && p.season != null && p.episode != null ? `S${p.season} E${p.episode}` : null;
+
+  return {
+    key: `${isEpisode ? "series" : "movie"}:${p.imdbId}`,
+    kind,
+    title,
+    art: p.poster,
+    addedAt: parseTime(p.pausedAt),
+    meta: metaLine(KIND_LABEL[kind], episode, left),
+    ruler: {
+      value: p.progress,
+      total: 100,
+      discrete: false,
+      label: episode ? `${title} ${episode}: ${left}` : `${title}: ${left}`,
+    },
+    trailing: left,
+    item: {
+      imdbId: p.imdbId,
+      type: isEpisode ? "series" : "movie",
+      name: title,
+      year: null,
+      poster: p.poster,
+      description: null,
+      genres: [],
+      rating: null,
+      inWatchlist: false,
+      inCollection: false,
+      lists: [],
+    },
+    playback: p,
+  };
+}
+
+/**
+ * Whether a show's Up Next card is the same episode a resume point already
+ * covers. It then belongs to Continue Watching alone — two cards for one
+ * episode, one saying "start" and one saying "resume", is the duplicate a
+ * viewer notices first.
+ */
+export const isResumedNextEpisode = (s: SeriesProgress, playback: PlaybackProgress[]): boolean =>
+  playback.some(
+    (p) => p.type === "episode" && p.imdbId === s.imdbId && p.season === s.nextSeason && p.episode === s.nextEpisode
+  );
 
 /** An in-progress game row: hours played, where it was last touched, no bar. */
 export function shelfEntryFromGameInProgress(game: Game, timeAgo: (iso: string) => string): ShelfEntry {

@@ -317,6 +317,27 @@ export type ScrobbleSession = {
   poster: string | null;
 };
 
+/**
+ * A resume point: where a profile stopped part-way through a film or an
+ * episode (`GET /playback`). Episodes carry the series id as `imdbId`, the way
+ * watch history stores them.
+ */
+export type PlaybackProgress = {
+  id: string;
+  type: "movie" | "episode";
+  imdbId: string;
+  season: number | null;
+  episode: number | null;
+  /** 0–100. */
+  progress: number;
+  /** Null when the player only reported a percentage. */
+  positionSeconds: number | null;
+  durationSeconds: number | null;
+  pausedAt: string;
+  name: string | null;
+  poster: string | null;
+};
+
 export type ExportPayload = {
   version: number;
   exportedAt: string;

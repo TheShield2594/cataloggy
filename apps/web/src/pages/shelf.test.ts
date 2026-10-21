@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CheckIn, Game, ListItemWithMeta, SeriesProgress } from "../api";
+import type { CheckIn, Game, ListItemWithMeta, PlaybackProgress, SeriesProgress } from "../api";
 import {
   applyShelfFilter,
   buildShelf,
@@ -8,10 +8,13 @@ import {
   checkinTitleId,
   countByKind,
   isGameInProgress,
+  isResumedNextEpisode,
   metaLine,
+  playbackMinutesLeft,
   shelfEntryFromGame,
   shelfEntryFromGameInProgress,
   shelfEntryFromListItem,
+  shelfEntryFromPlayback,
   shelfEntryFromSeriesProgress,
   shelfSummary,
 } from "./shelf";
@@ -323,5 +326,72 @@ describe("shelfSummary", () => {
     const shelf = buildShelf([listItem({ imdbId: "tt1" }), listItem({ imdbId: "tt2" })], [game()]);
 
     expect(shelfSummary(shelf, "Last watched 2h ago")).toBe("3 titles · 2 kinds · Last watched 2h ago");
+  });
+});
+
+describe("Continue Watching rows", () => {
+  const point = (over: Partial<PlaybackProgress> = {}): PlaybackProgress => ({
+    id: "p1",
+    type: "movie",
+    imdbId: "tt1",
+    season: null,
+    episode: null,
+    progress: 40,
+    positionSeconds: 2_880,
+    durationSeconds: 7_200,
+    pausedAt: "2026-10-20T20:15:00.000Z",
+    name: "Understudy",
+    poster: "p.jpg",
+    ...over,
+  });
+
+  it("counts minutes left from the reported position, not the rounded percentage", () => {
+    expect(playbackMinutesLeft(point({ progress: 50, positionSeconds: 2_880, durationSeconds: 7_200 }))).toBe(72);
+  });
+
+  it("falls back to the percentage of the runtime when there is no position", () => {
+    expect(playbackMinutesLeft(point({ progress: 75, positionSeconds: null, durationSeconds: 3_600 }))).toBe(15);
+  });
+
+  it("knows no time left without a runtime, and never says zero", () => {
+    expect(playbackMinutesLeft(point({ durationSeconds: null }))).toBeNull();
+    expect(playbackMinutesLeft(point({ positionSeconds: 7_190, durationSeconds: 7_200 }))).toBe(1);
+  });
+
+  it("draws a film as a continuous bar within the one title, keyed like its list row", () => {
+    const entry = shelfEntryFromPlayback(point());
+
+    expect(entry).toMatchObject({
+      key: "movie:tt1",
+      kind: "film",
+      title: "Understudy",
+      meta: "Film · 72 min left",
+      trailing: "72 min left",
+      ruler: { value: 40, total: 100, discrete: false, label: "Understudy: 72 min left" },
+    });
+    expect(entry.playback?.id).toBe("p1");
+  });
+
+  it("names the episode on a show, keyed like its series row", () => {
+    const entry = shelfEntryFromPlayback(
+      point({ type: "episode", imdbId: "tt9", season: 2, episode: 7, name: "The Long Shore" })
+    );
+
+    expect(entry).toMatchObject({ key: "series:tt9", kind: "show", meta: "Show · S2 E7 · 72 min left" });
+    expect(entry.item).toMatchObject({ imdbId: "tt9", type: "series" });
+  });
+
+  it("says how far in as a percentage when the player sent nothing else", () => {
+    const entry = shelfEntryFromPlayback(point({ progress: 38.6, positionSeconds: null, durationSeconds: null }));
+    expect(entry.meta).toBe("Film · 39% watched");
+  });
+
+  it("treats a show's Up Next as resumed only when the paused episode is the next one", () => {
+    const s = { imdbId: "tt9", nextSeason: 2, nextEpisode: 7 } as SeriesProgress;
+    const paused = point({ type: "episode", imdbId: "tt9", season: 2, episode: 7 });
+
+    expect(isResumedNextEpisode(s, [paused])).toBe(true);
+    expect(isResumedNextEpisode(s, [{ ...paused, episode: 3 }])).toBe(false);
+    expect(isResumedNextEpisode(s, [{ ...paused, imdbId: "tt8" }])).toBe(false);
   });
 });
