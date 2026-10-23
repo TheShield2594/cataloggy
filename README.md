@@ -1,3 +1,18 @@
+> [!IMPORTANT]
+> **Cataloggy has moved and is now the Fetch website.** Development continues in
+> [TheShield2594/fetch](https://github.com/TheShield2594/fetch), under
+> [`web/`](https://github.com/TheShield2594/fetch/tree/main/web), with this
+> repository's full history. This repository is archived and read-only.
+>
+> **Upgrading an existing install:** use the `docker-compose.yml` from `web/` in
+> the Fetch repository. Images are now published as
+> `ghcr.io/theshield2594/fetch-{api,migrate,addon,web}`; the `cataloggy-*` images
+> get no further updates. Your `.env` (including the `CATALOGGY_*` variables),
+> database volume and installed Stremio addon keep working unchanged.
+>
+> New code is licensed under the GPL-3.0, like the rest of Fetch. Everything
+> published here stays available under the MIT License below.
+
 # Cataloggy
 
 Cataloggy is your own personal home page for everything you watch and play. It opens on one shelf — your shows, films and games together, with whatever you're part-way through at the top — instead of making you jump between five different apps to find it.
